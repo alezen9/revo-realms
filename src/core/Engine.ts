@@ -1,15 +1,17 @@
-import { WebGPURenderer } from "three/webgpu";
+import { GridHelper, WebGPURenderer } from "three/webgpu";
 import { Scene, PointLight, Clock, Object3D, PerspectiveCamera } from "three";
 import { OrbitControls } from "three/examples/jsm/Addons.js";
 import Terrain from "../game/Terrain";
 import { World } from "@dimforge/rapier3d";
 import Player from "../game/Player";
+import Stats from "stats-gl";
 
 export type Rapier = typeof import("@dimforge/rapier3d");
 
 type Sizes = { width: number; height: number; dpr: number; aspect: number };
 
 export default class Engine {
+  private stats: Stats;
   private canvas: HTMLCanvasElement;
   private renderer: WebGPURenderer;
   private camera: PerspectiveCamera;
@@ -34,6 +36,19 @@ export default class Engine {
     this.renderer.setSize(sizes.width, sizes.height);
     this.renderer.setPixelRatio(sizes.dpr);
 
+    // Stats
+    this.stats = new Stats({
+      trackGPU: true,
+      logsPerSecond: 4,
+      graphsPerSecond: 30,
+      samplesLog: 40,
+      samplesGraph: 10,
+      horizontal: false,
+      precision: 2,
+    });
+    document.body.appendChild(this.stats.dom);
+    this.stats.init(this.renderer);
+
     // Scene
     this.scene = new Scene();
 
@@ -42,18 +57,19 @@ export default class Engine {
     pointLoght.position.set(1, 5, 0);
     this.scene.add(pointLoght);
 
-    // // Grid helper
-    // const gridHelper = new GridHelper(1000, 1000, "white", "red");
-    // this.scene.add(gridHelper);
+    // Grid helper
+    const gridHelper = new GridHelper(1000, 1000, "black", "grey");
+    this.scene.add(gridHelper);
 
     // Camera
     this.camera = new PerspectiveCamera(45, sizes.aspect, 0.1, 100);
-    this.camera.position.set(4, 2, 4);
+    this.camera.position.set(0, 2, 7.5);
     this.scene.add(this.camera);
 
     // Controls
     this.controls = new OrbitControls(this.camera, this.canvas);
     this.controls.enableDamping = true;
+    this.controls.maxPolarAngle = Math.PI / 2.05;
 
     // Clock
     this.clock = new Clock(false);
@@ -114,6 +130,7 @@ export default class Engine {
 
       // Next frame
       requestAnimationFrame(loop);
+      this.stats.update();
     };
     loop();
   }
