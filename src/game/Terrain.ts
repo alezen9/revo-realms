@@ -7,6 +7,7 @@ import {
 } from "@dimforge/rapier3d";
 
 export default class Terrain {
+  private readonly SCALE = 10;
   private mesh: Mesh;
   private rigidBody: RigidBody;
 
@@ -22,7 +23,7 @@ export default class Terrain {
     const material = new MeshStandardMaterial({ color: "green" });
     const mesh = new Mesh(geometry, material);
     mesh.rotation.x = -Math.PI / 2; // Make it horizontal
-    mesh.scale.set(5, 5, 5);
+    mesh.scale.set(this.SCALE, this.SCALE, this.SCALE);
     return mesh;
   }
 
@@ -32,7 +33,9 @@ export default class Terrain {
   }
 
   private createCharacterColliderDesc() {
-    const collider = ColliderDesc.cuboid(5, 0.0001, 5);
+    const collider = ColliderDesc.cuboid(this.SCALE / 2, 0.0001, this.SCALE / 2)
+      .setFriction(1)
+      .setRestitution(0.2);
     return collider;
   }
 }

@@ -53,8 +53,8 @@ export default class Engine {
     this.scene = new Scene();
 
     // Light
-    const pointLoght = new PointLight("white", 50);
-    pointLoght.position.set(1, 5, 0);
+    const pointLoght = new PointLight("white", 100);
+    pointLoght.position.set(2, 5, 2);
     this.scene.add(pointLoght);
 
     // Grid helper
@@ -63,7 +63,7 @@ export default class Engine {
 
     // Camera
     this.camera = new PerspectiveCamera(45, sizes.aspect, 0.1, 100);
-    this.camera.position.set(0, 2, 7.5);
+    this.camera.position.set(0, 5, 10);
     this.scene.add(this.camera);
 
     // Controls
@@ -74,10 +74,6 @@ export default class Engine {
     // Clock
     this.clock = new Clock(false);
 
-    // On resize
-    const resizeObserver = new ResizeObserver(this.onResize);
-    resizeObserver.observe(document.body);
-
     // Physics-affected objects
     import("@dimforge/rapier3d").then((rapier) => {
       this.world = new rapier.World({ x: 0, y: -9.81, z: 0 }); // Gravity points downwards
@@ -86,7 +82,7 @@ export default class Engine {
       new Terrain(this.world, this.scene);
 
       // Player
-      this.player = new Player(this.world, this.scene);
+      this.player = new Player(this.world, this.scene, this.clock);
     });
   }
 
@@ -115,6 +111,9 @@ export default class Engine {
   startLoop(callback?: (params: { clock: Clock }) => void) {
     this.clock.start();
     const loop = async () => {
+      // Update stats
+      this.stats.update();
+
       callback?.({ clock: this.clock });
 
       if (this.world) {
@@ -130,8 +129,14 @@ export default class Engine {
 
       // Next frame
       requestAnimationFrame(loop);
-      this.stats.update();
     };
+
+    // On resize
+    const resizeObserver = new ResizeObserver(() => {
+      this.onResize();
+    });
+    resizeObserver.observe(document.body);
+
     loop();
   }
 
