@@ -1,10 +1,10 @@
-import { GridHelper, WebGPURenderer } from "three/webgpu";
+import { WebGPURenderer } from "three/webgpu";
 import { Scene, PointLight, Clock, Object3D, PerspectiveCamera } from "three";
 import { OrbitControls } from "three/examples/jsm/Addons.js";
-import Terrain from "../game/Terrain";
 import { World } from "@dimforge/rapier3d";
 import Player from "../game/Player";
 import Stats from "stats-gl";
+import Floor from "../game/Floor";
 
 export type Rapier = typeof import("@dimforge/rapier3d");
 
@@ -53,16 +53,16 @@ export default class Engine {
     this.scene = new Scene();
 
     // Light
-    const pointLoght = new PointLight("white", 100);
-    pointLoght.position.set(2, 5, 2);
+    const pointLoght = new PointLight("white", 5000);
+    pointLoght.position.set(2, 25, 2);
     this.scene.add(pointLoght);
 
-    // Grid helper
-    const gridHelper = new GridHelper(1000, 1000, "black", "grey");
-    this.scene.add(gridHelper);
+    // // Grid helper
+    // const gridHelper = new GridHelper(1000, 1000, "black", "grey");
+    // this.scene.add(gridHelper);
 
     // Camera
-    this.camera = new PerspectiveCamera(45, sizes.aspect, 0.1, 100);
+    this.camera = new PerspectiveCamera(45, sizes.aspect, 0.01, 1000);
     this.camera.position.set(0, 5, 10);
     this.scene.add(this.camera);
 
@@ -78,8 +78,11 @@ export default class Engine {
     import("@dimforge/rapier3d").then((rapier) => {
       this.world = new rapier.World({ x: 0, y: -9.81, z: 0 }); // Gravity points downwards
 
-      // Terrain
-      new Terrain(this.world, this.scene);
+      // // Terrain
+      // new Terrain(this.world, this.scene);
+
+      // Floor
+      new Floor(this.world, this.scene);
 
       // Player
       this.player = new Player(this.world, this.scene, this.clock);
