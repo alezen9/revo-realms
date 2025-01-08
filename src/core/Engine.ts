@@ -6,7 +6,15 @@ import Player from "../game/Player";
 import Stats from "stats-gl";
 import Floor from "../game/Floor";
 
-export type Rapier = typeof import("@dimforge/rapier3d");
+// export type Rapier = typeof import("@dimforge/rapier3d");
+
+export type State = {
+  renderer: WebGPURenderer;
+  camera: PerspectiveCamera;
+  scene: Scene;
+  clock: Clock;
+  world: World;
+};
 
 type Sizes = { width: number; height: number; dpr: number; aspect: number };
 
@@ -20,6 +28,7 @@ export default class Engine {
   private clock: Clock;
   private world?: World;
   private player?: Player;
+  private floor?: Floor;
 
   constructor() {
     // Canvas
@@ -53,8 +62,8 @@ export default class Engine {
     this.scene = new Scene();
 
     // Light
-    const pointLoght = new PointLight("white", 5000);
-    pointLoght.position.set(2, 25, 2);
+    const pointLoght = new PointLight("white", 5000000);
+    pointLoght.position.set(0, 500, 0);
     this.scene.add(pointLoght);
 
     // // Grid helper
@@ -70,6 +79,7 @@ export default class Engine {
     this.controls = new OrbitControls(this.camera, this.canvas);
     this.controls.enableDamping = true;
     this.controls.maxPolarAngle = Math.PI / 2.05;
+    this.controls.enabled = false;
 
     // Clock
     this.clock = new Clock(false);
@@ -77,15 +87,22 @@ export default class Engine {
     // Physics-affected objects
     import("@dimforge/rapier3d").then((rapier) => {
       this.world = new rapier.World({ x: 0, y: -9.81, z: 0 }); // Gravity points downwards
+      const state = {
+        renderer: this.renderer,
+        camera: this.camera,
+        clock: this.clock,
+        scene: this.scene,
+        world: this.world,
+      };
 
       // // Terrain
       // new Terrain(this.world, this.scene);
 
       // Floor
-      new Floor(this.world, this.scene);
+      this.floor = new Floor(state);
 
       // Player
-      this.player = new Player(this.world, this.scene, this.clock);
+      this.player = new Player(state);
     });
   }
 
@@ -111,21 +128,29 @@ export default class Engine {
     this.renderer.setPixelRatio(sizes.dpr);
   }
 
-  startLoop(callback?: (params: { clock: Clock }) => void) {
+  startLoop(callback?: (state: State) => void) {
     this.clock.start();
     const loop = async () => {
       // Update stats
       this.stats.update();
-
-      callback?.({ clock: this.clock });
-
       if (this.world) {
+        const state = {
+          renderer: this.renderer,
+          camera: this.camera,
+          clock: this.clock,
+          scene: this.scene,
+          world: this.world,
+        };
+
+        callback?.(state);
+
         this.world.step();
-        this.player?.update();
+        this.player?.update(state);
+        this.floor?.update(state);
       }
 
       // Update controls
-      this.controls.update();
+      if (this.controls.enabled) this.controls.update();
 
       // Render
       await this.renderer.renderAsync(this.scene, this.camera);

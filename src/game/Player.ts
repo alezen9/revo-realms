@@ -1,59 +1,179 @@
 import {
   Mesh,
   MeshStandardMaterial,
-  Scene,
   IcosahedronGeometry,
   Vector3,
-  Clock,
+  Quaternion,
+  Camera,
 } from "three";
 import {
   ColliderDesc,
   RigidBody,
   RigidBodyDesc,
   World,
+  Ray,
 } from "@dimforge/rapier3d";
 import InputManager from "./InputManager";
+import { type State } from "../core/Engine";
 
 export default class Player {
   private mesh: Mesh;
   private rigidBody: RigidBody;
-  private clock: Clock;
   private inputManager: InputManager;
 
-  constructor(world: World, scene: Scene, clock: Clock) {
-    this.clock = clock;
+  // Camera smoothing
+  private smoothedCameraPosition = new Vector3();
+  private smoothedCameraTarget = new Vector3();
+
+  // Yaw (rotation around Y-axis)
+  private yawInRadians = 0;
+
+  // Jump & Movement Configuration
+  private readonly JUMP_IMPULSE = 5;
+  private readonly JUMP_BUFFER_DURATION_IN_SECONDS = 0.2;
+  private readonly MAX_CONSECUTIVE_JUMPS = 2;
+  private readonly JUMP_CUT_MULTIPLIER = 0.3;
+  private readonly FALL_MULTIPLIER = 1.5;
+  private readonly MAX_UPWARD_VELOCITY = 6;
+  private readonly LINEAR_DAMPING = 0.2;
+  private readonly ANGULAR_DAMPING = 0.5;
+  private readonly FORWARD_IMPULSE = 3; // base horizontal impulse
+  private readonly TORQUE_STRENGTH = 1.5; // for rolling
+
+  // Player State
+  private isOnGround = false;
+  private jumpCount = 0;
+  private wasJumpHeld = false;
+  private jumpBufferTimer = 0;
+
+  // Constants for geometry/camera offset
+  private readonly RADIUS = 0.5;
+  private readonly INITIAL_POSITION = new Vector3(0, 2, 0);
+  private readonly CAMERA_OFFSET = new Vector3(0, 1, 7.5);
+  private readonly UP = new Vector3(0, 1, 0);
+  private readonly DOWN = new Vector3(0, -1, 0);
+
+  constructor(state: State) {
+    const { scene, world } = state;
     this.inputManager = new InputManager();
+
     this.mesh = this.createCharacterMesh();
     scene.add(this.mesh);
-    this.rigidBody = world.createRigidBody(this.createCharacterRigidBodyDesc());
-    world.createCollider(this.createCharacterColliderDesc(), this.rigidBody);
+
+    this.rigidBody = world.createRigidBody(this.createRigidBodyDesc());
+    world.createCollider(this.createColliderDesc(), this.rigidBody);
   }
 
   private createCharacterMesh() {
-    const geometry = new IcosahedronGeometry(0.5, 2);
+    const geometry = new IcosahedronGeometry(this.RADIUS, 2);
     const material = new MeshStandardMaterial({
       color: "purple",
       flatShading: true,
     });
     const mesh = new Mesh(geometry, material);
-    mesh.position.set(0, 2, 0);
+    mesh.position.copy(this.INITIAL_POSITION);
     return mesh;
   }
 
-  private createCharacterRigidBodyDesc() {
-    const rigidBody = RigidBodyDesc.dynamic()
-      .setTranslation(0, 2, 0)
-      .setLinearDamping(0.5)
-      .setAngularDamping(0.5);
-    return rigidBody;
+  private createRigidBodyDesc() {
+    const { x, y, z } = this.INITIAL_POSITION;
+    return RigidBodyDesc.dynamic()
+      .setTranslation(x, y, z)
+      .setLinearDamping(this.LINEAR_DAMPING)
+      .setAngularDamping(this.ANGULAR_DAMPING);
   }
 
-  private createCharacterColliderDesc() {
-    const collider = ColliderDesc.ball(0.5).setRestitution(0.2).setFriction(1);
-    return collider;
+  private createColliderDesc() {
+    return ColliderDesc.ball(this.RADIUS).setRestitution(0.2).setFriction(1);
   }
 
-  private move() {
+  public update(state: State) {
+    const { clock, camera, world } = state;
+    const delta = clock.getDelta();
+
+    this.updateVerticalMovement(delta, world);
+    this.updateHorizontalMovement(delta);
+    this.updateCameraPosition(camera, delta);
+  }
+
+  private updateVerticalMovement(delta: number, world: World) {
+    const isJumpKeyPressed = this.inputManager.isKeyPressed(" ");
+
+    // 1) Ground check
+    this.isOnGround = this.checkIfGrounded(world);
+    if (this.isOnGround) {
+      this.jumpCount = 0;
+    }
+
+    // 2) Jump buffer
+    const justPressedThisFrame = isJumpKeyPressed && !this.wasJumpHeld;
+    if (justPressedThisFrame) {
+      this.jumpBufferTimer = this.JUMP_BUFFER_DURATION_IN_SECONDS;
+    } else {
+      this.jumpBufferTimer = Math.max(0, this.jumpBufferTimer - delta);
+    }
+
+    // 3) Jump attempt
+    if (this.jumpBufferTimer > 0 && this.canJump()) {
+      this.performJump();
+      this.jumpBufferTimer = 0;
+    }
+
+    // 4) Mid-air logic (jump cut, fast fall, clamp)
+    const velocity = this.rigidBody.linvel() as Vector3;
+    this.handleJumpCut(isJumpKeyPressed, velocity);
+    this.handleFastFall(delta, velocity, world.gravity.y);
+    this.clampUpwardVelocity(velocity);
+    this.rigidBody.setLinvel(velocity, true);
+
+    // 5) Save jump key state
+    this.wasJumpHeld = isJumpKeyPressed;
+  }
+
+  private checkIfGrounded(world: World): boolean {
+    // Cast a ray downward from just below the sphere’s center
+    const pos = this.rigidBody.translation();
+    const rayOrigin = new Vector3(pos.x, pos.y - (this.RADIUS + 0.01), pos.z);
+    const ray = new Ray(rayOrigin, this.DOWN);
+
+    const maxDistance = 5;
+    const hit = world.castRay(ray, maxDistance, true);
+
+    if (!hit) return false;
+
+    const distanceToGround = hit.timeOfImpact * maxDistance;
+    return distanceToGround < 0.01;
+  }
+
+  private canJump(): boolean {
+    if (this.isOnGround) return true;
+    return this.jumpCount < this.MAX_CONSECUTIVE_JUMPS;
+  }
+
+  private performJump() {
+    const impulse = new Vector3(0, this.JUMP_IMPULSE, 0);
+    this.rigidBody.applyImpulse(impulse, true);
+    this.jumpCount += 1;
+  }
+
+  private handleJumpCut(isJumpKeyPressed: boolean, velocity: Vector3) {
+    const justReleasedJump = !isJumpKeyPressed && this.wasJumpHeld;
+    if (!justReleasedJump || velocity.y <= 0) return;
+    velocity.y *= this.JUMP_CUT_MULTIPLIER;
+  }
+
+  private handleFastFall(delta: number, velocity: Vector3, gravityY: number) {
+    if (velocity.y >= 0) return;
+    const extraDown = this.FALL_MULTIPLIER * Math.abs(gravityY) * delta;
+    velocity.y -= extraDown;
+  }
+
+  private clampUpwardVelocity(velocity: Vector3) {
+    if (velocity.y <= this.MAX_UPWARD_VELOCITY) return;
+    velocity.y = this.MAX_UPWARD_VELOCITY;
+  }
+
+  private updateHorizontalMovement(delta: number) {
     const isForward =
       this.inputManager.isKeyPressed("w") ||
       this.inputManager.isKeyPressed("arrowup");
@@ -67,44 +187,68 @@ export default class Player {
       this.inputManager.isKeyPressed("d") ||
       this.inputManager.isKeyPressed("arrowright");
 
-    const delta = this.clock.getDelta();
-    const impulseStrength = 1 * delta;
-    const torqueStrength = 1.5 * delta;
-    const impulse = new Vector3(0, 0, 0);
-    const torque = new Vector3(0, 0, 0);
+    const turnSpeed = 2; // radians/sec
+    if (isLeftward) this.yawInRadians += turnSpeed * delta;
+    if (isRightward) this.yawInRadians -= turnSpeed * delta;
+
+    const forwardVec = new Vector3(
+      -Math.sin(this.yawInRadians),
+      0,
+      -Math.cos(this.yawInRadians),
+    );
+
+    const impulse = new Vector3();
+    const torque = new Vector3();
+    const torqueAxis = new Vector3()
+      .crossVectors(this.UP, forwardVec)
+      .normalize();
 
     if (isForward) {
-      impulse.z -= impulseStrength; // Push forward
-      torque.x -= torqueStrength; // Rotate backward (rolling forward)
+      impulse.addScaledVector(forwardVec, this.FORWARD_IMPULSE * delta);
+      torque.addScaledVector(torqueAxis, this.TORQUE_STRENGTH * delta);
     }
     if (isBackward) {
-      impulse.z += impulseStrength; // Push backward
-      torque.x += torqueStrength; // Rotate forward (rolling backward)
-    }
-    if (isLeftward) {
-      impulse.x -= impulseStrength; // Push left
-      torque.z += torqueStrength; // Rotate right (rolling left)
-    }
-    if (isRightward) {
-      impulse.x += impulseStrength; // Push right
-      torque.z -= torqueStrength; // Rotate left (rolling right)
+      impulse.addScaledVector(forwardVec, -this.FORWARD_IMPULSE * delta);
+      torque.addScaledVector(torqueAxis, -this.TORQUE_STRENGTH * delta);
     }
 
-    // Apply impulse to the ball
     this.rigidBody.applyImpulse(impulse, true);
     this.rigidBody.applyTorqueImpulse(torque, true);
+
+    this.syncMeshWithBody();
   }
 
-  public update() {
-    // Move
-    this.move();
-
-    // Update rranslation
+  private syncMeshWithBody() {
     const position = this.rigidBody.translation();
-    this.mesh.position.copy(position);
+    this.mesh.position.set(position.x, position.y, position.z);
 
-    // Update rotation
     const rotation = this.rigidBody.rotation();
     this.mesh.quaternion.copy(rotation);
+  }
+
+  private updateCameraPosition(camera: Camera, delta: number) {
+    // Build yaw quaternion
+    const yawQuaternion = new Quaternion();
+    yawQuaternion.setFromAxisAngle(this.UP, this.yawInRadians);
+
+    // Rotate offset
+    const offset = this.CAMERA_OFFSET.clone().applyQuaternion(yawQuaternion);
+
+    // Desired camera pos
+    const position = this.mesh.position.clone();
+    const desiredCameraPosition = position.add(offset);
+
+    // Lerp
+    const lerpFactor = 7.5 * delta;
+    this.smoothedCameraPosition.lerp(desiredCameraPosition, lerpFactor);
+
+    // Lerp target as well
+    const desiredTarget = this.mesh.position.clone();
+    desiredTarget.y += 1;
+    this.smoothedCameraTarget.lerp(desiredTarget, lerpFactor);
+
+    // Assign to camera
+    camera.position.copy(this.smoothedCameraPosition);
+    camera.lookAt(this.smoothedCameraTarget);
   }
 }
