@@ -5,6 +5,7 @@ import {
   Object3D,
   PerspectiveCamera,
   ACESFilmicToneMapping,
+  VSMShadowMap,
 } from "three";
 import { OrbitControls } from "three/examples/jsm/Addons.js";
 import { World } from "@dimforge/rapier3d";
@@ -52,6 +53,7 @@ export default class Engine {
       antialias: true,
     });
     this.renderer.shadowMap.enabled = true;
+    this.renderer.shadowMap.type = VSMShadowMap;
     this.renderer.setSize(sizes.width, sizes.height);
     this.renderer.setPixelRatio(sizes.dpr);
     this.renderer.toneMapping = ACESFilmicToneMapping;
@@ -72,10 +74,6 @@ export default class Engine {
     // Scene
     this.scene = new Scene();
 
-    // // Grid helper
-    // const gridHelper = new GridHelper(1000, 1000, "black", "grey");
-    // this.scene.add(gridHelper);
-
     // Camera
     this.camera = new PerspectiveCamera(45, sizes.aspect, 0.01, 1000);
     this.camera.position.set(0, 5, 10);
@@ -93,6 +91,7 @@ export default class Engine {
     // Physics-affected objects
     import("@dimforge/rapier3d").then((rapier) => {
       this.world = new rapier.World({ x: 0, y: -9.81, z: 0 }); // Gravity points downwards
+
       const state: State = {
         renderer: this.renderer,
         camera: this.camera,

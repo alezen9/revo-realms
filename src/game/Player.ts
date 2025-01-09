@@ -65,10 +65,20 @@ export default class Player {
   }
 
   private createCharacterMesh() {
-    const geometry = new IcosahedronGeometry(this.RADIUS, 5);
+    const geometry = new IcosahedronGeometry(this.RADIUS, 3);
+    // const material = new MeshPhongMaterial({
+    //   color: "purple",
+    //   flatShading: true,
+    //   shininess: 150,
+    //   specular: "#fcffb5",
+    //   emissive: "red",
+    //   emissiveIntensity: 1.1,
+    // });
     const material = new MeshStandardMaterial({
       color: "purple",
       flatShading: true,
+      // emissive: "purple",
+      // emissiveIntensity: 10,
       metalness: 1,
       roughness: 0.5,
     });

@@ -3,7 +3,7 @@ import { State } from "../core/Engine";
 
 export default class Light {
   private light: DirectionalLight;
-  private readonly LIGHT_POSITION_OFFSET = new Vector3(2.5, 10, 1);
+  private readonly LIGHT_POSITION_OFFSET = new Vector3(2.5, 7.5, 1);
   private target = new Object3D();
   private readonly TARGET_POSITION_OFFSET = new Vector3(-3, 0, -3);
 
@@ -16,8 +16,9 @@ export default class Light {
     this.light = new DirectionalLight("#fcffb5", 2);
     this.light.target = this.target;
     this.light.castShadow = true;
-    this.light.shadow.mapSize.width = 1024;
-    this.light.shadow.mapSize.height = 1024;
+    this.light.shadow.mapSize.width = 256;
+    this.light.shadow.mapSize.height = 256;
+    this.light.shadow.radius = 3;
 
     this.light.shadow.camera.near = 0.5;
     this.light.shadow.camera.far = 50;

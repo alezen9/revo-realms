@@ -1,10 +1,4 @@
-import {
-  Scene,
-  PlaneGeometry,
-  MeshStandardMaterial,
-  Mesh,
-  PerspectiveCamera,
-} from "three";
+import { Scene, PlaneGeometry, MeshStandardMaterial, Mesh } from "three";
 import { ColliderDesc, RigidBodyDesc, World } from "@dimforge/rapier3d";
 import { State } from "../core/Engine";
 
@@ -20,22 +14,18 @@ export default class InfiniteFloor {
   // Internal state
   private tiles: Mesh[][] = [];
   private readonly halfGrid = Math.floor(this.GRID_COUNT / 2);
-  private readonly scene: Scene;
-  private readonly world: World;
 
   constructor(state: State) {
     const { scene, world } = state;
-    this.scene = scene;
-    this.world = world;
 
-    this.createTileGrid();
+    this.createTileGrid(world, scene);
   }
 
   /**
    * Initialize a grid of floor tiles centered around (0,0) in the XZ plane.
    * Each tile is a normal mesh that can receive shadows.
    */
-  private createTileGrid() {
+  private createTileGrid(world: World, scene: Scene) {
     const geometry = new PlaneGeometry(
       this.TILE_SIZE,
       this.TILE_SIZE,
@@ -59,13 +49,14 @@ export default class InfiniteFloor {
         mesh.position.set(x, 0, z);
         mesh.receiveShadow = true;
 
-        this.scene.add(mesh);
+        scene.add(mesh);
         this.tiles[rowIdx][colIdx] = mesh;
+
         // Create physics collider for the floor
-        const rigidBody = this.world.createRigidBody(
+        const rigidBody = world.createRigidBody(
           this.createFloorRigidBodyDesc(x, z),
         );
-        this.world.createCollider(this.createFloorColliderDesc(), rigidBody);
+        world.createCollider(this.createFloorColliderDesc(), rigidBody);
         mesh.userData = { rigidBody };
       }
     }
