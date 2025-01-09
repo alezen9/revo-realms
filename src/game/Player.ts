@@ -48,8 +48,8 @@ export default class Player {
 
   // Constants for geometry/camera offset
   private readonly RADIUS = 0.5;
-  private readonly INITIAL_POSITION = new Vector3(0, 2, 0);
-  private readonly CAMERA_OFFSET = new Vector3(0, 1, 7.5);
+  private readonly PLAYER_INITIAL_POSITION = new Vector3(0, 2, 0);
+  private readonly CAMERA_OFFSET = new Vector3(0, 5, 7.5);
   private readonly UP = new Vector3(0, 1, 0);
   private readonly DOWN = new Vector3(0, -1, 0);
 
@@ -65,18 +65,21 @@ export default class Player {
   }
 
   private createCharacterMesh() {
-    const geometry = new IcosahedronGeometry(this.RADIUS, 2);
+    const geometry = new IcosahedronGeometry(this.RADIUS, 5);
     const material = new MeshStandardMaterial({
       color: "purple",
       flatShading: true,
+      metalness: 1,
+      roughness: 0.5,
     });
     const mesh = new Mesh(geometry, material);
-    mesh.position.copy(this.INITIAL_POSITION);
+    mesh.castShadow = true;
+    mesh.position.copy(this.PLAYER_INITIAL_POSITION);
     return mesh;
   }
 
   private createRigidBodyDesc() {
-    const { x, y, z } = this.INITIAL_POSITION;
+    const { x, y, z } = this.PLAYER_INITIAL_POSITION;
     return RigidBodyDesc.dynamic()
       .setTranslation(x, y, z)
       .setLinearDamping(this.LINEAR_DAMPING)
@@ -250,5 +253,9 @@ export default class Player {
     // Assign to camera
     camera.position.copy(this.smoothedCameraPosition);
     camera.lookAt(this.smoothedCameraTarget);
+  }
+
+  public getPosition() {
+    return this.mesh.position;
   }
 }

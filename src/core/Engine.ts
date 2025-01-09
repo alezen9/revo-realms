@@ -1,10 +1,17 @@
 import { WebGPURenderer } from "three/webgpu";
-import { Scene, PointLight, Clock, Object3D, PerspectiveCamera } from "three";
+import {
+  Scene,
+  Clock,
+  Object3D,
+  PerspectiveCamera,
+  ACESFilmicToneMapping,
+} from "three";
 import { OrbitControls } from "three/examples/jsm/Addons.js";
 import { World } from "@dimforge/rapier3d";
 import Player from "../game/Player";
 import Stats from "stats-gl";
-import Floor from "../game/Floor";
+import InfiniteFloor from "../game/InfiniteFloor";
+import Light from "../game/Light";
 
 // export type Rapier = typeof import("@dimforge/rapier3d");
 
@@ -14,6 +21,7 @@ export type State = {
   scene: Scene;
   clock: Clock;
   world: World;
+  player?: Player;
 };
 
 type Sizes = { width: number; height: number; dpr: number; aspect: number };
@@ -28,7 +36,8 @@ export default class Engine {
   private clock: Clock;
   private world?: World;
   private player?: Player;
-  private floor?: Floor;
+  private infiniteFloor?: InfiniteFloor;
+  private light?: Light;
 
   constructor() {
     // Canvas
@@ -42,8 +51,10 @@ export default class Engine {
       canvas: this.canvas,
       antialias: true,
     });
+    this.renderer.shadowMap.enabled = true;
     this.renderer.setSize(sizes.width, sizes.height);
     this.renderer.setPixelRatio(sizes.dpr);
+    this.renderer.toneMapping = ACESFilmicToneMapping;
 
     // Stats
     this.stats = new Stats({
@@ -60,11 +71,6 @@ export default class Engine {
 
     // Scene
     this.scene = new Scene();
-
-    // Light
-    const pointLoght = new PointLight("white", 5000000);
-    pointLoght.position.set(0, 500, 0);
-    this.scene.add(pointLoght);
 
     // // Grid helper
     // const gridHelper = new GridHelper(1000, 1000, "black", "grey");
@@ -87,7 +93,7 @@ export default class Engine {
     // Physics-affected objects
     import("@dimforge/rapier3d").then((rapier) => {
       this.world = new rapier.World({ x: 0, y: -9.81, z: 0 }); // Gravity points downwards
-      const state = {
+      const state: State = {
         renderer: this.renderer,
         camera: this.camera,
         clock: this.clock,
@@ -95,14 +101,15 @@ export default class Engine {
         world: this.world,
       };
 
-      // // Terrain
-      // new Terrain(this.world, this.scene);
-
-      // Floor
-      this.floor = new Floor(state);
-
       // Player
       this.player = new Player(state);
+      state.player = this.player;
+
+      // Light
+      this.light = new Light(state);
+
+      // Infinite Floor
+      this.infiniteFloor = new InfiniteFloor(state);
     });
   }
 
@@ -140,13 +147,15 @@ export default class Engine {
           clock: this.clock,
           scene: this.scene,
           world: this.world,
+          player: this.player,
         };
 
         callback?.(state);
 
         this.world.step();
         this.player?.update(state);
-        this.floor?.update(state);
+        this.infiniteFloor?.update(state);
+        this.light?.update(state);
       }
 
       // Update controls
