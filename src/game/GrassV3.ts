@@ -331,63 +331,6 @@ export default class GrassV3 {
     ];
   }
 
-  private createGeometry() {
-    const geometry = new BufferGeometry();
-
-    const totalGrassBlades = Math.pow(this.NUM_BLADES_PER_SIDE, 2);
-    const cellSize = this.GRASS_AREA_SIDE_SIZE / this.NUM_BLADES_PER_SIDE;
-    const halfCellSize = cellSize / 2;
-    const halfAreaSize = this.GRASS_AREA_SIDE_SIZE / 2;
-    const numVerticesPerBlade = this.NUM_VERTICES_PER_BLADE_HIGH * 3; // 3 vertices * x,y,z
-    const totalVertices = totalGrassBlades * numVerticesPerBlade;
-    const halfWidth = this.BLADE_WIDTH / 2;
-
-    const vertices = new Float32Array(totalVertices);
-
-    let globalIdx = 0;
-    for (let rowIdx = 0; rowIdx < this.NUM_BLADES_PER_SIDE; rowIdx++) {
-      const displacementZ = rowIdx * cellSize + halfCellSize - halfAreaSize;
-      for (let colIdx = 0; colIdx < this.NUM_BLADES_PER_SIDE; colIdx++) {
-        const offsetZ = MathUtils.randFloat(
-          -halfCellSize + halfWidth,
-          halfCellSize - halfWidth,
-        );
-        const offsetX = MathUtils.randFloat(
-          -halfCellSize + halfWidth,
-          halfCellSize - halfWidth,
-        );
-
-        const rotationAngle = MathUtils.randFloat(-1, 1);
-        const bendAngle = MathUtils.randFloat(-0.5, 0.5);
-
-        const displacementX = colIdx * cellSize + halfCellSize - halfAreaSize;
-        const bladeVertices = this.createBladeVerticesHigh(
-          displacementX + offsetX,
-          displacementZ + offsetZ,
-          rotationAngle,
-          bendAngle,
-        );
-        vertices.set(bladeVertices, globalIdx * numVerticesPerBlade);
-        globalIdx++;
-      }
-    }
-
-    geometry.setAttribute("position", new BufferAttribute(vertices, 3));
-
-    const singleBladeUVs = this.computeSingleBladeUvsHigh();
-
-    const uvs = new Float32Array(totalVertices * 2); // 2 = u,v
-    for (let bladeIdx = 0; bladeIdx < totalGrassBlades; bladeIdx++) {
-      uvs.set(singleBladeUVs, bladeIdx * singleBladeUVs.length);
-    }
-
-    geometry.setAttribute("uv", new BufferAttribute(uvs, 2));
-
-    geometry.computeVertexNormals();
-
-    return geometry;
-  }
-
   private material_curveNormals(materialNode: MeshBasicNodeMaterial) {
     // Control the roundness, stronger curve at the base
     const curvatureAngle = Math.PI * 0.5;
@@ -569,5 +512,179 @@ export default class GrassV3 {
   public update(state: State) {
     const { clock } = state;
     this.uTime.value = clock.getElapsedTime();
+  }
+
+  // ########################################
+  //            Refactoring
+  // ########################################
+
+  private createGrassBladeGeometryData() {
+    /**
+     *        I
+     *      /   \
+     *    G ------ H
+     *    |   /    |
+     *    E ------ F
+     *    |   /    |
+     *    C ------ D
+     *    |   /    |
+     *    A ------ B
+     *
+     *  - Bottom Quad: A-B-D-C (2 triangles)
+     *  - Middle Quad: C-D-F-E (2 triangles)
+     *  - Top Quad:    E-F-H-G (2 triangles)
+     *  - Tip:         G-H-I   (1 triangle)
+     *
+     *  Total: 7 triangles for smooth high-definition bending.
+     */
+
+    const halfWidth = this.BLADE_WIDTH / 2;
+    const height = this.BLADE_HEIGHT;
+
+    const segmentHeight = height / 4;
+
+    const positions = new Float32Array([
+      -halfWidth,
+      0,
+      0, // A
+      halfWidth,
+      0,
+      0, // B
+      -halfWidth,
+      segmentHeight,
+      0, // C
+      halfWidth,
+      segmentHeight,
+      0, // D
+      -halfWidth,
+      segmentHeight * 2,
+      0, // E
+      halfWidth,
+      segmentHeight * 2,
+      0, // F
+      -halfWidth,
+      segmentHeight * 3,
+      0, // G
+      halfWidth,
+      segmentHeight * 3,
+      0, // H
+      0,
+      height,
+      0, // I - Tip (8)
+    ]);
+
+    const indices = new Uint16Array([
+      // Bottom Quad (A-B-D, A-D-C)
+      0, 1, 3, 0, 3, 2,
+      // Middle Quad (C-D-F, C-F-E)
+      2, 3, 5, 2, 5, 4,
+      // Top Quad (E-F-H, E-H-G)
+      4, 5, 7, 4, 7, 6,
+      // Tip (G-H-I)
+      6, 7, 8,
+    ]);
+
+    const uvs = new Float32Array([
+      0,
+      0,
+      1,
+      0,
+      0,
+      0.25,
+      1,
+      0.25, // Bottom Quad
+      0,
+      0.5,
+      1,
+      0.5, // Middle Quad
+      0,
+      0.75,
+      1,
+      0.75, // Top Quad
+      0.5,
+      1, // Tip
+    ]);
+
+    return {
+      positions,
+      indices,
+      uvs,
+    };
+  }
+
+  private createGeometry() {
+    const {
+      positions: bladePositions,
+      indices: bladeIndices,
+      uvs: bladeUVs,
+    } = this.createGrassBladeGeometryData();
+
+    const bladeVertexCount = bladePositions.length / 3;
+    const bladeIndexCount = bladeIndices.length;
+    const bladesPerSide = this.NUM_BLADES_PER_SIDE;
+    const totalBlades = Math.pow(bladesPerSide, 2);
+
+    const tileSize = this.GRASS_AREA_SIDE_SIZE;
+    const halfTileSize = tileSize / 2;
+    const spacing = tileSize / bladesPerSide;
+
+    // Buffers for the entire tile
+    const positions = new Float32Array(bladeVertexCount * totalBlades * 3);
+    const uvs = new Float32Array(bladeVertexCount * totalBlades * 2);
+    const indices =
+      bladeVertexCount * totalBlades < 65_536 // 2^16
+        ? new Uint16Array(bladeIndexCount * totalBlades)
+        : new Uint32Array(bladeIndexCount * totalBlades);
+    let vertexOffset = 0; // position data index
+    let uvOffset = 0; // UV data index
+    let indexOffset = 0; // index data index
+
+    for (let rowIdx = 0; rowIdx < bladesPerSide; rowIdx++) {
+      const offsetZ =
+        -halfTileSize + rowIdx * spacing + Math.random() * spacing * 0.5;
+      for (let colIdx = 0; colIdx < bladesPerSide; colIdx++) {
+        const offsetX =
+          -halfTileSize + colIdx * spacing + Math.random() * spacing * 0.5;
+
+        // Random rotation for variation
+        const rotationAngle = Math.random() * Math.PI * 2;
+        const cosTheta = Math.cos(rotationAngle);
+        const sinTheta = Math.sin(rotationAngle);
+
+        for (let i = 0; i < bladeVertexCount; i++) {
+          const x = bladePositions[i * 3];
+          const y = bladePositions[i * 3 + 1];
+          const z = bladePositions[i * 3 + 2];
+
+          // Rotate on Y and offset each blade
+          positions[vertexOffset * 3] = x * cosTheta - z * sinTheta + offsetX;
+          positions[vertexOffset * 3 + 1] = y;
+          positions[vertexOffset * 3 + 2] =
+            x * sinTheta + z * cosTheta + offsetZ;
+
+          vertexOffset++;
+        }
+
+        // UVs
+        uvs.set(bladeUVs, uvOffset);
+        uvOffset += bladeVertexCount * 2;
+
+        // Index
+        const vertexIndexOffset = vertexOffset - bladeVertexCount;
+        for (let i = 0; i < bladeIndexCount; i++) {
+          indices[indexOffset + i] = bladeIndices[i] + vertexIndexOffset;
+        }
+        indexOffset += bladeIndexCount;
+      }
+    }
+
+    const tileGeometry = new BufferGeometry();
+    tileGeometry.setAttribute("position", new BufferAttribute(positions, 3));
+    tileGeometry.setAttribute("uv", new BufferAttribute(uvs, 2));
+    tileGeometry.setIndex(new BufferAttribute(indices, 1));
+
+    tileGeometry.computeVertexNormals();
+
+    return tileGeometry;
   }
 }
