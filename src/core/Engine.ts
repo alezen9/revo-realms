@@ -22,6 +22,7 @@ export type State = {
   scene: Scene;
   clock: Clock;
   world: World;
+  light?: Light;
   player?: Player;
 };
 
@@ -106,6 +107,7 @@ export default class Engine {
 
       // Light
       this.light = new Light(state);
+      state.light = this.light;
 
       // Infinite Floor
       this.infiniteFloor = new InfiniteFloor(state);
@@ -146,6 +148,7 @@ export default class Engine {
           clock: this.clock,
           scene: this.scene,
           world: this.world,
+          light: this.light,
           player: this.player,
         };
 

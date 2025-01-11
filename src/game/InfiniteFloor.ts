@@ -1,10 +1,21 @@
-import { Scene, PlaneGeometry, MeshStandardMaterial, Mesh } from "three";
+import {
+  Scene,
+  PlaneGeometry,
+  MeshStandardMaterial,
+  Mesh,
+  MeshBasicMaterial,
+  MeshPhongMaterial,
+} from "three";
 import { ColliderDesc, RigidBodyDesc, World } from "@dimforge/rapier3d";
 import { State } from "../core/Engine";
+import Grass from "./GrassV3";
 
-const colors = ["red", "green", "blue", "yellow", "purple", "orange", "coral"];
+// const colors = ["red", "green", "blue", "yellow", "purple", "orange", "coral"];
+const colors = ["#543b0e"];
 
 export default class InfiniteFloor {
+  private grass: Grass;
+
   // Configuration constants
   private readonly TILE_SIZE = 4;
   private readonly TILE_SUBDIVISION = 16;
@@ -19,6 +30,8 @@ export default class InfiniteFloor {
     const { scene, world } = state;
 
     this.createTileGrid(world, scene);
+
+    this.grass = new Grass(state);
   }
 
   /**
@@ -38,7 +51,7 @@ export default class InfiniteFloor {
         // Debug material
         const colorIdx = Math.floor(Math.random() * colors.length);
         const color = colors[colorIdx];
-        const material = new MeshStandardMaterial({ color });
+        const material = new MeshPhongMaterial({ color });
 
         const mesh = new Mesh(geometry, material);
         mesh.rotation.x = -Math.PI / 2; // lay flat on ground
@@ -115,5 +128,7 @@ export default class InfiniteFloor {
         mesh.userData.rigidBody.setTranslation(rigidBodyPosition, true);
       }
     }
+
+    this.grass.update(state);
   }
 }
