@@ -27,6 +27,10 @@ export default class Light {
     scene.add(this.light);
   }
 
+  public getDirection() {
+    return this.target.position.normalize();
+  }
+
   public update(state: State) {
     const { player } = state;
     if (!player) return;

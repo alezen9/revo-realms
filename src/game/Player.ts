@@ -268,4 +268,8 @@ export default class Player {
   public getPosition() {
     return this.mesh.position;
   }
+
+  public getRotation() {
+    return this.mesh.rotation;
+  }
 }
