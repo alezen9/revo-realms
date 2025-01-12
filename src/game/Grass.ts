@@ -4,36 +4,26 @@ import {
   DoubleSide,
   MathUtils,
   InstancedMesh,
-} from "three";
-import { State } from "../core/Engine";
-import {
-  Color,
-  Mesh,
-  MeshBasicNodeMaterial,
-  MeshLambertNodeMaterial,
-  MeshPhongNodeMaterial,
-  MeshPhysicalMaterial,
-  MeshStandardNodeMaterial,
   Object3D,
   Texture,
   TextureLoader,
-} from "three/webgpu";
+  Mesh,
+} from "three";
+import { State } from "../core/Engine";
+import { MeshPhongNodeMaterial } from "three/webgpu";
 import {
-  abs,
+  attribute,
   cos,
-  dot,
   faceDirection,
   float,
   fract,
   mix,
   modelNormalMatrix,
-  normalGeometry,
   normalize,
   positionGeometry,
   positionWorld,
   pow,
   sin,
-  smoothstep,
   texture,
   transformDirection,
   uniform,
@@ -44,10 +34,10 @@ import {
 import perlinNoiseTextureUrl from "/perlin_noise_texture.webp?url";
 
 export default class GrassV3 {
-  private readonly GRASS_AREA_SIDE_SIZE = 8; // better if pow of 2 or even
-  private readonly NUM_BLADES_PER_SIDE = 96; // better if pow of 2 or perfect square
-  private readonly BLADE_WIDTH = 0.05;
-  private readonly BLADE_HEIGHT = 1;
+  private readonly GRASS_AREA_SIDE_SIZE = 4; // better if pow of 2 or even
+  private readonly NUM_BLADES_PER_SIDE = 49; // better if pow of 2 or perfect square
+  private readonly BLADE_WIDTH = 0.025;
+  private readonly BLADE_HEIGHT = 1.25;
   private uTime = uniform(0);
   private noiseTexture: Texture;
 
@@ -57,23 +47,23 @@ export default class GrassV3 {
     const loader = new TextureLoader();
     this.noiseTexture = loader.load(perlinNoiseTextureUrl);
 
-    // const geometry = this.createGeometry();
-    // const material = this.createBladeMaterial();
-    // const mesh = new Mesh(geometry, material);
-    // scene.add(mesh);
+    const geometry = this.createGeometry();
+    const material = this.createBladeMaterial();
+    const mesh = new Mesh(geometry, material);
+    scene.add(mesh);
 
     // const normalHelper = new VertexNormalsHelper(mesh, 0.1, 0xff0000);
     // scene.add(normalHelper);
 
-    const instances = this.createInstances();
-    scene.add(instances);
+    // const instances = this.createInstances();
+    // scene.add(instances);
   }
 
   private createInstances() {
     const geometry = this.createGeometry();
     const material = this.createBladeMaterial();
 
-    const instancesPerSide = 2;
+    const instancesPerSide = 10;
     const totalInstances = instancesPerSide * instancesPerSide;
     const instances = new InstancedMesh(geometry, material, totalInstances);
 
@@ -270,6 +260,7 @@ export default class GrassV3 {
     // Buffers for the entire tile
     const positions = new Float32Array(bladeVertexCount * totalBlades * 3);
     const uvs = new Float32Array(bladeVertexCount * totalBlades * 2);
+    const aoFactors = new Float32Array(bladeVertexCount * totalBlades);
     const indices =
       bladeVertexCount * totalBlades < 65_536 // 2^16
         ? new Uint16Array(bladeIndexCount * totalBlades)
@@ -311,6 +302,11 @@ export default class GrassV3 {
           positions[v3 + 1] = translatedVertex[1];
           positions[v3 + 2] = translatedVertex[2];
 
+          // AO
+          const heightFactor = translatedVertex[1] / this.BLADE_HEIGHT;
+          const aoValue = MathUtils.smoothstep(1.0, 0.0, heightFactor);
+          aoFactors[vertexOffset] = aoValue;
+
           vertexOffset++;
         }
 
@@ -330,6 +326,7 @@ export default class GrassV3 {
     const tileGeometry = new BufferGeometry();
     tileGeometry.setAttribute("position", new BufferAttribute(positions, 3));
     tileGeometry.setAttribute("uv", new BufferAttribute(uvs, 2));
+    tileGeometry.setAttribute("ao", new BufferAttribute(aoFactors, 1));
     tileGeometry.setIndex(new BufferAttribute(indices, 1));
 
     tileGeometry.computeVertexNormals();
@@ -337,137 +334,62 @@ export default class GrassV3 {
     return tileGeometry;
   }
 
-  private material_curveNormals(
-    materialNode: MeshPhongNodeMaterial | MeshBasicNodeMaterial,
-  ) {
-    // 1. Apply curvature across the blade width (UV.x)
-    const sideFactor = uv().x.mul(2.0).sub(1.0); // -1 to 1 across the width
-    const heightFactor = pow(uv().y, 2.0); // More curvature at the base
-    const curvatureStrength = mix(0.4, 0.1, heightFactor);
+  private material_curveNormals(materialNode: MeshPhongNodeMaterial) {
+    // Fake cylindrical shape by curving normals
+    const sideFactor = sin(uv().x.mul(Math.PI)); // Smoother curvature: -1 -> 0 -> 1
+    const heightFactor = pow(uv().y, 1.5); // Softer curvature transition toward the tip
 
-    // 2. Simulate cylindrical normals
+    // Stronger curvature at the base, softer at the tip
+    const curvatureStrength = mix(0.6, 0.15, heightFactor);
+
+    // Subtle Twisting for Organic Shape
+    const twistStrength = mix(0.0, 0.2, heightFactor); // Slight twist near the tip
+    const twistAngle = uv().y.mul(Math.PI).mul(twistStrength); // Vary twist over height
+
+    // Apply combined curvature and twist for cylindrical illusion
     let curvedNormal = normalize(
-      vec3(sideFactor.mul(curvatureStrength), 0.0, 1.0),
+      vec3(
+        sideFactor.mul(curvatureStrength).cos().sub(twistAngle.sin().mul(0.1)), // Side curvature with slight twist
+        twistAngle.sin().mul(0.05), // Subtle upward twist
+        1.0,
+      ),
     );
 
-    // 3. Transform normals to world space
+    // Transform Normals to World Space
     curvedNormal = normalize(
       transformDirection(curvedNormal, modelNormalMatrix),
     );
 
-    // 4. Correct for backface rendering
+    // Correct for Backface Rendering
     curvedNormal = mix(
       curvedNormal,
       curvedNormal.negate(),
       float(faceDirection.lessThan(0.0)),
     );
 
-    // 5. Apply the corrected normal to the material
     materialNode.normalNode = curvedNormal;
   }
 
-  private material_addAmbientOcclusion(
-    materialNode: MeshPhongNodeMaterial | MeshBasicNodeMaterial,
-  ) {
-    // 1. **Gentler Height-Based AO (Soft Grounding)**
-    const baseAO = smoothstep(0.0, 0.5, positionGeometry.y).mul(0.2);
-    // Softens the base darkening effect
-
-    // 2. **Subtle Noise-Based Variation (Organic Patches)**
-    const aoNoiseScale = 0.15;
-    const aoNoiseUV = positionWorld.xz.mul(aoNoiseScale);
-    const noiseSample = texture(this.noiseTexture, aoNoiseUV).r;
-    const aoClustering = mix(0.85, 1.0, noiseSample);
-    // Softer clustering
-
-    // 3. **Increased Self-Shadowing Along Blade Curvature**
-    const bendShadowStrength = 0.6; // Increased self-shadowing strength
-    const bendShadow = float(1.0)
-      .sub(abs(normalGeometry.x))
-      .mul(bendShadowStrength);
-    // Stronger shading on inner curves
-
-    // 4. **Neighboring Blade Occlusion (More Depth)**
-    const neighborNoiseScale = 0.08;
-    const neighborNoiseUV = positionWorld.xz.mul(neighborNoiseScale);
-    const neighborDensity = texture(this.noiseTexture, neighborNoiseUV).r;
-    const neighborAO = mix(0.85, 1.0, neighborDensity);
-
-    // 5. **Reduced AO on Backfaces (Brighter Backs)**
-    const backfaceFactor = mix(1.0, 0.9, float(faceDirection.lessThan(0.0)));
-    // Slight reduction in AO on the back
-
-    // 6. **Combine All AO Effects with More Emphasis on Self-Shadowing**
-    const combinedAO = mix(
-      1.0,
-      baseAO.mul(aoClustering).mul(bendShadow).mul(neighborAO),
-      0.5, // Stronger blending of AO
-    )
-      .mul(backfaceFactor) // Reduce AO on backfaces
-      .clamp(0.7, 1.0); // Keep it bright but with depth
-
-    // 7. **Apply to Material**
-    materialNode.aoNode = combinedAO;
+  private material_addAmbientOcclusion(materialNode: MeshPhongNodeMaterial) {
+    const bakedAO = attribute("ao");
+    materialNode.aoNode = bakedAO;
   }
 
-  private material_setDiffuseColor(
-    materialNode: MeshPhongNodeMaterial | MeshBasicNodeMaterial,
-  ) {
-    // 1. **Base, Mid, and Tip Colors for a Smooth Gradient**
-    const baseColor = vec3(0.05, 0.2, 0.01); // Deep green at the base
-    const midColor = vec3(0.15, 0.35, 0.05); // Richer green for mid-blade
-    const tipColor = vec3(0.45, 0.5, 0.1); // Soft yellow-green near the tip
+  private material_setDiffuseColor(materialNode: MeshPhongNodeMaterial) {
+    const baseColor = vec3(0.1, 0.25, 0.05); // Consistent green
+    const tipColor = vec3(0.4, 0.5, 0.1); // Slightly lighter tip
 
-    // 2. **Noise for Organic Dark Patches**
-    const noiseScale = 0.25;
-    const noiseSample = texture(
-      this.noiseTexture,
-      positionWorld.xz.mul(noiseScale),
-    ).r;
-    const darkPatchFactor = smoothstep(0.3, 0.7, noiseSample); // Emphasize dark spots
+    // Smooth gradient from base to tip
+    const heightFactor = pow(positionGeometry.y, 1.5);
+    const blendedColor = mix(baseColor, tipColor, heightFactor);
 
-    const darkPatchColor = vec3(0.03, 0.15, 0.01); // Dark green for organic spots
-
-    // 3. **Height-Based Color Blending (Base → Mid → Tip)**
-    const heightFactor = pow(positionGeometry.y, 1.2); // More gradual transition
-    const baseToMidBlend = mix(
-      baseColor,
-      midColor,
-      smoothstep(0.0, 0.6, heightFactor),
-    );
-    const midToTipBlend = mix(
-      baseToMidBlend,
-      tipColor,
-      smoothstep(0.4, 1.0, heightFactor),
-    );
-
-    // 4. **Overlay Dark Patches for Organic Variation**
-    const organicColor = mix(
-      midToTipBlend,
-      darkPatchColor,
-      darkPatchFactor.mul(0.3),
-    );
-    // Subtle dark patches blended in
-
-    // 5. **Enhanced Subsurface Scattering (Soft Light Wrap)**
-    const lightDirection = normalize(vec3(-0.3, 1.0, 0.2)); // Dawn light direction
-    const lightWrap = 0.6; // Softer light spread
-    const facingLightFactor = dot(normalGeometry, lightDirection).max(0.0);
-    const subsurfaceEffect = mix(0.5, 1.0, facingLightFactor.mul(lightWrap));
-
-    // 6. **Final Color Composition**
-    const finalColor = organicColor.mul(subsurfaceEffect);
-
-    // 7. **Apply to Material**
-    materialNode.colorNode = finalColor;
+    materialNode.colorNode = blendedColor;
   }
 
-  private material_addWindMotion(
-    materialNode: MeshPhongNodeMaterial | MeshBasicNodeMaterial,
-  ) {
+  private material_addWindMotion(materialNode: MeshPhongNodeMaterial) {
     // 1. **Blade-Level Noise Sampling (With Seamless Wrapping)**
     const bladeOrigin = vec2(positionWorld.x, positionWorld.z);
-    const bladeNoiseScale = 0.05; // Large-scale wind
+    const bladeNoiseScale = 0.05;
     const detailNoiseScale = 0.2; // Fine turbulence
     const timeFactor = this.uTime.mul(0.1); // Smooth time evolution
 
