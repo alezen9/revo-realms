@@ -1,17 +1,10 @@
-import {
-  Scene,
-  PlaneGeometry,
-  MeshStandardMaterial,
-  Mesh,
-  MeshBasicMaterial,
-  MeshPhongMaterial,
-} from "three";
+import { Scene, PlaneGeometry, Mesh, MeshLambertMaterial } from "three";
 import { ColliderDesc, RigidBodyDesc, World } from "@dimforge/rapier3d";
 import { State } from "../core/Engine";
-import Grass from "./GrassV3";
+import Grass from "./Grass";
 
 // const colors = ["red", "green", "blue", "yellow", "purple", "orange", "coral"];
-const colors = ["#543b0e"];
+const colors = ["#140d07", "#281b0d", "#1e140a", "#332211", "#0a0703"];
 
 export default class InfiniteFloor {
   private grass: Grass;
@@ -51,7 +44,7 @@ export default class InfiniteFloor {
         // Debug material
         const colorIdx = Math.floor(Math.random() * colors.length);
         const color = colors[colorIdx];
-        const material = new MeshPhongMaterial({ color });
+        const material = new MeshLambertMaterial({ color });
 
         const mesh = new Mesh(geometry, material);
         mesh.rotation.x = -Math.PI / 2; // lay flat on ground
