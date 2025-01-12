@@ -5,7 +5,6 @@ import {
   Object3D,
   PerspectiveCamera,
   ACESFilmicToneMapping,
-  VSMShadowMap,
 } from "three";
 import { OrbitControls } from "three/examples/jsm/Addons.js";
 import { World } from "@dimforge/rapier3d";
@@ -53,8 +52,6 @@ export default class Engine {
       canvas: this.canvas,
       antialias: true,
     });
-    this.renderer.shadowMap.enabled = true;
-    this.renderer.shadowMap.type = VSMShadowMap;
     this.renderer.setSize(sizes.width, sizes.height);
     this.renderer.setPixelRatio(sizes.dpr);
     this.renderer.toneMapping = ACESFilmicToneMapping;
