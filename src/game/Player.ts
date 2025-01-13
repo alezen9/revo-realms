@@ -12,7 +12,7 @@ import {
   RigidBodyDesc,
   World,
   Ray,
-} from "@dimforge/rapier3d";
+} from "@dimforge/rapier3d-compat";
 import InputManager from "./InputManager";
 import { type State } from "../core/Engine";
 

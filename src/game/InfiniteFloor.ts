@@ -12,27 +12,15 @@ import {
   RigidBody,
   RigidBodyDesc,
   World,
-} from "@dimforge/rapier3d";
+} from "@dimforge/rapier3d-compat";
 import { State } from "../core/Engine";
 import Grass from "./Grass";
-import {
-  ClampToEdgeWrapping,
-  MeshLambertNodeMaterial,
-  RepeatWrapping,
-} from "three/webgpu";
-import materialNormalTextureUrl from "/forest/forest_ground_normal.jpg?url";
-import materialDisplacementTextureUrl from "/forest/forest_ground_displacement.jpg?url";
-import materialDiffuseTextureUrl from "/forest/forest_ground_diffuse.jpg?url";
-import materialAOTextureUrl from "/forest/forest_ground_ao.jpg?url";
-import {
-  cameraPosition,
-  fract,
-  positionWorld,
-  texture,
-  uniform,
-  uv,
-  vec2,
-} from "three/tsl";
+import { MeshLambertNodeMaterial } from "three/webgpu";
+import materialNormalTextureUrl from "/forest/forest_ground_normal.webp?url";
+// import materialDisplacementTextureUrl from "/forest/forest_ground_displacement.jpg?url";
+import materialDiffuseTextureUrl from "/forest/forest_ground_diffuse.webp?url";
+import materialAOTextureUrl from "/forest/forest_ground_ao.webp?url";
+import { positionWorld, texture, uniform, vec2 } from "three/tsl";
 
 export default class InfiniteFloorInstanced {
   private readonly TILE_SIZE = 4;
@@ -49,12 +37,12 @@ export default class InfiniteFloorInstanced {
   private instancedFloor!: InstancedMesh;
 
   // Physics
-  private mapRigidBody: RigidBody;
+  // private mapRigidBody: RigidBody;
   private kintounRigidBody: RigidBody; // Kintoun = Flying Nimbus cloud from dragon ball
 
   // Material
   private materialNormalMap: Texture;
-  private materialDisplacementMap: Texture;
+  // private materialDisplacementMap: Texture;
   private materialDiffuseMap: Texture;
   private materialAOMap: Texture;
 
@@ -69,12 +57,12 @@ export default class InfiniteFloorInstanced {
 
     const loader = new TextureLoader();
     this.materialNormalMap = loader.load(materialNormalTextureUrl);
-    this.materialDisplacementMap = loader.load(materialDisplacementTextureUrl);
+    // this.materialDisplacementMap = loader.load(materialDisplacementTextureUrl);
     this.materialDiffuseMap = loader.load(materialDiffuseTextureUrl);
     this.materialAOMap = loader.load(materialAOTextureUrl);
 
     this.createInstancedTileGrid(scene);
-    this.mapRigidBody = this.createMapCollider(world);
+    this.createMapCollider(world);
     this.kintounRigidBody = this.createKintounCollider(world);
 
     this.grass = new Grass(state);

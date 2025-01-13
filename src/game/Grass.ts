@@ -7,8 +7,6 @@ import {
   Object3D,
   Texture,
   TextureLoader,
-  Mesh,
-  LOD,
   Scene,
 } from "three";
 import { State } from "../core/Engine";
@@ -36,9 +34,9 @@ import {
 import perlinNoiseTextureUrl from "/perlin_noise_texture.webp?url";
 
 type BladeGeometryData = {
-  positions: number[];
-  uvs: number[];
-  indices?: number[];
+  positions: Float32Array;
+  uvs: Float32Array;
+  indices?: Uint16Array;
 };
 
 type GrassChunk = {
@@ -60,8 +58,6 @@ export default class Grass {
 
   private uTime = uniform(0);
   private noiseTexture: Texture;
-  private highLODInstances: InstancedMesh;
-  private lowLODInstances: InstancedMesh;
 
   private chunks: GrassChunk[] = [];
 
@@ -71,22 +67,7 @@ export default class Grass {
     const loader = new TextureLoader();
     this.noiseTexture = loader.load(perlinNoiseTextureUrl);
 
-    // const geomData = this.createGrassBladeGeometryDataHighLOD();
-    // const geometry = this.createGeometry("high", geomData);
-    // const material = this.createBladeMaterial();
-    // const mesh = new Mesh(geometry, material);
-    // scene.add(mesh);
-
-    // const normalHelper = new VertexNormalsHelper(mesh, 0.1, 0xff0000);
-    // scene.add(normalHelper);
-
     this.buildGrassChunks(scene);
-
-    // const { instancesHigh, instancesLow } = this.createInstances();
-    // this.highLODInstances = instancesHigh;
-    // this.lowLODInstances = instancesLow;
-    // scene.add(instancesHigh);
-    // scene.add(instancesLow);
   }
 
   private buildGrassChunks(scene: Scene) {
@@ -195,67 +176,6 @@ export default class Grass {
       highMesh: meshHigh,
       lowMesh: meshLow,
       boundingRadius,
-    };
-  }
-
-  private createInstances() {
-    const highGeometryData = this.createGrassBladeGeometryDataHighLOD();
-    const lowGeometryData = this.createGrassBladeGeometryDataLowLOD();
-    const highLODGeometry = this.createGeometry("high", highGeometryData);
-    const lowLODGeometry = this.createGeometry("low", lowGeometryData);
-    const material = this.createBladeMaterial();
-
-    const instancesPerSide = 10;
-    const totalInstances = instancesPerSide * instancesPerSide;
-    const instancesHigh = new InstancedMesh(
-      highLODGeometry,
-      material,
-      totalInstances,
-    );
-    const instancesLow = new InstancedMesh(
-      lowLODGeometry,
-      material,
-      totalInstances,
-    );
-
-    const totalAreaSide = this.GRASS_AREA_SIDE_SIZE * instancesPerSide;
-    const halfInstancesAreaSize = totalAreaSide / 2;
-
-    const halfAreaSize = this.GRASS_AREA_SIDE_SIZE / 2;
-
-    const dummy = new Object3D();
-    let tileIdx = 0;
-    for (let rowIdx = 0; rowIdx < instancesPerSide; rowIdx++) {
-      const displacedZ =
-        rowIdx * this.GRASS_AREA_SIDE_SIZE +
-        halfAreaSize -
-        halfInstancesAreaSize;
-      for (let colIdx = 0; colIdx < instancesPerSide; colIdx++) {
-        const displacedX =
-          colIdx * this.GRASS_AREA_SIDE_SIZE +
-          halfAreaSize -
-          halfInstancesAreaSize;
-
-        dummy.position.set(displacedX, 0, displacedZ);
-
-        dummy.updateMatrix();
-
-        instancesHigh.setMatrixAt(tileIdx, dummy.matrix);
-        instancesLow.setMatrixAt(tileIdx, dummy.matrix);
-
-        tileIdx++;
-      }
-    }
-
-    instancesHigh.instanceMatrix.needsUpdate = true;
-    instancesHigh.computeBoundingSphere();
-    instancesHigh.receiveShadow = true;
-    instancesLow.instanceMatrix.needsUpdate = true;
-    instancesLow.computeBoundingSphere();
-
-    return {
-      instancesHigh,
-      instancesLow,
     };
   }
 
@@ -628,24 +548,6 @@ export default class Grass {
     this.material_setDiffuseColor(materialNode);
     this.material_addWindMotion(materialNode);
     return materialNode;
-  }
-
-  private createTileMeshLOD() {
-    const lowGeometryData = this.createGrassBladeGeometryDataLowLOD();
-    const highGeometryData = this.createGrassBladeGeometryDataHighLOD();
-    const highLODGeometry = this.createGeometry("high", highGeometryData);
-    const lowLODGeometry = this.createGeometry("low", lowGeometryData);
-    const material = this.createBladeMaterial();
-
-    const highLODMesh = new Mesh(highLODGeometry, material);
-    const lowLODMesh = new Mesh(lowLODGeometry, material);
-
-    const lod = new LOD();
-    lod.addLevel(highLODMesh, 0); // High LOD up close
-    lod.addLevel(lowLODMesh, 15); // Low LOD farther away
-    // lod.addLevel(null, 40);         // Culls beyond 40 units
-
-    return lod;
   }
 
   // ########################################
