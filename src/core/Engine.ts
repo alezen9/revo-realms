@@ -138,6 +138,7 @@ export default class Engine {
     const loop = async () => {
       // Update stats
       this.stats.update();
+
       if (this.world) {
         const state = {
           renderer: this.renderer,
