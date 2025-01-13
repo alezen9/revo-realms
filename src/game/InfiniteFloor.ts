@@ -1,127 +1,207 @@
-import { Scene, PlaneGeometry, Mesh, MeshLambertMaterial } from "three";
-import { ColliderDesc, RigidBodyDesc, World } from "@dimforge/rapier3d";
+import {
+  PlaneGeometry,
+  InstancedMesh,
+  Object3D,
+  Scene,
+  TextureLoader,
+  Texture,
+  Vector3,
+} from "three";
+import {
+  ColliderDesc,
+  RigidBody,
+  RigidBodyDesc,
+  World,
+} from "@dimforge/rapier3d";
 import { State } from "../core/Engine";
 import Grass from "./Grass";
+import {
+  ClampToEdgeWrapping,
+  MeshLambertNodeMaterial,
+  RepeatWrapping,
+} from "three/webgpu";
+import materialNormalTextureUrl from "/forest/forest_ground_normal.jpg?url";
+import materialDisplacementTextureUrl from "/forest/forest_ground_displacement.jpg?url";
+import materialDiffuseTextureUrl from "/forest/forest_ground_diffuse.jpg?url";
+import materialAOTextureUrl from "/forest/forest_ground_ao.jpg?url";
+import {
+  cameraPosition,
+  fract,
+  positionWorld,
+  texture,
+  uniform,
+  uv,
+  vec2,
+} from "three/tsl";
 
-// const colors = ["red", "green", "blue", "yellow", "purple", "orange", "coral"];
-const colors = ["#140d07", "#281b0d", "#1e140a", "#332211", "#0a0703"];
-
-export default class InfiniteFloor {
-  private grass: Grass;
-
-  // Configuration constants
+export default class InfiniteFloorInstanced {
   private readonly TILE_SIZE = 4;
   private readonly TILE_SUBDIVISION = 16;
-  private readonly GRID_COUNT = 50;
-  private readonly FLOOR_COLLIDER_HALF_HEIGHT = 0.3;
+  private readonly TILES_PER_SIDE = 50;
+  private readonly HALF_TILES_PER_SIDE = Math.ceil(this.TILES_PER_SIDE / 2);
+  private readonly HALF_FLOOR_THICKNESS = 0.3;
 
-  // Internal state
-  private tiles: Mesh[][] = [];
-  private readonly halfGrid = Math.floor(this.GRID_COUNT / 2);
+  private readonly MAP_SIZE = 300;
+  private readonly HALF_MAP_SIZE = this.MAP_SIZE / 2;
+  private readonly KINTOUN_ACTIVATION_THRESHOLD = 2;
+
+  // Mesh
+  private instancedFloor!: InstancedMesh;
+
+  // Physics
+  private mapRigidBody: RigidBody;
+  private kintounRigidBody: RigidBody; // Kintoun = Flying Nimbus cloud from dragon ball
+
+  // Material
+  private materialNormalMap: Texture;
+  private materialDisplacementMap: Texture;
+  private materialDiffuseMap: Texture;
+  private materialAOMap: Texture;
+
+  private grass: Grass;
+
+  private uTime = uniform(0);
+
+  private dummy = new Object3D();
 
   constructor(state: State) {
     const { scene, world } = state;
 
-    this.createTileGrid(world, scene);
+    const loader = new TextureLoader();
+    this.materialNormalMap = loader.load(materialNormalTextureUrl);
+    this.materialDisplacementMap = loader.load(materialDisplacementTextureUrl);
+    this.materialDiffuseMap = loader.load(materialDiffuseTextureUrl);
+    this.materialAOMap = loader.load(materialAOTextureUrl);
+
+    this.createInstancedTileGrid(scene);
+    this.mapRigidBody = this.createMapCollider(world);
+    this.kintounRigidBody = this.createKintounCollider(world);
 
     this.grass = new Grass(state);
   }
 
-  /**
-   * Initialize a grid of floor tiles centered around (0,0) in the XZ plane.
-   * Each tile is a normal mesh that can receive shadows.
-   */
-  private createTileGrid(world: World, scene: Scene) {
+  private createInstancedTileGrid(scene: Scene) {
     const geometry = new PlaneGeometry(
       this.TILE_SIZE,
       this.TILE_SIZE,
       this.TILE_SUBDIVISION,
       this.TILE_SUBDIVISION,
     );
-    for (let rowIdx = 0; rowIdx < this.GRID_COUNT; rowIdx++) {
-      this.tiles[rowIdx] = [];
-      for (let colIdx = 0; colIdx < this.GRID_COUNT; colIdx++) {
-        // Debug material
-        const colorIdx = Math.floor(Math.random() * colors.length);
-        const color = colors[colorIdx];
-        const material = new MeshLambertMaterial({ color });
+    geometry.rotateX(-Math.PI / 2); // Plane facing up
 
-        const mesh = new Mesh(geometry, material);
-        mesh.rotation.x = -Math.PI / 2; // lay flat on ground
+    const material = this.createFloorMaterial();
+    const totalTiles = this.TILES_PER_SIDE * this.TILES_PER_SIDE;
 
-        // Position tiles in a grid centered at origin
-        const x = (rowIdx - this.halfGrid) * this.TILE_SIZE;
-        const z = (colIdx - this.halfGrid) * this.TILE_SIZE;
-        mesh.position.set(x, 0, z);
-        mesh.receiveShadow = true;
+    this.instancedFloor = new InstancedMesh(geometry, material, totalTiles);
+    this.instancedFloor.receiveShadow = true;
 
-        scene.add(mesh);
-        this.tiles[rowIdx][colIdx] = mesh;
+    const dummy = this.dummy;
+    let instanceIdx = 0;
 
-        // Create physics collider for the floor
-        const rigidBody = world.createRigidBody(
-          this.createFloorRigidBodyDesc(x, z),
-        );
-        world.createCollider(this.createFloorColliderDesc(), rigidBody);
-        mesh.userData = { rigidBody };
+    for (let rowIdx = 0; rowIdx < this.TILES_PER_SIDE; rowIdx++) {
+      const x = (rowIdx - this.HALF_TILES_PER_SIDE) * this.TILE_SIZE;
+      for (let colIdx = 0; colIdx < this.TILES_PER_SIDE; colIdx++) {
+        const z = (colIdx - this.HALF_TILES_PER_SIDE) * this.TILE_SIZE;
+        dummy.position.set(x, 0, z);
+        dummy.updateMatrix();
+        this.instancedFloor.setMatrixAt(instanceIdx, dummy.matrix);
+        instanceIdx++;
       }
     }
+    this.instancedFloor.instanceMatrix.needsUpdate = true;
+    scene.add(this.instancedFloor);
   }
 
-  private createFloorRigidBodyDesc(x: number, z: number) {
-    return RigidBodyDesc.fixed().setTranslation(
-      x,
-      -this.FLOOR_COLLIDER_HALF_HEIGHT,
-      z,
+  private createMapCollider(world: World) {
+    const rigidBodyDesc = RigidBodyDesc.fixed().setTranslation(
+      0,
+      -this.HALF_FLOOR_THICKNESS,
+      0,
     );
-  }
+    const rigidBody = world.createRigidBody(rigidBodyDesc);
 
-  private createFloorColliderDesc() {
-    const halfExtent = this.TILE_SIZE / 2;
-    return ColliderDesc.cuboid(
-      halfExtent,
-      this.FLOOR_COLLIDER_HALF_HEIGHT,
-      halfExtent,
+    const halfMapSize = this.MAP_SIZE / 2;
+
+    const colliderDesc = ColliderDesc.cuboid(
+      halfMapSize,
+      this.HALF_FLOOR_THICKNESS,
+      halfMapSize,
     )
       .setFriction(1)
       .setRestitution(0.2);
+    world.createCollider(colliderDesc, rigidBody);
+    return rigidBody;
   }
 
-  /**
-   * Update the position of floor tiles to simulate an infinite floor
-   * based on the current camera position.
-   */
+  private createKintounCollider(world: World) {
+    const rigidBodyDesc = RigidBodyDesc.fixed().setTranslation(
+      0,
+      -20, // out of the physics world
+      0,
+    );
+    const rigidBody = world.createRigidBody(rigidBodyDesc);
+
+    const halfSize = 2;
+
+    const colliderDesc = ColliderDesc.cuboid(
+      halfSize,
+      this.HALF_FLOOR_THICKNESS,
+      halfSize,
+    )
+      .setFriction(1)
+      .setRestitution(0.2);
+    world.createCollider(colliderDesc, rigidBody);
+    return rigidBody;
+  }
+
+  private createFloorMaterial() {
+    const materialNode = new MeshLambertNodeMaterial();
+
+    // Define how often the texture repeats per tile
+    const uvScale = 1 / this.TILE_SIZE;
+
+    // Calculate UVs based on world position to lock the texture
+    const worldUV = vec2(
+      positionWorld.x.mul(uvScale),
+      positionWorld.z.mul(uvScale),
+    ).fract(); // Keep UVs within [0, 1]
+
+    // Apply the texture using the adjusted UVs
+    materialNode.colorNode = texture(this.materialDiffuseMap, worldUV).rgb;
+
+    materialNode.normalNode = texture(this.materialNormalMap, worldUV).rgb;
+    materialNode.aoNode = texture(this.materialAOMap, worldUV).rgb;
+    // materialNode.displacementMap = this.materialDisplacementMap;
+    return materialNode;
+  }
+
+  private useKintoun(playerPosition: Vector3) {
+    const kintounPosition = playerPosition
+      .clone()
+      .setY(-this.HALF_FLOOR_THICKNESS);
+    this.kintounRigidBody.setTranslation(kintounPosition, true);
+  }
+
   public update(state: State) {
-    const { camera } = state;
-    const camX = camera.position.x;
-    const camZ = camera.position.z;
-    const halfExtent = (this.GRID_COUNT * this.TILE_SIZE) / 2;
-
-    // For each tile in the grid, reposition it if it's too far from the camera
-    for (let rowIdx = 0; rowIdx < this.GRID_COUNT; rowIdx++) {
-      for (let colIdx = 0; colIdx < this.GRID_COUNT; colIdx++) {
-        const mesh = this.tiles[rowIdx][colIdx];
-        let dx = mesh.position.x - camX;
-        let dz = mesh.position.z - camZ;
-
-        // If the tile is too far right/left of the camera, move it to the opposite side
-        if (dx > halfExtent) {
-          mesh.position.x -= this.GRID_COUNT * this.TILE_SIZE;
-        } else if (dx < -halfExtent) {
-          mesh.position.x += this.GRID_COUNT * this.TILE_SIZE;
-        }
-        // If the tile is too far in front/behind the camera, move it to the opposite side
-        if (dz > halfExtent) {
-          mesh.position.z -= this.GRID_COUNT * this.TILE_SIZE;
-        } else if (dz < -halfExtent) {
-          mesh.position.z += this.GRID_COUNT * this.TILE_SIZE;
-        }
-        const rigidBodyPosition = mesh.position.clone();
-        rigidBodyPosition.y = -this.FLOOR_COLLIDER_HALF_HEIGHT;
-        mesh.userData.rigidBody.setTranslation(rigidBodyPosition, true);
-      }
-    }
+    const { clock, camera, player } = state;
+    this.uTime.value = clock.getElapsedTime();
 
     this.grass.update(state);
+
+    // Move the entire floor opposite to the player's position
+    this.instancedFloor.position.x = camera.position.x;
+    this.instancedFloor.position.z = camera.position.z;
+    this.instancedFloor.updateMatrixWorld();
+
+    if (!player) return;
+    const playerPosition = player.getPosition();
+    const isPlayerNearEdgeX =
+      this.HALF_MAP_SIZE - Math.abs(playerPosition.x) <
+      this.KINTOUN_ACTIVATION_THRESHOLD;
+    const isPlayerNearEdgeZ =
+      this.HALF_MAP_SIZE - Math.abs(playerPosition.z) <
+      this.KINTOUN_ACTIVATION_THRESHOLD;
+
+    if (isPlayerNearEdgeX || isPlayerNearEdgeZ) this.useKintoun(playerPosition);
   }
 }
