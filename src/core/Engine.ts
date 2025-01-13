@@ -7,13 +7,13 @@ import {
   ACESFilmicToneMapping,
 } from "three";
 import { OrbitControls } from "three/examples/jsm/Addons.js";
-import { World } from "@dimforge/rapier3d";
+import { World } from "@dimforge/rapier3d-compat";
 import Player from "../game/Player";
 import Stats from "stats-gl";
 import InfiniteFloor from "../game/InfiniteFloor";
 import Light from "../game/Light";
 
-// export type Rapier = typeof import("@dimforge/rapier3d");
+// export type Rapier = typeof import("@dimforge/rapier3d-compat");
 
 export type State = {
   renderer: WebGPURenderer;
@@ -87,8 +87,9 @@ export default class Engine {
     this.clock = new Clock(false);
 
     // Physics-affected objects
-    import("@dimforge/rapier3d").then((rapier) => {
-      this.world = new rapier.World({ x: 0, y: -9.81, z: 0 }); // Gravity points downwards
+    import("@dimforge/rapier3d-compat").then(async (rapier) => {
+      await rapier.init();
+      this.world = new World({ x: 0, y: -9.81, z: 0 }); // Gravity points downwards
 
       const state: State = {
         renderer: this.renderer,
