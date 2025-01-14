@@ -14,13 +14,30 @@ import {
   World,
 } from "@dimforge/rapier3d-compat";
 import { State } from "../core/Engine";
-import Grass from "./Grass";
-import { MeshLambertNodeMaterial } from "three/webgpu";
-import materialNormalTextureUrl from "/forest/forest_ground_normal.webp?url";
-// import materialDisplacementTextureUrl from "/forest/forest_ground_displacement.jpg?url";
-import materialDiffuseTextureUrl from "/forest/forest_ground_diffuse.webp?url";
-import materialAOTextureUrl from "/forest/forest_ground_ao.webp?url";
-import { positionWorld, texture, uniform, vec2 } from "three/tsl";
+// import Grass from "./Grass";
+import {
+  DataTexture,
+  Mesh,
+  MeshLambertNodeMaterial,
+  Vector2,
+} from "three/webgpu";
+import heightmapTextureUrl from "/environment/heightmap-super-small.webp?url";
+import heightmapTextureUrlExr from "/environment/heightmap-super-small.exr?url";
+import floorTextureUrl from "/environment/floor.webp?url";
+import {
+  add,
+  float,
+  greaterThan,
+  lessThan,
+  mix,
+  or,
+  positionLocal,
+  texture,
+  uniform,
+  vec2,
+  vec3,
+} from "three/tsl";
+import { EXRLoader } from "three/examples/jsm/Addons.js";
 
 export default class InfiniteFloorInstanced {
   private readonly TILE_SIZE = 4;
@@ -35,20 +52,19 @@ export default class InfiniteFloorInstanced {
 
   // Mesh
   private instancedFloor!: InstancedMesh;
+  private mesh!: Mesh;
+  private floorTexture: Texture;
 
   // Physics
   // private mapRigidBody: RigidBody;
   private kintounRigidBody: RigidBody; // Kintoun = Flying Nimbus cloud from dragon ball
 
-  // Material
-  private materialNormalMap: Texture;
-  // private materialDisplacementMap: Texture;
-  private materialDiffuseMap: Texture;
-  private materialAOMap: Texture;
+  private heightmapTexture: DataTexture;
 
-  private grass: Grass;
+  // private grass: Grass;
 
   private uTime = uniform(0);
+  private uOffset = uniform(new Vector2());
 
   private dummy = new Object3D();
 
@@ -56,16 +72,35 @@ export default class InfiniteFloorInstanced {
     const { scene, world } = state;
 
     const loader = new TextureLoader();
-    this.materialNormalMap = loader.load(materialNormalTextureUrl);
-    // this.materialDisplacementMap = loader.load(materialDisplacementTextureUrl);
-    this.materialDiffuseMap = loader.load(materialDiffuseTextureUrl);
-    this.materialAOMap = loader.load(materialAOTextureUrl);
+    this.floorTexture = loader.load(floorTextureUrl);
+    loader.load(heightmapTextureUrl, (t) => {
+      console.log(t);
+    });
 
+    const exrLoader = new EXRLoader();
+    this.heightmapTexture = exrLoader.load(heightmapTextureUrlExr, (t, d) => {
+      // this.createMapHeightfieldCollider(world);
+    });
     this.createInstancedTileGrid(scene);
+    // this.createFloorMesh(scene);
     this.createMapCollider(world);
     this.kintounRigidBody = this.createKintounCollider(world);
 
-    this.grass = new Grass(state);
+    // this.grass = new Grass(state);
+  }
+
+  private createFloorMesh(scene: Scene) {
+    const geometry = new PlaneGeometry(
+      this.TILE_SIZE * this.TILES_PER_SIDE,
+      this.TILE_SIZE * this.TILES_PER_SIDE,
+      this.TILE_SUBDIVISION * this.TILES_PER_SIDE,
+      this.TILE_SUBDIVISION * this.TILES_PER_SIDE,
+    );
+    geometry.rotateX(-Math.PI / 2); // Plane facing up
+
+    const material = this.createFloorMaterial();
+    this.mesh = new Mesh(geometry, material);
+    scene.add(this.mesh);
   }
 
   private createInstancedTileGrid(scene: Scene) {
@@ -82,6 +117,7 @@ export default class InfiniteFloorInstanced {
 
     this.instancedFloor = new InstancedMesh(geometry, material, totalTiles);
     this.instancedFloor.receiveShadow = true;
+    this.instancedFloor.castShadow = true;
 
     const dummy = this.dummy;
     let instanceIdx = 0;
@@ -98,6 +134,96 @@ export default class InfiniteFloorInstanced {
     }
     this.instancedFloor.instanceMatrix.needsUpdate = true;
     scene.add(this.instancedFloor);
+  }
+
+  private getDataFromDisplacementMap() {
+    const { width, height, data } = this.heightmapTexture.image;
+
+    const maxEXRValue = 65535; // Max value for Uint16Array
+    const maxBlenderHeight = 0.69; // Blender's height range
+    const floorOffset = 0.14719; // Blender's "ground level"
+
+    const heights = new Float32Array(width * height);
+    const scale = 1 / maxEXRValue;
+    let max = 0;
+    let min = 0;
+    for (let i = 0; i < width * height; i++) {
+      // Normalize from [0, 65535] to [0, maxHeight]
+      const normalizedHeight = data[i] * scale;
+      heights[i] = normalizedHeight; // Adjust to set the floor at Y = 0
+      if (heights[i] < min) min = heights[i];
+      if (heights[i] > max) max = heights[i];
+    }
+
+    console.log(min, max);
+
+    // console.log("Normalized heights:", heights.slice(0, 10));
+    return { heights, width, height };
+  }
+
+  // private getDataFromDisplacementMap() {
+  //   const image = this.heightmapTexture.image;
+  //   const canvas = document.createElement("canvas");
+  //   const ctx = canvas.getContext("2d");
+
+  //   if (!ctx)
+  //     throw new Error(
+  //       "Error extracting heights from displacement map, no canvas context provided.",
+  //     );
+
+  //   canvas.width = image.width;
+  //   canvas.height = image.height;
+
+  //   // Draw the texture onto the canvas
+  //   ctx.drawImage(image, 0, 0);
+
+  //   // Extract pixel data
+  //   const { data } = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+  //   // Convert pixel data to height values
+  //   const totalSamples = canvas.width * canvas.height;
+  //   const heights = new Float32Array(totalSamples);
+
+  //   let flatIdx = 0;
+  //   for (let y = 0; y < canvas.height; y++) {
+  //     for (let x = 0; x < canvas.width; x++) {
+  //       const pixelIndex = (y * canvas.width + x) * 3;
+  //       const r = data[pixelIndex]; // Assuming grayscale (R == G == B)
+  //       const height = r / 255; // Normalize to 0–1
+  //       heights[flatIdx] = height;
+  //       flatIdx++;
+  //     }
+  //   }
+
+  //   return { heights, width: canvas.width, height: canvas.height };
+  // }
+
+  private createMapHeightfieldCollider(world: World) {
+    const { heights, width, height } = this.getDataFromDisplacementMap();
+
+    const scaleX = this.MAP_SIZE / (width - 1); // Scale to fit 300×300
+    const scaleZ = this.MAP_SIZE / (height - 1);
+    const maxHeight = 0.69; // Directly use Blender's max height
+    const scaleY = 3; // 3 for debugging // 30 blenders plane, 300 map size
+
+    // Move the collider up by the floor offset to match the visual mesh
+    const floorOffset = 0.14719;
+
+    const rigidBodyDesc = RigidBodyDesc.fixed().setTranslation(
+      -this.HALF_MAP_SIZE,
+      -floorOffset,
+      this.HALF_MAP_SIZE,
+    );
+    const rigidBody = world.createRigidBody(rigidBodyDesc);
+
+    const colliderDesc = ColliderDesc.heightfield(
+      height - 1, // 64 rows
+      width - 1, // 64 columns
+      heights, // Height data
+      { x: scaleX, y: scaleY, z: scaleZ },
+    );
+
+    world.createCollider(colliderDesc, rigidBody);
   }
 
   private createMapCollider(world: World) {
@@ -145,21 +271,52 @@ export default class InfiniteFloorInstanced {
   private createFloorMaterial() {
     const materialNode = new MeshLambertNodeMaterial();
 
-    // Define how often the texture repeats per tile
-    const uvScale = 1 / this.TILE_SIZE;
+    const blenderMaxHeight = 0.609;
+    const blenderFloorOffset = 0.14719;
+    const scale = 3;
+    const scaledFloorOffset = (blenderFloorOffset / blenderMaxHeight) * scale;
 
-    // Calculate UVs based on world position to lock the texture
+    const absoluteXZ = add(positionLocal.xz, this.uOffset);
+
     const worldUV = vec2(
-      positionWorld.x.mul(uvScale),
-      positionWorld.z.mul(uvScale),
-    ).fract(); // Keep UVs within [0, 1]
+      add(absoluteXZ.x, this.HALF_MAP_SIZE).div(this.MAP_SIZE),
+      add(absoluteXZ.y, this.HALF_MAP_SIZE).div(this.MAP_SIZE),
+    );
 
-    // Apply the texture using the adjusted UVs
-    materialNode.colorNode = texture(this.materialDiffuseMap, worldUV).rgb;
+    // Sample the heightmap using fully world-locked UVs
+    const heightmapNode = texture(this.heightmapTexture, worldUV);
 
-    materialNode.normalNode = texture(this.materialNormalMap, worldUV).rgb;
-    materialNode.aoNode = texture(this.materialAOMap, worldUV).rgb;
-    // materialNode.displacementMap = this.materialDisplacementMap;
+    // Detect if we're outside the map area
+    const isOutsideMap = or(
+      or(
+        lessThan(absoluteXZ.x, float(-this.HALF_MAP_SIZE)),
+        greaterThan(absoluteXZ.x, float(+this.HALF_MAP_SIZE)),
+      ),
+      or(
+        lessThan(absoluteXZ.y, float(-this.HALF_MAP_SIZE)),
+        greaterThan(absoluteXZ.y, float(+this.HALF_MAP_SIZE)),
+      ),
+    );
+
+    // Apply heightmap displacement
+    const adjustedHeight = heightmapNode.r.mul(scale).sub(scaledFloorOffset);
+
+    // Apply the displacement
+    materialNode.positionNode = vec3(
+      positionLocal.x,
+      adjustedHeight,
+      positionLocal.z,
+    );
+
+    const colorNode = texture(this.floorTexture, worldUV);
+
+    // Debug color: heightmap inside, red outside
+    materialNode.colorNode = mix(
+      colorNode.rgb, // Inside → heightmap
+      vec3(1.0, 0.0, 0.0), // Outside → red
+      isOutsideMap,
+    );
+
     return materialNode;
   }
 
@@ -174,12 +331,18 @@ export default class InfiniteFloorInstanced {
     const { clock, camera, player } = state;
     this.uTime.value = clock.getElapsedTime();
 
-    this.grass.update(state);
+    // this.grass.update(state);
 
     // Move the entire floor opposite to the player's position
     this.instancedFloor.position.x = camera.position.x;
     this.instancedFloor.position.z = camera.position.z;
     this.instancedFloor.updateMatrixWorld();
+
+    // this.mesh.position.x = camera.position.x;
+    // this.mesh.position.z = camera.position.z;
+
+    this.uOffset.value.x = camera.position.x;
+    this.uOffset.value.y = camera.position.z;
 
     if (!player) return;
     const playerPosition = player.getPosition();
