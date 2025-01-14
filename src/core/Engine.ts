@@ -12,6 +12,7 @@ import Player from "../game/Player";
 import Stats from "stats-gl";
 import InfiniteFloor from "../game/InfiniteFloor";
 import Light from "../game/Light";
+import RapierDebugRenderer from "./RapierDebugRenderer";
 
 // export type Rapier = typeof import("@dimforge/rapier3d-compat");
 
@@ -29,7 +30,9 @@ type Sizes = { width: number; height: number; dpr: number; aspect: number };
 
 export default class Engine {
   private stats: Stats;
+  private rapierDebugRenderer?: RapierDebugRenderer;
   private canvas: HTMLCanvasElement;
+
   private renderer: WebGPURenderer;
   private camera: PerspectiveCamera;
   private scene: Scene;
@@ -99,6 +102,12 @@ export default class Engine {
         world: this.world,
       };
 
+      this.rapierDebugRenderer = new RapierDebugRenderer(
+        this.scene,
+        this.world,
+      );
+      this.rapierDebugRenderer.enabled = false;
+
       // Player
       this.player = new Player(state);
       state.player = this.player;
@@ -137,8 +146,8 @@ export default class Engine {
   startLoop(callback?: (state: State) => void) {
     this.clock.start();
     const loop = async () => {
-      // Update stats
       this.stats.update();
+      this.rapierDebugRenderer?.update();
 
       if (this.world) {
         const state = {
