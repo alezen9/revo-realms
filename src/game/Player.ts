@@ -269,7 +269,7 @@ export default class Player {
     return this.mesh.position;
   }
 
-  public getRotation() {
-    return this.mesh.rotation;
+  public getYaw() {
+    return this.yawInRadians;
   }
 }
