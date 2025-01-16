@@ -10,24 +10,36 @@ import {
 } from "three";
 import {
   ColliderDesc,
+  HeightFieldFlags,
   RigidBody,
   RigidBodyDesc,
   World,
 } from "@dimforge/rapier3d-compat";
 import { State } from "../core/Engine";
-import { MeshLambertNodeMaterial } from "three/webgpu";
-import heightmapTextureUrlExr from "/environment/heightmap-super-small.exr?url";
-import floorTextureUrl from "/environment/floor.webp?url";
+import {
+  LinearFilter,
+  LinearMipmapLinearFilter,
+  MathUtils,
+  MeshLambertNodeMaterial,
+  PlaneGeometry,
+} from "three/webgpu";
+import heightmapTextureUrlExr from "/environment/heightmap3-128.exr?url";
+import floorTextureUrl from "/environment/map2-1024.webp?url";
 import floorModelUrl from "/environment/floor.glb?url";
 import {
   clamp,
+  dFdx,
+  dFdy,
   float,
   greaterThan,
   lessThan,
   mix,
+  normalize,
   or,
   positionLocal,
   rotate,
+  ShaderNodeObject,
+  step,
   texture,
   uniform,
   vec3,
@@ -66,7 +78,18 @@ export default class InfiniteFloorInstanced {
     const { scene, world } = state;
 
     const loader = new TextureLoader();
-    this.floorTexture = loader.load(floorTextureUrl);
+    this.floorTexture = loader.load(floorTextureUrl, (t) => {
+      t.flipY = false;
+    });
+
+    const exrLoader = new EXRLoader();
+    this.heightmapTexture = exrLoader.load(heightmapTextureUrlExr, (t, d) => {
+      t.flipY = true;
+      this.createMapHeightfieldCollider(world);
+    });
+    this.heightmapTexture.magFilter = LinearFilter;
+    this.heightmapTexture.minFilter = LinearMipmapLinearFilter;
+    this.heightmapTexture.generateMipmaps = true;
 
     const dracoLoader = new DRACOLoader();
     dracoLoader.setDecoderPath("/draco/");
@@ -78,11 +101,7 @@ export default class InfiniteFloorInstanced {
       scene.add(this.floor);
     });
 
-    const exrLoader = new EXRLoader();
-    this.heightmapTexture = exrLoader.load(heightmapTextureUrlExr, (t, d) => {
-      // this.createMapHeightfieldCollider(world);
-    });
-    this.createMapCollider(world);
+    // this.createMapCollider(world);
     this.kintounRigidBody = this.createKintounCollider(world);
 
     this.grass = new Grass(state);
@@ -93,6 +112,17 @@ export default class InfiniteFloorInstanced {
     );
     cube.position.y = 0.5;
     scene.add(cube);
+
+    // const planeGeom = new PlaneGeometry();
+    // planeGeom.rotateX(-Math.PI / 2);
+    // const plane = new Mesh(
+    //   planeGeom,
+    //   new MeshLambertMaterial({ color: "blue" }),
+    // );
+    // this.heightmapScaleXZ = 300;
+    // const scale = this.heightmapScaleXZ;
+    // plane.scale.copy(new Vector3(scale, scale, scale));
+    // scene.add(plane);
   }
 
   private createFloorFromModel(model: GLTF) {
@@ -103,55 +133,169 @@ export default class InfiniteFloorInstanced {
     return mesh;
   }
 
+  // works well with 64x64 texture
+  // private getDataFromDisplacementMap() {
+  //   const { width, height, data } = this.heightmapTexture.image;
+
+  //   const minValue = Math.min(...data);
+  //   const maxValue = Math.max(...data);
+
+  //   const heights = new Float32Array(width * height);
+
+  //   for (let row = 0; row < height; row++) {
+  //     for (let col = 0; col < width; col++) {
+  //       const i = row * width + col;
+  //       // Clamp the edge values to avoid warping
+  //       if (row === 0 || row === height - 1 || col === 0 || col === width - 1) {
+  //         heights[i] = 0; // Set edges flat
+  //         continue;
+  //       }
+
+  //       // no flipping
+  //       // const i4 = (row * width + col) * 4;
+
+  //       // flip x
+  //       // const i4 = (row * width + (width - 1 - col)) * 4;
+
+  //       // flip y
+  //       // const i4 = ((height - 1 - row) * width + col) * 4;
+
+  //       // flip both x and y
+  //       // const flippedRow = height - 1 - row;
+  //       // const flippedCol = width - 1 - col;
+  //       // const i4 = (flippedRow * width + flippedCol) * 4;
+
+  //       // clockwise rotation 90deg
+  //       // const i4 = (col * height + (height - 1 - row)) * 4;
+
+  //       // counterclockwise rotation 90deg
+  //       const i4 = ((width - 1 - col) * height + row) * 4;
+
+  //       const rawValue = data[i4]; // Red channel
+
+  //       // Normalize and map to [-1, 1]
+  //       const normalizedValue = (rawValue - minValue) / (maxValue - minValue);
+  //       // const displacementValue = normalizedValue * 2.0 - 1.0;
+  //       const displacementValue = MathUtils.mapLinear(
+  //         rawValue,
+  //         minValue,
+  //         maxValue,
+  //         -0.5,
+  //         0.5,
+  //       );
+  //       const compressed =
+  //         displacementValue < 0
+  //           ? MathUtils.mapLinear(displacementValue, -0.5, 0, -0.25, 0)
+  //           : displacementValue;
+
+  //       heights[i] = compressed;
+  //     }
+  //   }
+
+  //   console.log("Min Height:", Math.min(...heights));
+  //   console.log("Max Height:", Math.max(...heights));
+
+  //   return { heights, width, height };
+  // }
+
   private getDataFromDisplacementMap() {
     const { width, height, data } = this.heightmapTexture.image;
 
-    const maxEXRValue = 65535; // Max value for Uint16Array
-    const maxBlenderHeight = 0.69; // Blender's height range
-    const floorOffset = 0.14719; // Blender's "ground level"
+    const minValue = Math.min(...data);
+    const maxValue = Math.max(...data);
 
     const heights = new Float32Array(width * height);
-    const scale = 1 / maxEXRValue;
-    let max = 0;
-    let min = 0;
-    for (let i = 0; i < width * height; i++) {
-      // Normalize from [0, 65535] to [0, maxHeight]
-      const normalizedHeight = data[i] * scale;
-      heights[i] = normalizedHeight; // Adjust to set the floor at Y = 0
-      if (heights[i] < min) min = heights[i];
-      if (heights[i] > max) max = heights[i];
+
+    let totalHeight = 0;
+
+    for (let row = 0; row < height; row++) {
+      for (let col = 0; col < width; col++) {
+        const i = row * width + col;
+        // Clamp the edge values to avoid warping
+        if (row === 0 || row === height - 1 || col === 0 || col === width - 1) {
+          heights[i] = 0; // Set edges flat
+          continue;
+        }
+
+        // no flipping
+        // const i4 = (row * width + col) * 4;
+
+        // flip x
+        // const i4 = (row * width + (width - 1 - col)) * 4;
+
+        // flip y
+        // const i4 = ((height - 1 - row) * width + col) * 4;
+
+        // flip both x and y
+        // const flippedRow = height - 1 - row;
+        // const flippedCol = width - 1 - col;
+        // const i4 = (flippedRow * width + flippedCol) * 4;
+
+        // clockwise rotation 90deg
+        // const i4 = (col * height + (height - 1 - row)) * 4;
+
+        // counterclockwise rotation 90deg
+        const i4 = ((width - 1 - col) * height + row) * 4;
+
+        const rawValue = data[i4]; // Red channel
+
+        // Normalize and map to [-1, 1]
+        const normalizedValue = (rawValue - minValue) / (maxValue - minValue);
+        // const displacementValue = normalizedValue * 2.0 - 1.0;
+        const displacementValue = MathUtils.mapLinear(
+          rawValue,
+          minValue,
+          maxValue,
+          -0.5,
+          0.5,
+        );
+        const compressed =
+          displacementValue < 0
+            ? MathUtils.mapLinear(displacementValue, -0.5, 0, -0.25, 0)
+            : displacementValue;
+
+        heights[i] = compressed;
+        totalHeight += compressed;
+      }
     }
 
-    console.log(min, max);
+    const averageHeight = totalHeight / heights.length;
 
-    // console.log("Normalized heights:", heights.slice(0, 10));
-    return { heights, width, height };
+    console.log("Min Height:", Math.min(...heights));
+    console.log("Max Height:", Math.max(...heights));
+
+    return { heights, width, height, averageHeight };
   }
 
   private createMapHeightfieldCollider(world: World) {
-    const { heights, width, height } = this.getDataFromDisplacementMap();
+    const { heights, width, height, averageHeight } =
+      this.getDataFromDisplacementMap();
 
-    const scaleX = this.MAP_SIZE / (width - 1); // Scale to fit 300×300
-    const scaleZ = this.MAP_SIZE / (height - 1);
-    const maxHeight = 0.69; // Directly use Blender's max height
-    const scaleY = 3; // 3 for debugging // 30 blenders plane, 300 map size
-
-    // Move the collider up by the floor offset to match the visual mesh
-    const floorOffset = 0.14719;
+    const nrows = height - 1;
+    const ncols = width - 1;
+    // const scaleXZ = this.MAP_SIZE - 5;
+    const scaleXZ = (this.MAP_SIZE * (width - 1)) / width;
 
     const rigidBodyDesc = RigidBodyDesc.fixed().setTranslation(
-      -this.HALF_MAP_SIZE,
-      -floorOffset,
-      this.HALF_MAP_SIZE,
+      0,
+      -averageHeight * 20,
+      0,
     );
     const rigidBody = world.createRigidBody(rigidBodyDesc);
 
     const colliderDesc = ColliderDesc.heightfield(
-      height - 1, // 64 rows
-      width - 1, // 64 columns
-      heights, // Height data
-      { x: scaleX, y: scaleY, z: scaleZ },
-    );
+      nrows,
+      ncols,
+      heights,
+      {
+        x: scaleXZ,
+        y: 20,
+        z: scaleXZ,
+      },
+      HeightFieldFlags.FIX_INTERNAL_EDGES,
+    )
+      .setFriction(1)
+      .setRestitution(0.2);
 
     world.createCollider(colliderDesc, rigidBody);
   }
@@ -201,40 +345,39 @@ export default class InfiniteFloorInstanced {
   private createFloorMaterial() {
     const materialNode = new MeshLambertNodeMaterial();
 
-    const unrot = rotate(positionLocal, vec3(0, this.uWorldYaw, 0));
-    const absoluteXZ = unrot.xz.add(this.uWorldPos);
-    const uv = absoluteXZ.add(150).div(300);
-
+    // Position
+    const unrotatedPosition = rotate(positionLocal, vec3(0, this.uWorldYaw, 0));
+    const absoluteXZ = unrotatedPosition.xz.add(this.uWorldPos);
+    const uv = absoluteXZ.add(this.HALF_MAP_SIZE).div(this.MAP_SIZE);
     const clampedUV = clamp(uv, 0.0, 1.0);
 
-    const colorNode = texture(this.floorTexture, clampedUV);
+    const edgeX = step(float(-this.HALF_MAP_SIZE), absoluteXZ.x).mul(
+      step(absoluteXZ.x, float(this.HALF_MAP_SIZE)),
+    );
+    const edgeY = step(float(-this.HALF_MAP_SIZE), absoluteXZ.y).mul(
+      step(absoluteXZ.y, float(this.HALF_MAP_SIZE)),
+    );
+    const isOutsideMap = float(1.0).sub(edgeX.mul(edgeY)); // 1 if outside, 0 if inside
 
     const heightmapNode = texture(this.heightmapTexture, clampedUV);
-    const blenderMaxHeight = 0.609;
-    const blenderFloorOffset = 0.14719;
-    const scale = 3;
-    const scaledFloorOffset = (blenderFloorOffset / blenderMaxHeight) * scale;
-    const displacedY = heightmapNode.r.mul(scale).sub(scaledFloorOffset);
+    const heightValue = heightmapNode.r;
+    const scaleY = 20; // Arbitrary, how much to stretch ups and downs on the y axis
 
-    materialNode.positionNode = vec3(
+    const displacedY = mix(-scaleY / 2.0, scaleY / 2.0, heightValue);
+
+    const displacedPosition = vec3(
       positionLocal.x,
       displacedY,
       positionLocal.z,
     );
 
-    const isOutsideMap = or(
-      or(
-        lessThan(absoluteXZ.x, float(-this.HALF_MAP_SIZE)),
-        greaterThan(absoluteXZ.x, float(+this.HALF_MAP_SIZE)),
-      ),
-      or(
-        lessThan(absoluteXZ.y, float(-this.HALF_MAP_SIZE)),
-        greaterThan(absoluteXZ.y, float(+this.HALF_MAP_SIZE)),
-      ),
-    );
+    materialNode.positionNode = displacedPosition;
+
+    const colorSample = texture(this.floorTexture, clampedUV);
+
     materialNode.colorNode = mix(
-      colorNode.rgb,
-      vec3(1.0, 0.0, 0.0),
+      colorSample.rgb,
+      vec3(0.0, 1.0, 0.0),
       isOutsideMap,
     );
 

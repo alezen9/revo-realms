@@ -36,7 +36,7 @@ import perlinNoiseTextureUrl from "/perlin_noise_texture.webp?url";
 type BladeGeometryData = {
   positions: Float32Array;
   uvs: Float32Array;
-  indices?: Uint16Array;
+  indices?: Uint8Array;
 };
 
 type GrassChunk = {
@@ -308,7 +308,7 @@ export default class Grass {
       0, // I - Tip (8)
     ]);
 
-    const indices = new Uint16Array([
+    const indices = new Uint8Array([
       // Bottom Quad (A-B-D, A-D-C)
       0, 1, 3, 0, 3, 2,
       // Middle Quad (C-D-F, C-F-E)
