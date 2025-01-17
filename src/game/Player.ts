@@ -150,7 +150,7 @@ export default class Player {
     const rayOrigin = new Vector3(pos.x, pos.y - (this.RADIUS + 0.01), pos.z);
     const ray = new Ray(rayOrigin, this.DOWN);
 
-    const maxDistance = 5;
+    const maxDistance = 0.2;
     const hit = world.castRay(ray, maxDistance, true);
 
     if (!hit) return false;

@@ -53,7 +53,7 @@ export default class Grass {
   private readonly BLADE_WIDTH = 0.025;
   private readonly BLADE_HEIGHT = 0.75;
 
-  private readonly LOD_DIST_HIGH = 60;
+  private readonly LOD_DIST_HIGH = 80;
   private readonly NUM_TILES_PER_CHUNK_SIDE = 2;
 
   private uTime = uniform(0);
