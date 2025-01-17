@@ -79,7 +79,7 @@ export default class Grass {
 
     const instancesPerSide = 2;
     const totalAreaSide = this.GRASS_AREA_SIDE_SIZE * instancesPerSide;
-    const halfInstancesAreaSize = totalAreaSide / 2;
+    const halfInstancesAreaSize = totalAreaSide / 2 + this.GRASS_AREA_SIDE_SIZE;
 
     for (let chunkIdxX = 0; chunkIdxX < instancesPerSide; chunkIdxX++) {
       for (let chunkIdxZ = 0; chunkIdxZ < instancesPerSide; chunkIdxZ++) {
