@@ -20,7 +20,8 @@ export default class Light {
 
     scene.add(this.target);
 
-    this.light = new DirectionalLight("#fcffb5", 1);
+    // this.light = new DirectionalLight("#fcffb5", 0.5);
+    this.light = new DirectionalLight("#00f", 0.5);
     this.light.target = this.target;
     this.light.castShadow = true;
     this.light.shadow.mapSize.width = 256;
@@ -33,7 +34,7 @@ export default class Light {
 
     scene.add(this.light);
 
-    const ambient = new AmbientLight("white", 0.75);
+    const ambient = new AmbientLight("blue", 0.15);
     scene.add(ambient);
   }
 

@@ -76,11 +76,10 @@ export default class Player {
     //   emissiveIntensity: 1.1,
     // });
     const material = new MeshStandardMaterial({
-      color: "purple",
       flatShading: true,
-      // emissive: "purple",
-      // emissiveIntensity: 10,
-      metalness: 1,
+      emissive: "purple",
+      emissiveIntensity: 15,
+      // metalness: 1,
       roughness: 0.5,
     });
     const mesh = new Mesh(geometry, material);

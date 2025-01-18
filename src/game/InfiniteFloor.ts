@@ -77,7 +77,10 @@ export default class InfiniteFloorInstanced {
 
     const cube = new Mesh(
       new BoxGeometry(),
-      new MeshLambertMaterial({ color: "blue" }),
+      new MeshLambertMaterial({
+        emissive: "red",
+        emissiveIntensity: 10,
+      }),
     );
     cube.position.y = 0.5;
     scene.add(cube);

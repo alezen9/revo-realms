@@ -13,6 +13,7 @@ import Stats from "stats-gl";
 import InfiniteFloor from "../game/InfiniteFloor";
 import Light from "../game/Light";
 import RapierDebugRenderer from "./RapierDebugRenderer";
+import PostProcessing from "./PostProcessing";
 
 // export type Rapier = typeof import("@dimforge/rapier3d-compat");
 
@@ -42,6 +43,7 @@ export default class Engine {
   private player?: Player;
   private infiniteFloor?: InfiniteFloor;
   private light?: Light;
+  private postprocessing?: PostProcessing;
 
   constructor() {
     // Canvas
@@ -59,6 +61,21 @@ export default class Engine {
     this.renderer.setPixelRatio(sizes.dpr);
     this.renderer.toneMapping = ACESFilmicToneMapping;
 
+    // Scene
+    this.scene = new Scene();
+
+    // Camera
+    this.camera = new PerspectiveCamera(45, sizes.aspect, 0.01, 1000);
+    this.camera.position.set(0, 5, 10);
+    this.scene.add(this.camera);
+
+    // Postprocessing
+    this.postprocessing = new PostProcessing({
+      renderer: this.renderer,
+      scene: this.scene,
+      camera: this.camera,
+    });
+
     // Stats
     this.stats = new Stats({
       trackGPU: true,
@@ -70,15 +87,7 @@ export default class Engine {
       precision: 2,
     });
     document.body.appendChild(this.stats.dom);
-    this.stats.init(this.renderer);
-
-    // Scene
-    this.scene = new Scene();
-
-    // Camera
-    this.camera = new PerspectiveCamera(45, sizes.aspect, 0.01, 1000);
-    this.camera.position.set(0, 5, 10);
-    this.scene.add(this.camera);
+    this.stats.init(this.postprocessing.postprocessing.renderer);
 
     // Controls
     this.controls = new OrbitControls(this.camera, this.canvas);
@@ -172,7 +181,8 @@ export default class Engine {
       if (this.controls.enabled) this.controls.update();
 
       // Render
-      await this.renderer.renderAsync(this.scene, this.camera);
+      // await this.renderer.renderAsync(this.scene, this.camera);
+      await this.postprocessing?.postprocessing.renderAsync();
 
       // Next frame
       requestAnimationFrame(loop);
