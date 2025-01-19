@@ -6,7 +6,6 @@ import {
   InstancedMesh,
   Object3D,
   Texture,
-  TextureLoader,
   Scene,
 } from "three";
 import { State } from "../core/Engine";
@@ -62,10 +61,9 @@ export default class Grass {
   private chunks: GrassChunk[] = [];
 
   constructor(state: State) {
-    const { scene } = state;
+    const { scene, assetManager } = state;
 
-    const loader = new TextureLoader();
-    this.noiseTexture = loader.load(perlinNoiseTextureUrl);
+    this.noiseTexture = assetManager.textureLoader.load(perlinNoiseTextureUrl);
 
     this.buildGrassChunks(scene);
   }

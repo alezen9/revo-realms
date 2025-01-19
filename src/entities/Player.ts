@@ -13,7 +13,7 @@ import {
   World,
   Ray,
 } from "@dimforge/rapier3d-compat";
-import InputManager from "./InputManager";
+import InputManager from "../systems/InputManager";
 import { type State } from "../core/Engine";
 
 export default class Player {
@@ -55,8 +55,8 @@ export default class Player {
   private readonly DOWN = new Vector3(0, -1, 0);
 
   constructor(state: State) {
-    const { scene, world } = state;
-    this.inputManager = new InputManager();
+    const { scene, world, inputManager } = state;
+    this.inputManager = inputManager;
 
     this.mesh = this.createCharacterMesh();
     scene.add(this.mesh);
@@ -77,9 +77,10 @@ export default class Player {
     // });
     const material = new MeshStandardMaterial({
       flatShading: true,
-      emissive: "purple",
-      emissiveIntensity: 15,
-      // metalness: 1,
+      color: "purple",
+      // emissive: "purple",
+      // emissiveIntensity: 15,
+      metalness: 1,
       roughness: 0.5,
     });
     const mesh = new Mesh(geometry, material);

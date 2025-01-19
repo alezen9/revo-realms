@@ -4,7 +4,7 @@ import { emissive, mrt, output, pass } from "three/tsl";
 import { bloom } from "three/examples/jsm/tsl/display/BloomNode.js";
 
 export default class PostProcessing {
-  postprocessing: WebGpuPostProcessing;
+  private postprocessing: WebGpuPostProcessing;
 
   constructor(state: Pick<State, "renderer" | "scene" | "camera">) {
     const { renderer, scene, camera } = state;
@@ -30,5 +30,13 @@ export default class PostProcessing {
 
     this.postprocessing.outputNode = outputNode;
     this.postprocessing.needsUpdate = true;
+  }
+
+  get renderer() {
+    return this.postprocessing.renderer;
+  }
+
+  renderAsync() {
+    return this.postprocessing.renderAsync();
   }
 }

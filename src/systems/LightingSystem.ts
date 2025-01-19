@@ -1,27 +1,18 @@
-import {
-  AmbientLight,
-  DirectionalLight,
-  Object3D,
-  Vector3,
-  VSMShadowMap,
-} from "three";
+import { AmbientLight, DirectionalLight, Object3D, Vector3 } from "three";
 import { State } from "../core/Engine";
 
-export default class Light {
+export default class LightingSystem {
   private light: DirectionalLight;
   private readonly LIGHT_POSITION_OFFSET = new Vector3(10, 20, 10);
 
   private target = new Object3D();
 
   constructor(state: State) {
-    const { scene, renderer } = state;
-    renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = VSMShadowMap;
-
+    const { scene } = state;
     scene.add(this.target);
 
     // this.light = new DirectionalLight("#fcffb5", 0.5);
-    this.light = new DirectionalLight("#00f", 0.5);
+    this.light = new DirectionalLight("#fff", 1.5);
     this.light.target = this.target;
     this.light.castShadow = true;
     this.light.shadow.mapSize.width = 256;
@@ -34,7 +25,7 @@ export default class Light {
 
     scene.add(this.light);
 
-    const ambient = new AmbientLight("blue", 0.15);
+    const ambient = new AmbientLight("white", 0.35);
     scene.add(ambient);
   }
 

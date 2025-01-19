@@ -2,28 +2,28 @@ import { WebGPURenderer } from "three/webgpu";
 import {
   Scene,
   Clock,
-  Object3D,
   PerspectiveCamera,
   ACESFilmicToneMapping,
+  VSMShadowMap,
 } from "three";
 import { OrbitControls } from "three/examples/jsm/Addons.js";
 import { World } from "@dimforge/rapier3d-compat";
-import Player from "../game/Player";
+import Player from "../entities/Player";
 import Stats from "stats-gl";
-import InfiniteFloor from "../game/InfiniteFloor";
-import Light from "../game/Light";
-import RapierDebugRenderer from "./RapierDebugRenderer";
+import InfiniteFloor from "../entities/InfiniteFloor";
 import PostProcessing from "./PostProcessing";
-
-// export type Rapier = typeof import("@dimforge/rapier3d-compat");
+import LightingSystem from "../systems/LightingSystem";
+import AssetManager from "../systems/AssetManager";
+import InputManager from "../systems/InputManager";
 
 export type State = {
-  renderer: WebGPURenderer;
   camera: PerspectiveCamera;
   scene: Scene;
   clock: Clock;
   world: World;
-  light?: Light;
+  assetManager: AssetManager;
+  inputManager: InputManager;
+  lighting?: LightingSystem;
   player?: Player;
 };
 
@@ -31,10 +31,7 @@ type Sizes = { width: number; height: number; dpr: number; aspect: number };
 
 export default class Engine {
   private stats: Stats;
-  private rapierDebugRenderer?: RapierDebugRenderer;
   private canvas: HTMLCanvasElement;
-
-  private renderer: WebGPURenderer;
   private camera: PerspectiveCamera;
   private scene: Scene;
   private controls: OrbitControls;
@@ -42,8 +39,10 @@ export default class Engine {
   private world?: World;
   private player?: Player;
   private infiniteFloor?: InfiniteFloor;
-  private light?: Light;
-  private postprocessing?: PostProcessing;
+  private assetManager: AssetManager;
+  private inputManager: InputManager;
+  private lighting?: LightingSystem;
+  private postprocessing: PostProcessing;
 
   constructor() {
     // Canvas
@@ -51,15 +50,23 @@ export default class Engine {
     this.canvas.classList.add("revo-realms");
     document.body.appendChild(this.canvas);
 
+    // Asset manager
+    this.assetManager = new AssetManager();
+
+    // Input manager
+    this.inputManager = new InputManager();
+
     // Renderer
     const sizes = this.getSizes();
-    this.renderer = new WebGPURenderer({
+    const renderer = new WebGPURenderer({
       canvas: this.canvas,
       antialias: true,
     });
-    this.renderer.setSize(sizes.width, sizes.height);
-    this.renderer.setPixelRatio(sizes.dpr);
-    this.renderer.toneMapping = ACESFilmicToneMapping;
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = VSMShadowMap;
+    renderer.setSize(sizes.width, sizes.height);
+    renderer.setPixelRatio(sizes.dpr);
+    renderer.toneMapping = ACESFilmicToneMapping;
 
     // Scene
     this.scene = new Scene();
@@ -71,14 +78,14 @@ export default class Engine {
 
     // Postprocessing
     this.postprocessing = new PostProcessing({
-      renderer: this.renderer,
+      renderer,
       scene: this.scene,
       camera: this.camera,
     });
+    this.postprocessing.renderer;
 
     // Stats
     this.stats = new Stats({
-      trackGPU: true,
       logsPerSecond: 4,
       graphsPerSecond: 30,
       samplesLog: 40,
@@ -87,12 +94,11 @@ export default class Engine {
       precision: 2,
     });
     document.body.appendChild(this.stats.dom);
-    this.stats.init(this.postprocessing.postprocessing.renderer);
 
     // Controls
     this.controls = new OrbitControls(this.camera, this.canvas);
     this.controls.enableDamping = true;
-    // this.controls.maxPolarAngle = Math.PI / 2.05;
+    this.controls.maxPolarAngle = Math.PI / 2.05;
     this.controls.enabled = false;
 
     // Clock
@@ -104,26 +110,21 @@ export default class Engine {
       this.world = new World({ x: 0, y: -9.81, z: 0 }); // Gravity points downwards
 
       const state: State = {
-        renderer: this.renderer,
         camera: this.camera,
         clock: this.clock,
         scene: this.scene,
+        assetManager: this.assetManager,
+        inputManager: this.inputManager,
         world: this.world,
       };
-
-      this.rapierDebugRenderer = new RapierDebugRenderer(
-        this.scene,
-        this.world,
-      );
-      this.rapierDebugRenderer.enabled = false;
 
       // Player
       this.player = new Player(state);
       state.player = this.player;
 
       // Light
-      this.light = new Light(state);
-      state.light = this.light;
+      this.lighting = new LightingSystem(state);
+      state.lighting = this.lighting;
 
       // Infinite Floor
       this.infiniteFloor = new InfiniteFloor(state);
@@ -148,24 +149,25 @@ export default class Engine {
     this.camera.updateProjectionMatrix();
 
     // Update renderer
-    this.renderer.setSize(sizes.width, sizes.height);
-    this.renderer.setPixelRatio(sizes.dpr);
+    this.postprocessing.renderer.setSize(sizes.width, sizes.height);
+    this.postprocessing.renderer.setPixelRatio(sizes.dpr);
   }
 
-  startLoop(callback?: (state: State) => void) {
+  async startLoop(callback?: (state: State) => void) {
+    await this.stats.init(this.postprocessing.renderer);
     this.clock.start();
     const loop = async () => {
       this.stats.update();
-      this.rapierDebugRenderer?.update();
 
       if (this.world) {
-        const state = {
-          renderer: this.renderer,
+        const state: State = {
           camera: this.camera,
           clock: this.clock,
           scene: this.scene,
           world: this.world,
-          light: this.light,
+          assetManager: this.assetManager,
+          inputManager: this.inputManager,
+          lighting: this.lighting,
           player: this.player,
         };
 
@@ -174,15 +176,14 @@ export default class Engine {
         this.world.step();
         this.player?.update(state);
         this.infiniteFloor?.update(state);
-        this.light?.update(state);
+        this.lighting?.update(state);
       }
 
       // Update controls
       if (this.controls.enabled) this.controls.update();
 
       // Render
-      // await this.renderer.renderAsync(this.scene, this.camera);
-      await this.postprocessing?.postprocessing.renderAsync();
+      await this.postprocessing.renderAsync();
 
       // Next frame
       requestAnimationFrame(loop);
@@ -195,9 +196,5 @@ export default class Engine {
     resizeObserver.observe(document.body);
 
     loop();
-  }
-
-  addToScene(...objects: Object3D[]) {
-    this.scene.add(...objects);
   }
 }

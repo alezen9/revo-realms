@@ -1,5 +1,4 @@
 import {
-  TextureLoader,
   Texture,
   Vector3,
   BoxGeometry,
@@ -29,8 +28,8 @@ import {
   uniform,
   vec3,
 } from "three/tsl";
-import { DRACOLoader, GLTF, GLTFLoader } from "three/examples/jsm/Addons.js";
-import Grass from "./Grass";
+import { GLTF } from "three/examples/jsm/Addons.js";
+import Grass from "../entities/Grass";
 
 export default class InfiniteFloorInstanced {
   private readonly HALF_FLOOR_THICKNESS = 0.3;
@@ -50,26 +49,27 @@ export default class InfiniteFloorInstanced {
   private uTime = uniform(0);
 
   constructor(state: State) {
-    const { scene, world } = state;
+    const { scene, world, assetManager } = state;
 
-    const loader = new TextureLoader();
-    this.floorTexture = loader.load(floor_TEMPORARY_TextureUrl, (t) => {
-      t.flipY = false;
-    });
-
-    const dracoLoader = new DRACOLoader();
-    dracoLoader.setDecoderPath("/draco/");
-    const gltfLoader = new GLTFLoader();
-    gltfLoader.setDRACOLoader(dracoLoader);
-
-    gltfLoader.load(floorModelUrl, (model) => {
-      this.floor = this.createFloorFromModel(model);
-      scene.add(this.floor);
-    });
-
-    gltfLoader.load(mapHeightfieldModelUrl, (model) => {
-      this.createHeightmapCollider(model, world);
-    });
+    (this.floorTexture = assetManager.textureLoader.load(
+      floor_TEMPORARY_TextureUrl,
+      (t) => {
+        t.flipY = false;
+      },
+    )),
+      (async () => {
+        await Promise.all([
+          assetManager.gltfLoader.loadAsync(floorModelUrl).then((model) => {
+            this.floor = this.createFloorFromModel(model);
+            scene.add(this.floor);
+          }),
+          assetManager.gltfLoader
+            .loadAsync(mapHeightfieldModelUrl)
+            .then((model) => {
+              this.createHeightmapCollider(model, world);
+            }),
+        ]);
+      })();
 
     this.kintounRigidBody = this.createKintounCollider(world);
 
