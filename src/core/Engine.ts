@@ -15,6 +15,7 @@ import PostProcessing from "./PostProcessing";
 import LightingSystem from "../systems/LightingSystem";
 import AssetManager from "../systems/AssetManager";
 import InputManager from "../systems/InputManager";
+import RadianceCascades from "../systems/RadianceCascades";
 
 export type State = {
   camera: PerspectiveCamera;
@@ -24,6 +25,7 @@ export type State = {
   assetManager: AssetManager;
   inputManager: InputManager;
   lighting?: LightingSystem;
+  globalIllumination: RadianceCascades;
   player?: Player;
 };
 
@@ -43,6 +45,7 @@ export default class Engine {
   private inputManager: InputManager;
   private lighting?: LightingSystem;
   private postprocessing: PostProcessing;
+  private globalIllumination: RadianceCascades;
 
   constructor() {
     // Canvas
@@ -82,7 +85,6 @@ export default class Engine {
       scene: this.scene,
       camera: this.camera,
     });
-    this.postprocessing.renderer;
 
     // Stats
     this.stats = new Stats({
@@ -104,6 +106,8 @@ export default class Engine {
     // Clock
     this.clock = new Clock(false);
 
+    this.globalIllumination = new RadianceCascades(this.scene);
+
     // Physics-affected objects
     import("@dimforge/rapier3d-compat").then(async (rapier) => {
       await rapier.init();
@@ -115,6 +119,7 @@ export default class Engine {
         scene: this.scene,
         assetManager: this.assetManager,
         inputManager: this.inputManager,
+        globalIllumination: this.globalIllumination,
         world: this.world,
       };
 
@@ -168,11 +173,14 @@ export default class Engine {
           assetManager: this.assetManager,
           inputManager: this.inputManager,
           lighting: this.lighting,
+          globalIllumination: this.globalIllumination,
           player: this.player,
         };
 
         callback?.(state);
 
+        this.globalIllumination.updateProbes();
+        this.globalIllumination.updateProbeColors();
         this.world.step();
         this.player?.update(state);
         this.infiniteFloor?.update(state);

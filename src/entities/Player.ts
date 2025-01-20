@@ -5,6 +5,7 @@ import {
   Vector3,
   Quaternion,
   Camera,
+  Color,
 } from "three";
 import {
   ColliderDesc,
@@ -15,6 +16,21 @@ import {
 } from "@dimforge/rapier3d-compat";
 import InputManager from "../systems/InputManager";
 import { type State } from "../core/Engine";
+import {
+  add,
+  clamp,
+  dot,
+  float,
+  max,
+  mul,
+  normalize,
+  normalWorld,
+  positionWorld,
+  uniform,
+  vec3,
+  vec4,
+} from "three/tsl";
+import { MeshStandardNodeMaterial } from "three/webgpu";
 
 export default class Player {
   private mesh: Mesh;
@@ -54,6 +70,16 @@ export default class Player {
   private readonly UP = new Vector3(0, 1, 0);
   private readonly DOWN = new Vector3(0, -1, 0);
 
+  // Material
+  private uLightColor1 = uniform(new Color());
+  private uLightColor2 = uniform(new Color());
+  private uLightColor3 = uniform(new Color());
+  private uLightColor4 = uniform(new Color());
+  private uLightDirection1 = uniform(new Vector3());
+  private uLightDirection2 = uniform(new Vector3());
+  private uLightDirection3 = uniform(new Vector3());
+  private uLightDirection4 = uniform(new Vector3());
+
   constructor(state: State) {
     const { scene, world, inputManager } = state;
     this.inputManager = inputManager;
@@ -75,14 +101,15 @@ export default class Player {
     //   emissive: "red",
     //   emissiveIntensity: 1.1,
     // });
-    const material = new MeshStandardMaterial({
-      flatShading: true,
-      color: "purple",
-      // emissive: "purple",
-      // emissiveIntensity: 15,
-      metalness: 1,
-      roughness: 0.5,
-    });
+    // const material = new MeshStandardMaterial({
+    //   flatShading: true,
+    //   color: "purple",
+    //   // emissive: "purple",
+    //   // emissiveIntensity: 15,
+    //   metalness: 1,
+    //   roughness: 0.5,
+    // });
+    const material = this.createMaterial();
     const mesh = new Mesh(geometry, material);
     mesh.castShadow = true;
     mesh.position.copy(this.PLAYER_INITIAL_POSITION);
@@ -102,12 +129,28 @@ export default class Player {
   }
 
   public update(state: State) {
-    const { clock, camera, world } = state;
+    const { clock, camera, world, globalIllumination } = state;
     const delta = clock.getDelta();
 
     this.updateVerticalMovement(delta, world);
     this.updateHorizontalMovement(delta);
     this.updateCameraPosition(camera, delta);
+
+    // Apply lighting from RadianceCascades
+    const { colors, directions } = globalIllumination.applyLightingToPlayer(
+      this.mesh.position,
+    );
+
+    // Update uniforms
+    this.uLightColor1.value.copy(colors[0] || new Color(0, 0, 0));
+    this.uLightColor2.value.copy(colors[1] || new Color(0, 0, 0));
+    this.uLightColor3.value.copy(colors[2] || new Color(0, 0, 0));
+    this.uLightColor4.value.copy(colors[3] || new Color(0, 0, 0));
+
+    this.uLightDirection1.value.copy(directions[0] || new Vector3(0, 0, 0));
+    this.uLightDirection2.value.copy(directions[1] || new Vector3(0, 0, 0));
+    this.uLightDirection3.value.copy(directions[2] || new Vector3(0, 0, 0));
+    this.uLightDirection4.value.copy(directions[3] || new Vector3(0, 0, 0));
   }
 
   private updateVerticalMovement(delta: number, world: World) {
@@ -272,5 +315,40 @@ export default class Player {
 
   public getYaw() {
     return this.yawInRadians;
+  }
+
+  private createMaterial() {
+    const material = new MeshStandardNodeMaterial();
+
+    // Base color (purple)
+    const baseColor = vec3(0.5, 0.0, 0.5);
+
+    // Per-light contributions
+
+    const direction1 = this.uLightDirection1.normalize();
+    const distance1 = positionWorld.distance(this.uLightDirection1);
+    const falloff1 = float(1).div(distance1.mul(distance1).add(1)); // Quadratic falloff
+    const intensity1 = max(dot(normalWorld, direction1), 0.0).mul(falloff1); // Lambertian lighting
+    const color1 = this.uLightColor1.mul(intensity1);
+
+    // const direction2 = this.uLightDirection2.normalize();
+    // const intensity2 = max(dot(normalWorld, direction2), 0.0);
+    // const color2 = this.uLightColor2.mul(intensity2);
+
+    // const direction3 = this.uLightDirection3.normalize();
+    // const intensity3 = max(dot(normalWorld, direction3), 0.0);
+    // const color3 = this.uLightColor3.mul(intensity3);
+
+    // const direction4 = this.uLightDirection4.normalize();
+    // const intensity4 = max(dot(normalWorld, direction4), 0.0);
+    // const color4 = this.uLightColor4.mul(intensity4);
+
+    // // Combine all light contributions
+    // const lighting = add(color1, add(color2, add(color3, color4)));
+
+    // Final fragment color is base color modulated by the lighting
+    material.colorNode = clamp(add(baseColor, color1), 0.0, 1.0);
+
+    return material;
   }
 }

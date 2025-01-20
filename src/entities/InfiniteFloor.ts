@@ -74,16 +74,6 @@ export default class InfiniteFloorInstanced {
     this.kintounRigidBody = this.createKintounCollider(world);
 
     this.grass = new Grass(state);
-
-    const cube = new Mesh(
-      new BoxGeometry(),
-      new MeshLambertMaterial({
-        emissive: "red",
-        emissiveIntensity: 10,
-      }),
-    );
-    cube.position.y = 0.5;
-    scene.add(cube);
   }
 
   private createFloorFromModel(model: GLTF) {
