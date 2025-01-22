@@ -1,42 +1,160 @@
-import { AmbientLight, DirectionalLight, Object3D, Vector3 } from "three";
-import { State } from "../core/Engine";
+import {
+  AmbientLight,
+  Color,
+  DirectionalLight,
+  Object3D,
+  Scene,
+  Vector3,
+} from "three";
+import EmissiveIllumination from "./EmissiveIllumination";
+import {
+  dot,
+  float,
+  Fn,
+  max,
+  mix,
+  normalWorld,
+  pow,
+  uniform,
+  vec3,
+} from "three/tsl";
+import { gui, State } from "../core/Engine";
+import GUI from "lil-gui";
 
 export default class LightingSystem {
-  private light: DirectionalLight;
+  private directionalLight: DirectionalLight;
+  private uDirectionalHue = uniform(new Color());
+  private uDirectionalIntensity = uniform(0);
+  private uDirectionalDirection = uniform(new Vector3());
+
+  private ambientLight: AmbientLight;
+  private uAmbientHue = uniform(new Color());
+  private uAmbientIntensity = uniform(0);
+
+  emissive = new EmissiveIllumination();
   private readonly LIGHT_POSITION_OFFSET = new Vector3(10, 20, 10);
 
   private target = new Object3D();
 
-  constructor(state: State) {
-    const { scene } = state;
+  private guiFolder: GUI;
+
+  constructor(scene: Scene) {
+    this.guiFolder = gui.addFolder("Lighting");
+
+    this.emissive = new EmissiveIllumination();
+
     scene.add(this.target);
 
-    // this.light = new DirectionalLight("#fcffb5", 0.5);
-    this.light = new DirectionalLight("#fff", 1.5);
-    this.light.target = this.target;
-    this.light.castShadow = true;
-    this.light.shadow.mapSize.width = 256;
-    this.light.shadow.mapSize.height = 256;
-    this.light.shadow.radius = 3;
+    this.directionalLight = this.setupDirectionalLighting();
+    scene.add(this.directionalLight);
 
-    this.light.shadow.camera.near = 0.5;
-    this.light.shadow.camera.far = 50;
-    this.light.shadow.bias = -0.003;
-
-    scene.add(this.light);
-
-    const ambient = new AmbientLight("white", 0.35);
-    scene.add(ambient);
+    this.ambientLight = this.setupAmbientLighting();
+    scene.add(this.ambientLight);
   }
 
-  public getDirection() {
-    return this.target.position.normalize();
+  private setupAmbientLighting() {
+    const ambientLight = new AmbientLight("white", 0.3);
+    this.uAmbientHue.value.copy(ambientLight.color);
+    this.uAmbientIntensity.value = ambientLight.intensity;
+
+    // GUI
+    this.guiFolder
+      .addColor(ambientLight, "color")
+      .name("Ambient color")
+      .onChange((v) => {
+        this.uAmbientHue.value = v;
+      });
+    this.guiFolder
+      .add(ambientLight, "intensity")
+      .name("Ambient intensity")
+      .min(0)
+      .max(5)
+      .onChange((v) => {
+        this.uAmbientIntensity.value = v;
+      });
+    return ambientLight;
   }
+
+  private setupDirectionalLighting() {
+    const directionalLight = new DirectionalLight("white", 1);
+    directionalLight.position.copy(this.LIGHT_POSITION_OFFSET);
+    this.uDirectionalHue.value.copy(directionalLight.color);
+    this.uDirectionalIntensity.value = directionalLight.intensity;
+    this.uDirectionalDirection.value.copy(
+      directionalLight.position.sub(this.target.position).normalize(),
+    );
+
+    directionalLight.target = this.target;
+
+    directionalLight.castShadow = true;
+
+    directionalLight.shadow.intensity = 0.5;
+    directionalLight.shadow.mapSize.width = 256;
+    directionalLight.shadow.mapSize.height = 256;
+    directionalLight.shadow.radius = 3;
+    directionalLight.shadow.camera.near = 0.5;
+    directionalLight.shadow.camera.far = 50;
+    directionalLight.shadow.bias = -0.003;
+
+    // GUI
+    this.guiFolder
+      .addColor(directionalLight, "color")
+      .name("Directional color");
+    this.guiFolder
+      .add(directionalLight, "intensity")
+      .name("Directional intensity")
+      .min(0)
+      .max(5);
+
+    return directionalLight;
+  }
+
+  // Simple version
+  private material_computeAmbientLight = Fn(() => {
+    return this.uAmbientHue.mul(this.uAmbientIntensity);
+  });
+
+  // Enhanced version (Hemisphere light)
+  // private material_computeAmbientLight = Fn(() => {
+  //   // const skyHue = vec3(0.6, 0.8, 1.0); // Sky color
+  //   // const groundHue = vec3(0.2, 0.2, 0.2); // Ground color
+  //   const ambientFactor = normalWorld.y.mul(0.5).add(0.5); // Blend based on surface normal
+  //   return mix(this.uGroundHue, this.uSkyHue, ambientFactor).mul(
+  //     this.uAmbientIntensity,
+  //   );
+  // });
+
+  // Simple version
+  // private material_computeDirectionalLight = Fn(() => {
+  //   const shading = max(0, dot(normalWorld, this.uDirectionalDirection));
+  //   return this.uDirectionalHue.mul(this.uDirectionalIntensity).mul(shading);
+  // });
+
+  // Enhanced version
+  private material_computeDirectionalLight = Fn(() => {
+    const wrapFactor = 0.25; // Adjust for smoother blending
+    const baseShading = dot(normalWorld, this.uDirectionalDirection);
+    const wrappedShading = baseShading
+      .mul(float(1.0).sub(wrapFactor))
+      .add(wrapFactor);
+    const smoothShading = pow(max(0, wrappedShading), 1.5); // Exponential smoothing
+    return this.uDirectionalHue
+      .mul(this.uDirectionalIntensity)
+      .mul(smoothShading);
+  });
+
+  material_computeIllumination = Fn(() => {
+    const light = vec3(0)
+      .add(this.material_computeAmbientLight())
+      .add(this.material_computeDirectionalLight())
+      .add(this.emissive.material_computeEmissiveLight());
+    return light;
+  });
 
   public update(state: State) {
     const { player } = state;
     if (!player) return;
-    this.light.position
+    this.directionalLight.position
       .copy(player.getPosition())
       .add(this.LIGHT_POSITION_OFFSET);
     this.target.position.copy(player.getPosition());
