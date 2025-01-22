@@ -15,6 +15,7 @@ import {
   cos,
   faceDirection,
   float,
+  Fn,
   fract,
   mix,
   modelNormalMatrix,
@@ -446,7 +447,7 @@ export default class Grass {
     return tileGeometry;
   }
 
-  private material_curveNormals(materialNode: MeshPhongNodeMaterial) {
+  private material_curveNormals = Fn(() => {
     // Fake cylindrical shape by curving normals
     const sideFactor = sin(uv().x.mul(Math.PI)); // Smoother curvature: -1 -> 0 -> 1
     const heightFactor = pow(uv().y, 1.5); // Softer curvature transition toward the tip
@@ -479,15 +480,15 @@ export default class Grass {
       float(faceDirection.lessThan(0.0)),
     );
 
-    materialNode.normalNode = curvedNormal;
-  }
+    return curvedNormal;
+  });
 
-  private material_addAmbientOcclusion(materialNode: MeshPhongNodeMaterial) {
+  private material_addAmbientOcclusion = Fn(() => {
     const bakedAO = attribute("ao");
-    materialNode.aoNode = bakedAO;
-  }
+    return bakedAO;
+  });
 
-  private material_setDiffuseColor(materialNode: MeshPhongNodeMaterial) {
+  private material_setDiffuseColor = Fn(() => {
     const baseColor = vec3(0.1, 0.25, 0.05); // Consistent green
     const tipColor = vec3(0.4, 0.5, 0.1); // Slightly lighter tip
 
@@ -495,10 +496,10 @@ export default class Grass {
     const heightFactor = pow(positionGeometry.y, 1.5);
     const blendedColor = mix(baseColor, tipColor, heightFactor);
 
-    materialNode.colorNode = blendedColor;
-  }
+    return blendedColor;
+  });
 
-  private material_addWindMotion(materialNode: MeshPhongNodeMaterial) {
+  private material_addWindMotion = Fn(() => {
     // 1. **Blade-Level Noise Sampling (With Seamless Wrapping)**
     const bladeOrigin = vec2(positionWorld.x, positionWorld.z);
     const bladeNoiseScale = 0.05;
@@ -533,18 +534,18 @@ export default class Grass {
     const bentPosition = positionWorld.add(bendOffset);
 
     // 7. **Apply Final Bent Position**
-    materialNode.positionNode = bentPosition;
-  }
+    return bentPosition;
+  });
 
   private createBladeMaterial() {
     const materialNode = new MeshPhongNodeMaterial();
     materialNode.side = DoubleSide;
 
-    this.material_curveNormals(materialNode);
+    materialNode.normalNode = this.material_curveNormals();
     // materialNode.colorNode = normalLocal.add(1.0).div(2.0);
-    this.material_addAmbientOcclusion(materialNode);
-    this.material_setDiffuseColor(materialNode);
-    this.material_addWindMotion(materialNode);
+    materialNode.aoNode = this.material_addAmbientOcclusion();
+    materialNode.colorNode = this.material_setDiffuseColor();
+    materialNode.positionNode = this.material_addWindMotion();
     return materialNode;
   }
 
