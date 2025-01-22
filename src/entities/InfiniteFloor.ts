@@ -43,7 +43,7 @@ import Grass from "../entities/Grass";
 
 export default class InfiniteFloorInstanced {
   private readonly HALF_FLOOR_THICKNESS = 0.3;
-  private readonly MAP_SIZE = 300;
+  private readonly MAP_SIZE = 256;
   private readonly HALF_MAP_SIZE = this.MAP_SIZE / 2;
   private readonly KINTOUN_ACTIVATION_THRESHOLD = 2;
 
@@ -260,7 +260,9 @@ export default class InfiniteFloorInstanced {
     // materialNode.wireframe = true;
 
     // 1. Calculate the static UVs based on the rotated world position
-    const uv = positionWorld.zx.add(this.HALF_MAP_SIZE).div(this.MAP_SIZE);
+    const uv = positionWorld.zx
+      .add(this.HALF_MAP_SIZE - 0.0001)
+      .div(this.MAP_SIZE - 0.0002);
     const clampedUV = clamp(uv, 0.0, 1.0); // Prevent sampling outside the map
 
     materialNode.positionNode = this.material_applyMapDisplacement(clampedUV);
