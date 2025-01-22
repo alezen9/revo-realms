@@ -49,7 +49,7 @@ export default class Player {
   // Constants for geometry/camera offset
   private readonly RADIUS = 0.5;
   private readonly PLAYER_INITIAL_POSITION = new Vector3(0, 2, 0);
-  private readonly CAMERA_OFFSET = new Vector3(0, 2, 8);
+  private readonly CAMERA_OFFSET = new Vector3(0, 7, 12);
   // private readonly CAMERA_OFFSET = new Vector3(0, 3, 17.5); // Debug camera
   private readonly UP = new Vector3(0, 1, 0);
   private readonly DOWN = new Vector3(0, -1, 0);
@@ -140,7 +140,7 @@ export default class Player {
 
     this.updateVerticalMovement(delta, world);
     this.updateHorizontalMovement(delta);
-    this.updateCameraPosition(camera, delta);
+    // this.updateCameraPosition(camera, delta);
   }
 
   private updateVerticalMovement(delta: number, world: World) {
