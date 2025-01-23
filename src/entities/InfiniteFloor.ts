@@ -15,9 +15,8 @@ import {
   World,
 } from "@dimforge/rapier3d-compat";
 import { State } from "../core/Engine";
-import { MeshLambertNodeMaterial } from "three/webgpu";
+import { MeshLambertNodeMaterial, PlaneGeometry } from "three/webgpu";
 import floor_TEMPORARY_TextureUrl from "/environment/heightmap-1024.webp?url";
-import floorModelUrl from "/environment/floor.glb?url";
 import mapHeightfieldModelUrl from "/environment/model-heightmap-displacements.glb?url";
 import {
   clamp,
@@ -52,11 +51,13 @@ export default class InfiniteFloorInstanced {
   private uTime = uniform(0);
 
   constructor(state: State) {
-    const { world } = state;
+    const { world, scene } = state;
 
     this.loadFloorTexture(state); // temporary
     this.loadDisplacementModel(state);
-    this.loadFloorModel(state);
+
+    this.floor = this.createFloorFromModel();
+    scene.add(this.floor);
 
     this.kintounRigidBody = this.createKintounCollider(world);
   }
@@ -83,20 +84,69 @@ export default class InfiniteFloorInstanced {
     });
   }
 
-  private loadFloorModel(state: State) {
-    const { assetManager, scene } = state;
-    assetManager.gltfLoader.load(floorModelUrl, (model) => {
-      this.floor = this.createFloorFromModel(model);
-      scene.add(this.floor);
-    });
+  private createFloorFromModel() {
+    const geometry = new PlaneGeometry(150, 100, 512, 512);
+    geometry.rotateX(-Math.PI / 2);
+    geometry.translate(0, 0, -35);
+    const material = this.createFloorMaterial();
+    const mesh = new Mesh(geometry, material);
+    mesh.receiveShadow = true;
+    return mesh;
   }
 
-  private createFloorFromModel(floorModel: GLTF) {
-    const mesh = floorModel.scene.children[0] as Mesh;
-    mesh.receiveShadow = true;
-    const material = this.createFloorMaterial();
-    mesh.material = material;
-    return mesh;
+  private upSampleDisplacement(
+    baseHeights: Float32Array,
+    rowsCount: number,
+    factor = 2,
+  ) {
+    // Now upsample by factor 2 => final grid size = rowsCount * 2
+    const upsampledCount = rowsCount * factor;
+    const upsampledHeights = new Float32Array(upsampledCount * upsampledCount);
+
+    // For each upsampled cell (r2, c2) => in [0..upsampledCount-1]
+    // We find corresponding (rBase, cBase) in the baseHeights. We'll do a bilinear fetch.
+    // - localUV in [0..1] in each cell
+    // We can interpret the domain as [0..rowsCount-1] in baseHeights.
+
+    for (let row2 = 0; row2 < upsampledCount; row2++) {
+      for (let col2 = 0; col2 < upsampledCount; col2++) {
+        // Map [0..upsampledCount-1] => [0..rowsCount-1] float
+        const baseRowF = row2 / factor;
+        const baseColF = col2 / factor;
+
+        // floor indices
+        const row0 = Math.floor(baseRowF);
+        const col0 = Math.floor(baseColF);
+
+        // clamp
+        const row1 = Math.min(row0 + 1, rowsCount - 1);
+        const col1 = Math.min(col0 + 1, rowsCount - 1);
+
+        // fract
+        const fracR = baseRowF - row0;
+        const fracC = baseColF - col0;
+
+        // corner values
+        const i00 = row0 + col0 * rowsCount;
+        const i10 = row0 + col1 * rowsCount;
+        const i01 = row1 + col0 * rowsCount;
+        const i11 = row1 + col1 * rowsCount;
+
+        const h00 = baseHeights[i00];
+        const h10 = baseHeights[i10];
+        const h01 = baseHeights[i01];
+        const h11 = baseHeights[i11];
+
+        // bilinear interpolation
+        const h0 = h00 + (h10 - h00) * fracC;
+        const h1 = h01 + (h11 - h01) * fracC;
+        const h = h0 + (h1 - h0) * fracR;
+
+        const upsampledIndex = row2 + col2 * upsampledCount;
+        upsampledHeights[upsampledIndex] = h;
+      }
+    }
+    return { upsampledHeights, upsampledCount };
   }
 
   private extractDisplacementDataFromModel(model: GLTF) {
@@ -123,13 +173,23 @@ export default class InfiniteFloorInstanced {
       const indexZ = Math.round((z / (halfExtent * 2) + 0.5) * (rowsCount - 1));
 
       // col-major: row = indexZ, col = indexX
-      const index = indexX + indexZ * rowsCount;
+      const index = indexZ + indexX * rowsCount;
 
       heights[index] = y;
     }
     this.uDisplacement.value = displacement;
 
-    return { rowsCount, heights, displacement };
+    const { upsampledHeights, upsampledCount } = this.upSampleDisplacement(
+      heights,
+      rowsCount,
+      8,
+    );
+
+    return {
+      rowsCount: upsampledCount,
+      heights: upsampledHeights,
+      displacement,
+    };
   }
 
   private createDisplacementDataTexture(
@@ -290,8 +350,39 @@ export default class InfiniteFloorInstanced {
     return finalColor;
   });
 
+  private bilinearSampleHeight = Fn(([uv = vec2(0, 0)]) => {
+    const texW = float(this.displacementTexture.image.width);
+    const texH = float(this.displacementTexture.image.height);
+
+    // st in [0..64] range
+    const st = uv.mul(vec2(texW, texH)).sub(vec2(0.5));
+
+    const iST = st.floor();
+    const fST = st.fract();
+
+    // define corners
+    const corner00UV = iST.add(vec2(0, 0).add(0.5)).div(vec2(texW, texH));
+    const corner10UV = iST.add(vec2(1, 0).add(0.5)).div(vec2(texW, texH));
+    const corner01UV = iST.add(vec2(0, 1).add(0.5)).div(vec2(texW, texH));
+    const corner11UV = iST.add(vec2(1, 1).add(0.5)).div(vec2(texW, texH));
+
+    // sample
+    const h00 = texture(this.displacementTexture, corner00UV).r;
+    const h10 = texture(this.displacementTexture, corner10UV).r;
+    const h01 = texture(this.displacementTexture, corner01UV).r;
+    const h11 = texture(this.displacementTexture, corner11UV).r;
+
+    // mix in x
+    const h0 = h00.mix(h10, fST.x);
+    const h1 = h01.mix(h11, fST.x);
+
+    // final in y
+    return h0.mix(h1, fST.y);
+  });
+
   private material_applyMapDisplacement = Fn(([uv = vec2(0, 0)]) => {
     const displacedY = texture(this.displacementTexture, uv).r;
+    // const displacedY = this.bilinearSampleHeight(uv);
 
     const displacedPosition = vec3(
       positionLocal.x,
@@ -304,6 +395,7 @@ export default class InfiniteFloorInstanced {
 
   private material_applyMapTexture = Fn(([uv = vec2(0, 0)]) => {
     const displacedY = texture(this.displacementTexture, uv).r;
+    // const displacedY = this.bilinearSampleHeight(uv);
 
     const edgeX = step(-this.HALF_MAP_SIZE, positionWorld.x).mul(
       step(positionWorld.x, this.HALF_MAP_SIZE),

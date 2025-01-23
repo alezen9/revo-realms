@@ -1,4 +1,9 @@
-import { WebGPURenderer } from "three/webgpu";
+import {
+  Mesh,
+  MeshBasicMaterial,
+  PlaneGeometry,
+  WebGPURenderer,
+} from "three/webgpu";
 import {
   Scene,
   Clock,
@@ -17,10 +22,13 @@ import AssetManager from "../systems/AssetManager";
 import InputManager from "../systems/InputManager";
 import GUI from "lil-gui";
 
+// use tweakpane https://tweakpane.github.io/docs/
 export const gui = new GUI({ width: 340 });
+gui.hide();
 
 export type State = {
   camera: PerspectiveCamera;
+  testCamera: PerspectiveCamera;
   scene: Scene;
   clock: Clock;
   world: World;
@@ -46,6 +54,8 @@ export default class Engine {
   private inputManager: InputManager;
   private lighting: LightingSystem;
   private postprocessing: PostProcessing;
+
+  private testCamera: PerspectiveCamera;
 
   constructor() {
     // Canvas
@@ -79,12 +89,21 @@ export default class Engine {
     this.camera.position.set(0, 5, 10);
     this.scene.add(this.camera);
 
+    this.testCamera = new PerspectiveCamera(45, sizes.aspect, 0.01, 100);
+    // this.testCamera.position.set(0, 5, 10);
+    // this.scene.add(this.testCamera);
+
+    // const plane = new Mesh(
+    //   new PlaneGeometry(150, 100),
+    //   new MeshBasicMaterial({ color: "red" }),
+    // );
+    // plane.rotation.x = -Math.PI / 2;
+    // plane.position.y = 0.1;
+    // plane.position.z = -30;
+    // this.scene.add(plane);
+
     // Postprocessing
-    this.postprocessing = new PostProcessing({
-      renderer,
-      scene: this.scene,
-      camera: this.camera,
-    });
+    this.postprocessing = new PostProcessing(renderer, this.scene, this.camera);
 
     // Stats
     this.stats = new Stats({
@@ -116,6 +135,7 @@ export default class Engine {
 
       const state: State = {
         camera: this.camera,
+        testCamera: this.testCamera,
         clock: this.clock,
         scene: this.scene,
         assetManager: this.assetManager,
@@ -164,6 +184,7 @@ export default class Engine {
       if (this.world) {
         const state: State = {
           camera: this.camera,
+          testCamera: this.testCamera,
           clock: this.clock,
           scene: this.scene,
           world: this.world,

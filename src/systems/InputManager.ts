@@ -21,6 +21,7 @@ export default class InputManager {
   }
 
   private handleKeyUp(event: KeyboardEvent) {
+    // use event.code instead to make it work for different layouts of keyboards
     const key = event.key.toLowerCase();
     this.keysPressed.delete(key);
     this.keyUpListeners.get(key)?.();
