@@ -11,6 +11,7 @@ import { type State } from "../core/Engine";
 import { color } from "three/tsl";
 import {
   BoxGeometry,
+  CameraHelper,
   MeshBasicNodeMaterial,
   MeshLambertMaterial,
 } from "three/webgpu";
@@ -49,17 +50,19 @@ export default class Player {
   // Constants for geometry/camera offset
   private readonly RADIUS = 0.5;
   private readonly PLAYER_INITIAL_POSITION = new Vector3(0, 2, 0);
-  private readonly CAMERA_OFFSET = new Vector3(0, 7, 12);
-  // private readonly CAMERA_OFFSET = new Vector3(0, 3, 17.5); // Debug camera
+  private readonly CAMERA_OFFSET = new Vector3(0, 10, 15);
   private readonly UP = new Vector3(0, 1, 0);
   private readonly DOWN = new Vector3(0, -1, 0);
 
   lighting: LightingSystem;
 
   constructor(state: State) {
-    const { scene, world, inputManager, lighting } = state;
+    const { scene, world, inputManager, lighting, testCamera } = state;
     this.inputManager = inputManager;
     this.lighting = lighting;
+
+    const cameraHelper = new CameraHelper(testCamera);
+    // scene.add(cameraHelper);
 
     const box = new Mesh(
       new BoxGeometry(),
@@ -135,7 +138,7 @@ export default class Player {
   }
 
   public update(state: State) {
-    const { clock, camera, world } = state;
+    const { clock, camera, testCamera, world } = state;
     const delta = clock.getDelta();
 
     this.updateVerticalMovement(delta, world);

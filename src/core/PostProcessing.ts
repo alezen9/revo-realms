@@ -1,13 +1,20 @@
-import { PostProcessing as WebGpuPostProcessing } from "three/webgpu";
-import { State } from "./Engine";
+import {
+  PerspectiveCamera,
+  Scene,
+  PostProcessing as WebGpuPostProcessing,
+  WebGPURenderer,
+} from "three/webgpu";
 import { emissive, mrt, output, pass } from "three/tsl";
 import { bloom } from "three/examples/jsm/tsl/display/BloomNode.js";
 
 export default class PostProcessing {
   private postprocessing: WebGpuPostProcessing;
 
-  constructor(state: Pick<State, "renderer" | "scene" | "camera">) {
-    const { renderer, scene, camera } = state;
+  constructor(
+    renderer: WebGPURenderer,
+    scene: Scene,
+    camera: PerspectiveCamera,
+  ) {
     this.postprocessing = new WebGpuPostProcessing(renderer);
 
     const scenePass = pass(scene, camera);
