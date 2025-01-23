@@ -101,7 +101,7 @@ export default class Engine {
     this.controls = new OrbitControls(this.camera, this.canvas);
     this.controls.enableDamping = true;
     this.controls.maxPolarAngle = Math.PI / 2.05;
-    this.controls.enabled = true;
+    this.controls.enabled = false;
 
     // Clock
     this.clock = new Clock(false);

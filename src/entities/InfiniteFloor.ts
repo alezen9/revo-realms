@@ -209,6 +209,87 @@ export default class InfiniteFloorInstanced {
     return rigidBody;
   }
 
+  // Helper for piecewise linear segment: from altA..altB => colorA..colorB
+  // ratio = clamp( (alt - altA)/(altB - altA), 0..1 )
+  private segmentColor = Fn(
+    ([
+      altIn = float(0),
+      altA = float(0),
+      altB = float(0),
+      colA = color("black"),
+      colB = color("black"),
+    ]) => {
+      const ratio = altIn.sub(altA).div(altB.sub(altA));
+      const clampedRatio = clamp(ratio, 0.0, 1.0);
+      return mix(colA, colB, clampedRatio);
+    },
+  );
+
+  private applyAltitudeColor = Fn(([alt = float(0)]) => {
+    // Define altitude thresholds
+    // alt < -1.5 => deep ocean
+    // alt in [-1.5..-0.5] => gradient ocean
+    // alt in [-0.5..-0.1] => gradient to sand
+    // alt in [-0.1.. 0.3] => gradient to grass
+    // alt > 0.3 => solid grass
+
+    // THRESHOLDS
+    const alt1 = float(-1.5);
+    const alt2 = float(-0.5);
+    const alt3 = float(-0.1);
+    const alt4 = float(0.3);
+
+    // COLORS for each range boundary
+    const c0 = color("#000080"); // deep ocean
+    const c1 = color("#ADD8E6"); // lightblue
+    const c2 = color("#c2b280"); // sand
+    const c3 = color("#228B22"); // grass
+
+    // We'll combine 4 segments:
+    // 1) alt < alt1 => c0
+    // 2) alt in [alt1..alt2] => c0->c1
+    // 3) alt in [alt2..alt3] => c1->c2
+    // 4) alt in [alt3..alt4] => c2->c3
+    // 5) alt > alt4 => c3
+
+    // Step approach: we do it cumulatively
+    // color1 = segment from alt1..alt2
+    const color1 = this.segmentColor(alt, alt1, alt2, c0, c1);
+    // color2 = segment from alt2..alt3
+    const color2 = this.segmentColor(alt, alt2, alt3, c1, c2);
+    // color3 = segment from alt3..alt4
+    const color3 = this.segmentColor(alt, alt3, alt4, c2, c3);
+
+    // Adjust if needed based on TSL's step signature.
+    // TSL doc: step(edge, x) => 0 if x<edge else 1.
+    // If we want "alt<alt1 => 0 else 1," we do step(alt1, alt).
+
+    const s1c = step(alt1, alt);
+    const s2c = step(alt2, alt);
+    const s3c = step(alt3, alt);
+    const s4c = step(alt4, alt);
+
+    // Logic:
+    // if alt < alt1 => color = c0
+    // else if alt<alt2 => color = color1
+    // else if alt<alt3 => color = color2
+    // else if alt<alt4 => color = color3
+    // else => c3
+
+    // Implementation with layered mix:
+    // pick12 = mix(c0, color1, s1c) => if alt<alt1 => c0 else color1
+    // pick123 = mix(pick12, color2, s2c) => if alt<alt2 => pick12 else color2
+    // pick1234 = mix(pick123, color3, s3c)
+    // final = mix(pick1234, c3, s4c)
+
+    const pick12 = mix(c0, color1, s1c);
+    const pick123 = mix(pick12, color2, s2c);
+    const pick1234 = mix(pick123, color3, s3c);
+    const finalColor = mix(pick1234, c3, s4c);
+
+    return finalColor;
+  });
+
   private material_applyMapDisplacement = Fn(([uv = vec2(0, 0)]) => {
     const displacedY = texture(this.displacementTexture, uv).r;
 
@@ -222,7 +303,7 @@ export default class InfiniteFloorInstanced {
   });
 
   private material_applyMapTexture = Fn(([uv = vec2(0, 0)]) => {
-    const colorSample = texture(this.floorTexture, uv);
+    const displacedY = texture(this.displacementTexture, uv).r;
 
     const edgeX = step(-this.HALF_MAP_SIZE, positionWorld.x).mul(
       step(positionWorld.x, this.HALF_MAP_SIZE),
@@ -232,16 +313,17 @@ export default class InfiniteFloorInstanced {
     );
     const isOutsideMap = float(1.0).sub(edgeX.mul(edgeZ)); // Returns 1.0 if outside, 0.0 if inside
 
-    // Temporary
     const outsideMapColor = color("#8FBC8B");
-    const insideMapColor = color("coral");
 
-    return mix(insideMapColor, outsideMapColor, isOutsideMap);
+    const altitudeColor = this.applyAltitudeColor(
+      displacedY.sub(this.uDisplacement),
+    );
+
+    return mix(altitudeColor, outsideMapColor, isOutsideMap);
   });
 
   private createFloorMaterial() {
     const materialNode = new MeshLambertNodeMaterial();
-    materialNode.wireframe = true;
 
     // 1. Calculate the static UVs based on the rotated world position
     const uv = positionWorld.zx.add(this.HALF_MAP_SIZE).div(this.MAP_SIZE);

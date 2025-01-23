@@ -140,7 +140,7 @@ export default class Player {
 
     this.updateVerticalMovement(delta, world);
     this.updateHorizontalMovement(delta);
-    // this.updateCameraPosition(camera, delta);
+    this.updateCameraPosition(camera, delta);
   }
 
   private updateVerticalMovement(delta: number, world: World) {
