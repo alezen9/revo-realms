@@ -6,7 +6,6 @@ import {
 } from "three/webgpu";
 import { emissive, mrt, output, pass } from "three/tsl";
 import { bloom } from "three/examples/jsm/tsl/display/BloomNode.js";
-
 export default class PostProcessing {
   private postprocessing: WebGpuPostProcessing;
 
@@ -33,6 +32,7 @@ export default class PostProcessing {
     const scenePassColor = scenePass.getTextureNode("output");
     const scenePassEmissive = scenePass.getTextureNode("emissive");
     const bloomPass = bloom(scenePassEmissive, 0.25, 0.1, 0.5);
+
     const outputNode = scenePassColor.add(bloomPass);
 
     this.postprocessing.outputNode = outputNode;

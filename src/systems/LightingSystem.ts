@@ -39,7 +39,8 @@ export default class LightingSystem {
   private guiFolder: GUI;
 
   constructor(scene: Scene) {
-    this.guiFolder = gui.addFolder("Lighting");
+    this.guiFolder = gui.addFolder("💡 Lighting");
+    this.guiFolder.hide();
 
     this.emissive = new EmissiveIllumination();
 
@@ -146,8 +147,8 @@ export default class LightingSystem {
   material_computeIllumination = Fn(() => {
     const light = vec3(0)
       .add(this.material_computeAmbientLight())
-      .add(this.material_computeDirectionalLight())
-      .add(this.emissive.material_computeEmissiveLight());
+      .add(this.material_computeDirectionalLight());
+    // .add(this.emissive.material_computeEmissiveLight());
     return light;
   });
 

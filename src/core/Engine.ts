@@ -22,9 +22,7 @@ import AssetManager from "../systems/AssetManager";
 import InputManager from "../systems/InputManager";
 import GUI from "lil-gui";
 
-// use tweakpane https://tweakpane.github.io/docs/
-export const gui = new GUI({ width: 340 });
-gui.hide();
+export const gui = new GUI({ width: 340, title: "Revo Realms" });
 
 export type State = {
   camera: PerspectiveCamera;
@@ -93,20 +91,12 @@ export default class Engine {
     // this.testCamera.position.set(0, 5, 10);
     // this.scene.add(this.testCamera);
 
-    // const plane = new Mesh(
-    //   new PlaneGeometry(150, 100),
-    //   new MeshBasicMaterial({ color: "red" }),
-    // );
-    // plane.rotation.x = -Math.PI / 2;
-    // plane.position.y = 0.1;
-    // plane.position.z = -30;
-    // this.scene.add(plane);
-
     // Postprocessing
     this.postprocessing = new PostProcessing(renderer, this.scene, this.camera);
 
     // Stats
     this.stats = new Stats({
+      trackGPU: true,
       logsPerSecond: 4,
       graphsPerSecond: 30,
       samplesLog: 40,
