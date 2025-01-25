@@ -12,14 +12,14 @@ import {
   float,
   Fn,
   max,
-  mix,
   normalWorld,
   pow,
   uniform,
   vec3,
 } from "three/tsl";
-import { gui, State } from "../core/Engine";
+import { State } from "../Game";
 import GUI from "lil-gui";
+import { debugManager } from "./DebugManager";
 
 export default class LightingSystem {
   private directionalLight: DirectionalLight;
@@ -39,7 +39,7 @@ export default class LightingSystem {
   private guiFolder: GUI;
 
   constructor(scene: Scene) {
-    this.guiFolder = gui.addFolder("💡 Lighting");
+    this.guiFolder = debugManager.panel.addFolder("💡 Lighting");
     this.guiFolder.hide();
 
     this.emissive = new EmissiveIllumination();

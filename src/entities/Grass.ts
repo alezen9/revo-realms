@@ -8,7 +8,7 @@ import {
   Texture,
   Scene,
 } from "three";
-import { State } from "../core/Engine";
+import { State } from "../Game";
 import { MeshPhongNodeMaterial } from "three/webgpu";
 import {
   attribute,
