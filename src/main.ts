@@ -1,5 +1,10 @@
 import "./style.css";
-import Engine from "./core/Engine";
+import PhysicsManager from "./systems/PhysicsManager";
+import Game from "./Game";
 
-const engine = new Engine();
-engine.startLoop();
+const physicsManager = new PhysicsManager();
+
+physicsManager.init().then(() => {
+  const game = new Game();
+  game.startLoop();
+});

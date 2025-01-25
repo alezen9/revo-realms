@@ -7,7 +7,7 @@ import {
   Ray,
 } from "@dimforge/rapier3d-compat";
 import InputManager from "../systems/InputManager";
-import { view, type State } from "../core/Engine";
+import { type State } from "../Game";
 import { color } from "three/tsl";
 import {
   BoxGeometry,
@@ -58,18 +58,14 @@ export default class Player {
 
   private areOrbitControlsEnabled = false;
 
-  constructor(state: State) {
-    const { scene, world, inputManager, lighting, testCamera } = state;
-
-    view.children[0].onChange((v: any) => {
-      this.areOrbitControlsEnabled = v as boolean;
-    });
+  constructor(
+    state: Pick<State, "inputManager" | "scene" | "world" | "lighting">,
+  ) {
+    const { scene, world, inputManager, lighting } = state;
+    if (!world) throw new Error("world is undefined");
 
     this.inputManager = inputManager;
     this.lighting = lighting;
-
-    const cameraHelper = new CameraHelper(testCamera);
-    // scene.add(cameraHelper);
 
     const box = new Mesh(
       new BoxGeometry(),
@@ -145,7 +141,9 @@ export default class Player {
   }
 
   public update(state: State) {
-    const { clock, camera, testCamera, world } = state;
+    const { clock, camera, world } = state;
+    if (!world) throw new Error("world is undefined");
+
     const delta = clock.getDelta();
 
     this.updateVerticalMovement(delta, world);

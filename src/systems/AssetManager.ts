@@ -24,3 +24,5 @@ export default class AssetManager {
     this.perlinNoiseTexture.needsUpdate = true;
   }
 }
+
+export const assetManager = new AssetManager();
