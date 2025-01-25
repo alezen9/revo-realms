@@ -23,6 +23,7 @@ import InputManager from "../systems/InputManager";
 import GUI from "lil-gui";
 
 export const gui = new GUI({ width: 340, title: "Revo Realms" });
+export const view = gui.addFolder("🎥 View");
 
 export type State = {
   camera: PerspectiveCamera;
@@ -111,6 +112,7 @@ export default class Engine {
     this.controls.enableDamping = true;
     this.controls.maxPolarAngle = Math.PI / 2.05;
     this.controls.enabled = false;
+    view.add(this.controls, "enabled");
 
     // Clock
     this.clock = new Clock(false);

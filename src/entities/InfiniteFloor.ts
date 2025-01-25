@@ -16,8 +16,14 @@ import {
   World,
 } from "@dimforge/rapier3d-compat";
 import { gui, State } from "../core/Engine";
-import { MeshLambertNodeMaterial, Texture } from "three/webgpu";
+import {
+  MeshLambertMaterial,
+  MeshLambertNodeMaterial,
+  MeshStandardMaterial,
+  Texture,
+} from "three/webgpu";
 import worldModelUrl from "/environment/world.glb?url";
+import floorTextureUrl from "/environment/floor.webp?url";
 import {
   clamp,
   color,
@@ -30,6 +36,7 @@ import {
   step,
   texture,
   uniform,
+  uv,
   vec2,
   vec3,
 } from "three/tsl";
@@ -41,14 +48,8 @@ export default class InfiniteFloorInstanced {
   private readonly HALF_MAP_SIZE = this.MAP_SIZE / 2;
   private readonly KINTOUN_ACTIVATION_THRESHOLD = 2;
 
-  private displacementTexture = new DataTexture();
-  private uDisplacement = uniform(0);
-
-  private floor?: Mesh;
-
   private kintounRigidBody: RigidBody; // Kintoun = Flying Nimbus cloud from dragon ball
-
-  private uTime = uniform(0);
+  private kintounPosition = new Vector3();
 
   // DEBUG
   private uShallowWaterColor = uniform(new Color("#00ff7b"));
@@ -62,11 +63,12 @@ export default class InfiniteFloorInstanced {
     const { assetManager, world, scene } = state;
 
     this.perlinNoiseTexture = assetManager.perlinNoiseTexture;
+    const floorTexture = assetManager.textureLoader.load(floorTextureUrl);
+    floorTexture.flipY = false;
 
     assetManager.gltfLoader.load(worldModelUrl, (worldModel) => {
-      this.createMapGround(worldModel, world);
-      this.floor = this.createFloor();
-      scene.add(this.floor);
+      this.createPhysics(worldModel, world);
+      this.createVisual(worldModel, floorTexture, scene);
     });
 
     this.kintounRigidBody = this.createKintounCollider(world);
@@ -79,77 +81,24 @@ export default class InfiniteFloorInstanced {
     terrain.addColor(this.uShallowWaterColor, "value").name("Shallow water");
     terrain.addColor(this.uDeepWaterColor, "value").name("Deep water");
     terrain.addColor(this.uSandColor, "value").name("Sand");
-    console.log(this.uGrassColor.value.getHexString());
     terrain.addColor(this.uGrassColor, "value").name("Grass");
   }
 
-  private createFloor() {
-    const geometry = new PlaneGeometry(150, 100, 1024, 1024);
-    geometry.rotateX(-Math.PI / 2);
-    geometry.translate(0, 0, -35);
-    const material = this.createFloorMaterial();
-    const mesh = new Mesh(geometry, material);
-    mesh.receiveShadow = true;
-    return mesh;
-  }
-
-  private upSampleDisplacement(
-    baseHeights: Float32Array,
-    rowsCount: number,
-    factor = 2,
+  private createVisual(
+    worldModel: GLTF,
+    floorTexture: Texture,
+    scene: State["scene"],
   ) {
-    // Now upsample by factor 2 => final grid size = rowsCount * 2
-    const upsampledCount = rowsCount * factor;
-    const upsampledHeights = new Float32Array(upsampledCount * upsampledCount);
-
-    // For each upsampled cell (r2, c2) => in [0..upsampledCount-1]
-    // We find corresponding (rBase, cBase) in the baseHeights. We'll do a bilinear fetch.
-    // - localUV in [0..1] in each cell
-    // We can interpret the domain as [0..rowsCount-1] in baseHeights.
-
-    for (let row2 = 0; row2 < upsampledCount; row2++) {
-      for (let col2 = 0; col2 < upsampledCount; col2++) {
-        // Map [0..upsampledCount-1] => [0..rowsCount-1] float
-        const baseRowF = row2 / factor;
-        const baseColF = col2 / factor;
-
-        // floor indices
-        const row0 = Math.floor(baseRowF);
-        const col0 = Math.floor(baseColF);
-
-        // clamp
-        const row1 = Math.min(row0 + 1, rowsCount - 1);
-        const col1 = Math.min(col0 + 1, rowsCount - 1);
-
-        // fract
-        const fracR = baseRowF - row0;
-        const fracC = baseColF - col0;
-
-        // corner values
-        const i00 = row0 + col0 * rowsCount;
-        const i10 = row0 + col1 * rowsCount;
-        const i01 = row1 + col0 * rowsCount;
-        const i11 = row1 + col1 * rowsCount;
-
-        const h00 = baseHeights[i00];
-        const h10 = baseHeights[i10];
-        const h01 = baseHeights[i01];
-        const h11 = baseHeights[i11];
-
-        // bilinear interpolation
-        const h0 = h00 + (h10 - h00) * fracC;
-        const h1 = h01 + (h11 - h01) * fracC;
-        const h = h0 + (h1 - h0) * fracR;
-
-        const upsampledIndex = row2 + col2 * upsampledCount;
-        upsampledHeights[upsampledIndex] = h;
-      }
-    }
-    return { upsampledHeights, upsampledCount };
+    const floor = worldModel.scene.getObjectByName("floor") as Mesh;
+    floor.geometry.computeVertexNormals();
+    floor.material = new MeshStandardMaterial({ map: floorTexture });
+    // floor.material = this.createFloorMaterial();
+    floor.receiveShadow = true;
+    scene.add(floor);
   }
 
   private getDisplacementData(worldModel: GLTF) {
-    const mesh = worldModel.scene.getObjectByName("displacement") as Mesh;
+    const mesh = worldModel.scene.getObjectByName("heightfield") as Mesh;
     const displacement = mesh.geometry.attributes._displacement.array[0]; // they are all the same
     const positionAttribute = mesh.geometry.attributes.position;
     if (!mesh.geometry.boundingBox) mesh.geometry.computeBoundingBox();
@@ -176,44 +125,22 @@ export default class InfiniteFloorInstanced {
 
       heights[index] = y;
     }
-    this.uDisplacement.value = displacement;
 
-    const { upsampledHeights, upsampledCount } = this.upSampleDisplacement(
-      heights,
-      rowsCount,
-      2,
-    );
+    // const { upsampledHeights, upsampledCount } = this.upSampleDisplacement(
+    //   heights,
+    //   rowsCount,
+    //   2,
+    // );
 
     return {
-      rowsCount: upsampledCount,
-      heights: upsampledHeights,
+      rowsCount,
+      heights,
       displacement,
     };
   }
 
-  private createDisplacementDataTexture(
-    displaceMentData: ReturnType<typeof this.getDisplacementData>,
-  ) {
-    const { rowsCount, heights } = displaceMentData;
-    const data = new DataTexture(
-      heights,
-      rowsCount,
-      rowsCount,
-      RedFormat,
-      FloatType,
-    );
-    data.minFilter = LinearFilter;
-    data.magFilter = LinearFilter;
-    data.generateMipmaps = false;
-    data.needsUpdate = true;
-
-    this.displacementTexture.copy(data);
-  }
-
-  private createHeightfieldCollider(
-    displaceMentData: ReturnType<typeof this.getDisplacementData>,
-    world: World,
-  ) {
+  private createPhysics(worldModel: GLTF, world: World) {
+    const displaceMentData = this.getDisplacementData(worldModel);
     const { rowsCount, heights, displacement } = displaceMentData;
 
     const rigidBodyDesc = RigidBodyDesc.fixed().setTranslation(
@@ -237,18 +164,11 @@ export default class InfiniteFloorInstanced {
       .setFriction(1)
       .setRestitution(0.2);
 
-    // 5) Finally, create the collider in Rapier
     world.createCollider(colliderDesc, rigidBody);
   }
 
-  private createMapGround(worldModel: GLTF, world: World) {
-    const displaceMentData = this.getDisplacementData(worldModel);
-    this.createDisplacementDataTexture(displaceMentData);
-    this.createHeightfieldCollider(displaceMentData, world);
-  }
-
   private createKintounCollider(world: World) {
-    const rigidBodyDesc = RigidBodyDesc.fixed().setTranslation(
+    const rigidBodyDesc = RigidBodyDesc.kinematicPositionBased().setTranslation(
       0,
       -20, // out of the physics world
       0,
@@ -291,18 +211,18 @@ export default class InfiniteFloorInstanced {
     return finalSandColor;
   });
 
-  private getGrassColor = Fn(() => {
+  private material_getGrassColor = Fn(() => {
     return this.uGrassColor;
   });
 
   private getColorByAltitude = Fn(([noise = float(0)]) => {
     // Define the boundaries
-    const waterMax = -0.1;
-    const sandMin = -0.1;
-    const sandMax = 0.1;
-    const grassMin = 0.1;
+    const waterMax = -0.2;
+    const sandMin = -0.2;
+    const sandMax = 0.2;
+    const grassMin = 0.2;
 
-    const blendRange = 0.01; // Overlap range for blending
+    const blendRange = 0.2; // Overlap range for blending
 
     // Calculate blending factors using smoothstep
     const isWater = float(1.0).sub(
@@ -326,7 +246,7 @@ export default class InfiniteFloorInstanced {
     // Calculate colors with blending factors
     const waterColor = this.material_getWaterColor().mul(isWater);
     const sandColor = this.material_getSandColor(noise).mul(isSand);
-    const grassColor = this.getGrassColor().mul(isGrass);
+    const grassColor = this.material_getGrassColor().mul(isGrass);
 
     // Combine blended colors
     const finalColor = waterColor.add(sandColor).add(grassColor);
@@ -347,36 +267,7 @@ export default class InfiniteFloorInstanced {
     return finalColor;
   });
 
-  // Clear cut
-  // private getColorByAltitude = Fn(() => {
-  //   const isWater = float(1.0).sub(step(-0.1, positionWorld.y));
-  //   const isSand = float(1.0)
-  //     .sub(step(0.1, positionWorld.y))
-  //     .mul(step(-0.1, positionWorld.y));
-  //   const isGrass = step(0.1, positionWorld.y);
-
-  //   const waterColor = this.material_getWaterColor().mul(isWater);
-  //   const sandColor = this.material_getSandColor().mul(isSand);
-  //   const grassColor = this.getGrassColor().mul(isGrass);
-
-  //   const finalColor = waterColor.add(sandColor).add(grassColor);
-
-  //   return finalColor;
-  // });
-
-  private material_applyMapDisplacement = Fn(([uv = vec2(0, 0)]) => {
-    const displacedY = texture(this.displacementTexture, uv).r;
-
-    const displacedPosition = vec3(
-      positionLocal.x,
-      displacedY.sub(this.uDisplacement),
-      positionLocal.z,
-    );
-
-    return displacedPosition;
-  });
-
-  private material_applyMapTexture = Fn(([noise = float(0)]) => {
+  private material_isOutsideMap = Fn(() => {
     const edgeX = step(-this.HALF_MAP_SIZE, positionWorld.x).mul(
       step(positionWorld.x, this.HALF_MAP_SIZE),
     );
@@ -384,47 +275,36 @@ export default class InfiniteFloorInstanced {
       step(positionWorld.z, this.HALF_MAP_SIZE),
     );
     const isOutsideMap = float(1.0).sub(edgeX.mul(edgeZ)); // Returns 1.0 if outside, 0.0 if inside
+    return isOutsideMap;
+  });
 
-    // const outsideMapColor = color("#8FBC8B");
+  private material_colorizeByAltitude = Fn(() => {
+    const noise = texture(this.perlinNoiseTexture, uv());
+
+    const outsideMapColor = color("#8FBC8B");
     const altitudeColor = this.getColorByAltitude(noise);
-    const outsideMapColor = this.material_getSandColor(noise);
+
+    const isOutsideMap = this.material_isOutsideMap();
 
     return mix(altitudeColor, outsideMapColor, isOutsideMap);
   });
 
   private createFloorMaterial() {
     const materialNode = new MeshLambertNodeMaterial();
-
-    // Note: zx order is on purpose
-    const uv = positionWorld.zx.add(this.HALF_MAP_SIZE).div(this.MAP_SIZE);
-    const clampedUV = clamp(uv, 0.0, 1.0);
-
-    const noise = texture(this.perlinNoiseTexture, uv);
-
-    materialNode.positionNode = this.material_applyMapDisplacement(clampedUV);
-    materialNode.colorNode = this.material_applyMapTexture(noise);
-
+    materialNode.colorNode = this.material_colorizeByAltitude();
     return materialNode;
   }
 
   private useKintoun(playerPosition: Vector3) {
-    const kintounPosition = playerPosition
-      .clone()
-      .setY(-this.HALF_FLOOR_THICKNESS);
-    this.kintounRigidBody.setTranslation(kintounPosition, true);
+    this.kintounPosition.copy(playerPosition).setY(-this.HALF_FLOOR_THICKNESS);
+    this.kintounRigidBody.setTranslation(this.kintounPosition, true);
   }
 
   public update(state: State) {
-    const { clock, player } = state;
-    if (!this.floor || !player) return;
-
-    this.uTime.value = clock.getElapsedTime();
+    const { player } = state;
+    if (!player) return;
 
     const playerPosition = player.getPosition();
-    const playerYaw = player.getYaw();
-    this.floor.position.x = playerPosition.x;
-    this.floor.position.z = playerPosition.z;
-    this.floor.rotation.y = playerYaw;
 
     const isPlayerNearEdgeX =
       this.HALF_MAP_SIZE - Math.abs(playerPosition.x) <

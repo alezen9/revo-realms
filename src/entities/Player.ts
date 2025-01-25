@@ -7,7 +7,7 @@ import {
   Ray,
 } from "@dimforge/rapier3d-compat";
 import InputManager from "../systems/InputManager";
-import { type State } from "../core/Engine";
+import { view, type State } from "../core/Engine";
 import { color } from "three/tsl";
 import {
   BoxGeometry,
@@ -50,14 +50,21 @@ export default class Player {
   // Constants for geometry/camera offset
   private readonly RADIUS = 0.5;
   private readonly PLAYER_INITIAL_POSITION = new Vector3(0, 2, 0);
-  private readonly CAMERA_OFFSET = new Vector3(0, 7, 10);
+  private readonly CAMERA_OFFSET = new Vector3(0, 5, 10);
   private readonly UP = new Vector3(0, 1, 0);
   private readonly DOWN = new Vector3(0, -1, 0);
 
   lighting: LightingSystem;
 
+  private areOrbitControlsEnabled = false;
+
   constructor(state: State) {
     const { scene, world, inputManager, lighting, testCamera } = state;
+
+    view.children[0].onChange((v: any) => {
+      this.areOrbitControlsEnabled = v as boolean;
+    });
+
     this.inputManager = inputManager;
     this.lighting = lighting;
 
@@ -143,7 +150,7 @@ export default class Player {
 
     this.updateVerticalMovement(delta, world);
     this.updateHorizontalMovement(delta);
-    this.updateCameraPosition(camera, delta);
+    if (!this.areOrbitControlsEnabled) this.updateCameraPosition(camera, delta);
   }
 
   private updateVerticalMovement(delta: number, world: World) {
