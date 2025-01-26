@@ -56,8 +56,6 @@ export default class Player {
 
   lighting: LightingSystem;
 
-  private areOrbitControlsEnabled = false;
-
   constructor(
     state: Pick<State, "inputManager" | "scene" | "world" | "lighting">,
   ) {
@@ -142,13 +140,13 @@ export default class Player {
 
   public update(state: State) {
     const { clock, camera, world } = state;
-    if (!world) throw new Error("world is undefined");
 
     const delta = clock.getDelta();
 
     this.updateVerticalMovement(delta, world);
     this.updateHorizontalMovement(delta);
-    if (!this.areOrbitControlsEnabled) this.updateCameraPosition(camera, delta);
+    if (!camera.userData.isOrbitControlsEnabled)
+      this.updateCameraPosition(camera, delta);
   }
 
   private updateVerticalMovement(delta: number, world: World) {
