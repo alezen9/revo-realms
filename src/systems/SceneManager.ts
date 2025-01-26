@@ -1,6 +1,7 @@
 import { PerspectiveCamera, Scene } from "three";
 import { OrbitControls } from "three/examples/jsm/Addons.js";
 import RendererManager from "./RendererManager";
+import { debugManager } from "./DebugManager";
 
 export default class SceneManager {
   scene: Scene;
@@ -28,6 +29,19 @@ export default class SceneManager {
     controls.maxPolarAngle = Math.PI / 2.05;
     controls.enabled = false;
     this.controls = controls;
+
+    // Debug
+    this.debug();
+  }
+
+  private debug() {
+    const folder = debugManager.panel.addFolder("🎥 View");
+    folder
+      .add(this.controls, "enabled")
+      .name("Enable orbit controls")
+      .onChange((checked: boolean) => {
+        this.camera.userData.isOrbitControlsEnabled = checked;
+      });
   }
 
   update() {
