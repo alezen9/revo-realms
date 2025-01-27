@@ -18,8 +18,6 @@ import {
   vec3,
 } from "three/tsl";
 import { State } from "../Game";
-import GUI from "lil-gui";
-import { debugManager } from "./DebugManager";
 
 export default class LightingSystem {
   private directionalLight: DirectionalLight;
@@ -36,12 +34,7 @@ export default class LightingSystem {
 
   private target = new Object3D();
 
-  private guiFolder: GUI;
-
   constructor(scene: Scene) {
-    this.guiFolder = debugManager.panel.addFolder("💡 Lighting");
-    this.guiFolder.hide();
-
     this.emissive = new EmissiveIllumination();
 
     scene.add(this.target);
@@ -57,22 +50,6 @@ export default class LightingSystem {
     const ambientLight = new AmbientLight("white", 0.3);
     this.uAmbientHue.value.copy(ambientLight.color);
     this.uAmbientIntensity.value = ambientLight.intensity;
-
-    // GUI
-    this.guiFolder
-      .addColor(ambientLight, "color")
-      .name("Ambient color")
-      .onChange((v) => {
-        this.uAmbientHue.value = v;
-      });
-    this.guiFolder
-      .add(ambientLight, "intensity")
-      .name("Ambient intensity")
-      .min(0)
-      .max(5)
-      .onChange((v) => {
-        this.uAmbientIntensity.value = v;
-      });
     return ambientLight;
   }
 
@@ -96,16 +73,6 @@ export default class LightingSystem {
     directionalLight.shadow.camera.near = 0.5;
     directionalLight.shadow.camera.far = 50;
     directionalLight.shadow.bias = -0.003;
-
-    // GUI
-    this.guiFolder
-      .addColor(directionalLight, "color")
-      .name("Directional color");
-    this.guiFolder
-      .add(directionalLight, "intensity")
-      .name("Directional intensity")
-      .min(0)
-      .max(5);
 
     return directionalLight;
   }

@@ -35,12 +35,11 @@ export default class SceneManager {
   }
 
   private debug() {
-    const folder = debugManager.panel.addFolder("🎥 View");
+    const folder = debugManager.panel.addFolder({ title: "🎥 View" });
     folder
-      .add(this.controls, "enabled")
-      .name("Enable orbit controls")
-      .onChange((checked: boolean) => {
-        this.camera.userData.isOrbitControlsEnabled = checked;
+      .addBinding(this.controls, "enabled", { label: "Enable orbit controls" })
+      .on("change", ({ value }) => {
+        this.camera.userData.isOrbitControlsEnabled = value;
       });
   }
 

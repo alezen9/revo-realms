@@ -1,4 +1,10 @@
-import { Vector3, Mesh } from "three";
+import {
+  Vector3,
+  Mesh,
+  MeshBasicMaterial,
+  Vector2,
+  PlaneGeometry,
+} from "three";
 import {
   ColliderDesc,
   HeightFieldFlags,
@@ -7,10 +13,51 @@ import {
   World,
 } from "@dimforge/rapier3d-compat";
 import { State } from "../Game";
-import { MeshStandardMaterial, Texture } from "three/webgpu";
+import {
+  MeshBasicNodeMaterial,
+  MeshPhongNodeMaterial,
+  MeshStandardMaterial,
+  Texture,
+} from "three/webgpu";
 import worldModelUrl from "/environment/world.glb?url";
 import floorTextureUrl from "/environment/floor.webp?url";
-import { GLTF } from "three/examples/jsm/Addons.js";
+import { GLTF, VertexNormalsHelper } from "three/examples/jsm/Addons.js";
+import { debugManager } from "../systems/DebugManager";
+import WaterMaterial from "../other/WaterMaterial";
+import {
+  add,
+  color,
+  cos,
+  cross,
+  float,
+  Fn,
+  fract,
+  length,
+  linearDepth,
+  mix,
+  modelWorldMatrix,
+  mul,
+  mx_worley_noise_float,
+  normalize,
+  normalLocal,
+  positionGeometry,
+  positionLocal,
+  positionWorld,
+  screenUV,
+  sin,
+  smoothstep,
+  sub,
+  texture,
+  uniform,
+  uv,
+  vec2,
+  vec3,
+  vec4,
+  viewportDepthTexture,
+  viewportLinearDepth,
+  viewportSharedTexture,
+} from "three/tsl";
+import { assetManager } from "../systems/AssetManager";
 
 export default class PortfolioRealm {
   private readonly HALF_FLOOR_THICKNESS = 0.3;
@@ -20,6 +67,14 @@ export default class PortfolioRealm {
 
   private kintounRigidBody: RigidBody; // Kintoun = Flying Nimbus cloud from dragon ball
   private kintounPosition = new Vector3();
+
+  private uTime = uniform(0);
+  private uWavesFrequency = uniform(new Vector2(4, 2));
+  private uWavesSpeed = uniform(0.003);
+  private uWavesElevation = uniform(0.3);
+  private uNoiseMultiplier = uniform(-2);
+  private uShift = uniform(0.1);
+  private uDivisor = uniform(10);
 
   constructor(state: Pick<State, "assetManager" | "world" | "scene">) {
     const { assetManager, world, scene } = state;
@@ -46,7 +101,136 @@ export default class PortfolioRealm {
     floor.material = new MeshStandardMaterial({ map: floorTexture });
     floor.receiveShadow = true;
     scene.add(floor);
+
+    const lake = worldModel.scene.getObjectByName("lake") as Mesh;
+    // lake.geometry.computeVertexNormals();
+    const waterMaterial = this.createWaterMaterial();
+    lake.material = waterMaterial;
+    scene.add(lake);
+
+    debugManager.panel.addBinding(this.uWavesFrequency, "value", {
+      label: "Frequency",
+    });
+    debugManager.panel.addBinding(this.uWavesSpeed, "value", {
+      label: "Speed",
+    });
+    debugManager.panel.addBinding(this.uWavesElevation, "value", {
+      label: "Elevation",
+    });
+    debugManager.panel.addBinding(this.uNoiseMultiplier, "value", {
+      label: "Noise multiplier",
+    });
+    debugManager.panel.addBinding(waterMaterial, "wireframe", {
+      label: "Wireframe",
+    });
+    debugManager.panel.addBinding(this.uShift, "value", {
+      label: "Shift",
+    });
+    debugManager.panel.addBinding(this.uDivisor, "value", {
+      label: "Divisor",
+    });
   }
+
+  // replicate https://github.com/mrdoob/three.js/blob/master/examples/webgpu_backdrop_water.html
+  // demo https://threejs.org/examples/?q=water#webgpu_backdrop_water
+  // too expensive!
+  private createWaterMaterial() {
+    const materialNode = new MeshBasicNodeMaterial();
+
+    const timer = this.uTime;
+    const floorUV = positionWorld.xzy;
+    const waterLayer0 = mx_worley_noise_float(floorUV.mul(4).add(timer));
+    const waterLayer1 = mx_worley_noise_float(floorUV.mul(2).add(timer));
+
+    const waterIntensity = waterLayer0.mul(waterLayer1);
+    const waterColor = waterIntensity
+      .mul(1.4)
+      .mix(color(0x0487e2), color(0x74ccf4));
+
+    materialNode.colorNode = waterColor;
+
+    const depth = linearDepth();
+    const depthWater = viewportLinearDepth.sub(depth);
+    const depthEffect = depthWater.remapClamp(-0.002, 0.04);
+
+    const refractionUV = screenUV.add(vec2(0, waterIntensity.mul(0.1)));
+
+    const depthTestForRefraction = linearDepth(
+      viewportDepthTexture(refractionUV),
+    ).sub(depth);
+
+    const depthRefraction = depthTestForRefraction.remapClamp(0, 0.1);
+
+    const finalUV = depthTestForRefraction
+      .lessThan(0)
+      .select(screenUV, refractionUV);
+
+    const viewportTexture = viewportSharedTexture(finalUV);
+
+    materialNode.backdropNode = depthEffect.mix(
+      viewportSharedTexture(),
+      viewportTexture.mul(depthRefraction.mix(1, waterColor)),
+    );
+    materialNode.backdropAlphaNode = depthRefraction.oneMinus();
+    materialNode.transparent = true;
+    return materialNode;
+  }
+
+  // private getElevation = Fn(([pos = vec3(0, 0, 0)]) => {
+  //   const elevation = sin(
+  //     pos.x.mul(this.uWavesFrequency.x).add(this.uTime.mul(this.uWavesSpeed)),
+  //   )
+  //     .mul(
+  //       cos(
+  //         pos.z
+  //           .mul(this.uWavesFrequency.y)
+  //           .add(this.uTime.mul(this.uWavesSpeed)),
+  //       ),
+  //     )
+  //     .mul(this.uWavesElevation);
+  //   return elevation;
+  // });
+
+  // private applyWaveToNormals = Fn(() => {
+  //   const shift = 0.01;
+  //   const positionA = positionLocal.add(vec3(shift, 0, 0)); // shift only on X axes
+  //   const displacedPositionA = positionA.add(
+  //     positionA.x,
+  //     this.getElevation(positionA),
+  //     positionA.z,
+  //   );
+  //   const positionB = positionLocal.add(vec3(0, 0, -shift)); // shift only on Z axes
+  //   const displacedPositionB = positionB.add(
+  //     positionB.x,
+  //     this.getElevation(positionB),
+  //     positionB.z,
+  //   );
+
+  //   const tangentA = normalize(displacedPositionA.sub(positionLocal));
+  //   const tangentB = normalize(displacedPositionB.sub(positionLocal));
+  //   const computedNormal = normalize(cross(tangentA, tangentB));
+
+  //   return computedNormal;
+  // });
+
+  // private applyWaveToPosition = Fn(() => {
+  //   const elevation = this.getElevation(positionLocal);
+  //   const displacedPosition = positionLocal.add(0, elevation, 0);
+  //   return displacedPosition;
+  // });
+
+  // private createWaterMaterial() {
+  //   const materialNode = new MeshPhongNodeMaterial({
+  //     transparent: true,
+  //     color: "lightblue",
+  //     specular: "white",
+  //   });
+
+  //   materialNode.positionNode = this.applyWaveToPosition();
+  //   materialNode.normalNode = this.applyWaveToNormals();
+
+  //   return materialNode;
+  // }
 
   private getDisplacementData(worldModel: GLTF) {
     const mesh = worldModel.scene.getObjectByName("heightfield") as Mesh;
@@ -139,8 +323,9 @@ export default class PortfolioRealm {
   }
 
   public update(state: State) {
-    const { player } = state;
-    if (!player) return;
+    const { player, clock } = state;
+    this.uTime.value = clock.getElapsedTime();
+
     const playerPosition = player.getPosition();
 
     const isPlayerNearEdgeX =
