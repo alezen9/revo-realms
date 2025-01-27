@@ -9,8 +9,8 @@
     "preview": "vite preview"
   },
   "devDependencies": {
+    "@tweakpane/core": "^2.0.5",
     "@types/three": "^0.171.0",
-    "lil-gui": "^0.20.0",
     "prettier": "^3.4.2",
     "typescript": "~5.6.2",
     "vite": "^6.0.5",
@@ -20,6 +20,7 @@
   "dependencies": {
     "@dimforge/rapier3d-compat": "^0.14.0",
     "stats-gl": "^3.6.0",
-    "three": "^0.172.0"
+    "three": "^0.172.0",
+    "tweakpane": "^4.0.5"
   }
 }
