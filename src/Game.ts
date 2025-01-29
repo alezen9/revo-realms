@@ -8,6 +8,7 @@ import RendererManager from "./systems/RendererManager";
 import SceneManager from "./systems/SceneManager";
 import MonitoringManager from "./systems/MonitoringManager";
 import PostprocessingManager from "./systems/PostprocessingManager";
+import Environmentallumination from "./systems/Environmentallumination";
 
 export type State = {
   camera: PerspectiveCamera;
@@ -47,6 +48,8 @@ export default class Game {
     this.clock = new Clock(false);
 
     this.lighting = new LightingSystem(this.sceneManager.scene);
+
+    new Environmentallumination(this.sceneManager.scene);
 
     this.world = new World({ x: 0, y: -9.81, z: 0 });
 
