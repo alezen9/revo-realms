@@ -18,7 +18,8 @@ class AssetManager {
 
   perlinNoiseTexture: Texture;
   fractalNoiseTexture: Texture;
-  voronoiNoiseTexture: Texture;
+  voronoiPerlinNoiseTexture: Texture;
+  randoNoiseTexture: Texture;
 
   constructor() {
     // Texture
@@ -36,7 +37,10 @@ class AssetManager {
     // Noise textures
     this.perlinNoiseTexture = this.textureLoader.load(perlinNoiseTextureUrl);
     this.fractalNoiseTexture = this.textureLoader.load(fractalNoiseTextureUrl);
-    this.voronoiNoiseTexture = this.textureLoader.load(randomNoiseTextureUrl);
+    this.voronoiPerlinNoiseTexture = this.textureLoader.load(
+      combinedNoiseTextureUrl,
+    );
+    this.randoNoiseTexture = this.textureLoader.load(randomNoiseTextureUrl);
   }
 }
 
