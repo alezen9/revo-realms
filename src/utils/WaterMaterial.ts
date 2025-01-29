@@ -52,10 +52,10 @@ type WaterUniforms = {
 const defaultUniforms: Omit<Required<WaterUniforms>, "uEnvironmentMap"> = {
   uTime: uniform(0),
   uWavesSpeed: uniform(0.01),
-  uWavesAmplitude: uniform(0.08),
+  uWavesAmplitude: uniform(0.06),
   uWavesFrequency: uniform(0.96),
-  uWavesPersistence: uniform(0),
-  uWavesLacunarity: uniform(3),
+  uWavesPersistence: uniform(0.05),
+  uWavesLacunarity: uniform(2.2),
   uTroughColor: uniform(new Color("#186691")),
   uSurfaceColor: uniform(new Color("#9bd8c0")),
   uPeakColor: uniform(new Color("#bbd8e0")),
@@ -85,7 +85,7 @@ export default class WaterMaterial extends MeshBasicNodeMaterial {
     let amplitude = float(1.0);
     let frequency = float(0).add(this._uniforms.uWavesFrequency);
 
-    const waterTexture = assetManager.randoNoiseTexture;
+    const waterTexture = assetManager.randomNoiseTexture;
     const timer = this._uniforms.uTime.mul(this._uniforms.uWavesSpeed).mul(0.1);
 
     const _uv = fract(pos.mul(frequency).add(timer));
@@ -120,10 +120,11 @@ export default class WaterMaterial extends MeshBasicNodeMaterial {
   });
 
   private computePosition = Fn(([elevation = float(0)]) => {
+    const multipliedElevation = elevation.mul(10);
     return vec3(
-      positionLocal.x,
-      positionLocal.y.add(elevation.mul(2)),
-      positionLocal.z,
+      positionLocal.x.add(multipliedElevation),
+      positionLocal.y.add(multipliedElevation),
+      positionLocal.z.add(multipliedElevation),
     );
   });
 

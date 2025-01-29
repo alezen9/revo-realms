@@ -8,8 +8,8 @@ import {
 } from "@dimforge/rapier3d-compat";
 import { State } from "../Game";
 import { MeshStandardMaterial } from "three/webgpu";
-import worldModelUrl from "/environment/world.glb?url";
-import floorTextureUrl from "/environment/floor.webp?url";
+import worldModelUrl from "/models/world.glb?url";
+import floorTextureUrl from "/models/floor.webp?url";
 import { GLTF } from "three/examples/jsm/Addons.js";
 import { debugManager } from "../systems/DebugManager";
 import { uniform } from "three/tsl";
@@ -65,57 +65,6 @@ export default class PortfolioRealm {
     lake.material = waterMaterial;
     scene.add(lake);
   }
-
-  // private permute = Fn(([x = vec4(0, 0, 0, 0)]) => {
-  //   return mod(x.mul(34).add(1).mul(x), 289);
-  // });
-
-  // private snoise2d = Fn(([v = vec2(0, 0)]) => {
-  //   const C = vec4(
-  //     0.211324865405187,
-  //     0.366025403784439,
-  //     -0.577350269189626,
-  //     0.024390243902439,
-  //   );
-  //   let i = floor(v.add(dot(v, C.yy)));
-  //   const x0 = v.sub(i).add(dot(i, C.xx));
-  //   let i1 = vec2(step(x0.y, x0.x), step(x0.x, x0.y));
-  //   let x12 = vec4(x0.xyxy.add(C.xxzz));
-  //   x12 = vec4(x12.xy.sub(i1), x12.zw);
-  //   i = mod(i, 289);
-  //   const p = this.permute(
-  //     this.permute(i.y.add(vec3(0, i1.y, 1)))
-  //       .add(i.x)
-  //       .add(vec3(0, i1.x, 1)),
-  //   );
-  //   let m = vec3(
-  //     max(
-  //       float(0.5).sub(
-  //         vec3(dot(x0, x0), dot(x12.xy, x12.xy), dot(x12.zw, x12.zw)),
-  //       ),
-  //       0,
-  //     ),
-  //   );
-  //   m = m.mul(m);
-  //   m = m.mul(m);
-  //   const x = float(2).mul(fract(p.mul(C.www)).sub(1));
-  //   const h = abs(x).sub(0.5);
-  //   const ox = floor(x.add(0.5));
-  //   const a0 = x.sub(ox);
-  //   m = m.mul(
-  //     float(1.79284291400159).sub(
-  //       float(0.85373472095314).mul(a0.mul(a0).add(h.mul(h))),
-  //     ),
-  //   );
-  //   let g = vec3(
-  //     a0.x.mul(x0.x).add(h.x.mul(x0.y)),
-  //     a0.yz.mul(x12.xz).add(h.yz.mul(x12.yw)),
-  //   );
-  //   // g.x = a0.x.mul(x0.x).add(h.x.mul(x0.y))
-  //   // g.yz = a0.yz.mul(x12.xz).add(h.yz.mul(x12.yw))
-
-  //   return float(130).mul(dot(m, g));
-  // });
 
   private getDisplacementData(worldModel: GLTF) {
     const mesh = worldModel.scene.getObjectByName("heightfield") as Mesh;
