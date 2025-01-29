@@ -8,6 +8,8 @@ import {
   MeshPhongMaterial,
   Color,
   BoxGeometry,
+  CubeTexture,
+  LinearFilter,
 } from "three";
 import {
   ColliderDesc,
@@ -37,15 +39,20 @@ import {
   color,
   cos,
   cross,
+  cubeTexture,
   distance,
   dot,
   float,
+  floor,
   Fn,
   fract,
+  hash,
   length,
   linearDepth,
+  Loop,
   max,
   mix,
+  modelPosition,
   modelWorldMatrix,
   mul,
   mx_worley_noise_float,
@@ -55,13 +62,17 @@ import {
   positionLocal,
   positionWorld,
   pow,
+  reflect,
   screenUV,
   sin,
   smoothstep,
+  step,
   sub,
   texture,
+  textureCubeUV,
   uniform,
   uv,
+  varying,
   vec2,
   vec3,
   vec4,
@@ -80,33 +91,42 @@ export default class PortfolioRealm {
   private kintounRigidBody: RigidBody; // Kintoun = Flying Nimbus cloud from dragon ball
   private kintounPosition = new Vector3();
 
+  // Water
   private uTime = uniform(0);
-  private uLakeCenter = uniform(new Vector2());
   private uWavesSpeed = uniform(0.01);
-  private uNoiseMultiplier = uniform(0.5);
-  private uNoiseMultiplierBackdrop = uniform(5);
-  private uAnimatedUvMultiplier = uniform(0.75);
-  private uDisplacementNoiseMultiplier = uniform(20);
-  private uDisplacementLevelling = uniform(0.7);
-  private uDisplacementSlowdown = uniform(0.1);
+  private uOpacity = uniform(0.25);
+  private uEnvironmentMap = new CubeTexture();
+  private uWavesAmplitude = uniform(0.08);
+  private uWavesFrequency = uniform(0.2);
+  private uWavesPersistence = uniform(0.1);
+  private uWavesLacunarity = uniform(1.7);
+  private uWavesIterations = uniform(8);
+  private uTroughColor = uniform(new Color("#186691"));
+  private uSurfaceColor = uniform(new Color("#9bd8c0"));
+  private uPeakColor = uniform(new Color("#bbd8e0"));
+  private uPeakThreshold = uniform(0.5);
+  private uPeakTransition = uniform(0.05);
+  private uTroughThreshold = uniform(-0.01);
+  private uTroughTransition = uniform(0.15);
+  private uFresnelScale = uniform(0.8);
+  private uFresnelPower = uniform(0.5);
 
-  constructor(state: Pick<State, "world" | "scene" | "lighting">) {
-    const { world, scene, lighting } = state;
-    if (!world) throw new Error("world is undefined");
+  constructor(
+    state: Pick<State, "world" | "scene" | "environmentalIllumination">,
+  ) {
+    const { world, scene, environmentalIllumination } = state;
+
+    this.uEnvironmentMap.copy(environmentalIllumination.environmentMap);
 
     assetManager.gltfLoader.load(worldModelUrl, (worldModel) => {
       this.createPhysics(worldModel, world);
-      this.createVisual(worldModel, scene, lighting);
+      this.createVisual(worldModel, scene);
     });
 
     this.kintounRigidBody = this.createKintounCollider(world);
   }
 
-  private createVisual(
-    worldModel: GLTF,
-    scene: State["scene"],
-    lighting: State["lighting"],
-  ) {
+  private createVisual(worldModel: GLTF, scene: State["scene"]) {
     const floorTexture = assetManager.textureLoader.load(floorTextureUrl);
     floorTexture.flipY = false;
 
@@ -117,126 +137,304 @@ export default class PortfolioRealm {
     scene.add(floor);
 
     const lake = worldModel.scene.getObjectByName("lake") as Mesh;
-    // lake.geometry.computeVertexNormals();
-    console.log(lake.geometry);
-    if (!lake.geometry.boundingBox) lake.geometry.computeBoundingBox();
-    const boundingBox = lake.geometry.boundingBox!;
-    const center = {
-      x: (boundingBox.min.x + boundingBox.max.x) / 2,
-      z: (boundingBox.min.z + boundingBox.max.z) / 2,
-    };
-
-    this.uLakeCenter.value.set(center.x, center.z);
-
-    const cube = new Mesh(
-      new BoxGeometry(),
-      new MeshBasicMaterial({ color: "red" }),
-    );
-    cube.position.x = center.x;
-    cube.position.z = center.z;
-    scene.add(cube);
-
     const waterMaterial = this.createWaterMaterial();
     lake.material = waterMaterial;
     scene.add(lake);
-    debugManager.panel.expanded = false;
 
-    debugManager.panel.addBinding(this.uWavesSpeed, "value", {
-      label: "Speed",
-    });
-    debugManager.panel.addBinding(this.uNoiseMultiplier, "value", {
-      label: "Noise multiplier",
-    });
     debugManager.panel.addBinding(waterMaterial, "wireframe", {
       label: "Wireframe",
     });
-    debugManager.panel.addBinding(this.uNoiseMultiplierBackdrop, "value", {
-      label: "Backdrop noise multiplier",
+
+    this.debugWater();
+    this.debugWaterColor();
+    this.debugFresnel();
+  }
+
+  private debugWater() {
+    const wavesFolder = debugManager.panel.addFolder({ title: "Waves" });
+    wavesFolder.addBinding(this.uWavesAmplitude, "value", {
+      min: 0,
+      max: 0.1,
+      label: "Amplitude",
     });
-    debugManager.panel.addBinding(this.uAnimatedUvMultiplier, "value", {
-      label: "Animated UV multiplier",
+    wavesFolder.addBinding(this.uWavesFrequency, "value", {
+      min: 0.1,
+      max: 10,
+      label: "Frequency",
     });
-    debugManager.panel.addBinding(this.uDisplacementNoiseMultiplier, "value", {
-      label: "Displacement noise multiplier",
+    wavesFolder.addBinding(this.uWavesPersistence, "value", {
+      min: 0,
+      max: 1,
+      label: "Persistence",
     });
-    debugManager.panel.addBinding(this.uDisplacementLevelling, "value", {
-      label: "Displacement levelling",
+    wavesFolder.addBinding(this.uWavesLacunarity, "value", {
+      min: 0,
+      max: 3,
+      label: "Lacunarity",
     });
-    debugManager.panel.addBinding(this.uDisplacementSlowdown, "value", {
-      label: "Displacement slowdown",
+    wavesFolder.addBinding(this.uWavesIterations, "value", {
+      min: 1,
+      max: 10,
+      step: 1,
+      label: "Iterations",
+    });
+    wavesFolder.addBinding(this.uWavesSpeed, "value", {
+      min: 0,
+      max: 1,
+      label: "Speed",
     });
   }
+
+  private debugWaterColor() {
+    // Color
+    const colorFolder = debugManager.panel.addFolder({ title: "Color" });
+
+    colorFolder.addBinding(this.uOpacity, "value", {
+      min: 0,
+      max: 1,
+      step: 0.01,
+      label: "Opacity",
+    });
+
+    colorFolder.addBinding(this.uTroughColor, "value", {
+      label: "Trough Color",
+      view: "color",
+      color: { type: "float" },
+    });
+    colorFolder.addBinding(this.uSurfaceColor, "value", {
+      label: "Surface Color",
+      view: "color",
+      color: { type: "float" },
+    });
+    colorFolder.addBinding(this.uPeakColor, "value", {
+      label: "Peak Color",
+      view: "color",
+      color: { type: "float" },
+    });
+    colorFolder.addBinding(this.uPeakThreshold, "value", {
+      min: 0,
+      max: 0.5,
+      label: "Peak Threshold",
+    });
+    colorFolder.addBinding(this.uPeakTransition, "value", {
+      min: 0,
+      max: 0.5,
+      label: "Peak Transition",
+    });
+    colorFolder.addBinding(this.uTroughThreshold, "value", {
+      min: -0.5,
+      max: 0,
+      label: "Trough Threshold",
+    });
+    colorFolder.addBinding(this.uTroughTransition, "value", {
+      min: 0,
+      max: 0.5,
+      label: "Trough Transition",
+    });
+  }
+
+  private debugFresnel() {
+    // Fresnel
+    const fresnelFolder = debugManager.panel.addFolder({ title: "Fresnel" });
+    fresnelFolder.addBinding(this.uFresnelScale, "value", {
+      min: 0,
+      max: 1,
+      label: "Scale",
+    });
+    fresnelFolder.addBinding(this.uFresnelPower, "value", {
+      min: 0,
+      max: 3,
+      label: "Power",
+    });
+  }
+
+  private snoise2d = Fn(([p = vec2(0, 0)]) => {
+    const K1 = float(0.366025404); // (sqrt(3)-1)/2;
+    const K2 = float(0.211324865); // (3-sqrt(3))/6;
+
+    const i = floor(p.add(p.x.add(p.y).mul(K1)));
+    const a = p.sub(i).add(i.x.add(i.y).mul(K2));
+    const m = step(a.y, a.x);
+    const o = vec2(m, float(1).sub(m));
+    const b = a.sub(o).add(K2);
+    const c = a.sub(1).add(float(2).mul(K2));
+    const h = max(float(0.5).sub(vec3(dot(a, a), dot(b, b), dot(c, c))), 0);
+    const n = h
+      .mul(h)
+      .mul(h)
+      .mul(h)
+      .mul(
+        vec3(dot(a, hash(i)), dot(b, hash(i.add(o))), dot(c, hash(i.add(1)))),
+      );
+    return dot(n, vec3(70));
+  });
+
+  private getElevation = Fn(([pos = vec2(0, 0)]) => {
+    let elevation = float(0.0);
+    let amplitude = float(1.0);
+    let frequency = float(0);
+    frequency = frequency.add(this.uWavesFrequency);
+
+    // const waterTexture = assetManager.textureLoader.load(waterTextureUrl);
+
+    const waterTexture = assetManager.voronoiNoiseTexture;
+    const timer = this.uTime.mul(this.uWavesSpeed);
+
+    // const _uv = fract(pos.mul(frequency.mul(0.01)).add(timer));
+    const _uv = fract(pos.mul(frequency.mul(0.01)).add(timer.mul(0.1)));
+
+    const noiseValue = texture(waterTexture, _uv).r;
+    elevation = elevation.add(amplitude.mul(noiseValue));
+    elevation = elevation.mul(this.uWavesAmplitude);
+    amplitude = amplitude.mul(this.uWavesPersistence);
+    frequency = frequency.mul(this.uWavesLacunarity);
+
+    const _uv2 = fract(pos.mul(frequency.mul(0.01)).add(timer.mul(0.1)));
+    const noiseValue2 = texture(waterTexture, _uv2).r;
+    elevation = elevation.add(amplitude.mul(noiseValue2));
+    elevation = elevation.mul(this.uWavesAmplitude);
+    amplitude = amplitude.mul(this.uWavesPersistence);
+    frequency = frequency.mul(this.uWavesLacunarity);
+
+    const _uv3 = fract(pos.mul(frequency.mul(0.01)).add(timer.mul(0.1)));
+    const noiseValue3 = texture(waterTexture, _uv3).r;
+    elevation = elevation.add(amplitude.mul(noiseValue3));
+    elevation = elevation.mul(this.uWavesAmplitude);
+    amplitude = amplitude.mul(this.uWavesPersistence);
+    frequency = frequency.mul(this.uWavesLacunarity);
+
+    const _uv4 = fract(pos.mul(frequency.mul(0.01)).add(timer.mul(0.1)));
+    const noiseValue4 = texture(waterTexture, _uv4).r;
+    elevation = elevation.add(amplitude.mul(noiseValue4));
+    elevation = elevation.mul(this.uWavesAmplitude);
+    amplitude = amplitude.mul(this.uWavesPersistence);
+    frequency = frequency.mul(this.uWavesLacunarity);
+
+    // const _uv5 = fract(pos.mul(frequency.mul(0.01)).add(timer.mul(0.1)));
+    // const noiseValue5 = texture(waterTexture, _uv5).r;
+    // elevation = elevation.add(amplitude.mul(noiseValue5));
+    // elevation = elevation.mul(this.uWavesAmplitude);
+    // amplitude = amplitude.mul(this.uWavesPersistence);
+    // frequency = frequency.mul(this.uWavesLacunarity);
+
+    // const _uv6 = fract(pos.mul(frequency.mul(0.01)).add(timer.mul(0.1)));
+    // const noiseValue6 = texture(waterTexture, _uv6).r;
+    // elevation = elevation.add(amplitude.mul(noiseValue6));
+    // elevation = elevation.mul(this.uWavesAmplitude);
+    // amplitude = amplitude.mul(this.uWavesPersistence);
+    // frequency = frequency.mul(this.uWavesLacunarity);
+
+    // const _uv7 = fract(pos.mul(frequency.mul(0.01)).add(timer.mul(0.1)));
+    // const noiseValue7 = texture(waterTexture, _uv7).r;
+    // elevation = elevation.add(amplitude.mul(noiseValue7));
+    // elevation = elevation.mul(this.uWavesAmplitude);
+    // amplitude = amplitude.mul(this.uWavesPersistence);
+    // frequency = frequency.mul(this.uWavesLacunarity);
+
+    // const _uv8 = fract(pos.mul(frequency.mul(0.01)).add(timer.mul(0.1)));
+    // const noiseValue8 = texture(waterTexture, _uv8).r;
+    // elevation = elevation.add(amplitude.mul(noiseValue8));
+    // elevation = elevation.mul(this.uWavesAmplitude);
+    // amplitude = amplitude.mul(this.uWavesPersistence);
+    // frequency = frequency.mul(this.uWavesLacunarity);
+
+    return elevation;
+  });
 
   private createWaterMaterial() {
     const materialNode = new MeshBasicNodeMaterial();
     materialNode.transparent = true;
 
-    const timer = this.uTime.mul(this.uWavesSpeed);
+    // Position
+    const elevation = this.getElevation(uv());
+    const position = vec3(
+      positionLocal.x,
+      positionLocal.y.add(elevation),
+      positionLocal.z,
+    );
+    const vPosition = varying(position, "vPosition");
 
-    const waterTexture = assetManager.textureLoader.load(waterTextureUrl);
-    const sample1 = texture(waterTexture, fract(uv().add(timer)));
-    const rotatedUv = uv().mul(vec2(1, -1));
-    const sample2 = texture(
-      waterTexture,
-      fract(rotatedUv.add(timer.mul(2).negate())),
+    // Normal
+    const eps = float(0.001);
+    const tangent = normalize(
+      vec3(
+        eps,
+        this.getElevation(vec2(positionLocal.x.sub(eps), positionLocal.z)).sub(
+          elevation,
+        ),
+        0.0,
+      ),
+    );
+    const bitangent = normalize(
+      vec3(
+        0.0,
+        this.getElevation(vec2(positionLocal.x, positionLocal.z.sub(eps))).sub(
+          elevation,
+        ),
+        eps,
+      ),
+    );
+    const objectNormal = normalize(cross(tangent, bitangent));
+    const vNormal = varying(objectNormal, "vNormal");
+
+    // Calculate vector from camera to the vertex
+    const viewDirection = normalize(vPosition.sub(cameraPosition));
+    let reflectedDirection = reflect(viewDirection, vNormal);
+    reflectedDirection.x = reflectedDirection.x.negate();
+
+    // Sample environment map to get the reflected color
+    const reflectionColor = cubeTexture(
+      this.uEnvironmentMap,
+      reflectedDirection,
     );
 
-    const lightblue = vec4(0.5, 0.75, 1, 0.05);
-    materialNode.colorNode = lightblue;
-
-    const cumulativeNoise = sample1.mul(sample2);
-    materialNode.backdropNode = cumulativeNoise;
-    const distanceToCenter = distance(positionWorld.xz, this.uLakeCenter);
-    const smoothedTransition = smoothstep(0.0, 1, distanceToCenter);
-    const smoothedAlpha = mix(5, 2, smoothedTransition);
-    materialNode.backdropAlphaNode = smoothedAlpha;
-
-    const smoothedDisplacement = smoothstep(0, 1, sample1.g).mul(0.05);
-    const displacement = smoothedDisplacement
-      .mul(this.uDisplacementNoiseMultiplier)
-      .sub(this.uDisplacementLevelling);
-
-    const displacedPosition = vec3(
-      positionLocal.x.add(displacement),
-      positionLocal.y.add(displacement),
-      positionLocal.z.add(displacement),
+    // Calculate fresnel effect
+    const fresnel = this.uFresnelScale.mul(
+      pow(
+        float(1.0).sub(clamp(dot(viewDirection, vNormal), 0.0, 1.0)),
+        this.uFresnelPower,
+      ),
     );
 
-    materialNode.positionNode = displacedPosition;
+    // Calculate transition factors using smoothstep
+    const peakFactor = smoothstep(
+      this.uPeakThreshold.sub(this.uPeakTransition),
+      this.uPeakThreshold.add(this.uPeakTransition),
+      vPosition.y,
+    );
+    const troughFactor = smoothstep(
+      this.uTroughThreshold.sub(this.uTroughTransition),
+      this.uTroughThreshold.add(this.uTroughTransition),
+      vPosition.y,
+    );
+
+    // Mix between trough and surface colors based on trough transition
+    const mixedColor1 = mix(
+      this.uTroughColor,
+      this.uSurfaceColor,
+      troughFactor,
+    );
+
+    // Mix between surface and peak colors based on peak transition
+    const mixedColor2 = mix(mixedColor1, this.uPeakColor, peakFactor);
+
+    // Mix the final color with the reflection color
+    const finalColor = mix(mixedColor2, reflectionColor.rgb, fresnel);
+
+    const distanceXZ = length(positionWorld.xz.sub(cameraPosition.xz));
+    const minDist = 10.0; // Minimum distance (fully transparent at this distance)
+    const maxDist = 100.0; // Maximum distance (fully opaque at this distance)
+
+    const opacity = mix(0, 1, smoothstep(minDist, maxDist, distanceXZ));
+
+    const waterColor = vec4(finalColor, opacity);
+
+    materialNode.colorNode = waterColor;
+
+    materialNode.positionNode = position;
 
     return materialNode;
   }
-
-  // private createWaterMaterial() {
-  //   const materialNode = new MeshBasicNodeMaterial();
-  //   materialNode.transparent = true;
-
-  //   const waterTexture = assetManager.randomiNoiseTexture;
-  //   const timer = this.uTime.mul(this.uWavesSpeed);
-  //   const animatedUv = fract(uv().add(timer));
-
-  //   const noise = texture(waterTexture, animatedUv);
-
-  //   const blue = vec4(0, 0, 1, 0.25);
-  //   const white = vec4(1, 1, 1, 0.05);
-  //   const smoothedNoise = smoothstep(0.0, 1.0, noise.r.mul(5));
-  //   const waterColor = mix(blue, white, smoothedNoise);
-
-  //   materialNode.colorNode = waterColor;
-
-  //   const displacedPosition = vec3(
-  //     positionLocal.x,
-  //     positionLocal.y.add(noise.r.mul(0.25)).sub(0.15),
-  //     positionLocal.z,
-  //   );
-
-  //   materialNode.positionNode = displacedPosition;
-
-  //   const blurEffectUV = animatedUv.add(noise.r.mul(10));
-  //   materialNode.backdropNode = texture(waterTexture, blurEffectUV);
-
-  //   return materialNode;
-  // }
 
   private getDisplacementData(worldModel: GLTF) {
     const mesh = worldModel.scene.getObjectByName("heightfield") as Mesh;

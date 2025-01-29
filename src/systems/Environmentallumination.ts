@@ -6,8 +6,10 @@ import pyUrl from "/envwebp/py.webp?url";
 import nyUrl from "/envwebp/ny.webp?url";
 import pzUrl from "/envwebp/pz.webp?url";
 import nzUrl from "/envwebp/nz.webp?url";
+import { CubeTexture } from "three";
 
 export default class Environmentallumination {
+  environmentMap: CubeTexture;
   constructor(scene: State["scene"]) {
     const environmentMap = assetManager.cubeTextureLoader.load([
       pxUrl, // positive x
@@ -20,5 +22,6 @@ export default class Environmentallumination {
 
     scene.background = environmentMap;
     scene.environment = environmentMap;
+    this.environmentMap = environmentMap;
   }
 }
