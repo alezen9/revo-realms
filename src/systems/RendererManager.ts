@@ -1,4 +1,4 @@
-import { ACESFilmicToneMapping, VSMShadowMap } from "three";
+import { ACESFilmicToneMapping, NeutralToneMapping, VSMShadowMap } from "three";
 import { WebGPURenderer } from "three/webgpu";
 
 export default class RendererManager {
@@ -18,6 +18,7 @@ export default class RendererManager {
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = VSMShadowMap;
     renderer.toneMapping = ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.5;
     this.renderer = renderer;
   }
 }

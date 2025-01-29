@@ -47,7 +47,7 @@ export default class LightingSystem {
   }
 
   private setupAmbientLighting() {
-    const ambientLight = new AmbientLight("white", 0.3);
+    const ambientLight = new AmbientLight("white", 0.8);
     this.uAmbientHue.value.copy(ambientLight.color);
     this.uAmbientIntensity.value = ambientLight.intensity;
     return ambientLight;
