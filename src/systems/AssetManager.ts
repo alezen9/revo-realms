@@ -1,15 +1,7 @@
-import {
-  CubeTextureLoader,
-  RepeatWrapping,
-  Texture,
-  TextureLoader,
-} from "three";
+import { CubeTextureLoader, Texture, TextureLoader } from "three";
 import { DRACOLoader, GLTFLoader } from "three/examples/jsm/Addons.js";
-import perlinNoiseTextureUrl from "/perlin_noise_texture.webp?url";
-import voronoiNoiseTextureUrl from "/voronoi_noise_texture.webp?url";
-import randomNoiseTextureUrl from "/noise.webp?url";
-import combinedNoiseTextureUrl from "/combined_noise_texture.webp?url";
-import fractalNoiseTextureUrl from "/fractal_noise_texture.webp?url";
+import perlinNoiseTextureUrl from "/textures/perlin_noise.webp?url";
+import randomNoiseTextureUrl from "/textures/random_noise.webp?url";
 
 class AssetManager {
   textureLoader: TextureLoader;
@@ -17,9 +9,7 @@ class AssetManager {
   cubeTextureLoader: CubeTextureLoader;
 
   perlinNoiseTexture: Texture;
-  fractalNoiseTexture: Texture;
-  voronoiPerlinNoiseTexture: Texture;
-  randoNoiseTexture: Texture;
+  randomNoiseTexture: Texture;
 
   constructor() {
     // Texture
@@ -36,11 +26,7 @@ class AssetManager {
 
     // Noise textures
     this.perlinNoiseTexture = this.textureLoader.load(perlinNoiseTextureUrl);
-    this.fractalNoiseTexture = this.textureLoader.load(fractalNoiseTextureUrl);
-    this.voronoiPerlinNoiseTexture = this.textureLoader.load(
-      combinedNoiseTextureUrl,
-    );
-    this.randoNoiseTexture = this.textureLoader.load(randomNoiseTextureUrl);
+    this.randomNoiseTexture = this.textureLoader.load(randomNoiseTextureUrl);
   }
 }
 
