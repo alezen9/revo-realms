@@ -4,6 +4,10 @@ import {
   MeshBasicMaterial,
   Vector2,
   PlaneGeometry,
+  RepeatWrapping,
+  MeshPhongMaterial,
+  Color,
+  BoxGeometry,
 } from "three";
 import {
   ColliderDesc,
@@ -16,24 +20,31 @@ import { State } from "../Game";
 import {
   MeshBasicNodeMaterial,
   MeshPhongNodeMaterial,
+  MeshPhysicalNodeMaterial,
   MeshStandardMaterial,
   Texture,
 } from "three/webgpu";
 import worldModelUrl from "/environment/world.glb?url";
 import floorTextureUrl from "/environment/floor.webp?url";
-import { GLTF, VertexNormalsHelper } from "three/examples/jsm/Addons.js";
+import { GLTF } from "three/examples/jsm/Addons.js";
 import { debugManager } from "../systems/DebugManager";
-import WaterMaterial from "../other/WaterMaterial";
+import waterTextureUrl from "/water_pool_texture.webp?url";
+
 import {
   add,
+  cameraPosition,
+  clamp,
   color,
   cos,
   cross,
+  distance,
+  dot,
   float,
   Fn,
   fract,
   length,
   linearDepth,
+  max,
   mix,
   modelWorldMatrix,
   mul,
@@ -43,6 +54,7 @@ import {
   positionGeometry,
   positionLocal,
   positionWorld,
+  pow,
   screenUV,
   sin,
   smoothstep,
@@ -69,23 +81,22 @@ export default class PortfolioRealm {
   private kintounPosition = new Vector3();
 
   private uTime = uniform(0);
-  private uWavesFrequency = uniform(new Vector2(4, 2));
-  private uWavesSpeed = uniform(0.003);
-  private uWavesElevation = uniform(0.3);
-  private uNoiseMultiplier = uniform(-2);
-  private uShift = uniform(0.1);
-  private uDivisor = uniform(10);
+  private uLakeCenter = uniform(new Vector2());
+  private uWavesSpeed = uniform(0.01);
+  private uNoiseMultiplier = uniform(0.5);
+  private uNoiseMultiplierBackdrop = uniform(5);
+  private uAnimatedUvMultiplier = uniform(0.75);
+  private uDisplacementNoiseMultiplier = uniform(20);
+  private uDisplacementLevelling = uniform(0.7);
+  private uDisplacementSlowdown = uniform(0.1);
 
-  constructor(state: Pick<State, "assetManager" | "world" | "scene">) {
-    const { assetManager, world, scene } = state;
+  constructor(state: Pick<State, "world" | "scene" | "lighting">) {
+    const { world, scene, lighting } = state;
     if (!world) throw new Error("world is undefined");
-
-    const floorTexture = assetManager.textureLoader.load(floorTextureUrl);
-    floorTexture.flipY = false;
 
     assetManager.gltfLoader.load(worldModelUrl, (worldModel) => {
       this.createPhysics(worldModel, world);
-      this.createVisual(worldModel, floorTexture, scene);
+      this.createVisual(worldModel, scene, lighting);
     });
 
     this.kintounRigidBody = this.createKintounCollider(world);
@@ -93,9 +104,12 @@ export default class PortfolioRealm {
 
   private createVisual(
     worldModel: GLTF,
-    floorTexture: Texture,
     scene: State["scene"],
+    lighting: State["lighting"],
   ) {
+    const floorTexture = assetManager.textureLoader.load(floorTextureUrl);
+    floorTexture.flipY = false;
+
     const floor = worldModel.scene.getObjectByName("floor") as Mesh;
     floor.geometry.computeVertexNormals();
     floor.material = new MeshStandardMaterial({ map: floorTexture });
@@ -104,18 +118,31 @@ export default class PortfolioRealm {
 
     const lake = worldModel.scene.getObjectByName("lake") as Mesh;
     // lake.geometry.computeVertexNormals();
+    console.log(lake.geometry);
+    if (!lake.geometry.boundingBox) lake.geometry.computeBoundingBox();
+    const boundingBox = lake.geometry.boundingBox!;
+    const center = {
+      x: (boundingBox.min.x + boundingBox.max.x) / 2,
+      z: (boundingBox.min.z + boundingBox.max.z) / 2,
+    };
+
+    this.uLakeCenter.value.set(center.x, center.z);
+
+    const cube = new Mesh(
+      new BoxGeometry(),
+      new MeshBasicMaterial({ color: "red" }),
+    );
+    cube.position.x = center.x;
+    cube.position.z = center.z;
+    scene.add(cube);
+
     const waterMaterial = this.createWaterMaterial();
     lake.material = waterMaterial;
     scene.add(lake);
+    debugManager.panel.expanded = false;
 
-    debugManager.panel.addBinding(this.uWavesFrequency, "value", {
-      label: "Frequency",
-    });
     debugManager.panel.addBinding(this.uWavesSpeed, "value", {
       label: "Speed",
-    });
-    debugManager.panel.addBinding(this.uWavesElevation, "value", {
-      label: "Elevation",
     });
     debugManager.panel.addBinding(this.uNoiseMultiplier, "value", {
       label: "Noise multiplier",
@@ -123,111 +150,90 @@ export default class PortfolioRealm {
     debugManager.panel.addBinding(waterMaterial, "wireframe", {
       label: "Wireframe",
     });
-    debugManager.panel.addBinding(this.uShift, "value", {
-      label: "Shift",
+    debugManager.panel.addBinding(this.uNoiseMultiplierBackdrop, "value", {
+      label: "Backdrop noise multiplier",
     });
-    debugManager.panel.addBinding(this.uDivisor, "value", {
-      label: "Divisor",
+    debugManager.panel.addBinding(this.uAnimatedUvMultiplier, "value", {
+      label: "Animated UV multiplier",
+    });
+    debugManager.panel.addBinding(this.uDisplacementNoiseMultiplier, "value", {
+      label: "Displacement noise multiplier",
+    });
+    debugManager.panel.addBinding(this.uDisplacementLevelling, "value", {
+      label: "Displacement levelling",
+    });
+    debugManager.panel.addBinding(this.uDisplacementSlowdown, "value", {
+      label: "Displacement slowdown",
     });
   }
 
-  // replicate https://github.com/mrdoob/three.js/blob/master/examples/webgpu_backdrop_water.html
-  // demo https://threejs.org/examples/?q=water#webgpu_backdrop_water
-  // too expensive!
   private createWaterMaterial() {
     const materialNode = new MeshBasicNodeMaterial();
-
-    const timer = this.uTime;
-    const floorUV = positionWorld.xzy;
-    const waterLayer0 = mx_worley_noise_float(floorUV.mul(4).add(timer));
-    const waterLayer1 = mx_worley_noise_float(floorUV.mul(2).add(timer));
-
-    const waterIntensity = waterLayer0.mul(waterLayer1);
-    const waterColor = waterIntensity
-      .mul(1.4)
-      .mix(color(0x0487e2), color(0x74ccf4));
-
-    materialNode.colorNode = waterColor;
-
-    const depth = linearDepth();
-    const depthWater = viewportLinearDepth.sub(depth);
-    const depthEffect = depthWater.remapClamp(-0.002, 0.04);
-
-    const refractionUV = screenUV.add(vec2(0, waterIntensity.mul(0.1)));
-
-    const depthTestForRefraction = linearDepth(
-      viewportDepthTexture(refractionUV),
-    ).sub(depth);
-
-    const depthRefraction = depthTestForRefraction.remapClamp(0, 0.1);
-
-    const finalUV = depthTestForRefraction
-      .lessThan(0)
-      .select(screenUV, refractionUV);
-
-    const viewportTexture = viewportSharedTexture(finalUV);
-
-    materialNode.backdropNode = depthEffect.mix(
-      viewportSharedTexture(),
-      viewportTexture.mul(depthRefraction.mix(1, waterColor)),
-    );
-    materialNode.backdropAlphaNode = depthRefraction.oneMinus();
     materialNode.transparent = true;
+
+    const timer = this.uTime.mul(this.uWavesSpeed);
+
+    const waterTexture = assetManager.textureLoader.load(waterTextureUrl);
+    const sample1 = texture(waterTexture, fract(uv().add(timer)));
+    const rotatedUv = uv().mul(vec2(1, -1));
+    const sample2 = texture(
+      waterTexture,
+      fract(rotatedUv.add(timer.mul(2).negate())),
+    );
+
+    const lightblue = vec4(0.5, 0.75, 1, 0.05);
+    materialNode.colorNode = lightblue;
+
+    const cumulativeNoise = sample1.mul(sample2);
+    materialNode.backdropNode = cumulativeNoise;
+    const distanceToCenter = distance(positionWorld.xz, this.uLakeCenter);
+    const smoothedTransition = smoothstep(0.0, 1, distanceToCenter);
+    const smoothedAlpha = mix(5, 2, smoothedTransition);
+    materialNode.backdropAlphaNode = smoothedAlpha;
+
+    const smoothedDisplacement = smoothstep(0, 1, sample1.g).mul(0.05);
+    const displacement = smoothedDisplacement
+      .mul(this.uDisplacementNoiseMultiplier)
+      .sub(this.uDisplacementLevelling);
+
+    const displacedPosition = vec3(
+      positionLocal.x.add(displacement),
+      positionLocal.y.add(displacement),
+      positionLocal.z.add(displacement),
+    );
+
+    materialNode.positionNode = displacedPosition;
+
     return materialNode;
   }
 
-  // private getElevation = Fn(([pos = vec3(0, 0, 0)]) => {
-  //   const elevation = sin(
-  //     pos.x.mul(this.uWavesFrequency.x).add(this.uTime.mul(this.uWavesSpeed)),
-  //   )
-  //     .mul(
-  //       cos(
-  //         pos.z
-  //           .mul(this.uWavesFrequency.y)
-  //           .add(this.uTime.mul(this.uWavesSpeed)),
-  //       ),
-  //     )
-  //     .mul(this.uWavesElevation);
-  //   return elevation;
-  // });
-
-  // private applyWaveToNormals = Fn(() => {
-  //   const shift = 0.01;
-  //   const positionA = positionLocal.add(vec3(shift, 0, 0)); // shift only on X axes
-  //   const displacedPositionA = positionA.add(
-  //     positionA.x,
-  //     this.getElevation(positionA),
-  //     positionA.z,
-  //   );
-  //   const positionB = positionLocal.add(vec3(0, 0, -shift)); // shift only on Z axes
-  //   const displacedPositionB = positionB.add(
-  //     positionB.x,
-  //     this.getElevation(positionB),
-  //     positionB.z,
-  //   );
-
-  //   const tangentA = normalize(displacedPositionA.sub(positionLocal));
-  //   const tangentB = normalize(displacedPositionB.sub(positionLocal));
-  //   const computedNormal = normalize(cross(tangentA, tangentB));
-
-  //   return computedNormal;
-  // });
-
-  // private applyWaveToPosition = Fn(() => {
-  //   const elevation = this.getElevation(positionLocal);
-  //   const displacedPosition = positionLocal.add(0, elevation, 0);
-  //   return displacedPosition;
-  // });
-
   // private createWaterMaterial() {
-  //   const materialNode = new MeshPhongNodeMaterial({
-  //     transparent: true,
-  //     color: "lightblue",
-  //     specular: "white",
-  //   });
+  //   const materialNode = new MeshBasicNodeMaterial();
+  //   materialNode.transparent = true;
 
-  //   materialNode.positionNode = this.applyWaveToPosition();
-  //   materialNode.normalNode = this.applyWaveToNormals();
+  //   const waterTexture = assetManager.randomiNoiseTexture;
+  //   const timer = this.uTime.mul(this.uWavesSpeed);
+  //   const animatedUv = fract(uv().add(timer));
+
+  //   const noise = texture(waterTexture, animatedUv);
+
+  //   const blue = vec4(0, 0, 1, 0.25);
+  //   const white = vec4(1, 1, 1, 0.05);
+  //   const smoothedNoise = smoothstep(0.0, 1.0, noise.r.mul(5));
+  //   const waterColor = mix(blue, white, smoothedNoise);
+
+  //   materialNode.colorNode = waterColor;
+
+  //   const displacedPosition = vec3(
+  //     positionLocal.x,
+  //     positionLocal.y.add(noise.r.mul(0.25)).sub(0.15),
+  //     positionLocal.z,
+  //   );
+
+  //   materialNode.positionNode = displacedPosition;
+
+  //   const blurEffectUV = animatedUv.add(noise.r.mul(10));
+  //   materialNode.backdropNode = texture(waterTexture, blurEffectUV);
 
   //   return materialNode;
   // }

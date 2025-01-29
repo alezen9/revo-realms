@@ -114,8 +114,8 @@ export default class LightingSystem {
   material_computeIllumination = Fn(() => {
     const light = vec3(0)
       .add(this.material_computeAmbientLight())
-      .add(this.material_computeDirectionalLight());
-    // .add(this.emissive.material_computeEmissiveLight());
+      .add(this.material_computeDirectionalLight())
+      .add(this.emissive.material_computeEmissiveLight());
     return light;
   });
 

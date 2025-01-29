@@ -3,7 +3,6 @@ import { World } from "@dimforge/rapier3d-compat";
 import Player from "./entities/Player";
 import PortfolioRealm from "./realms/PortfolioRealm";
 import LightingSystem from "./systems/LightingSystem";
-import AssetManager from "./systems/AssetManager";
 import InputManager from "./systems/InputManager";
 import RendererManager from "./systems/RendererManager";
 import SceneManager from "./systems/SceneManager";
@@ -14,7 +13,6 @@ export type State = {
   camera: PerspectiveCamera;
   scene: Scene;
   clock: Clock;
-  assetManager: AssetManager;
   inputManager: InputManager;
   world: World;
   lighting: LightingSystem;
@@ -26,7 +24,6 @@ type Sizes = { width: number; height: number; dpr: number; aspect: number };
 export default class Game {
   private rendererManager: RendererManager;
   private sceneManager: SceneManager;
-  private assetManager: AssetManager;
   private inputManager: InputManager;
   private monitoringManager: MonitoringManager;
   private postprocessingManager: PostprocessingManager;
@@ -44,7 +41,6 @@ export default class Game {
       this.rendererManager,
       this.sceneManager,
     );
-    this.assetManager = new AssetManager();
     this.inputManager = new InputManager();
     this.monitoringManager = new MonitoringManager();
 
@@ -63,8 +59,8 @@ export default class Game {
 
     this.realm = new PortfolioRealm({
       scene: this.sceneManager.scene,
-      assetManager: this.assetManager,
       world: this.world,
+      lighting: this.lighting,
     });
   }
 
@@ -98,7 +94,6 @@ export default class Game {
       clock: this.clock,
       scene: this.sceneManager.scene,
       camera: this.sceneManager.camera,
-      assetManager: this.assetManager,
       inputManager: this.inputManager,
       lighting: this.lighting,
       world: this.world,
