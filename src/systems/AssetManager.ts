@@ -1,4 +1,4 @@
-import { Texture, TextureLoader } from "three";
+import { CubeTextureLoader, Texture, TextureLoader } from "three";
 import { DRACOLoader, GLTFLoader } from "three/examples/jsm/Addons.js";
 import perlinNoiseTextureUrl from "/perlin_noise_texture.webp?url";
 // import voronoiNoiseTextureUrl from "/voronoi_noise_texture.webp?url";
@@ -9,6 +9,7 @@ import fractalNoiseTextureUrl from "/fractal_noise_texture.webp?url";
 class AssetManager {
   textureLoader: TextureLoader;
   gltfLoader: GLTFLoader;
+  cubeTextureLoader: CubeTextureLoader;
 
   perlinNoiseTexture: Texture;
   fractalNoiseTexture: Texture;
@@ -22,6 +23,9 @@ class AssetManager {
     dracoLoader.setDecoderPath("/draco/");
     this.gltfLoader = new GLTFLoader();
     this.gltfLoader.setDRACOLoader(dracoLoader);
+
+    // Env maps
+    this.cubeTextureLoader = new CubeTextureLoader();
 
     // Noise textures
     this.perlinNoiseTexture = this.textureLoader.load(perlinNoiseTextureUrl);

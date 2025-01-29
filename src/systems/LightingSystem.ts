@@ -37,13 +37,13 @@ export default class LightingSystem {
   constructor(scene: Scene) {
     this.emissive = new EmissiveIllumination();
 
-    scene.add(this.target);
+    // scene.add(this.target);
 
     this.directionalLight = this.setupDirectionalLighting();
-    scene.add(this.directionalLight);
+    // scene.add(this.directionalLight);
 
     this.ambientLight = this.setupAmbientLighting();
-    scene.add(this.ambientLight);
+    // scene.add(this.ambientLight);
   }
 
   private setupAmbientLighting() {
@@ -113,18 +113,18 @@ export default class LightingSystem {
 
   material_computeIllumination = Fn(() => {
     const light = vec3(0)
-      .add(this.material_computeAmbientLight())
-      .add(this.material_computeDirectionalLight())
+      // .add(this.material_computeAmbientLight())
+      // .add(this.material_computeDirectionalLight())
       .add(this.emissive.material_computeEmissiveLight());
     return light;
   });
 
   public update(state: State) {
-    const { player } = state;
-    if (!player) return;
-    this.directionalLight.position
-      .copy(player.getPosition())
-      .add(this.LIGHT_POSITION_OFFSET);
-    this.target.position.copy(player.getPosition());
+    // const { player } = state;
+    // if (!player) return;
+    // this.directionalLight.position
+    //   .copy(player.getPosition())
+    //   .add(this.LIGHT_POSITION_OFFSET);
+    // this.target.position.copy(player.getPosition());
   }
 }
