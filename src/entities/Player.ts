@@ -8,13 +8,31 @@ import {
 } from "@dimforge/rapier3d-compat";
 import InputManager from "../systems/InputManager";
 import { type State } from "../Game";
-import { color } from "three/tsl";
+import {
+  color,
+  float,
+  Fn,
+  mix,
+  positionLocal,
+  positionWorld,
+  sin,
+  smoothstep,
+  step,
+  texture,
+  uniform,
+  uv,
+  vec2,
+  vec3,
+  vec4,
+} from "three/tsl";
 import {
   BoxGeometry,
   MeshBasicNodeMaterial,
   MeshLambertMaterial,
 } from "three/webgpu";
 import LightingSystem from "../systems/LightingSystem";
+import { assetManager } from "../systems/AssetManager";
+import denimTextureUrl from "/denim.jpg?url";
 
 export default class Player {
   private mesh: Mesh;
@@ -48,12 +66,14 @@ export default class Player {
 
   // Constants for geometry/camera offset
   private readonly RADIUS = 0.5;
-  private readonly PLAYER_INITIAL_POSITION = new Vector3(-70, 2, 135);
+  private readonly PLAYER_INITIAL_POSITION = new Vector3(-65, 2, 130);
   private readonly CAMERA_OFFSET = new Vector3(0, 5, 10);
   private readonly UP = new Vector3(0, 1, 0);
   private readonly DOWN = new Vector3(0, -1, 0);
 
   lighting: LightingSystem;
+
+  private uTime = uniform(0);
 
   constructor(
     state: Pick<State, "inputManager" | "scene" | "world" | "lighting">,
@@ -141,6 +161,8 @@ export default class Player {
     const { clock, camera, world } = state;
 
     const delta = clock.getDelta();
+
+    this.uTime.value = clock.getElapsedTime();
 
     this.updateVerticalMovement(delta, world);
     this.updateHorizontalMovement(delta);
@@ -312,11 +334,55 @@ export default class Player {
     return this.yawInRadians;
   }
 
+  // private createMaterial() {
+  //   const materialNode = new MeshBasicNodeMaterial();
+
+  //   const baseColor = color("purple");
+
+  //   const waterLevel = float(-0.35);
+  //   const underwaterColor = baseColor.mul(0.25);
+
+  //   const underwaterFactor = float(1).sub(
+  //     smoothstep(-1, waterLevel, positionWorld.y),
+  //   );
+
+  //   const finalColor = mix(baseColor, underwaterColor, underwaterFactor);
+
+  //   const light = this.lighting.material_computeIllumination();
+
+  //   materialNode.colorNode = finalColor.mul(light);
+
+  //   return materialNode;
+  // }
+
   private createMaterial() {
+    const denimTexture = assetManager.textureLoader.load(denimTextureUrl);
     const materialNode = new MeshBasicNodeMaterial();
-    const baseColor = color("white");
+    const baseColor = texture(denimTexture, uv());
+
+    // Base material color (can be a texture or color)
+    // const baseColor = color("purple"); // Replace with a texture if needed
+
+    // Water-related parameters
+    const waterLevel = float(-0.5); // Y-coordinate for the waterline
+    const underwaterTint = vec4(0.5, 0.75, 1, 0.05); // Whiteish tint for underwater
+
+    // Factor for underwater blending
+    const underwaterFactor = float(1).sub(
+      smoothstep(waterLevel.sub(0.25), waterLevel, positionWorld.y),
+    );
+
+    // Apply the blueish tint on top of the base color
+    const tintedUnderwaterColor = mix(baseColor, underwaterTint, 0.5) // Add the underwater tint to the base color
+      .mul(1); // Darken the result slightly underwater
+
+    // Blend the base color with the tinted underwater color
+    const finalColor = mix(baseColor, tintedUnderwaterColor, underwaterFactor);
+
+    // Apply lighting
     const light = this.lighting.material_computeIllumination();
-    materialNode.colorNode = baseColor.mul(light);
+    materialNode.colorNode = finalColor.mul(light);
+
     return materialNode;
   }
 }
