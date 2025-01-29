@@ -17,6 +17,7 @@ export type State = {
   inputManager: InputManager;
   world: World;
   lighting: LightingSystem;
+  environmentalIllumination: Environmentallumination;
   player: Player;
 };
 
@@ -34,6 +35,7 @@ export default class Game {
   private player: Player;
   private realm: PortfolioRealm;
   private lighting: LightingSystem;
+  private environmentalIllumination: Environmentallumination;
 
   constructor() {
     this.rendererManager = new RendererManager();
@@ -49,7 +51,9 @@ export default class Game {
 
     this.lighting = new LightingSystem(this.sceneManager.scene);
 
-    new Environmentallumination(this.sceneManager.scene);
+    this.environmentalIllumination = new Environmentallumination(
+      this.sceneManager.scene,
+    );
 
     this.world = new World({ x: 0, y: -9.81, z: 0 });
 
@@ -63,7 +67,7 @@ export default class Game {
     this.realm = new PortfolioRealm({
       scene: this.sceneManager.scene,
       world: this.world,
-      lighting: this.lighting,
+      environmentalIllumination: this.environmentalIllumination,
     });
   }
 
@@ -99,6 +103,7 @@ export default class Game {
       camera: this.sceneManager.camera,
       inputManager: this.inputManager,
       lighting: this.lighting,
+      environmentalIllumination: this.environmentalIllumination,
       world: this.world,
       player: this.player,
     };
