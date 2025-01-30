@@ -5,16 +5,17 @@ import {
   cross,
   cubeTexture,
   dot,
+  exp2,
   float,
   Fn,
-  fract,
-  length,
+  log2,
   mix,
+  mod,
   normalize,
   positionLocal,
   positionWorld,
-  pow,
   reflect,
+  saturate,
   smoothstep,
   texture,
   uniform,
@@ -36,8 +37,6 @@ type WaterUniforms = {
   uEnvironmentMap: CubeTexture;
   uWavesAmplitude?: UniformType<number>;
   uWavesFrequency?: UniformType<number>;
-  uWavesPersistence?: UniformType<number>;
-  uWavesLacunarity?: UniformType<number>;
   uTroughColor?: UniformType<Color>;
   uSurfaceColor?: UniformType<Color>;
   uPeakColor?: UniformType<Color>;
@@ -46,16 +45,13 @@ type WaterUniforms = {
   uTroughThreshold?: UniformType<number>;
   uTroughTransition?: UniformType<number>;
   uFresnelScale?: UniformType<number>;
-  uFresnelPower?: UniformType<number>;
 };
 
 const defaultUniforms: Omit<Required<WaterUniforms>, "uEnvironmentMap"> = {
   uTime: uniform(0),
-  uWavesSpeed: uniform(0.01),
-  uWavesAmplitude: uniform(0.06),
-  uWavesFrequency: uniform(0.96),
-  uWavesPersistence: uniform(0.05),
-  uWavesLacunarity: uniform(2.2),
+  uWavesSpeed: uniform(0.02),
+  uWavesAmplitude: uniform(0.02),
+  uWavesFrequency: uniform(0.64),
   uTroughColor: uniform(new Color("#186691")),
   uSurfaceColor: uniform(new Color("#9bd8c0")),
   uPeakColor: uniform(new Color("#bbd8e0")),
@@ -64,57 +60,33 @@ const defaultUniforms: Omit<Required<WaterUniforms>, "uEnvironmentMap"> = {
   uTroughThreshold: uniform(-0.23),
   uTroughTransition: uniform(0.15),
   uFresnelScale: uniform(0.8),
-  uFresnelPower: uniform(0.5),
 };
 
 export default class WaterMaterial extends MeshBasicNodeMaterial {
   private _uniforms: Required<WaterUniforms>;
   private debugFolder: FolderApi;
-  constructor(uniforms: WaterUniforms) {
+  constructor(uniforms: WaterUniforms, enableDebug = true) {
     super();
     this._uniforms = { ...defaultUniforms, ...uniforms };
     this.createWaterMaterial();
     this.debugFolder = debugManager.panel.addFolder({ title: "🌊 Water" });
+    if (!enableDebug) return;
     this.debugWaves();
     this.debugColor();
     this.debugFresnel();
   }
 
   private computeElevation = Fn(([pos = vec2(0, 0)]) => {
-    let elevation = float(0.0);
-    let amplitude = float(1.0);
-    let frequency = float(0).add(this._uniforms.uWavesFrequency);
-
     const waterTexture = assetManager.randomNoiseTexture;
     const timer = this._uniforms.uTime.mul(this._uniforms.uWavesSpeed).mul(0.1);
 
-    const _uv = fract(pos.mul(frequency).add(timer));
-    const noiseValue = texture(waterTexture, _uv).r;
-    elevation = elevation.add(amplitude.mul(noiseValue));
-    elevation = elevation.mul(this._uniforms.uWavesAmplitude);
-    amplitude = amplitude.mul(this._uniforms.uWavesPersistence);
-    frequency = frequency.mul(this._uniforms.uWavesLacunarity);
+    const baseUV = mod(pos.mul(this._uniforms.uWavesFrequency).add(timer), 1);
+    const noiseValue = texture(waterTexture, baseUV, 0.5).r; // Base layer
+    const noiseDetail = texture(waterTexture, baseUV, 1.5).r; // Higher-frequency noise
 
-    const _uv2 = fract(pos.mul(frequency.mul(0.1)).add(timer));
-    const noiseValue2 = texture(waterTexture, _uv2).r;
-    elevation = elevation.add(amplitude.mul(noiseValue2));
-    elevation = elevation.mul(this._uniforms.uWavesAmplitude);
-    amplitude = amplitude.mul(this._uniforms.uWavesPersistence);
-    frequency = frequency.mul(this._uniforms.uWavesLacunarity);
+    const mixedNoise = mix(noiseValue, noiseDetail, 0.5);
 
-    const _uv3 = fract(pos.mul(frequency.mul(0.1)).add(timer));
-    const noiseValue3 = texture(waterTexture, _uv3).r;
-    elevation = elevation.add(amplitude.mul(noiseValue3));
-    elevation = elevation.mul(this._uniforms.uWavesAmplitude);
-    amplitude = amplitude.mul(this._uniforms.uWavesPersistence);
-    frequency = frequency.mul(this._uniforms.uWavesLacunarity);
-
-    const _uv4 = fract(pos.mul(frequency.mul(0.1)).add(timer));
-    const noiseValue4 = texture(waterTexture, _uv4).r;
-    elevation = elevation.add(amplitude.mul(noiseValue4));
-    elevation = elevation.mul(this._uniforms.uWavesAmplitude);
-    amplitude = amplitude.mul(this._uniforms.uWavesPersistence);
-    frequency = frequency.mul(this._uniforms.uWavesLacunarity);
+    const elevation = mixedNoise.mul(this._uniforms.uWavesAmplitude).mul(0.001);
 
     return elevation;
   });
@@ -122,43 +94,32 @@ export default class WaterMaterial extends MeshBasicNodeMaterial {
   private computePosition = Fn(([elevation = float(0)]) => {
     const multipliedElevation = elevation.mul(10);
     return vec3(
-      positionLocal.x.add(multipliedElevation),
+      positionLocal.x,
       positionLocal.y.add(multipliedElevation),
-      positionLocal.z.add(multipliedElevation),
+      positionLocal.z,
     );
   });
 
   private computeNormal = Fn(([elevation = float(0)]) => {
     const eps = float(0.001);
-    const tangent = normalize(
-      vec3(
-        eps,
-        this.computeElevation(
-          vec2(positionLocal.x.sub(eps), positionLocal.z),
-        ).sub(elevation),
-        0.0,
-      ),
+    const elevX = this.computeElevation(
+      vec2(positionLocal.x.sub(eps), positionLocal.z),
     );
-    const bitangent = normalize(
-      vec3(
-        0.0,
-        this.computeElevation(
-          vec2(positionLocal.x, positionLocal.z.sub(eps)),
-        ).sub(elevation),
-        eps,
-      ),
+    const elevZ = this.computeElevation(
+      vec2(positionLocal.x, positionLocal.z.sub(eps)),
     );
-    return normalize(cross(tangent, bitangent));
+    const tangent = normalize(vec3(eps, elevX.sub(elevation), 0.0));
+    const bitangent = normalize(vec3(0.0, elevZ.sub(elevation), eps));
+    const avoidDivisionByZero = vec3(0.0001);
+    return normalize(cross(tangent, bitangent)).add(avoidDivisionByZero);
   });
 
   private computeFresnel = Fn(
     ([vNormal = varying(vec3(0, 0, 0)), viewDirection = vec3(0, 0, 0)]) => {
-      const fresnel = this._uniforms.uFresnelScale.mul(
-        pow(
-          float(1.0).sub(clamp(dot(viewDirection, vNormal), 0.0, 1.0)),
-          this._uniforms.uFresnelPower,
-        ),
+      const factor = exp2(
+        log2(float(1.0).sub(clamp(dot(viewDirection, vNormal), 0.0, 1.0))),
       );
+      const fresnel = this._uniforms.uFresnelScale.mul(factor);
       return fresnel;
     },
   );
@@ -190,14 +151,12 @@ export default class WaterMaterial extends MeshBasicNodeMaterial {
       // Calculate fresnel effect
       const fresnel = this.computeFresnel(vNormal, viewDirection);
 
-      // Calculate transition factors using smoothstep
-      const troughFactor = smoothstep(
-        this._uniforms.uTroughThreshold.sub(this._uniforms.uTroughTransition),
-        this._uniforms.uTroughThreshold.add(this._uniforms.uTroughTransition),
-        vPosition.y,
-      );
-
       // Mix between trough and surface colors based on trough transition
+      const troughFactor = saturate(
+        vPosition.y
+          .sub(this._uniforms.uTroughThreshold)
+          .div(this._uniforms.uTroughTransition.mul(2)),
+      );
       const mixedColor1 = mix(
         this._uniforms.uTroughColor,
         this._uniforms.uSurfaceColor,
@@ -205,10 +164,10 @@ export default class WaterMaterial extends MeshBasicNodeMaterial {
       );
 
       // Mix between surface and peak colors based on peak transition
-      const peakFactor = smoothstep(
-        this._uniforms.uPeakThreshold.sub(this._uniforms.uPeakTransition),
-        this._uniforms.uPeakThreshold.add(this._uniforms.uPeakTransition),
-        vPosition.y,
+      const peakFactor = saturate(
+        vPosition.y
+          .sub(this._uniforms.uPeakThreshold)
+          .div(this._uniforms.uPeakTransition.mul(2)),
       );
       const mixedColor2 = mix(
         mixedColor1,
@@ -219,17 +178,28 @@ export default class WaterMaterial extends MeshBasicNodeMaterial {
       // Mix the final color with the reflection color
       const finalColor = mix(mixedColor2, reflectionColor.rgb, fresnel);
 
-      const distanceXZ = length(vWorldPosition.xz.sub(cameraPosition.xz));
-      const minDist = 10.0; // Minimum distance (fully transparent at this distance)
-      const maxDist = 100.0; // Maximum distance (fully opaque at this distance)
+      // const distanceXZ = length(vWorldPosition.xz.sub(cameraPosition.xz));
+      const distanceXZSquared = dot(
+        vWorldPosition.xz.sub(cameraPosition.xz),
+        vWorldPosition.xz.sub(cameraPosition.xz),
+      );
 
-      const opacity = mix(0, 1, smoothstep(minDist, maxDist, distanceXZ));
+      const minDist = 10; // Minimum distance (fully transparent at this distance)
+      const maxDist = 55; // Maximum distance (fully opaque at this distance)
+
+      // const opacity = mix(0, 1, smoothstep(minDist, maxDist, distanceXZ));
+      const opacity = mix(
+        0,
+        1,
+        smoothstep(minDist * minDist, maxDist * maxDist, distanceXZSquared),
+      );
 
       return vec4(finalColor, opacity);
     },
   );
 
   private createWaterMaterial() {
+    this.precision = "mediump";
     // Position
     const elevation = this.computeElevation(uv()).mul(1000);
     const position = this.computePosition(elevation);
@@ -261,16 +231,6 @@ export default class WaterMaterial extends MeshBasicNodeMaterial {
       min: 0.1,
       max: 10,
       label: "Frequency",
-    });
-    wavesFolder.addBinding(this._uniforms.uWavesPersistence, "value", {
-      min: 0,
-      max: 1,
-      label: "Persistence",
-    });
-    wavesFolder.addBinding(this._uniforms.uWavesLacunarity, "value", {
-      min: 0,
-      max: 3,
-      label: "Lacunarity",
     });
     wavesFolder.addBinding(this._uniforms.uWavesSpeed, "value", {
       min: 0,
@@ -325,11 +285,6 @@ export default class WaterMaterial extends MeshBasicNodeMaterial {
       min: 0,
       max: 1,
       label: "Scale",
-    });
-    fresnelFolder.addBinding(this._uniforms.uFresnelPower, "value", {
-      min: 0,
-      max: 3,
-      label: "Power",
     });
   }
 }
