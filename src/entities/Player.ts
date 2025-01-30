@@ -9,20 +9,13 @@ import {
 import InputManager from "../systems/InputManager";
 import { type State } from "../Game";
 import {
-  color,
   float,
-  Fn,
   mix,
-  positionLocal,
   positionWorld,
-  sin,
   smoothstep,
-  step,
   texture,
   uniform,
   uv,
-  vec2,
-  vec3,
   vec4,
 } from "three/tsl";
 import {

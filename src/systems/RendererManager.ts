@@ -1,4 +1,4 @@
-import { ACESFilmicToneMapping, NeutralToneMapping, VSMShadowMap } from "three";
+import { ACESFilmicToneMapping, VSMShadowMap } from "three";
 import { WebGPURenderer } from "three/webgpu";
 
 export default class RendererManager {
