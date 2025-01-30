@@ -14,7 +14,7 @@ import { GLTF } from "three/examples/jsm/Addons.js";
 import { debugManager } from "../systems/DebugManager";
 import { uniform } from "three/tsl";
 import { assetManager } from "../systems/AssetManager";
-import WaterMaterial from "../utils/WaterMaterial";
+import WaterMaterial from "../materials/WaterMaterial";
 
 export default class PortfolioRealm {
   private readonly HALF_FLOOR_THICKNESS = 0.3;
