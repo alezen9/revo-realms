@@ -32,6 +32,7 @@ import {
   vec3,
 } from "three/tsl";
 import perlinNoiseTextureUrl from "/perlin_noise_texture.webp?url";
+import { assetManager } from "../systems/AssetManager";
 
 type BladeGeometryData = {
   positions: Float32Array;
@@ -62,7 +63,7 @@ export default class Grass {
   private chunks: GrassChunk[] = [];
 
   constructor(state: State) {
-    const { scene, assetManager } = state;
+    const { scene } = state;
 
     this.noiseTexture = assetManager.textureLoader.load(perlinNoiseTextureUrl);
 
