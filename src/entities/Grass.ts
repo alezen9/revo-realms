@@ -8,23 +8,19 @@ import {
   Scene,
 } from "three";
 import { State } from "../Game";
-import { MeshPhongNodeMaterial } from "three/webgpu";
+import { MeshBasicNodeMaterial } from "three/webgpu";
 import {
-  attribute,
   cos,
-  faceDirection,
-  float,
   Fn,
   fract,
   mix,
-  modelNormalMatrix,
   normalize,
   positionGeometry,
   positionWorld,
   pow,
   sin,
+  smoothstep,
   texture,
-  transformDirection,
   uniform,
   uv,
   vec2,
@@ -95,7 +91,7 @@ export default class Grass {
     chunkIndexZ: number,
     geometryHigh: BufferGeometry,
     geometryLow: BufferGeometry,
-    material: MeshPhongNodeMaterial,
+    material: MeshBasicNodeMaterial,
     scene: Scene,
     offset: number,
   ): GrassChunk {
@@ -362,7 +358,6 @@ export default class Grass {
     // Buffers for the entire tile
     const positions = new Float32Array(bladeVertexCount * totalBlades * 3);
     const uvs = new Float32Array(bladeVertexCount * totalBlades * 2);
-    const aoFactors = new Float32Array(bladeVertexCount * totalBlades);
     let indices = null;
     if (lod === "high") {
       indices =
@@ -386,6 +381,14 @@ export default class Grass {
         const rotationAngle = MathUtils.randFloat(-1, 1);
         const bendAngle = MathUtils.randFloat(-0.5, 0.5);
         const heightScale = MathUtils.randFloat(0.5, 1.25);
+        const additionalOffsetZ = MathUtils.randFloat(
+          -spacing / 3,
+          spacing / 3,
+        );
+        const additionalOffsetX = MathUtils.randFloat(
+          -spacing / 3,
+          spacing / 3,
+        );
 
         for (let i = 0; i < bladeVertexCount; i++) {
           const i3 = i * 3;
@@ -398,19 +401,14 @@ export default class Grass {
           const rotatedVertex = this.vertexRotateY(bentVertex, rotationAngle);
           const translatedVertex = this.vertexTranslateXZ(
             rotatedVertex,
-            offsetX,
-            offsetZ,
+            offsetX + additionalOffsetX,
+            offsetZ + additionalOffsetZ,
           );
 
           const v3 = vertexOffset * 3;
           positions[v3] = translatedVertex[0];
           positions[v3 + 1] = translatedVertex[1];
           positions[v3 + 2] = translatedVertex[2];
-
-          // AO
-          const heightFactor = translatedVertex[1] / this.BLADE_HEIGHT;
-          const aoValue = MathUtils.smoothstep(1.0, 0.0, heightFactor);
-          aoFactors[vertexOffset] = aoValue;
 
           vertexOffset++;
         }
@@ -433,54 +431,12 @@ export default class Grass {
     const tileGeometry = new BufferGeometry();
     tileGeometry.setAttribute("position", new BufferAttribute(positions, 3));
     tileGeometry.setAttribute("uv", new BufferAttribute(uvs, 2));
-    tileGeometry.setAttribute("ao", new BufferAttribute(aoFactors, 1));
     if (indices) tileGeometry.setIndex(new BufferAttribute(indices, 1));
 
     tileGeometry.computeVertexNormals();
 
     return tileGeometry;
   }
-
-  private material_curveNormals = Fn(() => {
-    // Fake cylindrical shape by curving normals
-    const sideFactor = sin(uv().x.mul(Math.PI)); // Smoother curvature: -1 -> 0 -> 1
-    const heightFactor = pow(uv().y, 1.5); // Softer curvature transition toward the tip
-
-    // Stronger curvature at the base, softer at the tip
-    const curvatureStrength = mix(0.6, 0.15, heightFactor);
-
-    // Subtle Twisting for Organic Shape
-    const twistStrength = mix(0.0, 0.2, heightFactor); // Slight twist near the tip
-    const twistAngle = uv().y.mul(Math.PI).mul(twistStrength); // Vary twist over height
-
-    // Apply combined curvature and twist for cylindrical illusion
-    let curvedNormal = normalize(
-      vec3(
-        sideFactor.mul(curvatureStrength).cos().sub(twistAngle.sin().mul(0.1)), // Side curvature with slight twist
-        twistAngle.sin().mul(0.05), // Subtle upward twist
-        1.0,
-      ),
-    );
-
-    // Transform Normals to World Space
-    curvedNormal = normalize(
-      transformDirection(curvedNormal, modelNormalMatrix),
-    );
-
-    // Correct for Backface Rendering
-    curvedNormal = mix(
-      curvedNormal,
-      curvedNormal.negate(),
-      float(faceDirection.lessThan(0.0)),
-    );
-
-    return curvedNormal;
-  });
-
-  private material_addAmbientOcclusion = Fn(() => {
-    const bakedAO = attribute("ao");
-    return bakedAO;
-  });
 
   private material_setDiffuseColor = Fn(() => {
     const baseColor = vec3(0.1, 0.25, 0.05); // Consistent green
@@ -497,21 +453,21 @@ export default class Grass {
     // 1. **Blade-Level Noise Sampling (With Seamless Wrapping)**
     const bladeOrigin = vec2(positionWorld.x, positionWorld.z);
     const bladeNoiseScale = 0.05;
-    const detailNoiseScale = 0.2; // Fine turbulence
     const timeFactor = this.uTime.mul(0.1); // Smooth time evolution
 
     // **Use fract to ensure UVs stay in [0, 1] for seamless looping**
     const bladeUV = fract(bladeOrigin.mul(bladeNoiseScale).add(timeFactor));
-    const detailUV = fract(
-      bladeOrigin.mul(detailNoiseScale).add(timeFactor.mul(1.5)),
-    );
 
     // 2. **Sample Noise with Seamless Wrapping**
-    const bladeWindSample = texture(assetManager.perlinNoiseTexture, bladeUV).r;
-    const detailSample = texture(assetManager.perlinNoiseTexture, detailUV).r;
+    const bladeWindSample = texture(
+      assetManager.perlinNoiseTexture,
+      bladeUV,
+      0.5,
+    ).r;
 
     // 3. **Blend Large and Small Scale Noise**
-    const blendedWind = mix(bladeWindSample, detailSample, 0.3);
+    // const blendedWind = mix(bladeWindSample, detailSample, 0.3);
+    const blendedWind = bladeWindSample;
 
     // 4. **Smooth Wind Direction**
     const windAngle = blendedWind.mul(Math.PI * 2.0);
@@ -532,12 +488,10 @@ export default class Grass {
   });
 
   private createBladeMaterial() {
-    const materialNode = new MeshPhongNodeMaterial();
+    const materialNode = new MeshBasicNodeMaterial();
     materialNode.side = DoubleSide;
 
-    materialNode.normalNode = this.material_curveNormals();
-    // materialNode.colorNode = normalLocal.add(1.0).div(2.0);
-    materialNode.aoNode = this.material_addAmbientOcclusion();
+    materialNode.aoNode = smoothstep(-0.75, 1.25, uv().y);
     materialNode.colorNode = this.material_setDiffuseColor();
     materialNode.positionNode = this.material_addWindMotion();
     return materialNode;
@@ -555,16 +509,17 @@ export default class Grass {
 
   private updateChunkLOD(camera: State["camera"]) {
     const cameraPos = camera.position;
+    const lodThresholdSq = this.LOD_DIST_HIGH * this.LOD_DIST_HIGH;
 
     for (const chunk of this.chunks) {
       // 3D distance from chunk center
       const dx = cameraPos.x - chunk.center.x;
       const dy = cameraPos.y; // floor is y=0
       const dz = cameraPos.z - chunk.center.z;
-      const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
+      const distanceSq = dx * dx + dy * dy + dz * dz;
 
       // Hard cutoff-based LOD logic
-      if (distance < this.LOD_DIST_HIGH) {
+      if (distanceSq < lodThresholdSq) {
         chunk.highMesh.visible = true;
         chunk.lowMesh.visible = false;
       } else {
