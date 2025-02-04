@@ -59,7 +59,7 @@ export default class Player {
 
   // Constants for geometry/camera offset
   private readonly RADIUS = 0.5;
-  private readonly PLAYER_INITIAL_POSITION = new Vector3(-90, 2, 40);
+  private readonly PLAYER_INITIAL_POSITION = new Vector3(0, 2, 0);
   private readonly CAMERA_OFFSET = new Vector3(0, 5, 10);
   private readonly UP = new Vector3(0, 1, 0);
   private readonly DOWN = new Vector3(0, -1, 0);
@@ -77,50 +77,50 @@ export default class Player {
     this.inputManager = inputManager;
     this.lighting = lighting;
 
-    const box = new Mesh(
-      new BoxGeometry(),
-      new MeshLambertMaterial({
-        emissive: "red",
-        emissiveIntensity: 5,
-      }),
-    );
-    box.position.set(2, 0.5, 2);
-    scene.add(box);
-    lighting.emissive.registerEmitter({
-      position: box.position,
-      hue: box.material.emissive,
-      intensity: box.material.emissiveIntensity,
-    });
+    // const box = new Mesh(
+    //   new BoxGeometry(),
+    //   new MeshLambertMaterial({
+    //     emissive: "red",
+    //     emissiveIntensity: 5,
+    //   }),
+    // );
+    // box.position.set(2, 0.5, 2);
+    // scene.add(box);
+    // lighting.emissive.registerEmitter({
+    //   position: box.position,
+    //   hue: box.material.emissive,
+    //   intensity: box.material.emissiveIntensity,
+    // });
 
-    const box2 = new Mesh(
-      new BoxGeometry(),
-      new MeshLambertMaterial({
-        emissive: "green",
-        emissiveIntensity: 7,
-      }),
-    );
-    box2.position.set(0, 0.5, -2);
-    scene.add(box2);
-    lighting.emissive.registerEmitter({
-      position: box2.position,
-      hue: box2.material.emissive,
-      intensity: box2.material.emissiveIntensity,
-    });
+    // const box2 = new Mesh(
+    //   new BoxGeometry(),
+    //   new MeshLambertMaterial({
+    //     emissive: "green",
+    //     emissiveIntensity: 7,
+    //   }),
+    // );
+    // box2.position.set(0, 0.5, -2);
+    // scene.add(box2);
+    // lighting.emissive.registerEmitter({
+    //   position: box2.position,
+    //   hue: box2.material.emissive,
+    //   intensity: box2.material.emissiveIntensity,
+    // });
 
-    const box3 = new Mesh(
-      new BoxGeometry(),
-      new MeshLambertMaterial({
-        emissive: "yellow",
-        emissiveIntensity: 2,
-      }),
-    );
-    box3.position.set(-1, 2, 1);
-    scene.add(box3);
-    lighting.emissive.registerEmitter({
-      position: box3.position,
-      hue: box3.material.emissive,
-      intensity: box3.material.emissiveIntensity,
-    });
+    // const box3 = new Mesh(
+    //   new BoxGeometry(),
+    //   new MeshLambertMaterial({
+    //     emissive: "yellow",
+    //     emissiveIntensity: 2,
+    //   }),
+    // );
+    // box3.position.set(-1, 2, 1);
+    // scene.add(box3);
+    // lighting.emissive.registerEmitter({
+    //   position: box3.position,
+    //   hue: box3.material.emissive,
+    //   intensity: box3.material.emissiveIntensity,
+    // });
 
     this.mesh = this.createCharacterMesh();
     scene.add(this.mesh);

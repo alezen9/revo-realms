@@ -65,11 +65,12 @@ const defaultUniforms: Omit<Required<WaterUniforms>, "uEnvironmentMap"> = {
 export default class WaterMaterial extends MeshBasicNodeMaterial {
   private _uniforms: Required<WaterUniforms>;
   private debugFolder: FolderApi;
-  constructor(uniforms: WaterUniforms, enableDebug = true) {
+  constructor(uniforms: WaterUniforms, enableDebug = false) {
     super();
     this._uniforms = { ...defaultUniforms, ...uniforms };
     this.createWaterMaterial();
     this.debugFolder = debugManager.panel.addFolder({ title: "🌊 Water" });
+    this.debugFolder.hidden = !enableDebug;
     if (!enableDebug) return;
     this.debugWaves();
     this.debugColor();

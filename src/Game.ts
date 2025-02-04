@@ -28,7 +28,7 @@ export default class Game {
   private sceneManager: SceneManager;
   private inputManager: InputManager;
   private monitoringManager: MonitoringManager;
-  private postprocessingManager: PostprocessingManager;
+  // private postprocessingManager: PostprocessingManager;
   private clock: Clock;
   private world: World;
 
@@ -40,10 +40,10 @@ export default class Game {
   constructor() {
     this.rendererManager = new RendererManager();
     this.sceneManager = new SceneManager(this.rendererManager);
-    this.postprocessingManager = new PostprocessingManager(
-      this.rendererManager,
-      this.sceneManager,
-    );
+    // this.postprocessingManager = new PostprocessingManager(
+    //   this.rendererManager,
+    //   this.sceneManager,
+    // );
     this.inputManager = new InputManager();
     this.monitoringManager = new MonitoringManager();
 
@@ -120,7 +120,11 @@ export default class Game {
 
       this.sceneManager.update();
 
-      await this.postprocessingManager.composer.renderAsync();
+      // await this.postprocessingManager.composer.renderAsync();
+      await this.rendererManager.renderer.renderAsync(
+        this.sceneManager.scene,
+        this.sceneManager.camera,
+      );
 
       requestAnimationFrame(loop);
     };
