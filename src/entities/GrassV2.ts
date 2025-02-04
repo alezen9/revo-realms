@@ -15,7 +15,7 @@ export default class GrassV2 {
   private readonly TILE_SIZE = 32; // better if pow of 2 or even
   private readonly NUM_BLADES_PER_SIDE = 256; // better if pow of 2 or perfect square
   private readonly BLADE_WIDTH = 0.05;
-  private readonly BLADE_HEIGHT = 1.5;
+  private readonly BLADE_HEIGHT = 0.75;
 
   private uTime = uniform(0);
 

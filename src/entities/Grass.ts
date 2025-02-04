@@ -1,7 +1,6 @@
 import {
   BufferAttribute,
   BufferGeometry,
-  DoubleSide,
   MathUtils,
   InstancedMesh,
   Object3D,
@@ -9,24 +8,8 @@ import {
 } from "three";
 import { State } from "../Game";
 import { MeshBasicNodeMaterial } from "three/webgpu";
-import {
-  cos,
-  Fn,
-  fract,
-  mix,
-  normalize,
-  positionGeometry,
-  positionWorld,
-  pow,
-  sin,
-  smoothstep,
-  texture,
-  uniform,
-  uv,
-  vec2,
-  vec3,
-} from "three/tsl";
-import { assetManager } from "../systems/AssetManager";
+import { uniform } from "three/tsl";
+import GrassMaterial from "../materials/GrassMaterial";
 
 type BladeGeometryData = {
   positions: Float32Array;
@@ -42,8 +25,9 @@ type GrassChunk = {
 };
 
 export default class Grass {
-  private readonly GRASS_AREA_SIDE_SIZE = 8; // better if pow of 2 or even
-  private readonly NUM_BLADES_PER_SIDE_HIGH = 96; // better if pow of 2 or perfect square
+  private readonly TILES_COUNT = 1;
+  private readonly GRASS_AREA_SIDE_SIZE = 4; // better if pow of 2 or even
+  private readonly NUM_BLADES_PER_SIDE_HIGH = this.GRASS_AREA_SIDE_SIZE * 10;
   private readonly NUM_BLADES_PER_SIDE_LOW_LOD = 16; // better if pow of 2 or perfect square
   private readonly BLADE_WIDTH = 0.025;
   private readonly BLADE_HEIGHT = 0.75;
@@ -60,7 +44,7 @@ export default class Grass {
   }
 
   private buildGrassChunks(scene: Scene) {
-    const material = this.createBladeMaterial();
+    const material = new GrassMaterial({ uTime: this.uTime });
     const highGeometryData = this.createGrassBladeGeometryDataHighLOD();
     const lowGeometryData = this.createGrassBladeGeometryDataLowLOD();
     const highLODGeometry = this.createGeometry("high", highGeometryData);
@@ -95,10 +79,12 @@ export default class Grass {
     scene: Scene,
     offset: number,
   ): GrassChunk {
-    const tileCount = 4;
-
-    const meshHigh = new InstancedMesh(geometryHigh, material, tileCount);
-    const meshLow = new InstancedMesh(geometryLow, material, tileCount);
+    const meshHigh = new InstancedMesh(
+      geometryHigh,
+      material,
+      this.TILES_COUNT,
+    );
+    const meshLow = new InstancedMesh(geometryLow, material, this.TILES_COUNT);
 
     // Hide medium & low initially
     meshLow.visible = false;
@@ -436,65 +422,6 @@ export default class Grass {
     tileGeometry.computeVertexNormals();
 
     return tileGeometry;
-  }
-
-  private material_setDiffuseColor = Fn(() => {
-    const baseColor = vec3(0.1, 0.25, 0.05); // Consistent green
-    const tipColor = vec3(0.4, 0.5, 0.1); // Slightly lighter tip
-
-    // Smooth gradient from base to tip
-    const heightFactor = pow(positionGeometry.y, 1.5);
-    const blendedColor = mix(baseColor, tipColor, heightFactor);
-
-    return blendedColor;
-  });
-
-  private material_addWindMotion = Fn(() => {
-    // 1. **Blade-Level Noise Sampling (With Seamless Wrapping)**
-    const bladeOrigin = vec2(positionWorld.x, positionWorld.z);
-    const bladeNoiseScale = 0.05;
-    const timeFactor = this.uTime.mul(0.1); // Smooth time evolution
-
-    // **Use fract to ensure UVs stay in [0, 1] for seamless looping**
-    const bladeUV = fract(bladeOrigin.mul(bladeNoiseScale).add(timeFactor));
-
-    // 2. **Sample Noise with Seamless Wrapping**
-    const bladeWindSample = texture(
-      assetManager.perlinNoiseTexture,
-      bladeUV,
-      0.5,
-    ).r;
-
-    // 3. **Blend Large and Small Scale Noise**
-    // const blendedWind = mix(bladeWindSample, detailSample, 0.3);
-    const blendedWind = bladeWindSample;
-
-    // 4. **Smooth Wind Direction**
-    const windAngle = blendedWind.mul(Math.PI * 2.0);
-    const windDirection = normalize(vec2(cos(windAngle), sin(windAngle)));
-
-    // 5. **Height-Based Bending for Natural Sway**
-    const heightFactor = pow(positionGeometry.y.div(this.BLADE_HEIGHT), 2.0);
-    const bendStrength = blendedWind.mul(0.3).mul(heightFactor);
-
-    // 6. **Apply Consistent Bending to the Entire Blade**
-    const bendOffset = vec3(windDirection.x, 0.0, windDirection.y).mul(
-      bendStrength,
-    );
-    const bentPosition = positionWorld.add(bendOffset);
-
-    // 7. **Apply Final Bent Position**
-    return bentPosition;
-  });
-
-  private createBladeMaterial() {
-    const materialNode = new MeshBasicNodeMaterial();
-    materialNode.side = DoubleSide;
-
-    materialNode.aoNode = smoothstep(-0.75, 1.25, uv().y);
-    materialNode.colorNode = this.material_setDiffuseColor();
-    materialNode.positionNode = this.material_addWindMotion();
-    return materialNode;
   }
 
   // ########################################
