@@ -5,7 +5,6 @@ import {
   MathUtils,
   InstancedMesh,
   Object3D,
-  Texture,
   Scene,
 } from "three";
 import { State } from "../Game";
@@ -31,7 +30,6 @@ import {
   vec2,
   vec3,
 } from "three/tsl";
-import perlinNoiseTextureUrl from "/perlin_noise_texture.webp?url";
 import { assetManager } from "../systems/AssetManager";
 
 type BladeGeometryData = {
@@ -58,15 +56,10 @@ export default class Grass {
   private readonly NUM_TILES_PER_CHUNK_SIDE = 2;
 
   private uTime = uniform(0);
-  private noiseTexture: Texture;
 
   private chunks: GrassChunk[] = [];
 
-  constructor(state: State) {
-    const { scene } = state;
-
-    this.noiseTexture = assetManager.textureLoader.load(perlinNoiseTextureUrl);
-
+  constructor(scene: State["scene"]) {
     this.buildGrassChunks(scene);
   }
 
@@ -514,8 +507,8 @@ export default class Grass {
     );
 
     // 2. **Sample Noise with Seamless Wrapping**
-    const bladeWindSample = texture(this.noiseTexture, bladeUV).r;
-    const detailSample = texture(this.noiseTexture, detailUV).r;
+    const bladeWindSample = texture(assetManager.perlinNoiseTexture, bladeUV).r;
+    const detailSample = texture(assetManager.perlinNoiseTexture, detailUV).r;
 
     // 3. **Blend Large and Small Scale Noise**
     const blendedWind = mix(bladeWindSample, detailSample, 0.3);

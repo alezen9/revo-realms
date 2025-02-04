@@ -4,7 +4,7 @@ export default class MonitoringManager {
   stats: Stats;
   constructor() {
     const stats = new Stats({
-      trackGPU: false,
+      trackGPU: true,
       logsPerSecond: 4,
       graphsPerSecond: 30,
       samplesLog: 40,
