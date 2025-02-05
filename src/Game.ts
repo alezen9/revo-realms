@@ -1,4 +1,4 @@
-import { Scene, Clock, PerspectiveCamera, TimestampQuery } from "three";
+import { Scene, Clock, PerspectiveCamera } from "three";
 import { World } from "@dimforge/rapier3d-compat";
 import Player from "./entities/Player";
 import PortfolioRealm from "./realms/PortfolioRealm";
@@ -7,7 +7,7 @@ import InputManager from "./systems/InputManager";
 import RendererManager from "./systems/RendererManager";
 import SceneManager from "./systems/SceneManager";
 import MonitoringManager from "./systems/MonitoringManager";
-import PostprocessingManager from "./systems/PostprocessingManager";
+// import PostprocessingManager from "./systems/PostprocessingManager";
 import Environmentallumination from "./systems/Environmentallumination";
 import NewGrass from "./entities/NewGrass";
 import { WebGPURenderer } from "three/webgpu";

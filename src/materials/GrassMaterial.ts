@@ -138,7 +138,6 @@ export default class GrassMaterial extends MeshBasicNodeMaterial {
     this.aoNode = smoothstep(-0.75, 1.25, uv().y);
     // this.opacityNode = this.computeOpacity();
     this.colorNode = this.computeDiffuseColor();
-    // this.positionNode = this.computeWindAnimation();
     // this.alphaTest = 0.5;
   }
 }
