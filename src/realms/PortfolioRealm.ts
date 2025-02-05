@@ -11,12 +11,11 @@ import { MeshStandardMaterial } from "three/webgpu";
 import worldModelUrl from "/models/world.glb?url";
 import floorTextureUrl from "/models/floor.webp?url";
 import { GLTF } from "three/examples/jsm/Addons.js";
-import { debugManager } from "../systems/DebugManager";
 import { uniform } from "three/tsl";
 import { assetManager } from "../systems/AssetManager";
 import WaterMaterial from "../materials/WaterMaterial";
-import GrassV2 from "../entities/GrassV2";
 import Grass from "../entities/Grass";
+import NewGrass from "../entities/NewGrass";
 
 export default class PortfolioRealm {
   private readonly HALF_FLOOR_THICKNESS = 0.3;
@@ -31,10 +30,6 @@ export default class PortfolioRealm {
   private uTime = uniform(0);
   private uEnvironmentMap = new CubeTexture();
 
-  // Grass
-  // private grass: GrassV2;
-  private oldGrass: Grass;
-
   constructor(
     state: Pick<State, "world" | "scene" | "environmentalIllumination">,
   ) {
@@ -48,10 +43,6 @@ export default class PortfolioRealm {
     });
 
     this.kintounRigidBody = this.createKintounCollider(world);
-
-    // Grass
-    // this.grass = new GrassV2(scene);
-    this.oldGrass = new Grass(scene);
   }
 
   private createVisual(worldModel: GLTF, scene: State["scene"]) {
@@ -167,8 +158,6 @@ export default class PortfolioRealm {
   public update(state: State) {
     const { player, clock } = state;
     this.uTime.value = clock.getElapsedTime();
-    // this.grass.update(state);
-    this.oldGrass.update(state);
 
     const playerPosition = player.getPosition();
 
