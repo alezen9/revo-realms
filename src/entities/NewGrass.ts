@@ -1,4 +1,12 @@
-import { BufferAttribute, BufferGeometry, InstancedMesh, Vector3 } from "three";
+import {
+  BufferAttribute,
+  BufferGeometry,
+  Group,
+  InstancedMesh,
+  Texture,
+  Vector2,
+  Vector3,
+} from "three";
 import { State } from "../Game";
 import NewGrassMaterial from "../materials/NewGrassMaterial";
 import {
@@ -18,34 +26,57 @@ import {
   texture,
   vec2,
   uniform,
+  positionWorld,
 } from "three/tsl";
 import { assetManager } from "../systems/AssetManager";
+import alphaTextureUrl from "/textures/test.webp?url";
 
 export default class NewGrass {
-  private readonly TILE_SIZE = 40;
+  private readonly TILE_SIZE = 75;
   private readonly HALF_TILE_SIZE = this.TILE_SIZE / 2;
   private readonly BLADE_WIDTH = 0.1;
-  private readonly BLADE_HEIGHT = 0.75;
-  private readonly BLADES_PER_SIDE = 400; // Number of blades along one side
+  private readonly BLADE_HEIGHT = 0.5;
+  private readonly BLADES_PER_SIDE = 750; // Number of blades along one side
   private readonly SPACING = this.TILE_SIZE / this.BLADES_PER_SIDE;
   private readonly COUNT = this.BLADES_PER_SIDE * this.BLADES_PER_SIDE;
 
   private uTime = uniform(0);
-  private uPlayerPos = uniform(new Vector3(0, 0, 0));
-  private uOldCenter = uniform(new Vector3(0, 0, 0)); // last frame's tile center
+  private uDelta = uniform(new Vector2(0, 0));
 
-  private offsetBuffer = instancedArray(this.COUNT, "vec3"); // x, y, z
-  private additionalBuffer = instancedArray(this.COUNT, "vec2"); // rotation, scale
+  private offsetBuffer = instancedArray(this.COUNT, "vec2"); // x, z (y)
+  private additionalBuffer = instancedArray(this.COUNT, "vec3"); // rotation, scale, opacity
+  private tile: InstancedMesh<BufferGeometry, NewGrassMaterial>;
+  private group: Group;
+  private alphaTexture: Texture;
 
   constructor(scene: State["scene"]) {
+    this.alphaTexture = assetManager.textureLoader.load(alphaTextureUrl);
+    this.alphaTexture.flipY = false;
     this.offsetBuffer.setPBO(true);
     this.additionalBuffer.setPBO(true);
+    this.tile = this.createTile();
+    scene.add(this.tile);
+
+    const group = new Group();
+    // const t1 = this.createTile();
+    // t1.position.set(-this.HALF_TILE_SIZE, 0, -this.HALF_TILE_SIZE);
+    // group.add(t1);
+    // const t2 = this.createTile();
+    // t2.position.set(this.HALF_TILE_SIZE, 0, -this.HALF_TILE_SIZE);
+    // group.add(t2);
+    // const t3 = this.createTile();
+    // t3.position.set(this.HALF_TILE_SIZE, 0, this.HALF_TILE_SIZE);
+    // group.add(t3);
+    // const t4 = this.createTile();
+    // t4.position.set(-this.HALF_TILE_SIZE, 0, this.HALF_TILE_SIZE);
+    // group.add(t4);
+
+    // scene.add(group);
+    this.group = group;
+
     this.computeUpdate.onInit(({ renderer }) => {
       renderer.compute(this.computeInit);
     });
-
-    const instances = this.createGrassInstances();
-    scene.add(instances);
   }
 
   private computeWindAnimation = Fn(() => {
@@ -55,36 +86,45 @@ export default class NewGrass {
     const scaled = positionLocal.mul(vec3(1, scale, 1));
     const rotationAngle = additionalData.x;
     const rotated = rotate(scaled, vec3(0, rotationAngle, 0));
-    const worldPos = rotated.add(offset);
-    const bladeOrigin = vec2(worldPos.x, worldPos.z);
+    const worldPos = rotated.add(vec3(offset.x, 0, offset.y));
+    return worldPos;
+    // const bladeOrigin = vec2(worldPos.x, worldPos.z);
 
-    // Timer
-    const timer = this.uTime.mul(0.025);
+    // const timer = this.uTime.mul(0.025);
 
-    // UV for noise
-    const bladeUV = mod(bladeOrigin.mul(0.05).add(timer), 1);
-    const noiseSample = texture(assetManager.perlinNoiseTexture, bladeUV).r; // fetch from a noise texture
+    // const bladeUV = mod(bladeOrigin.mul(0.05).add(timer), 1);
+    // const noiseSample = texture(
+    //   assetManager.perlinNoiseTexture,
+    //   bladeUV.mul(2),
+    //   2,
+    // ).r;
 
-    // Convert sample to angle/direction
-    const windAngle = noiseSample.mul(Math.PI * 2.0);
-    const windDir = normalize(vec2(cos(windAngle), sin(windAngle)));
+    // const windAngle = noiseSample.mul(Math.PI * 0.1);
+    // const windDir = normalize(vec2(cos(windAngle), sin(windAngle)));
 
-    // Some factor of how high up we are
-    const y = positionLocal.y.div(float(0.75));
-    const heightFactor = y.mul(y);
-    const bendStrength = noiseSample.mul(float(0.3)).mul(heightFactor);
+    // const y = positionLocal.y.div(float(0.75));
+    // const heightFactor = y.mul(y);
+    // const bendStrength = noiseSample.mul(float(0.3)).mul(heightFactor);
 
-    // The actual bend offset in XZ plane
-    const bendOffset = vec3(windDir.x, 0.0, windDir.y).mul(bendStrength);
+    // const bendOffset = vec3(windDir.x, 0.0, windDir.y).mul(bendStrength);
 
-    // Bent position
-    return worldPos.add(bendOffset);
+    // return worldPos.add(bendOffset);
   });
 
-  private createGrassInstances() {
+  private computeOpacity = Fn(() => {
+    const bladeOrigin = vec2(positionWorld.x, positionWorld.z);
+    const mapSize = 256;
+    const bladeUV = bladeOrigin.add(float(mapSize * 0.5)).div(float(mapSize));
+    const sample = texture(this.alphaTexture, bladeUV).r;
+    return sample;
+  });
+
+  private createTile() {
     const geometry = this.createBladeGeometry();
     const material = new NewGrassMaterial({});
     material.positionNode = this.computeWindAnimation();
+    material.opacityNode = this.computeOpacity();
+    material.alphaTest = 0.1;
     const instances = new InstancedMesh(geometry, material, this.COUNT);
     instances.frustumCulled = false;
     return instances;
@@ -158,8 +198,7 @@ export default class NewGrass {
       .add(randCol.mul(float(this.SPACING * 0.5)));
 
     offset.x = offsetX;
-    offset.y = float(0);
-    offset.z = offsetZ;
+    offset.y = offsetZ;
 
     const randomRotation = hash(instanceIndex.add(200))
       .mul(float(Math.PI * 2))
@@ -172,45 +211,32 @@ export default class NewGrass {
   })().compute(this.COUNT);
 
   private computeUpdate = Fn(() => {
-    const currentOffset = this.offsetBuffer.element(instanceIndex);
+    const offset = this.offsetBuffer.element(instanceIndex);
+    const newOffsetX = mod(
+      offset.x.sub(this.uDelta.x).add(this.HALF_TILE_SIZE),
+      this.TILE_SIZE,
+    ).sub(this.HALF_TILE_SIZE);
+    const newOffsetZ = mod(
+      offset.y.sub(this.uDelta.y).add(this.HALF_TILE_SIZE),
+      this.TILE_SIZE,
+    ).sub(this.HALF_TILE_SIZE);
 
-    // currentOffset.x = currentOffset.x.add(this.uPlayerPos.x);
-    // currentOffset.z = currentOffset.z.add(this.uPlayerPos.z);
-
-    // const off = this.offsetBuffer.element(instanceIndex);
-
-    // // "tileSize" and "halfTile"
-    // const tileSize = float(this.TILE_SIZE);
-    // const halfTile = float(this.HALF_TILE_SIZE);
-
-    // // The player's position (continuous, no floor!)
-    // const playerX = float(this.uPlayerPos.value.x);
-    // const playerZ = float(this.uPlayerPos.value.z);
-
-    // // The old center from last frame
-    // const oldCenterX = float(this.uOldCenter.value.x);
-    // const oldCenterZ = float(this.uOldCenter.value.z);
-
-    // // Subtract the movement delta => effectively "following" the player
-    // const dx = playerX.sub(oldCenterX);
-    // const dz = playerZ.sub(oldCenterZ);
-
-    // off.x = off.x.sub(dx);
-    // off.z = off.z.sub(dz);
-
-    // // Optionally wrap around so each offset always remains in [-half, half].
-    // // If you do NOT want wrapping, comment out the next 4 lines:
-    // off.x = off.x.sub(tileSize.mul(off.x.greaterThan(halfTile)));
-    // off.x = off.x.add(tileSize.mul(off.x.lessThan(halfTile.negate())));
-    // off.z = off.z.sub(tileSize.mul(off.z.greaterThan(halfTile)));
-    // off.z = off.z.add(tileSize.mul(off.z.lessThan(halfTile.negate())));
+    offset.x = newOffsetX;
+    offset.y = newOffsetZ;
   })().compute(this.COUNT);
 
   async update(state: State) {
     const { renderer, clock, player } = state;
     this.uTime.value = clock.getElapsedTime();
-    this.uPlayerPos.value.copy(player.position);
+    const dx = player.position.x - this.tile.position.x;
+    const dz = player.position.z - this.tile.position.z;
+    this.uDelta.value.set(dx, dz);
+    this.tile.position.copy(player.position).setY(0);
 
+    // const dx = player.position.x - this.group.position.x;
+    // const dz = player.position.z - this.group.position.z;
+    // this.uDelta.value.set(dx, dz);
+    // this.group.position.copy(player.position).setY(0);
     await renderer.computeAsync(this.computeUpdate);
   }
 }
