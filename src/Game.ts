@@ -1,4 +1,4 @@
-import { Scene, Clock, PerspectiveCamera } from "three";
+import { Scene, Clock, PerspectiveCamera, TimestampQuery } from "three";
 import { World } from "@dimforge/rapier3d-compat";
 import Player from "./entities/Player";
 import PortfolioRealm from "./realms/PortfolioRealm";
@@ -9,11 +9,14 @@ import SceneManager from "./systems/SceneManager";
 import MonitoringManager from "./systems/MonitoringManager";
 import PostprocessingManager from "./systems/PostprocessingManager";
 import Environmentallumination from "./systems/Environmentallumination";
+import NewGrass from "./entities/NewGrass";
+import { WebGPURenderer } from "three/webgpu";
 
 export type State = {
   camera: PerspectiveCamera;
   scene: Scene;
   clock: Clock;
+  renderer: WebGPURenderer;
   inputManager: InputManager;
   world: World;
   lighting: LightingSystem;
@@ -36,6 +39,8 @@ export default class Game {
   private realm: PortfolioRealm;
   private lighting: LightingSystem;
   private environmentalIllumination: Environmentallumination;
+
+  private grass: NewGrass;
 
   constructor() {
     this.rendererManager = new RendererManager();
@@ -69,6 +74,9 @@ export default class Game {
       world: this.world,
       environmentalIllumination: this.environmentalIllumination,
     });
+
+    // Grass
+    this.grass = new NewGrass(this.sceneManager.scene);
   }
 
   private getSizes(): Sizes {
@@ -97,7 +105,7 @@ export default class Game {
     await this.monitoringManager.stats.init(this.rendererManager.renderer);
     this.clock.start();
 
-    const state = {
+    const state: State = {
       clock: this.clock,
       scene: this.sceneManager.scene,
       camera: this.sceneManager.camera,
@@ -106,10 +114,12 @@ export default class Game {
       environmentalIllumination: this.environmentalIllumination,
       world: this.world,
       player: this.player,
+      renderer: this.rendererManager.renderer,
     };
 
     const loop = async () => {
       this.monitoringManager.stats.update();
+      this.sceneManager.update();
 
       callback?.(state);
 
@@ -117,14 +127,22 @@ export default class Game {
       this.player.update(state);
       this.realm.update(state);
       this.lighting.update(state);
-
-      this.sceneManager.update();
+      await this.grass.update(state);
+      // // Rread GPU compute time (not working)
+      // const computeTime =
+      //   await this.rendererManager.renderer.resolveTimestampsAsync("compute");
+      // console.log("GPU Compute Time ms:", computeTime);
 
       // await this.postprocessingManager.composer.renderAsync();
       await this.rendererManager.renderer.renderAsync(
         this.sceneManager.scene,
         this.sceneManager.camera,
       );
+
+      // // Read GPU render time (not working)
+      // const renderTime =
+      //   await this.rendererManager.renderer.resolveTimestampsAsync("render");
+      // console.log("GPU Render Time ms:", renderTime);
 
       requestAnimationFrame(loop);
     };

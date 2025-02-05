@@ -4,154 +4,65 @@ import {
   MathUtils,
   InstancedMesh,
   Object3D,
-  Scene,
+  Vector3,
 } from "three";
 import { State } from "../Game";
-import { MeshBasicNodeMaterial } from "three/webgpu";
 import { uniform } from "three/tsl";
 import GrassMaterial from "../materials/GrassMaterial";
 
 type BladeGeometryData = {
   positions: Float32Array;
   uvs: Float32Array;
-  indices?: Uint8Array;
-};
-
-type GrassChunk = {
-  center: { x: number; z: number };
-  highMesh: InstancedMesh;
-  lowMesh: InstancedMesh;
-  boundingRadius: number;
+  indices: Uint8Array;
 };
 
 export default class Grass {
-  private readonly TILES_COUNT = 1;
-  private readonly GRASS_AREA_SIDE_SIZE = 4; // better if pow of 2 or even
-  private readonly NUM_BLADES_PER_SIDE_HIGH = this.GRASS_AREA_SIDE_SIZE * 10;
-  private readonly NUM_BLADES_PER_SIDE_LOW_LOD = 16; // better if pow of 2 or perfect square
-  private readonly BLADE_WIDTH = 0.025;
+  private readonly TILES_PER_SIDE_COUNT = 4;
+  private readonly TILE_SIZE = 4;
+  private readonly BLADE_WIDTH = 0.15;
   private readonly BLADE_HEIGHT = 0.75;
-
-  private readonly LOD_DIST_HIGH = 80;
-  private readonly NUM_TILES_PER_CHUNK_SIDE = 2;
 
   private uTime = uniform(0);
 
-  private chunks: GrassChunk[] = [];
+  private dummyObj = new Object3D();
+  private instances: InstancedMesh<BufferGeometry, GrassMaterial>;
 
   constructor(scene: State["scene"]) {
-    this.buildGrassChunks(scene);
+    this.instances = this.createGrassInstances();
+    scene.add(this.instances);
   }
 
-  private buildGrassChunks(scene: Scene) {
+  private createGrassInstances() {
     const material = new GrassMaterial({ uTime: this.uTime });
-    const highGeometryData = this.createGrassBladeGeometryDataHighLOD();
-    const lowGeometryData = this.createGrassBladeGeometryDataLowLOD();
-    const highLODGeometry = this.createGeometry("high", highGeometryData);
-    const lowLODGeometry = this.createGeometry("low", lowGeometryData);
+    const geometry = this.createGeometry();
 
-    const instancesPerSide = 2;
-    const totalAreaSide = this.GRASS_AREA_SIDE_SIZE * instancesPerSide;
-    const halfInstancesAreaSize = totalAreaSide / 2 + this.GRASS_AREA_SIDE_SIZE;
-
-    for (let chunkIdxX = 0; chunkIdxX < instancesPerSide; chunkIdxX++) {
-      for (let chunkIdxZ = 0; chunkIdxZ < instancesPerSide; chunkIdxZ++) {
-        const chunk = this.buildSingleChunk(
-          chunkIdxX,
-          chunkIdxZ,
-          highLODGeometry,
-          lowLODGeometry,
-          material,
-          scene,
-          halfInstancesAreaSize,
-        );
-        this.chunks.push(chunk);
-      }
-    }
-  }
-
-  private buildSingleChunk(
-    chunkIndexX: number,
-    chunkIndexZ: number,
-    geometryHigh: BufferGeometry,
-    geometryLow: BufferGeometry,
-    material: MeshBasicNodeMaterial,
-    scene: Scene,
-    offset: number,
-  ): GrassChunk {
-    const meshHigh = new InstancedMesh(
-      geometryHigh,
+    const instances = new InstancedMesh(
+      geometry,
       material,
-      this.TILES_COUNT,
+      this.TILES_PER_SIDE_COUNT * this.TILES_PER_SIDE_COUNT,
     );
-    const meshLow = new InstancedMesh(geometryLow, material, this.TILES_COUNT);
 
-    // Hide medium & low initially
-    meshLow.visible = false;
+    const grassAreaSideSize = this.TILE_SIZE * this.TILES_PER_SIDE_COUNT;
+    const areaOffsetXZ = grassAreaSideSize / 2;
 
-    // Calculate chunk's "bottom-left" corner in world coords
-    const chunkWorldX =
-      chunkIndexX * this.NUM_TILES_PER_CHUNK_SIDE * this.GRASS_AREA_SIDE_SIZE -
-      offset;
-    const chunkWorldZ =
-      chunkIndexZ * this.NUM_TILES_PER_CHUNK_SIDE * this.GRASS_AREA_SIDE_SIZE -
-      offset;
-
-    // Fill tile transforms using a dummy Object3D so threejs does the math
-    const dummy = new Object3D();
-    let tileFlatIdx = 0;
-    for (
-      let tileIdxX = 0;
-      tileIdxX < this.NUM_TILES_PER_CHUNK_SIDE;
-      tileIdxX++
-    ) {
-      for (
-        let tileIdxZ = 0;
-        tileIdxZ < this.NUM_TILES_PER_CHUNK_SIDE;
-        tileIdxZ++
-      ) {
-        const tileX =
-          chunkWorldX +
-          tileIdxX * this.GRASS_AREA_SIDE_SIZE +
-          this.GRASS_AREA_SIDE_SIZE / 2;
-        const tileZ =
-          chunkWorldZ +
-          tileIdxZ * this.GRASS_AREA_SIDE_SIZE +
-          this.GRASS_AREA_SIDE_SIZE / 2;
-
-        dummy.position.set(tileX, 0, tileZ);
-        dummy.updateMatrix();
-
-        meshHigh.setMatrixAt(tileFlatIdx, dummy.matrix);
-        meshLow.setMatrixAt(tileFlatIdx, dummy.matrix);
-        tileFlatIdx++;
+    let instanceIdx = 0;
+    for (let tileIdxX = 0; tileIdxX < this.TILES_PER_SIDE_COUNT; tileIdxX++) {
+      const offsetX =
+        this.TILE_SIZE * (tileIdxX + 1) - areaOffsetXZ - this.TILE_SIZE / 2;
+      for (let tileIdxZ = 0; tileIdxZ < this.TILES_PER_SIDE_COUNT; tileIdxZ++) {
+        const offsetZ =
+          this.TILE_SIZE * (tileIdxZ + 1) - areaOffsetXZ - this.TILE_SIZE / 2;
+        this.dummyObj.position.set(offsetX, 0, offsetZ);
+        this.dummyObj.updateMatrix();
+        instances.setMatrixAt(instanceIdx, this.dummyObj.matrix);
+        instances.setMatrixAt(instanceIdx, this.dummyObj.matrix);
+        instanceIdx++;
       }
     }
 
-    meshHigh.instanceMatrix.needsUpdate = true;
-    meshLow.instanceMatrix.needsUpdate = true;
+    instances.instanceMatrix.needsUpdate = true;
 
-    scene.add(meshHigh, meshLow);
-
-    // Compute chunk center
-    const chunkCenterX =
-      chunkWorldX +
-      (this.NUM_TILES_PER_CHUNK_SIDE * this.GRASS_AREA_SIDE_SIZE) / 2;
-    const chunkCenterZ =
-      chunkWorldZ +
-      (this.NUM_TILES_PER_CHUNK_SIDE * this.GRASS_AREA_SIDE_SIZE) / 2;
-
-    // Approximate bounding radius
-    const chunkDiagonal =
-      this.NUM_TILES_PER_CHUNK_SIDE * this.GRASS_AREA_SIDE_SIZE;
-    const boundingRadius = (Math.sqrt(2) * chunkDiagonal) / 2;
-
-    return {
-      center: { x: chunkCenterX, z: chunkCenterZ },
-      highMesh: meshHigh,
-      lowMesh: meshLow,
-      boundingRadius,
-    };
+    return instances;
   }
 
   private vertexScaleY(vertex: number[], scale = 1) {
@@ -159,22 +70,22 @@ export default class Grass {
     return [x, y * scale, z];
   }
 
-  private vertexBendX(vertex: number[], maxAngle = 0) {
-    const [x, y, z] = vertex;
+  // private vertexBendX(vertex: number[], maxAngle = 0) {
+  //   const [x, y, z] = vertex;
 
-    // Calculate how much to rotate based on the height (y-axis)
-    const t = y / this.BLADE_HEIGHT;
-    const angle = maxAngle * t; // Gradual rotation from 0 to maxAngle
+  //   // Calculate how much to rotate based on the height (y-axis)
+  //   const t = y / this.BLADE_HEIGHT;
+  //   const angle = maxAngle * t; // Gradual rotation from 0 to maxAngle
 
-    const cosTheta = Math.cos(angle);
-    const sinTheta = Math.sin(angle);
+  //   const cosTheta = Math.cos(angle);
+  //   const sinTheta = Math.sin(angle);
 
-    // Rotate around X-axis
-    const rotatedY = y * cosTheta - z * sinTheta;
-    const rotatedZ = y * sinTheta + z * cosTheta;
+  //   // Rotate around X-axis
+  //   const rotatedY = y * cosTheta - z * sinTheta;
+  //   const rotatedZ = y * sinTheta + z * cosTheta;
 
-    return [x, rotatedY, rotatedZ];
-  }
+  //   return [x, rotatedY, rotatedZ];
+  // }
 
   private vertexRotateY(vertex: number[], angle: number) {
     const [x, y, z] = vertex;
@@ -196,7 +107,7 @@ export default class Grass {
     return [displacedX, displacedY, displacedZ];
   }
 
-  private createGrassBladeGeometryDataLowLOD(): BladeGeometryData {
+  private createGrassBladeGeometryData(): BladeGeometryData {
     /**
      *        C
      *      /   \
@@ -225,132 +136,33 @@ export default class Grass {
     return {
       positions,
       uvs,
+      indices: new Uint8Array(),
     };
   }
 
-  private createGrassBladeGeometryDataHighLOD(): BladeGeometryData {
-    /**
-     *        I
-     *      /   \
-     *    G ------ H
-     *    |   /    |
-     *    E ------ F
-     *    |   /    |
-     *    C ------ D
-     *    |   /    |
-     *    A ------ B
-     *
-     *  - Bottom Quad: A-B-D-C (2 triangles)
-     *  - Middle Quad: C-D-F-E (2 triangles)
-     *  - Top Quad:    E-F-H-G (2 triangles)
-     *  - Tip:         G-H-I   (1 triangle)
-     *
-     *  Total: 7 triangles for smooth high-definition bending.
-     */
-
-    const halfWidth = this.BLADE_WIDTH / 2;
-    const height = this.BLADE_HEIGHT;
-
-    const segmentHeight = height / 4;
-
-    const positions = new Float32Array([
-      -halfWidth,
-      0,
-      0, // A
-      halfWidth,
-      0,
-      0, // B
-      -halfWidth,
-      segmentHeight,
-      0, // C
-      halfWidth,
-      segmentHeight,
-      0, // D
-      -halfWidth,
-      segmentHeight * 2,
-      0, // E
-      halfWidth,
-      segmentHeight * 2,
-      0, // F
-      -halfWidth,
-      segmentHeight * 3,
-      0, // G
-      halfWidth,
-      segmentHeight * 3,
-      0, // H
-      0,
-      height,
-      0, // I - Tip (8)
-    ]);
-
-    const indices = new Uint8Array([
-      // Bottom Quad (A-B-D, A-D-C)
-      0, 1, 3, 0, 3, 2,
-      // Middle Quad (C-D-F, C-F-E)
-      2, 3, 5, 2, 5, 4,
-      // Top Quad (E-F-H, E-H-G)
-      4, 5, 7, 4, 7, 6,
-      // Tip (G-H-I)
-      6, 7, 8,
-    ]);
-
-    const uvs = new Float32Array([
-      0,
-      0,
-      1,
-      0,
-      0,
-      0.25,
-      1,
-      0.25, // Bottom Quad
-      0,
-      0.5,
-      1,
-      0.5, // Middle Quad
-      0,
-      0.75,
-      1,
-      0.75, // Top Quad
-      0.5,
-      1, // Tip
-    ]);
-
-    return {
-      positions,
-      indices,
-      uvs,
-    };
-  }
-
-  private createGeometry(lod: "high" | "low", data: BladeGeometryData) {
+  private createGeometry() {
     const {
       positions: bladePositions,
       indices: bladeIndices,
       uvs: bladeUVs,
-    } = data;
+    } = this.createGrassBladeGeometryData();
 
     const bladeVertexCount = bladePositions.length / 3;
     const bladeIndexCount = bladeIndices?.length || 0;
-    const bladesPerSide =
-      lod == "high"
-        ? this.NUM_BLADES_PER_SIDE_HIGH
-        : this.NUM_BLADES_PER_SIDE_LOW_LOD;
-    const totalBlades = Math.pow(bladesPerSide, 2);
+    const bladesPerSide = this.TILE_SIZE * 10;
+    const totalBlades = bladesPerSide * bladesPerSide;
 
-    const tileSize = this.GRASS_AREA_SIDE_SIZE;
+    const tileSize = this.TILE_SIZE;
     const halfTileSize = tileSize / 2;
     const spacing = tileSize / bladesPerSide;
 
     // Buffers for the entire tile
     const positions = new Float32Array(bladeVertexCount * totalBlades * 3);
     const uvs = new Float32Array(bladeVertexCount * totalBlades * 2);
-    let indices = null;
-    if (lod === "high") {
-      indices =
-        bladeVertexCount * totalBlades < 65_536 // 2^16
-          ? new Uint16Array(bladeIndexCount * totalBlades)
-          : new Uint32Array(bladeIndexCount * totalBlades);
-    }
+    const indices =
+      bladeVertexCount * totalBlades < 65_536 // 2^16
+        ? new Uint16Array(bladeIndexCount * totalBlades)
+        : new Uint32Array(bladeIndexCount * totalBlades);
 
     let vertexOffset = 0; // position data index
     let uvOffset = 0; // UV data index
@@ -365,7 +177,7 @@ export default class Grass {
 
         // Random rotation for variation
         const rotationAngle = MathUtils.randFloat(-1, 1);
-        const bendAngle = MathUtils.randFloat(-0.5, 0.5);
+        // const bendAngle = MathUtils.randFloat(-0.5, 0.5);
         const heightScale = MathUtils.randFloat(0.5, 1.25);
         const additionalOffsetZ = MathUtils.randFloat(
           -spacing / 3,
@@ -383,8 +195,8 @@ export default class Grass {
           const z = bladePositions[i3 + 2];
           const vertex = [x, y, z];
           const scaledVertex = this.vertexScaleY(vertex, heightScale);
-          const bentVertex = this.vertexBendX(scaledVertex, bendAngle);
-          const rotatedVertex = this.vertexRotateY(bentVertex, rotationAngle);
+          // const bentVertex = this.vertexBendX(scaledVertex, bendAngle);
+          const rotatedVertex = this.vertexRotateY(scaledVertex, rotationAngle);
           const translatedVertex = this.vertexTranslateXZ(
             rotatedVertex,
             offsetX + additionalOffsetX,
@@ -404,55 +216,62 @@ export default class Grass {
         uvOffset += bladeVertexCount * 2;
 
         // Index
-        if (indices && bladeIndices) {
-          const vertexIndexOffset = vertexOffset - bladeVertexCount;
-          for (let i = 0; i < bladeIndexCount; i++) {
-            indices[indexOffset + i] = bladeIndices[i] + vertexIndexOffset;
-          }
-          indexOffset += bladeIndexCount;
+        const vertexIndexOffset = vertexOffset - bladeVertexCount;
+        for (let i = 0; i < bladeIndexCount; i++) {
+          indices[indexOffset + i] = bladeIndices[i] + vertexIndexOffset;
         }
+        indexOffset += bladeIndexCount;
       }
     }
 
     const tileGeometry = new BufferGeometry();
     tileGeometry.setAttribute("position", new BufferAttribute(positions, 3));
     tileGeometry.setAttribute("uv", new BufferAttribute(uvs, 2));
-    if (indices) tileGeometry.setIndex(new BufferAttribute(indices, 1));
+    if (bladeIndices.length)
+      tileGeometry.setIndex(new BufferAttribute(indices, 1));
 
     tileGeometry.computeVertexNormals();
 
     return tileGeometry;
   }
 
-  // ########################################
-  //            Per-Frame logic
-  // ########################################
-
   public update(state: State) {
-    const { clock, camera } = state;
-    this.updateChunkLOD(camera);
+    const { clock, player } = state;
     this.uTime.value = clock.getElapsedTime();
+    this.updateGrassPosition(player.getPosition());
   }
 
-  private updateChunkLOD(camera: State["camera"]) {
-    const cameraPos = camera.position;
-    const lodThresholdSq = this.LOD_DIST_HIGH * this.LOD_DIST_HIGH;
+  // Instead of a fixed TILES_PER_SIDE_COUNT, move tiles dynamically
+  private updateGrassPosition(playerPosition: Vector3) {
+    const tileSize = this.TILE_SIZE;
+    const halfWorldSize = 256 / 2;
 
-    for (const chunk of this.chunks) {
-      // 3D distance from chunk center
-      const dx = cameraPos.x - chunk.center.x;
-      const dy = cameraPos.y; // floor is y=0
-      const dz = cameraPos.z - chunk.center.z;
-      const distanceSq = dx * dx + dy * dy + dz * dz;
+    // Center grass around player
+    const centerX = Math.round(playerPosition.x / tileSize) * tileSize;
+    const centerZ = Math.round(playerPosition.z / tileSize) * tileSize;
 
-      // Hard cutoff-based LOD logic
-      if (distanceSq < lodThresholdSq) {
-        chunk.highMesh.visible = true;
-        chunk.lowMesh.visible = false;
-      } else {
-        chunk.highMesh.visible = false;
-        chunk.lowMesh.visible = true;
+    let instanceIdx = 0;
+    for (let tileX = -1; tileX <= 1; tileX++) {
+      for (let tileZ = -1; tileZ <= 1; tileZ++) {
+        const offsetX = centerX + tileX * tileSize;
+        const offsetZ = centerZ + tileZ * tileSize;
+
+        if (
+          offsetX < -halfWorldSize ||
+          offsetX > halfWorldSize ||
+          offsetZ < -halfWorldSize ||
+          offsetZ > halfWorldSize
+        ) {
+          continue; // Skip out-of-bounds tiles
+        }
+
+        this.dummyObj.position.set(offsetX, 0, offsetZ);
+        this.dummyObj.updateMatrix();
+        this.instances.setMatrixAt(instanceIdx, this.dummyObj.matrix);
+        instanceIdx++;
       }
     }
+
+    this.instances.instanceMatrix.needsUpdate = true;
   }
 }
