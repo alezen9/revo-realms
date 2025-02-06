@@ -34,7 +34,6 @@ export default class LightingSystem {
 
   private target = new Object3D();
 
-  // @ts-ignore
   constructor(scene: Scene) {
     this.emissive = new EmissiveIllumination();
 
@@ -125,8 +124,8 @@ export default class LightingSystem {
     const { player } = state;
     if (!player) return;
     this.directionalLight.position
-      .copy(player.getPosition())
+      .copy(player.position)
       .add(this.LIGHT_POSITION_OFFSET);
-    this.target.position.copy(player.getPosition());
+    this.target.position.copy(player.position);
   }
 }
