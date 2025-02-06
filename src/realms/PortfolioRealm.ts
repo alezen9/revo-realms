@@ -1,4 +1,11 @@
-import { Vector3, Mesh, CubeTexture } from "three";
+import {
+  Vector3,
+  Mesh,
+  CubeTexture,
+  MeshBasicMaterial,
+  MeshStandardMaterial,
+  MeshLambertMaterial,
+} from "three";
 import {
   ColliderDesc,
   HeightFieldFlags,
@@ -7,15 +14,12 @@ import {
   World,
 } from "@dimforge/rapier3d-compat";
 import { State } from "../Game";
-import { MeshStandardMaterial } from "three/webgpu";
 import worldModelUrl from "/models/world.glb?url";
 import floorTextureUrl from "/models/floor.webp?url";
 import { GLTF } from "three/examples/jsm/Addons.js";
 import { uniform } from "three/tsl";
 import { assetManager } from "../systems/AssetManager";
 import WaterMaterial from "../materials/WaterMaterial";
-import Grass from "../entities/Grass";
-import NewGrass from "../entities/NewGrass";
 
 export default class PortfolioRealm {
   private readonly HALF_FLOOR_THICKNESS = 0.3;
@@ -51,7 +55,7 @@ export default class PortfolioRealm {
     floorTexture.flipY = false;
     const floor = worldModel.scene.getObjectByName("floor") as Mesh;
     floor.geometry.computeVertexNormals();
-    floor.material = new MeshStandardMaterial({ map: floorTexture });
+    floor.material = new MeshLambertMaterial({ map: floorTexture });
     floor.receiveShadow = true;
     scene.add(floor);
 

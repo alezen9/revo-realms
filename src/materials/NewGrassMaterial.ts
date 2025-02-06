@@ -1,23 +1,5 @@
-import {
-  Color,
-  DoubleSide,
-  MeshBasicNodeMaterial,
-  Texture,
-} from "three/webgpu";
-import {
-  Fn,
-  mix,
-  positionGeometry,
-  positionWorld,
-  pow,
-  smoothstep,
-  texture,
-  uniform,
-  uv,
-  vec2,
-} from "three/tsl";
-import { assetManager } from "../systems/AssetManager";
-import alphaTextureUrl from "/textures/test.jpg?url";
+import { Color, DoubleSide, MeshLambertNodeMaterial } from "three/webgpu";
+import { Fn, mix, pow, smoothstep, uniform, uv } from "three/tsl";
 
 type UniformType<T> = ReturnType<typeof uniform<T>>;
 
@@ -37,16 +19,38 @@ const defaultUniforms: Required<GrassUniforms> = {
   uTipColor: uniform(new Color("#f7ff3d")),
 };
 
-export default class GrassMaterial extends MeshBasicNodeMaterial {
+export default class GrassMaterial extends MeshLambertNodeMaterial {
   private _uniforms: Required<GrassUniforms>;
-  private alphaTexture: Texture;
 
   constructor(uniforms: GrassUniforms) {
     super();
-    this.alphaTexture = assetManager.textureLoader.load(alphaTextureUrl);
     this._uniforms = { ...defaultUniforms, ...uniforms };
     this.createGrassMaterial();
   }
+
+  // private computeWindAnimation = Fn(() => {
+  //   const bladeOrigin = vec2(positionWorld.x, positionWorld.z);
+
+  //   const timer = this.uTime.mul(0.01);
+
+  //   const bladeUV = mod(bladeOrigin.mul(0.05).add(timer), 1);
+  //   const noiseSample = texture(
+  //     assetManager.perlinNoiseTexture,
+  //     bladeUV.mul(2),
+  //     2,
+  //   ).r;
+
+  //   const windAngle = noiseSample.mul(Math.PI * 0.1);
+  //   const windDir = normalize(vec2(cos(windAngle), sin(windAngle)));
+
+  //   const y = positionLocal.y.div(float(0.75));
+  //   const heightFactor = y.mul(y);
+  //   const bendStrength = noiseSample.mul(float(0.3)).mul(heightFactor);
+
+  //   const bendOffset = vec3(windDir.x, 0.0, windDir.y).mul(bendStrength);
+
+  //   return positionWorld.add(bendOffset);
+  // });
 
   private computeDiffuseColor = Fn(() => {
     const factor = pow(uv().y, 1.5);
@@ -58,23 +62,11 @@ export default class GrassMaterial extends MeshBasicNodeMaterial {
     return blendedColor;
   });
 
-  // private computeOpacity = Fn(() => {
-  //   const bladeOrigin = vec2(positionWorld.x, positionWorld.z);
-
-  //   const bladeUV = bladeOrigin.div(256);
-
-  //   const sample = texture(this.alphaTexture, bladeUV).r;
-
-  //   return sample;
-  // });
-
   private createGrassMaterial() {
     this.precision = "lowp";
     this.side = DoubleSide;
 
     this.aoNode = smoothstep(-0.75, 1.25, uv().y);
     this.colorNode = this.computeDiffuseColor();
-    // this.opacityNode = this.computeOpacity();
-    // this.alphaTest = 0.1;
   }
 }

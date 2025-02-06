@@ -1,4 +1,12 @@
-import { Mesh, IcosahedronGeometry, Vector3, Quaternion, Camera } from "three";
+import {
+  Mesh,
+  IcosahedronGeometry,
+  Vector3,
+  Quaternion,
+  Camera,
+  MeshPhongMaterial,
+  MeshStandardMaterial,
+} from "three";
 import {
   ColliderDesc,
   RigidBody,
@@ -48,7 +56,7 @@ export default class Player {
   private readonly MAX_UPWARD_VELOCITY = 6;
   private readonly LINEAR_DAMPING = 0.2;
   private readonly ANGULAR_DAMPING = 0.5;
-  private readonly FORWARD_IMPULSE = 3; // base horizontal impulse
+  private readonly FORWARD_IMPULSE = 5; // base horizontal impulse
   private readonly TORQUE_STRENGTH = 1.5; // for rolling
 
   // Player State
@@ -60,7 +68,7 @@ export default class Player {
   // Constants for geometry/camera offset
   private readonly RADIUS = 0.5;
   private readonly PLAYER_INITIAL_POSITION = new Vector3(0, 2, 0);
-  private readonly CAMERA_OFFSET = new Vector3(0, 5, 10);
+  private readonly CAMERA_OFFSET = new Vector3(0, 10, 15);
   private readonly UP = new Vector3(0, 1, 0);
   private readonly DOWN = new Vector3(0, -1, 0);
 
@@ -130,7 +138,12 @@ export default class Player {
 
   private createCharacterMesh() {
     const geometry = new IcosahedronGeometry(this.RADIUS, 3);
-    const material = this.createMaterial();
+    const material = new MeshStandardMaterial({
+      color: "purple",
+      flatShading: true,
+      metalness: 1,
+      roughness: 0.5,
+    });
     const mesh = new Mesh(geometry, material);
     mesh.castShadow = true;
     mesh.position.copy(this.PLAYER_INITIAL_POSITION);
@@ -316,6 +329,9 @@ export default class Player {
     // Assign to camera
     camera.position.copy(this.smoothedCameraPosition);
     camera.lookAt(this.smoothedCameraTarget);
+    // For testing purpose, remove smoothing
+    // camera.position.copy(desiredCameraPosition);
+    // camera.lookAt(desiredTarget);
   }
 
   public getPosition() {
@@ -326,7 +342,7 @@ export default class Player {
     return this.mesh.position;
   }
 
-  public getYaw() {
+  get yaw() {
     return this.yawInRadians;
   }
 
@@ -351,34 +367,34 @@ export default class Player {
   //   return materialNode;
   // }
 
-  private createMaterial() {
-    const denimTexture = assetManager.textureLoader.load(denimTextureUrl);
-    const materialNode = new MeshBasicNodeMaterial();
-    const baseColor = texture(denimTexture, uv());
+  // private createMaterial() {
+  //   const denimTexture = assetManager.textureLoader.load(denimTextureUrl);
+  //   const materialNode = new MeshBasicNodeMaterial();
+  //   const baseColor = texture(denimTexture, uv());
 
-    // Base material color (can be a texture or color)
-    // const baseColor = color("purple"); // Replace with a texture if needed
+  //   // Base material color (can be a texture or color)
+  //   // const baseColor = color("purple"); // Replace with a texture if needed
 
-    // Water-related parameters
-    const waterLevel = float(-0.5); // Y-coordinate for the waterline
-    const underwaterTint = vec4(0.5, 0.75, 1, 0.05); // Whiteish tint for underwater
+  //   // Water-related parameters
+  //   const waterLevel = float(-0.5); // Y-coordinate for the waterline
+  //   const underwaterTint = vec4(0.5, 0.75, 1, 0.05); // Whiteish tint for underwater
 
-    // Factor for underwater blending
-    const underwaterFactor = float(1).sub(
-      smoothstep(waterLevel.sub(0.25), waterLevel, positionWorld.y),
-    );
+  //   // Factor for underwater blending
+  //   const underwaterFactor = float(1).sub(
+  //     smoothstep(waterLevel.sub(0.25), waterLevel, positionWorld.y),
+  //   );
 
-    // Apply the blueish tint on top of the base color
-    const tintedUnderwaterColor = mix(baseColor, underwaterTint, 0.5) // Add the underwater tint to the base color
-      .mul(1); // Darken the result slightly underwater
+  //   // Apply the blueish tint on top of the base color
+  //   const tintedUnderwaterColor = mix(baseColor, underwaterTint, 0.5) // Add the underwater tint to the base color
+  //     .mul(1); // Darken the result slightly underwater
 
-    // Blend the base color with the tinted underwater color
-    const finalColor = mix(baseColor, tintedUnderwaterColor, underwaterFactor);
+  //   // Blend the base color with the tinted underwater color
+  //   const finalColor = mix(baseColor, tintedUnderwaterColor, underwaterFactor);
 
-    // Apply lighting
-    const light = this.lighting.material_computeIllumination();
-    materialNode.colorNode = finalColor.mul(light);
+  //   // Apply lighting
+  //   const light = this.lighting.material_computeIllumination();
+  //   materialNode.colorNode = finalColor.mul(light);
 
-    return materialNode;
-  }
+  //   return materialNode;
+  // }
 }
