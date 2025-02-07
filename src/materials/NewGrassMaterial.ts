@@ -1,4 +1,4 @@
-import { Color, DoubleSide, MeshLambertNodeMaterial } from "three/webgpu";
+import { Color, DoubleSide, MeshBasicNodeMaterial } from "three/webgpu";
 import { Fn, mix, pow, smoothstep, uniform, uv } from "three/tsl";
 
 type UniformType<T> = ReturnType<typeof uniform<T>>;
@@ -19,7 +19,7 @@ const defaultUniforms: Required<GrassUniforms> = {
   uTipColor: uniform(new Color("#f7ff3d")),
 };
 
-export default class GrassMaterial extends MeshLambertNodeMaterial {
+export default class GrassMaterial extends MeshBasicNodeMaterial {
   private _uniforms: Required<GrassUniforms>;
 
   constructor(uniforms: GrassUniforms) {
