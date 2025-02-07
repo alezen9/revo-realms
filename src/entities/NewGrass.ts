@@ -37,10 +37,10 @@ import alphaTextureUrl from "/textures/test.webp?url";
 const getConfig = () => {
   const BLADE_WIDTH = 0.1;
   const BLADE_HEIGHT = 1.25;
-  const TILE_WIDTH = 50;
-  const TILE_HEIGHT = 50;
-  const BLADES_PER_WIDTH = 200;
-  const BLADES_PER_HEIGHT = 200;
+  const TILE_WIDTH = 100;
+  const TILE_HEIGHT = 100;
+  const BLADES_PER_WIDTH = 500;
+  const BLADES_PER_HEIGHT = 500;
   return {
     BLADE_WIDTH,
     BLADE_HEIGHT,
@@ -328,7 +328,8 @@ class GrassMaterial extends MeshBasicNodeMaterial {
     const rotated = rotate(scaled, vec3(0, yawAngle, 0));
 
     // Final world position
-    return rotated.add(offset);
+    const worldPosition = rotated.add(offset);
+    return worldPosition;
   });
 
   private computeOpacity = Fn(() => {
