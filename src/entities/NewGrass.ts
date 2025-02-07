@@ -4,6 +4,7 @@ import {
   InstancedMesh,
   Texture,
   Vector2,
+  Vector3,
 } from "three";
 import { State } from "../Game";
 import NewGrassMaterial from "../materials/NewGrassMaterial";
@@ -57,9 +58,9 @@ export default class NewGrass {
 
   private uTime = uniform(0);
   private uDelta = uniform(new Vector2(0));
-  private uPlayerYPosition = uniform(0);
+  private uPlayerPosition = uniform(new Vector3(0, 0, 0)); // y used for grass trail, xz used for opacity sampling
 
-  private offsetBuffer = instancedArray(this.COUNT, "vec2"); // x, z (y)
+  private offsetBuffer = instancedArray(this.COUNT, "vec3"); // x, z (y), opacity
   private additionalBuffer = instancedArray(this.COUNT, "vec4"); // yaw angle, current scale, original scale, bending angle
   private tile: InstancedMesh<BufferGeometry, NewGrassMaterial>;
   private alphaTexture: Texture;
@@ -104,11 +105,8 @@ export default class NewGrass {
   });
 
   private computeOpacity = Fn(() => {
-    const bladeOrigin = vec2(positionWorld.x, positionWorld.z);
-    const mapSize = 256;
-    const bladeUV = bladeOrigin.add(float(mapSize * 0.5)).div(float(mapSize));
-    const sample = texture(this.alphaTexture, bladeUV).r;
-    return sample;
+    const offsetData = this.offsetBuffer.element(instanceIndex);
+    return offsetData.z;
   });
 
   private createTile() {
@@ -192,6 +190,15 @@ export default class NewGrass {
     offset.x = offsetX;
     offset.y = offsetZ;
 
+    // Compute alpha once per blade
+    const mapSize = float(256);
+    const worldPos = vec2(offsetX, offsetZ)
+      .add(this.uPlayerPosition.xz)
+      .add(mapSize.mul(0.5))
+      .div(mapSize);
+    const alphaValue = texture(this.alphaTexture, worldPos).r; // Sample once per instance
+    offset.z = alphaValue;
+
     // Additional info
     const additional = this.additionalBuffer.element(instanceIndex);
 
@@ -233,6 +240,15 @@ export default class NewGrass {
     offset.x = newOffsetX;
     offset.y = newOffsetZ;
 
+    // Update alpha
+    const mapSize = float(256);
+    const worldPos = vec2(offset.x, offset.y)
+      .add(this.uPlayerPosition.xz)
+      .add(mapSize.mul(0.5))
+      .div(mapSize);
+    const alphaValue = texture(this.alphaTexture, worldPos).r;
+    offset.z = alphaValue;
+
     // Additional info
     const additional = this.additionalBuffer.element(instanceIndex);
     // Trail
@@ -242,7 +258,7 @@ export default class NewGrass {
     const distSq = diff.dot(diff);
 
     // Check if the player is on the ground (arbitrary threshold for jumping)
-    const isPlayerGrounded = step(0.1, float(1).sub(this.uPlayerYPosition)); // 1 if grounded, 0 if airborne
+    const isPlayerGrounded = step(0.1, float(1).sub(this.uPlayerPosition.y)); // 1 if grounded, 0 if airborne
     const isBladeSteppedOn = step(distSq, this.SQUARED_TRAIL_RAIUS).mul(
       isPlayerGrounded,
     ); // 1 if stepped on, 0 if not
@@ -264,7 +280,7 @@ export default class NewGrass {
 
     this.uTime.value = clock.getElapsedTime();
     this.uDelta.value.set(dx, dz);
-    this.uPlayerYPosition.value = player.position.y;
+    this.uPlayerPosition.value.copy(player.position);
 
     this.tile.position.copy(player.position).setY(0);
 
