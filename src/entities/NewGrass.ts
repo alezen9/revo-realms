@@ -29,7 +29,7 @@ import { assetManager } from "../systems/AssetManager";
 import alphaTextureUrl from "/textures/test.webp?url";
 
 export default class NewGrass {
-  private readonly BLADE_WIDTH = 0.05;
+  private readonly BLADE_WIDTH = 0.1;
   private readonly BLADE_HEIGHT = 1.25;
 
   private readonly TILE_WIDTH = 50;
@@ -37,8 +37,8 @@ export default class NewGrass {
   private readonly HALF_TILE_WIDTH = this.TILE_WIDTH / 2;
   private readonly HALF_TILE_HEIGHT = this.TILE_HEIGHT / 2;
 
-  private readonly BLADES_PER_WIDTH = 300; // Density along width
-  private readonly BLADES_PER_HEIGHT = 300; // Density along height
+  private readonly BLADES_PER_WIDTH = 200; // Density along width
+  private readonly BLADES_PER_HEIGHT = 200; // Density along height
 
   private readonly MIN_SCALE = 0.5;
   private readonly MAX_SCALE = 1.25;
@@ -48,8 +48,8 @@ export default class NewGrass {
 
   private readonly COUNT = this.BLADES_PER_WIDTH * this.BLADES_PER_HEIGHT;
 
-  private readonly TRAIL_GROWTH_RATE = 0.005;
-  private readonly TRAIL_MIN_SCALE = 0.05;
+  private readonly TRAIL_GROWTH_RATE = 0.004;
+  private readonly TRAIL_MIN_SCALE = 0.1;
   private readonly TRAIL_RADIUS = 0.65; // Radius of effect
   private readonly SQUARED_TRAIL_RAIUS = this.TRAIL_RADIUS * this.TRAIL_RADIUS;
 
