@@ -85,7 +85,7 @@ export default class Game {
     return {
       width,
       height,
-      dpr: Math.min(window.devicePixelRatio, 2),
+      dpr: Math.min(window.devicePixelRatio, 1.5),
       aspect: width / height,
     };
   }
@@ -143,8 +143,6 @@ export default class Game {
       // const renderTime =
       //   await this.rendererManager.renderer.resolveTimestampsAsync("render");
       // console.log("GPU Render Time ms:", renderTime);
-
-      requestAnimationFrame(loop);
     };
 
     // On resize
@@ -153,6 +151,6 @@ export default class Game {
     });
     resizeObserver.observe(document.body);
 
-    loop();
+    this.rendererManager.renderer.setAnimationLoop(loop);
   }
 }
