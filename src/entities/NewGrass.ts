@@ -1,14 +1,11 @@
 import {
   Box3,
-  Box3Helper,
   BufferAttribute,
   BufferGeometry,
   Color,
-  ColorRepresentation,
   DoubleSide,
   Group,
   InstancedMesh,
-  MathUtils,
   Sphere,
   Texture,
   Vector2,
@@ -32,12 +29,10 @@ import {
   vec3,
   mod,
   vec4,
-  positionWorld,
   vec2,
   texture,
   min,
   max,
-  color,
 } from "three/tsl";
 import { MeshBasicNodeMaterial } from "three/webgpu";
 import { assetManager } from "../systems/AssetManager";
@@ -46,8 +41,8 @@ import alphaTextureUrl from "/textures/test.webp?url";
 const getConfig = () => {
   const BLADE_WIDTH = 0.075;
   const BLADE_HEIGHT = 1.25;
-  const TILE_SIZE = 50;
-  const BLADES_PER_SIDE = 200;
+  const TILE_SIZE = 25;
+  const BLADES_PER_SIDE = 100;
 
   return {
     BLADE_WIDTH,
@@ -71,8 +66,7 @@ const getConfig = () => {
 const config = getConfig();
 
 const getGridConfig = () => {
-  // const GRID_SIZE = 13; // STRICTLY odd numbers so there is a tile in the middle
-  const GRID_SIZE = 3; // STRICTLY odd numbers so there is a tile in the middle
+  const GRID_SIZE = 7; // STRICTLY odd numbers so there is a tile in the middle
   return {
     GRID_SIZE,
     GRID_HALF_SIZE: GRID_SIZE / 2,
@@ -321,40 +315,6 @@ class GrassMaterial extends MeshBasicNodeMaterial {
 
     tileData.x = newOffsetX;
     tileData.y = newOffsetZ;
-
-    // // Update alpha
-    // const mapSize = float(256);
-    // const worldPos = vec2(data1.x, data1.y)
-    //   .add(this._uniforms.uPlayerPosition.xz)
-    //   .add(mapSize.mul(0.5))
-    //   .div(mapSize);
-    // const alphaValue = texture(this._alphaTexture, worldPos).r;
-    // data1.z = alphaValue;
-
-    // // Trail
-    // // Compute distance to player
-    // const playerPos = vec2(this._uniforms.uDelta.x, this._uniforms.uDelta.y);
-    // const diff = vec2(data1.x, data1.y).sub(playerPos);
-    // const distSq = diff.dot(diff);
-
-    // // Check if the player is on the ground (arbitrary threshold for jumping)
-    // const isPlayerGrounded = step(
-    //   0.1,
-    //   float(1).sub(this._uniforms.uPlayerPosition.y),
-    // ); // 1 if grounded, 0 if airborne
-    // const isBladeSteppedOn = step(
-    //   distSq,
-    //   this._uniforms.uTrailRaiusSquared,
-    // ).mul(isPlayerGrounded); // 1 if stepped on, 0 if not
-    // const growScale = data2.y.add(this._uniforms.uTrailGrowthRate);
-
-    // // Compute new scale
-    // const growScaleFactor = float(1).sub(isBladeSteppedOn);
-    // const targetScale = this._uniforms.uTrailMinScale
-    //   .mul(isBladeSteppedOn)
-    //   .add(growScale.mul(growScaleFactor));
-
-    // data2.y = min(targetScale, data2.z);
   })().compute(config.COUNT);
 
   private computeInitGrid = Fn(() => {
@@ -368,49 +328,7 @@ class GrassMaterial extends MeshBasicNodeMaterial {
 
     gridData.x = randomBladeBend;
     gridData.y = randomBladeBend;
-
-    // Alpha
-    // const mapSize = float(256);
-    // const worldPos = vec2(data1.x, data1.y)
-    //   .add(this._uniforms.uPlayerPosition.xz)
-    //   .add(mapSize.mul(0.5))
-    //   .div(mapSize);
-    // const alphaValue = texture(this._alphaTexture, worldPos).r;
-    // gridData.z = alphaValue;
   })().compute(gridConfig.COUNT);
-
-  // private computeUpdateGrid = Fn(() => {
-  //   const gridData = this._gridBuffer.element(instanceIndex);
-
-  //   // Compute row and col of the blade in the full grid
-  //   const row = floor(
-  //     float(instanceIndex).div(gridConfig.BLADES_PER_GRID_SIDE),
-  //   );
-  //   const col = float(instanceIndex).mod(gridConfig.BLADES_PER_GRID_SIDE);
-
-  //   // Compute world position of this blade
-  //   const worldPosX = col
-  //     .mul(config.SPACING)
-  //     .sub(float(gridConfig.GRID_HALF_SIZE).mul(config.TILE_SIZE));
-  //   const worldPosZ = row
-  //     .mul(config.SPACING)
-  //     .sub(float(gridConfig.GRID_HALF_SIZE).mul(config.TILE_SIZE));
-
-  //   // Offset by player position to align with the grid world position
-  //   const worldPos = vec2(worldPosX, worldPosZ).add(
-  //     this._uniforms.uPlayerPosition.xz,
-  //   );
-
-  //   // Normalize for texture sampling (from [-mapSize/2, +mapSize/2] to [0,1])
-  //   const mapSize = float(256);
-  //   const uvPos = worldPos.add(mapSize.mul(0.5)).div(mapSize);
-
-  //   // Sample the alpha texture
-  //   const alphaValue = texture(this._alphaTexture, uvPos).r;
-
-  //   // Store the alpha value in the grid buffer
-  //   gridData.z = alphaValue;
-  // })().compute(gridConfig.COUNT);
 
   private computeUpdateGrid = Fn(() => {
     const gridData = this._gridBuffer.element(instanceIndex);
@@ -433,7 +351,7 @@ class GrassMaterial extends MeshBasicNodeMaterial {
         .sub(
           float(gridConfig.BLADES_PER_GRID_SIDE).mul(config.SPACING).mul(0.5),
         ),
-    );
+    ).add(this._uniforms.uPlayerPosition.xz);
 
     // Normalize world position to texture UV space (assuming 256x256 texture)
     const uvPos = worldPos.div(float(256)).add(float(0.5));
@@ -515,33 +433,6 @@ class GrassMaterial extends MeshBasicNodeMaterial {
     return gridIndex;
   });
 
-  // private computeGridInstanceIndex = Fn(() => {
-  //   // tileRow/Col from uTileIndex
-  //   const tileRow = floor(
-  //     this._uniforms.uTileIndex.div(float(gridConfig.GRID_SIZE)),
-  //   );
-  //   const tileCol = float(this._uniforms.uTileIndex).mod(
-  //     float(gridConfig.GRID_SIZE),
-  //   );
-
-  //   // bladeRow/Col from instanceIndex
-  //   const bladeRow = floor(
-  //     float(instanceIndex).div(float(config.BLADES_PER_SIDE)),
-  //   );
-  //   const bladeCol = float(instanceIndex).mod(float(config.BLADES_PER_SIDE));
-
-  //   // Combine
-  //   const globalRow = tileRow.mul(float(config.BLADES_PER_SIDE)).add(bladeRow);
-  //   const globalCol = tileCol.mul(float(config.BLADES_PER_SIDE)).add(bladeCol);
-
-  //   // Final
-  //   const gridIndex = globalRow
-  //     .mul(float(gridConfig.BLADES_PER_GRID_SIDE))
-  //     .add(globalCol);
-
-  //   return gridIndex;
-  // });
-
   private createGrassMaterial() {
     this.precision = "lowp";
     this.side = DoubleSide;
@@ -552,7 +443,7 @@ class GrassMaterial extends MeshBasicNodeMaterial {
     const gridData = this._gridBuffer.element(gridInstanceIndex);
 
     this.positionNode = this.computePosition(tileData, gridData);
-    // this.opacityNode = gridData.z;
+    this.opacityNode = gridData.z;
     this.alphaTest = 0.1;
     this.aoNode = smoothstep(-0.75, 1.25, uv().y);
     this.colorNode = this.computeDiffuseColor();
