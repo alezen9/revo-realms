@@ -11,8 +11,7 @@ export default class MonitoringManager {
       samplesGraph: 10,
       horizontal: false,
       precision: 2,
-      minimal: true,
-      mode: 0,
+      mode: 2,
     });
     document.body.appendChild(stats.dom);
     this.stats = stats;

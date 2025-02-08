@@ -4,7 +4,6 @@ import {
   Vector3,
   Quaternion,
   Camera,
-  MeshPhongMaterial,
   MeshStandardMaterial,
 } from "three";
 import {
@@ -16,24 +15,8 @@ import {
 } from "@dimforge/rapier3d-compat";
 import InputManager from "../systems/InputManager";
 import { type State } from "../Game";
-import {
-  float,
-  mix,
-  positionWorld,
-  smoothstep,
-  texture,
-  uniform,
-  uv,
-  vec4,
-} from "three/tsl";
-import {
-  BoxGeometry,
-  MeshBasicNodeMaterial,
-  MeshLambertMaterial,
-} from "three/webgpu";
+import { uniform } from "three/tsl";
 import LightingSystem from "../systems/LightingSystem";
-import { assetManager } from "../systems/AssetManager";
-import denimTextureUrl from "/denim.jpg?url";
 
 export default class Player {
   private mesh: Mesh;
@@ -68,7 +51,7 @@ export default class Player {
   // Constants for geometry/camera offset
   private readonly RADIUS = 0.5;
   private readonly PLAYER_INITIAL_POSITION = new Vector3(0, 2, 0);
-  private readonly CAMERA_OFFSET = new Vector3(0, 11, 15);
+  private readonly CAMERA_OFFSET = new Vector3(0, 12, 17);
   private readonly UP = new Vector3(0, 1, 0);
   private readonly DOWN = new Vector3(0, -1, 0);
 
