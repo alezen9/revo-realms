@@ -1,11 +1,4 @@
-import {
-  Vector3,
-  Mesh,
-  CubeTexture,
-  MeshBasicMaterial,
-  MeshStandardMaterial,
-  MeshLambertMaterial,
-} from "three";
+import { Vector3, Mesh, CubeTexture, MeshLambertMaterial } from "three";
 import {
   ColliderDesc,
   HeightFieldFlags,

@@ -1,9 +1,15 @@
 import {
+  Box3,
+  Box3Helper,
   BufferAttribute,
   BufferGeometry,
   Color,
+  ColorRepresentation,
   DoubleSide,
+  Group,
   InstancedMesh,
+  MathUtils,
+  Sphere,
   Texture,
   Vector2,
   Vector3,
@@ -25,54 +31,102 @@ import {
   rotate,
   vec3,
   mod,
-  texture,
+  vec4,
+  positionWorld,
   vec2,
+  texture,
   min,
-  step,
+  max,
+  color,
 } from "three/tsl";
 import { MeshBasicNodeMaterial } from "three/webgpu";
 import { assetManager } from "../systems/AssetManager";
 import alphaTextureUrl from "/textures/test.webp?url";
 
 const getConfig = () => {
-  const BLADE_WIDTH = 0.1;
+  const BLADE_WIDTH = 0.075;
   const BLADE_HEIGHT = 1.25;
-  const TILE_WIDTH = 100;
-  const TILE_HEIGHT = 100;
-  const BLADES_PER_WIDTH = 500;
-  const BLADES_PER_HEIGHT = 500;
+  const TILE_SIZE = 50;
+  const BLADES_PER_SIDE = 200;
+
   return {
     BLADE_WIDTH,
     BLADE_HEIGHT,
-    TILE_WIDTH,
-    TILE_HEIGHT,
-    TILE_HALF_WIDTH: TILE_WIDTH / 2,
-    TILE_HALF_HEIGHT: TILE_HEIGHT / 2,
-    BLADES_PER_WIDTH,
-    BLADES_PER_HEIGHT,
-    COUNT: BLADES_PER_WIDTH * BLADES_PER_HEIGHT,
-    SPACING_WIDTH: TILE_WIDTH / BLADES_PER_WIDTH,
-    SPACING_HEIGHT: TILE_HEIGHT / BLADES_PER_HEIGHT,
+    TILE_SIZE,
+    TILE_HALF_SIZE: TILE_SIZE / 2,
+    BLADES_PER_SIDE,
+    COUNT: BLADES_PER_SIDE * BLADES_PER_SIDE,
+    SPACING: TILE_SIZE / BLADES_PER_SIDE,
+    boundingBox: new Box3(
+      new Vector3(-TILE_SIZE / 2, 0, -TILE_SIZE / 2),
+      new Vector3(TILE_SIZE / 2, BLADE_HEIGHT * 2, TILE_SIZE / 2),
+    ),
+    boundingSphere: new Sphere(
+      new Vector3(0, 0, 0),
+      TILE_SIZE * Math.sqrt(2), // diagonal
+    ),
   };
 };
 
 const config = getConfig();
 
-export default class NewGrass {
+const getGridConfig = () => {
+  // const GRID_SIZE = 13; // STRICTLY odd numbers so there is a tile in the middle
+  const GRID_SIZE = 3; // STRICTLY odd numbers so there is a tile in the middle
+  return {
+    GRID_SIZE,
+    GRID_HALF_SIZE: GRID_SIZE / 2,
+    BLADES_PER_GRID_SIDE: GRID_SIZE * config.BLADES_PER_SIDE,
+    COUNT: GRID_SIZE * GRID_SIZE * config.COUNT,
+    SPACING: config.SPACING,
+  };
+};
+
+const gridConfig = getGridConfig();
+
+export default class Grass {
   private uDelta = uniform(new Vector2(0));
-  private tile: InstancedMesh<BufferGeometry, GrassMaterial>;
+  private geometry: BufferGeometry;
   private material: GrassMaterial;
+  private grassField: Group;
 
   constructor(scene: State["scene"]) {
+    this.geometry = this.createBladeGeometry();
     this.material = new GrassMaterial({ uDelta: this.uDelta });
-    this.tile = this.createTile();
-    scene.add(this.tile);
+
+    this.grassField = this.createGrassGrid();
+    scene.add(this.grassField);
+  }
+
+  private createGrassGrid() {
+    const grid = new Group();
+    const offsetXZ =
+      gridConfig.GRID_HALF_SIZE * config.TILE_SIZE - config.TILE_HALF_SIZE;
+
+    let i = 0;
+    for (let rowIdx = 0; rowIdx < gridConfig.GRID_SIZE; rowIdx++) {
+      for (let colIdx = 0; colIdx < gridConfig.GRID_SIZE; colIdx++) {
+        const tile = this.createTile();
+        const x = config.TILE_SIZE * colIdx - offsetXZ;
+        const z = config.TILE_SIZE * rowIdx - offsetXZ;
+        tile.onBeforeRender = (_, __, ___, ____, material: GrassMaterial) => {
+          material.setTileOffsetAndIndex(x, z, i);
+        };
+        grid.add(tile);
+        i++;
+      }
+    }
+    return grid;
   }
 
   private createTile() {
-    const geometry = this.createBladeGeometry();
-    const instances = new InstancedMesh(geometry, this.material, config.COUNT);
-    instances.frustumCulled = false;
+    const instances = new InstancedMesh(
+      this.geometry,
+      this.material,
+      config.COUNT,
+    );
+    instances.boundingBox = config.boundingBox;
+    instances.boundingSphere = config.boundingSphere;
     return instances;
   }
 
@@ -126,12 +180,14 @@ export default class NewGrass {
 
   async update(state: State) {
     const { player } = state;
-    const dx = player.position.x - this.tile.position.x;
-    const dz = player.position.z - this.tile.position.z;
+
+    const dx = player.position.x - this.grassField.position.x;
+    const dz = player.position.z - this.grassField.position.z;
 
     this.uDelta.value.set(dx, dz);
 
-    this.tile.position.copy(player.position).setY(0);
+    this.grassField.position.copy(player.position).setY(0);
+
     await this.material.update(state);
   }
 }
@@ -153,6 +209,10 @@ type GrassUniforms = {
   // color
   uBaseColor?: UniformType<Color>;
   uTipColor?: UniformType<Color>;
+
+  // per tile instance
+  uTileOffset?: UniformType<Vector2>;
+  uTileIndex?: UniformType<number>;
 };
 
 const defaultUniforms: Required<GrassUniforms> = {
@@ -166,73 +226,75 @@ const defaultUniforms: Required<GrassUniforms> = {
   uTrailRaius: uniform(0.65),
   uTrailRaiusSquared: uniform(0.65 * 0.65),
   uBladeMaxBendAngle: uniform(Math.PI * 0.15), // ~ 27deg
+
   // color
   uBaseColor: uniform(new Color("#4f8a4f")),
   uTipColor: uniform(new Color("#f7ff3d")),
+
+  // per tile instance
+  uTileOffset: uniform(new Vector2(0, 0)),
+  uTileIndex: uniform(0),
 };
 
 class GrassMaterial extends MeshBasicNodeMaterial {
   private _uniforms: Required<GrassUniforms>;
-  private _buffer1: ReturnType<typeof instancedArray>; // x, z (y), opacity
-  private _buffer2: ReturnType<typeof instancedArray>; // yaw angle, current scale, original scale, bending angle
+  private _tileBuffer: ReturnType<typeof instancedArray>; // x, z (y), yaw, scale
+  private _gridBuffer: ReturnType<typeof instancedArray>; // current bending angle, original bending angle, opacity
   private _alphaTexture: Texture;
 
-  constructor(uniforms: GrassUniforms) {
+  constructor(uniforms: Pick<GrassUniforms, "uDelta">) {
     super();
     this._uniforms = { ...defaultUniforms, ...uniforms };
 
-    this._buffer1 = instancedArray(config.COUNT, "vec3");
-    this._buffer1.setPBO(true);
-    this._buffer2 = instancedArray(config.COUNT, "vec4");
-    this._buffer2.setPBO(true);
+    this._tileBuffer = instancedArray(config.COUNT, "vec4");
+    this._tileBuffer.setPBO(true);
+    this._gridBuffer = instancedArray(gridConfig.COUNT, "vec3");
+    this._gridBuffer.setPBO(true);
+
     this._alphaTexture = assetManager.textureLoader.load(alphaTextureUrl);
     this._alphaTexture.flipY = false;
-    this.computeUpdate.onInit(({ renderer }) => {
-      renderer.computeAsync(this.computeInit);
+    this.computeUpdateTile.onInit(({ renderer }) => {
+      renderer.computeAsync(this.computeInitTile);
+    });
+    this.computeUpdateGrid.onInit(({ renderer }) => {
+      renderer.computeAsync(this.computeInitGrid);
     });
 
     this.createGrassMaterial();
   }
 
-  private computeInit = Fn(() => {
+  setTileOffsetAndIndex(x: number, z: number, idx: number) {
+    this._uniforms.uTileOffset.value.set(x, z);
+    this._uniforms.uTileIndex.value = idx;
+  }
+
+  private computeInitTile = Fn(() => {
     // Position
-    const offset = this._buffer1.element(instanceIndex);
-    const row = floor(float(instanceIndex).div(config.BLADES_PER_WIDTH));
-    const col = float(instanceIndex).mod(config.BLADES_PER_WIDTH);
+    const tileData = this._tileBuffer.element(instanceIndex);
+    const row = floor(float(instanceIndex).div(config.BLADES_PER_SIDE));
+    const col = float(instanceIndex).mod(config.BLADES_PER_SIDE);
 
     const randX = hash(instanceIndex);
     const randZ = hash(instanceIndex.add(1234));
 
     const offsetX = col
-      .mul(config.SPACING_WIDTH)
-      .sub(config.TILE_HALF_WIDTH)
-      .add(randX.mul(config.SPACING_WIDTH * 0.5)); // Randomness
+      .mul(config.SPACING)
+      .sub(config.TILE_HALF_SIZE)
+      .add(randX.mul(config.SPACING * 0.5)); // Randomness
 
     const offsetZ = row
-      .mul(config.SPACING_HEIGHT)
-      .sub(config.TILE_HEIGHT)
-      .add(randZ.mul(config.SPACING_HEIGHT * 0.5)); // Randomness
+      .mul(config.SPACING)
+      .sub(config.TILE_HALF_SIZE)
+      .add(randZ.mul(config.SPACING * 0.5)); // Randomness
 
-    offset.x = offsetX;
-    offset.y = offsetZ;
-
-    // Compute alpha once per blade
-    const mapSize = float(256);
-    const worldPos = vec2(offsetX, offsetZ)
-      .add(this._uniforms.uPlayerPosition.xz)
-      .add(mapSize.mul(0.5))
-      .div(mapSize);
-    const alphaValue = texture(this._alphaTexture, worldPos).r; // Sample once per instance
-    offset.z = alphaValue;
-
-    // Additional info
-    const additional = this._buffer2.element(instanceIndex);
+    tileData.x = offsetX;
+    tileData.y = offsetZ;
 
     // Yaw
     const randomBladeYaw = hash(instanceIndex.add(200))
       .mul(float(Math.PI * 2))
       .sub(float(Math.PI));
-    additional.x = randomBladeYaw;
+    tileData.z = randomBladeYaw;
 
     // Scale
     const scaleRange = this._uniforms.uBladeMaxScale.sub(
@@ -242,100 +304,173 @@ class GrassMaterial extends MeshBasicNodeMaterial {
       .mul(scaleRange)
       .add(this._uniforms.uBladeMinScale);
 
-    additional.y = randomScale; // current
-    additional.z = randomScale; // original
+    tileData.w = randomScale;
+  })().compute(config.COUNT);
+
+  private computeUpdateTile = Fn(() => {
+    // Position
+    const tileData = this._tileBuffer.element(instanceIndex);
+    const newOffsetX = mod(
+      tileData.x.sub(this._uniforms.uDelta.x).add(config.TILE_HALF_SIZE),
+      config.TILE_SIZE,
+    ).sub(config.TILE_HALF_SIZE);
+    const newOffsetZ = mod(
+      tileData.y.sub(this._uniforms.uDelta.y).add(config.TILE_HALF_SIZE),
+      config.TILE_SIZE,
+    ).sub(config.TILE_HALF_SIZE);
+
+    tileData.x = newOffsetX;
+    tileData.y = newOffsetZ;
+
+    // // Update alpha
+    // const mapSize = float(256);
+    // const worldPos = vec2(data1.x, data1.y)
+    //   .add(this._uniforms.uPlayerPosition.xz)
+    //   .add(mapSize.mul(0.5))
+    //   .div(mapSize);
+    // const alphaValue = texture(this._alphaTexture, worldPos).r;
+    // data1.z = alphaValue;
+
+    // // Trail
+    // // Compute distance to player
+    // const playerPos = vec2(this._uniforms.uDelta.x, this._uniforms.uDelta.y);
+    // const diff = vec2(data1.x, data1.y).sub(playerPos);
+    // const distSq = diff.dot(diff);
+
+    // // Check if the player is on the ground (arbitrary threshold for jumping)
+    // const isPlayerGrounded = step(
+    //   0.1,
+    //   float(1).sub(this._uniforms.uPlayerPosition.y),
+    // ); // 1 if grounded, 0 if airborne
+    // const isBladeSteppedOn = step(
+    //   distSq,
+    //   this._uniforms.uTrailRaiusSquared,
+    // ).mul(isPlayerGrounded); // 1 if stepped on, 0 if not
+    // const growScale = data2.y.add(this._uniforms.uTrailGrowthRate);
+
+    // // Compute new scale
+    // const growScaleFactor = float(1).sub(isBladeSteppedOn);
+    // const targetScale = this._uniforms.uTrailMinScale
+    //   .mul(isBladeSteppedOn)
+    //   .add(growScale.mul(growScaleFactor));
+
+    // data2.y = min(targetScale, data2.z);
+  })().compute(config.COUNT);
+
+  private computeInitGrid = Fn(() => {
+    const gridData = this._gridBuffer.element(instanceIndex);
 
     // Bending angle
+    const minOffset = this._uniforms.uBladeMaxBendAngle.mul(0.05); // Small offset to avoid zero
     const randomBladeBend = hash(instanceIndex.add(300))
-      .mul(this._uniforms.uBladeMaxBendAngle.mul(2))
-      .sub(this._uniforms.uBladeMaxBendAngle);
+      .mul(this._uniforms.uBladeMaxBendAngle.mul(1.9)) // Slightly reduced range
+      .sub(this._uniforms.uBladeMaxBendAngle.sub(minOffset)); // Shift away from 0
 
-    additional.w = randomBladeBend;
-  })().compute(config.COUNT);
+    gridData.x = randomBladeBend;
+    gridData.y = randomBladeBend;
 
-  private computeUpdate = Fn(() => {
-    // Position
-    const offset = this._buffer1.element(instanceIndex);
-    const newOffsetX = mod(
-      offset.x.sub(this._uniforms.uDelta.x).add(config.TILE_HALF_WIDTH),
-      config.TILE_WIDTH,
-    ).sub(config.TILE_HALF_WIDTH);
-    const newOffsetZ = mod(
-      offset.y.sub(this._uniforms.uDelta.y).add(config.TILE_HALF_HEIGHT),
-      config.TILE_HEIGHT,
-    ).sub(config.TILE_HALF_HEIGHT);
+    // Alpha
+    // const mapSize = float(256);
+    // const worldPos = vec2(data1.x, data1.y)
+    //   .add(this._uniforms.uPlayerPosition.xz)
+    //   .add(mapSize.mul(0.5))
+    //   .div(mapSize);
+    // const alphaValue = texture(this._alphaTexture, worldPos).r;
+    // gridData.z = alphaValue;
+  })().compute(gridConfig.COUNT);
 
-    offset.x = newOffsetX;
-    offset.y = newOffsetZ;
+  // private computeUpdateGrid = Fn(() => {
+  //   const gridData = this._gridBuffer.element(instanceIndex);
 
-    // Update alpha
-    const mapSize = float(256);
-    const worldPos = vec2(offset.x, offset.y)
-      .add(this._uniforms.uPlayerPosition.xz)
-      .add(mapSize.mul(0.5))
-      .div(mapSize);
-    const alphaValue = texture(this._alphaTexture, worldPos).r;
-    offset.z = alphaValue;
+  //   // Compute row and col of the blade in the full grid
+  //   const row = floor(
+  //     float(instanceIndex).div(gridConfig.BLADES_PER_GRID_SIDE),
+  //   );
+  //   const col = float(instanceIndex).mod(gridConfig.BLADES_PER_GRID_SIDE);
 
-    // Additional info
-    const additional = this._buffer2.element(instanceIndex);
-    // Trail
-    // Compute distance to player
-    const playerPos = vec2(this._uniforms.uDelta.x, this._uniforms.uDelta.y);
-    const diff = vec2(offset.x, offset.y).sub(playerPos);
-    const distSq = diff.dot(diff);
+  //   // Compute world position of this blade
+  //   const worldPosX = col
+  //     .mul(config.SPACING)
+  //     .sub(float(gridConfig.GRID_HALF_SIZE).mul(config.TILE_SIZE));
+  //   const worldPosZ = row
+  //     .mul(config.SPACING)
+  //     .sub(float(gridConfig.GRID_HALF_SIZE).mul(config.TILE_SIZE));
 
-    // Check if the player is on the ground (arbitrary threshold for jumping)
-    const isPlayerGrounded = step(
-      0.1,
-      float(1).sub(this._uniforms.uPlayerPosition.y),
-    ); // 1 if grounded, 0 if airborne
-    const isBladeSteppedOn = step(
-      distSq,
-      this._uniforms.uTrailRaiusSquared,
-    ).mul(isPlayerGrounded); // 1 if stepped on, 0 if not
-    const growScale = additional.y.add(this._uniforms.uTrailGrowthRate);
+  //   // Offset by player position to align with the grid world position
+  //   const worldPos = vec2(worldPosX, worldPosZ).add(
+  //     this._uniforms.uPlayerPosition.xz,
+  //   );
 
-    // Compute new scale
-    const growScaleFactor = float(1).sub(isBladeSteppedOn);
-    const targetScale = this._uniforms.uTrailMinScale
-      .mul(isBladeSteppedOn)
-      .add(growScale.mul(growScaleFactor));
+  //   // Normalize for texture sampling (from [-mapSize/2, +mapSize/2] to [0,1])
+  //   const mapSize = float(256);
+  //   const uvPos = worldPos.add(mapSize.mul(0.5)).div(mapSize);
 
-    additional.y = min(targetScale, additional.z);
-  })().compute(config.COUNT);
+  //   // Sample the alpha texture
+  //   const alphaValue = texture(this._alphaTexture, uvPos).r;
 
-  private computePosition = Fn(() => {
-    const offsetData = this._buffer1.element(instanceIndex);
-    const offset = vec3(offsetData.x, 0, offsetData.y);
+  //   // Store the alpha value in the grid buffer
+  //   gridData.z = alphaValue;
+  // })().compute(gridConfig.COUNT);
 
-    const additionalData = this._buffer2.element(instanceIndex);
-    const yawAngle = additionalData.x;
-    const scale = additionalData.y;
-    const bendingAngle = additionalData.w;
+  private computeUpdateGrid = Fn(() => {
+    const gridData = this._gridBuffer.element(instanceIndex);
 
-    // Compute bending strength based on vertex height
-    const bendFactor = positionLocal.y; // `y` in local space (0 at base, 1 at tip)
-    const bendAmount = bendingAngle.mul(bendFactor); // More bending at the top
+    // Compute row and col in full grid
+    const row = floor(
+      float(instanceIndex).div(gridConfig.BLADES_PER_GRID_SIDE),
+    );
+    const col = float(instanceIndex).mod(gridConfig.BLADES_PER_GRID_SIDE);
 
-    // Apply bending: Rotate around the X-axis to tilt forward/backward
-    const bentPosition = rotate(positionLocal, vec3(bendAmount, 0, 0));
+    // Compute world-space position of each blade in the grid
+    const worldPos = vec2(
+      col
+        .mul(config.SPACING)
+        .sub(
+          float(gridConfig.BLADES_PER_GRID_SIDE).mul(config.SPACING).mul(0.5),
+        ),
+      row
+        .mul(config.SPACING)
+        .sub(
+          float(gridConfig.BLADES_PER_GRID_SIDE).mul(config.SPACING).mul(0.5),
+        ),
+    );
 
-    // Apply scaling
-    const scaled = bentPosition.mul(vec3(1, scale, 1));
+    // Normalize world position to texture UV space (assuming 256x256 texture)
+    const uvPos = worldPos.div(float(256)).add(float(0.5));
 
-    // Apply rotation
-    const rotated = rotate(scaled, vec3(0, yawAngle, 0));
+    // Sample alpha texture
+    const alphaValue = texture(this._alphaTexture, uvPos).r;
 
-    // Final world position
-    const worldPosition = rotated.add(offset);
-    return worldPosition;
-  });
+    // Store alpha in grid buffer
+    gridData.z = alphaValue;
+  })().compute(gridConfig.COUNT);
 
-  private computeOpacity = Fn(() => {
-    const offsetData = this._buffer1.element(instanceIndex);
-    return offsetData.z;
-  });
+  private computePosition = Fn(
+    ([tileData = vec4(0, 0, 0, 0), gridData = vec3(0, 0, 0)]) => {
+      const combinedOffset = tileData.xy.add(this._uniforms.uTileOffset);
+      const offset = vec3(combinedOffset.x, 0, combinedOffset.y);
+
+      const bendingAngle = gridData.x;
+      const scale = tileData.w;
+      const yawAngle = tileData.z;
+
+      // Compute bending strength based on vertex height
+      const bendAmount = bendingAngle.mul(uv().y); // More bending at the top
+
+      // Apply bending: Rotate around the X-axis to tilt forward/backward
+      const bentPosition = rotate(positionLocal, vec3(bendAmount, 0, 0));
+
+      // Apply scaling
+      const scaled = positionLocal.mul(vec3(1, scale, 1));
+
+      // Apply rotation
+      const rotated = rotate(scaled, vec3(0, yawAngle, 0));
+
+      // Final world position
+      const worldPosition = rotated.add(offset);
+      return worldPosition;
+    },
+  );
 
   private computeDiffuseColor = Fn(() => {
     const factor = pow(uv().y, 1.5);
@@ -347,12 +482,77 @@ class GrassMaterial extends MeshBasicNodeMaterial {
     return blendedColor;
   });
 
+  private computeGridInstanceIndex = Fn(([tileData = vec4(0, 0, 0, 0)]) => {
+    // 1. Reconstruct final XY (2D) for each blade
+    //   tileData.x,y + uTileOffset.x,y
+    const tileOffset = this._uniforms.uTileOffset;
+    const finalX = tileData.x.add(tileOffset.x);
+    const finalZ = tileData.y.add(tileOffset.y);
+
+    // 2. Map finalX, finalZ to global row/col
+    const halfField = float(gridConfig.BLADES_PER_GRID_SIDE)
+      .mul(config.SPACING)
+      .mul(0.5);
+
+    const colGrid = floor(finalX.add(halfField).div(config.SPACING));
+    const rowGrid = floor(finalZ.add(halfField).div(config.SPACING));
+
+    // 3. clamp (optional)
+    const colClamped = min(
+      max(colGrid, float(0)),
+      float(gridConfig.BLADES_PER_GRID_SIDE - 1),
+    );
+    const rowClamped = min(
+      max(rowGrid, float(0)),
+      float(gridConfig.BLADES_PER_GRID_SIDE - 1),
+    );
+
+    // 4. final gridIndex
+    const gridIndex = rowClamped
+      .mul(float(gridConfig.BLADES_PER_GRID_SIDE))
+      .add(colClamped);
+
+    return gridIndex;
+  });
+
+  // private computeGridInstanceIndex = Fn(() => {
+  //   // tileRow/Col from uTileIndex
+  //   const tileRow = floor(
+  //     this._uniforms.uTileIndex.div(float(gridConfig.GRID_SIZE)),
+  //   );
+  //   const tileCol = float(this._uniforms.uTileIndex).mod(
+  //     float(gridConfig.GRID_SIZE),
+  //   );
+
+  //   // bladeRow/Col from instanceIndex
+  //   const bladeRow = floor(
+  //     float(instanceIndex).div(float(config.BLADES_PER_SIDE)),
+  //   );
+  //   const bladeCol = float(instanceIndex).mod(float(config.BLADES_PER_SIDE));
+
+  //   // Combine
+  //   const globalRow = tileRow.mul(float(config.BLADES_PER_SIDE)).add(bladeRow);
+  //   const globalCol = tileCol.mul(float(config.BLADES_PER_SIDE)).add(bladeCol);
+
+  //   // Final
+  //   const gridIndex = globalRow
+  //     .mul(float(gridConfig.BLADES_PER_GRID_SIDE))
+  //     .add(globalCol);
+
+  //   return gridIndex;
+  // });
+
   private createGrassMaterial() {
     this.precision = "lowp";
     this.side = DoubleSide;
+    this.toneMapped = false;
 
-    this.positionNode = this.computePosition();
-    this.opacityNode = this.computeOpacity();
+    const tileData = this._tileBuffer.element(instanceIndex);
+    const gridInstanceIndex = this.computeGridInstanceIndex(tileData);
+    const gridData = this._gridBuffer.element(gridInstanceIndex);
+
+    this.positionNode = this.computePosition(tileData, gridData);
+    // this.opacityNode = gridData.z;
     this.alphaTest = 0.1;
     this.aoNode = smoothstep(-0.75, 1.25, uv().y);
     this.colorNode = this.computeDiffuseColor();
@@ -361,6 +561,9 @@ class GrassMaterial extends MeshBasicNodeMaterial {
   async update(state: State) {
     const { renderer, player } = state;
     this._uniforms.uPlayerPosition.value.copy(player.position);
-    await renderer.computeAsync(this.computeUpdate);
+    await Promise.all([
+      renderer.computeAsync(this.computeUpdateTile),
+      renderer.computeAsync(this.computeUpdateGrid),
+    ]);
   }
 }
