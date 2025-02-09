@@ -40,10 +40,10 @@ import { assetManager } from "../systems/AssetManager";
 import alphaTextureUrl from "/textures/test.webp?url";
 
 const getConfig = () => {
-  const BLADE_WIDTH = 0.1;
+  const BLADE_WIDTH = 0.15;
   const BLADE_HEIGHT = 1.25;
   const TILE_SIZE = 50;
-  const BLADES_PER_SIDE = 200;
+  const BLADES_PER_SIDE = 150;
   return {
     BLADE_WIDTH,
     BLADE_HEIGHT,
@@ -73,8 +73,6 @@ const getGridConfig = () => {
   };
 };
 const gridConfig = getGridConfig();
-
-console.log(gridConfig.COUNT);
 
 type UniformType<T> = ReturnType<typeof uniform<T>>;
 type GrassUniforms = {
