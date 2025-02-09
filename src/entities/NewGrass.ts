@@ -45,8 +45,8 @@ import alphaTextureUrl from "/textures/test.webp?url";
 const getConfig = () => {
   const BLADE_WIDTH = 0.075;
   const BLADE_HEIGHT = 1.25;
-  const TILE_SIZE = 15;
-  const BLADES_PER_SIDE = 75;
+  const TILE_SIZE = 25;
+  const BLADES_PER_SIDE = 100;
 
   return {
     BLADE_WIDTH,
@@ -67,7 +67,7 @@ const getConfig = () => {
 const config = getConfig();
 
 const getGridConfig = () => {
-  const GRID_SIZE = 11; // must be an odd number so there is a center tile.
+  const GRID_SIZE = 7; // must be an odd number so there is a center tile.
   return {
     GRID_SIZE,
     GRID_HALF_SIZE: GRID_SIZE / 2,
@@ -80,9 +80,7 @@ const getGridConfig = () => {
 const gridConfig = getGridConfig();
 
 // -----------------------------------------------------------------------------
-// Grass Class: Creates a grid of tiles, each of which is an instanced mesh.
-// The grid is not moved per se; instead, in update() we reposition the grid so that
-// its center tile is aligned with the player’s current tile and update a wrap offset.
+// Grass Class: Builds a grid of tiles (InstancedMesh objects) that follow the player.
 // -----------------------------------------------------------------------------
 
 export default class Grass {
@@ -95,7 +93,7 @@ export default class Grass {
     this.material = new GrassMaterial();
 
     this.grassField = this.createGrassGrid();
-    // We leave the grassField at the origin; its position will be updated in update().
+    // In this approach we let the grid follow the player.
     scene.add(this.grassField);
   }
 
@@ -106,11 +104,11 @@ export default class Grass {
     for (let rowIdx = 0; rowIdx < gridConfig.GRID_SIZE; rowIdx++) {
       for (let colIdx = 0; colIdx < gridConfig.GRID_SIZE; colIdx++) {
         const tile = this.createTile();
-        // Compute a static offset for the tile relative to the grid center.
+        // Compute a static per-tile offset relative to the grid center.
         const tileOffsetX = (colIdx - centerIdx) * config.TILE_SIZE;
         const tileOffsetZ = (rowIdx - centerIdx) * config.TILE_SIZE;
-        // onBeforeRender is called every frame for visible objects.
-        // Here we pass the tile’s static offset and a tile index.
+        // onBeforeRender is called each frame for visible objects.
+        // Here we pass the static per-tile offset and a tile index.
         tile.onBeforeRender = (_, __, ___, ____, material: GrassMaterial) => {
           material.setTileOffsetAndIndex(tileOffsetX, tileOffsetZ, i);
         };
@@ -135,7 +133,6 @@ export default class Grass {
   private createBladeGeometry() {
     const halfWidth = config.BLADE_WIDTH / 2;
     const height = config.BLADE_HEIGHT;
-
     const positions = new Float32Array([
       -halfWidth,
       0,
@@ -147,7 +144,6 @@ export default class Grass {
       height,
       0, // C
     ]);
-
     const uvs = new Float32Array([
       0,
       0, // A
@@ -156,7 +152,6 @@ export default class Grass {
       0.5,
       1, // C
     ]);
-
     const geometry = new BufferGeometry();
     geometry.setAttribute("position", new BufferAttribute(positions, 3));
     geometry.setAttribute("uv", new BufferAttribute(uvs, 2));
@@ -166,25 +161,22 @@ export default class Grass {
   async update(state: State) {
     const { player } = state;
     const tileSize = config.TILE_SIZE;
-    // const gridCenter = Math.floor(gridConfig.GRID_SIZE / 2);
-
-    // Compute the player's current tile coordinate.
+    // Compute the fractional offset within the current tile.
     const playerTileX = Math.floor(player.position.x / tileSize);
     const playerTileZ = Math.floor(player.position.z / tileSize);
-    // Compute the fractional offset within the current tile.
     const fracX = player.position.x - playerTileX * tileSize;
     const fracZ = player.position.z - playerTileZ * tileSize;
 
-    // Reposition the grid so its center tile corresponds to the player's current tile.
-    // const gridPosX = playerTileX * tileSize - gridCenter * tileSize;
-    // const gridPosZ = playerTileZ * tileSize - gridCenter * tileSize;
-    // this.grassField.position.set(gridPosX, 0, gridPosZ);
+    // Here we choose to move the grid along with the player.
+    // (You could instead snap the grid if you prefer.)
     this.grassField.position.copy(player.position).setY(0);
 
-    // Update the per-frame wrap offset so the grass appears to slide within each tile.
-    this.material._uniforms.uTileWrapOffset.value.set(-fracX, -fracZ);
+    // Update the per-frame wrap offset so that within each tile the blades slide smoothly.
+    // (The wrap offset is only applied visually; grid-based effects will be computed from the absolute coordinate.)
+    // this.material._uniforms.uTileWrapOffset.value.set(-fracX, -fracZ);
+    this.material._uniforms.uTileWrapOffset.value.set(0, 0);
 
-    // Update other uniforms (if used by compute nodes).
+    // Update other uniforms (for grid compute nodes).
     this.material._uniforms.uPlayerPosition.value.copy(player.position);
 
     await this.material.update(state);
@@ -214,7 +206,7 @@ type GrassUniforms = {
 
   // Per-tile instance – static offset (set via onBeforeRender)
   uTileOffset?: UniformType<Vector2>;
-  // Additional per-frame wrap offset (computed in update)
+  // Additional per-frame wrap offset (applied only for visual placement)
   uTileWrapOffset?: UniformType<Vector2>;
   uTileIndex?: UniformType<number>;
 };
@@ -236,16 +228,16 @@ const defaultUniforms: Required<GrassUniforms> = {
 };
 
 // -----------------------------------------------------------------------------
-// GrassMaterial: Handles compute nodes and the final shader composition.
+// GrassMaterial: Handles compute nodes and shader composition.
 // The final blade world position is computed as:
-//   bladeLocalOffset (from computeInitTile) + uTileOffset (static per-tile) + uTileWrapOffset (dynamic)
+//   bladeLocalOffset + uTileOffset (absolute position) + uTileWrapOffset (visual modulation)
+// When computing grid-based effects (like alpha mapping and bending), we want to use the absolute position.
 // -----------------------------------------------------------------------------
 
 class GrassMaterial extends MeshBasicNodeMaterial {
-  // (Exposed publicly for convenience. In a production system, you might encapsulate these.)
   public _uniforms: Required<GrassUniforms>;
-  private _tileBuffer: ReturnType<typeof instancedArray>; // holds: x,y (local offset), yaw, scale
-  private _gridBuffer: ReturnType<typeof instancedArray>; // grid data (for bending, alpha, etc.)
+  private _tileBuffer: ReturnType<typeof instancedArray>; // stores: x,y (local offset), yaw, scale
+  private _gridBuffer: ReturnType<typeof instancedArray>; // grid data (bending, alpha, etc.)
   private _alphaTexture: Texture;
 
   constructor() {
@@ -261,8 +253,7 @@ class GrassMaterial extends MeshBasicNodeMaterial {
     this._alphaTexture = assetManager.textureLoader.load(alphaTextureUrl);
     this._alphaTexture.flipY = false;
 
-    // Run the initial compute passes.
-    // Here we schedule the initial per-blade and grid initializations.
+    // Run initial compute passes.
     this.computeUpdateGrid.onInit(({ renderer }) => {
       renderer.computeAsync(this.computeInitTile);
       renderer.computeAsync(this.computeInitGrid);
@@ -300,13 +291,13 @@ class GrassMaterial extends MeshBasicNodeMaterial {
     tileData.x = offsetX;
     tileData.y = offsetZ;
 
-    // Yaw: Give each blade a random rotation.
+    // Yaw: Randomize the blade's rotation.
     const randomBladeYaw = hash(instanceIndex.add(200))
       .mul(float(Math.PI * 2))
       .sub(float(Math.PI));
     tileData.z = randomBladeYaw;
 
-    // Scale: Randomize the blade’s scale.
+    // Scale: Randomize the blade's scale.
     const scaleRange = this._uniforms.uBladeMaxScale.sub(
       this._uniforms.uBladeMinScale,
     );
@@ -359,23 +350,26 @@ class GrassMaterial extends MeshBasicNodeMaterial {
 
   // ---------------------------------------------------------------------------
   // Compute Node: Final blade position.
-  // Combines the constant blade local offset, the static tile offset, and the dynamic wrap offset.
+  // We separate the absolute offset (used for grid effects) from the visual offset.
   // ---------------------------------------------------------------------------
   private computePosition = Fn(
     ([tileData = vec4(0, 0, 0, 0), gridData = vec3(0, 0, 0)]) => {
-      const combinedOffset = tileData.xy
-        .add(this._uniforms.uTileOffset)
-        .add(this._uniforms.uTileWrapOffset);
-      const offset = vec3(combinedOffset.x, 0, combinedOffset.y);
+      // Compute the absolute offset from the tile's constant data plus the static per-tile offset.
+      const absOffset = tileData.xy.add(this._uniforms.uTileOffset);
+      // Compute the visual offset by adding the dynamic wrap offset.
+      const visualOffset = absOffset.add(this._uniforms.uTileWrapOffset);
+      const offset = vec3(visualOffset.x, 0, visualOffset.y);
 
       const bendingAngle = gridData.x;
       const scale = tileData.w;
       const yawAngle = tileData.z;
 
+      // Compute bending based on uv coordinates.
       const bendAmount = bendingAngle.mul(uv().y);
       const bentPosition = rotate(positionLocal, vec3(bendAmount, 0, 0));
       const scaled = bentPosition.mul(vec3(1, scale, 1));
       const rotated = rotate(scaled, vec3(0, yawAngle, 0));
+      // Final world position uses the visual offset.
       const worldPosition = rotated.add(offset);
       return worldPosition;
     },
@@ -395,7 +389,8 @@ class GrassMaterial extends MeshBasicNodeMaterial {
   });
 
   // ---------------------------------------------------------------------------
-  // Compute Node: Compute the grid instance index (used for sampling grid data).
+  // Compute Node: Compute the grid instance index (for sampling grid data).
+  // We base this on the absolute offset only.
   // ---------------------------------------------------------------------------
   private computeGridInstanceIndex = Fn(([tileData = vec4(0, 0, 0, 0)]) => {
     const tileOffset = this._uniforms.uTileOffset;
@@ -425,7 +420,7 @@ class GrassMaterial extends MeshBasicNodeMaterial {
   });
 
   // ---------------------------------------------------------------------------
-  // Create the material by setting up the node chain.
+  // Create the final grass material by composing the shader nodes.
   // ---------------------------------------------------------------------------
   private createGrassMaterial() {
     this.precision = "lowp";
@@ -437,7 +432,7 @@ class GrassMaterial extends MeshBasicNodeMaterial {
     const gridData = this._gridBuffer.element(gridInstanceIndex);
 
     this.positionNode = this.computePosition(tileData, gridData);
-    // Optionally, if alpha testing or opacity is desired, uncomment these lines:
+    // Uncomment the next lines if you want to enable alpha testing:
     this.opacityNode = gridData.z;
     this.alphaTest = 0.1;
     this.aoNode = smoothstep(-0.75, 1.25, uv().y);
