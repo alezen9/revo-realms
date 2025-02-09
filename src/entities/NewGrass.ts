@@ -7,6 +7,7 @@ import {
   Group,
   InstancedMesh,
   MathUtils,
+  Object3D,
   Sphere,
   Texture,
   Vector2,
@@ -28,21 +29,20 @@ import {
   rotate,
   vec3,
   vec4,
-  mod,
-  texture,
   smoothstep,
-  min,
-  max,
+  mod,
+  vec2,
+  texture,
 } from "three/tsl";
 import { MeshBasicNodeMaterial } from "three/webgpu";
 import { assetManager } from "../systems/AssetManager";
 import alphaTextureUrl from "/textures/test.webp?url";
 
 const getConfig = () => {
-  const BLADE_WIDTH = 0.25;
-  const BLADE_HEIGHT = 1.75;
+  const BLADE_WIDTH = 0.1;
+  const BLADE_HEIGHT = 1.25;
   const TILE_SIZE = 50;
-  const BLADES_PER_SIDE = 75;
+  const BLADES_PER_SIDE = 200;
   return {
     BLADE_WIDTH,
     BLADE_HEIGHT,
@@ -73,6 +73,8 @@ const getGridConfig = () => {
 };
 const gridConfig = getGridConfig();
 
+console.log(gridConfig.COUNT);
+
 type UniformType<T> = ReturnType<typeof uniform<T>>;
 type GrassUniforms = {
   uDelta: UniformType<Vector2>;
@@ -88,6 +90,7 @@ type GrassUniforms = {
   uTipColor?: UniformType<Color>;
   // Per-tile uniforms:
   uTileOffset?: UniformType<Vector2>;
+  uTileIdx?: UniformType<number>;
   uTileColorVarianceFactor?: UniformType<number>;
 };
 
@@ -103,67 +106,70 @@ const defaultUniforms: Required<GrassUniforms> = {
   uBladeMaxBendAngle: uniform(Math.PI * 0.15),
   uBaseColor: uniform(new Color("#4f8a4f")),
   uTipColor: uniform(new Color("#f7ff3d")),
-  uTileOffset: uniform(new Vector2(0, 0)),
 
+  uTileOffset: uniform(new Vector2(0, 0)),
+  uTileIdx: uniform(0),
   uTileColorVarianceFactor: uniform(1),
 };
 
 class GrassMaterial extends MeshBasicNodeMaterial {
   private _uniforms: Required<GrassUniforms>;
-  private _tileBuffer: ReturnType<typeof instancedArray>; // holds: vec4 = (localOffset.x, localOffset.y, yaw, scale)
-  private _gridBuffer: ReturnType<typeof instancedArray>; // holds: vec3 = (initial bending, trail bending, alpha)
+  private _gridBuffer: ReturnType<typeof instancedArray>; // holds: vec4 = (localOffset.x, localOffset.y, yaw, scale)
+  private _gridBuffer2: ReturnType<typeof instancedArray>; // holds: vec4 = (current bending angle, original bending angle, alpha, TBD)
   private _alphaTexture: Texture;
   constructor(uniforms: GrassUniforms) {
     super();
     this._uniforms = { ...defaultUniforms, ...uniforms };
-    this._tileBuffer = instancedArray(config.COUNT, "vec4");
-    this._tileBuffer.setPBO(true);
-    this._gridBuffer = instancedArray(gridConfig.COUNT, "vec3");
+    this._gridBuffer = instancedArray(gridConfig.COUNT, "vec4");
     this._gridBuffer.setPBO(true);
+    this._gridBuffer2 = instancedArray(gridConfig.COUNT, "vec4");
+    this._gridBuffer2.setPBO(true);
     this._alphaTexture = assetManager.textureLoader.load(alphaTextureUrl);
     this._alphaTexture.flipY = false;
 
-    this.computeUpdateTile.onInit(({ renderer }) => {
-      renderer.computeAsync(this.computeInitTile);
-    });
-    this.computeUpdateGrid.onInit(({ renderer }) => {
-      renderer.computeAsync(this.computeInitGrid);
+    this.computeUpdate.onInit(({ renderer }) => {
+      renderer.computeAsync(this.computeInit);
     });
     this.createGrassMaterial();
   }
 
-  setTileOffset(x: number, z: number) {
-    this._uniforms.uTileOffset.value.set(x, z);
+  setTilePosition(position: Vector2) {
+    this._uniforms.uTileOffset.value.copy(position);
+  }
+
+  setTileIndex(idx: number) {
+    this._uniforms.uTileIdx.value = idx;
   }
 
   setRandomColorVariance(n: number) {
     this._uniforms.uTileColorVarianceFactor.value = n;
   }
 
-  private computeInitTile = Fn(() => {
-    const tileData = this._tileBuffer.element(instanceIndex);
-
+  private computeInit = Fn(() => {
+    const gridData = this._gridBuffer.element(instanceIndex);
     // Position XZ
-    const row = floor(float(instanceIndex).div(config.BLADES_PER_SIDE));
-    const col = float(instanceIndex).mod(config.BLADES_PER_SIDE);
+    const row = floor(
+      float(instanceIndex).div(gridConfig.BLADES_PER_GRID_SIDE),
+    );
+    const col = float(instanceIndex).mod(gridConfig.BLADES_PER_GRID_SIDE);
     const randX = hash(instanceIndex);
     const randZ = hash(instanceIndex.add(1234));
     const offsetX = col
-      .mul(config.SPACING)
-      .sub(config.TILE_HALF_SIZE)
-      .add(randX.mul(config.SPACING * 0.5));
+      .mul(gridConfig.SPACING)
+      .sub(gridConfig.GRID_HALF_WIDTH)
+      .add(randX.mul(gridConfig.SPACING * 0.5));
     const offsetZ = row
-      .mul(config.SPACING)
-      .sub(config.TILE_HALF_SIZE)
-      .add(randZ.mul(config.SPACING * 0.5));
-    tileData.x = offsetX;
-    tileData.y = offsetZ;
+      .mul(gridConfig.SPACING)
+      .sub(gridConfig.GRID_HALF_WIDTH)
+      .add(randZ.mul(gridConfig.SPACING * 0.5));
+    gridData.x = offsetX;
+    gridData.y = offsetZ;
 
     // Yaw
     const randomBladeYaw = hash(instanceIndex.add(200))
       .mul(float(Math.PI * 2))
       .sub(float(Math.PI));
-    tileData.z = randomBladeYaw;
+    gridData.z = randomBladeYaw;
 
     // Scale
     const scaleRange = this._uniforms.uBladeMaxScale.sub(
@@ -172,52 +178,47 @@ class GrassMaterial extends MeshBasicNodeMaterial {
     const randomScale = hash(instanceIndex.add(100))
       .mul(scaleRange)
       .add(this._uniforms.uBladeMinScale);
-    tileData.w = randomScale;
-  })().compute(config.COUNT);
+    gridData.w = randomScale;
 
-  private computeUpdateTile = Fn(() => {
-    const tileData = this._tileBuffer.element(instanceIndex);
-    // Position
-    const newOffsetX = mod(
-      tileData.x.sub(this._uniforms.uDelta.x).add(config.TILE_HALF_SIZE),
-      config.TILE_SIZE,
-    ).sub(config.TILE_HALF_SIZE);
-    const newOffsetZ = mod(
-      tileData.y.sub(this._uniforms.uDelta.y).add(config.TILE_HALF_SIZE),
-      config.TILE_SIZE,
-    ).sub(config.TILE_HALF_SIZE);
-
-    tileData.x = newOffsetX;
-    tileData.y = newOffsetZ;
-  })().compute(config.COUNT);
-
-  private computeInitGrid = Fn(() => {
-    const gridData = this._gridBuffer.element(instanceIndex);
     // Bending
+    const gridData2 = this._gridBuffer2.element(instanceIndex);
     const randomBladeBend = hash(instanceIndex.add(300))
       .mul(this._uniforms.uBladeMaxBendAngle.mul(2))
       .sub(this._uniforms.uBladeMaxBendAngle);
 
-    gridData.x = randomBladeBend;
-    gridData.y = randomBladeBend;
+    gridData2.x = randomBladeBend;
+    gridData2.y = randomBladeBend;
   })().compute(gridConfig.COUNT);
 
-  private computeUpdateGrid = Fn(() => {
-    // const tileData2 = this._tileBuffer2.element(instanceIndex);
-    // // Alpha
-    // const mapSize = float(256);
-    // const worldPosition = this._uniforms.uPlayerPosition.xz.add(
-    //   newOffsetX,
-    //   newOffsetZ,
-    // );
-    // const uv = worldPosition.add(mapSize.div(2)).div(mapSize);
-    // const alphaValue = texture(this._alphaTexture, uv).r;
-    // tileData2.z = alphaValue;
+  private computeUpdate = Fn(() => {
+    const gridData = this._gridBuffer.element(instanceIndex);
+    // Position
+    const newOffsetX = mod(
+      gridData.x.sub(this._uniforms.uDelta.x).add(gridConfig.GRID_HALF_WIDTH),
+      gridConfig.GRID_WIDTH,
+    ).sub(gridConfig.GRID_HALF_WIDTH);
+    const newOffsetZ = mod(
+      gridData.y.sub(this._uniforms.uDelta.y).add(gridConfig.GRID_HALF_WIDTH),
+      gridConfig.GRID_WIDTH,
+    ).sub(gridConfig.GRID_HALF_WIDTH);
+
+    gridData.x = newOffsetX;
+    gridData.y = newOffsetZ;
+
+    // Update alpha
+    const gridData2 = this._gridBuffer2.element(instanceIndex);
+    const mapSize = float(256);
+    const worldPos = vec2(gridData.x, gridData.y)
+      .add(this._uniforms.uPlayerPosition.xz)
+      .add(mapSize.mul(0.5))
+      .div(mapSize);
+    const alphaValue = texture(this._alphaTexture, worldPos).r;
+    gridData2.z = alphaValue;
   })().compute(gridConfig.COUNT);
 
   private computePosition = Fn(
     ([data1 = vec4(0, 0, 0, 0), data2 = vec3(0, 0, 0)]) => {
-      const combinedOffset = data1.xy.add(this._uniforms.uTileOffset);
+      const combinedOffset = data1.xy;
       const offset = vec3(combinedOffset.x, 0, combinedOffset.y);
       const scale = data1.w;
       const yawAngle = data1.z;
@@ -241,59 +242,42 @@ class GrassMaterial extends MeshBasicNodeMaterial {
     return blendedColor.mul(this._uniforms.uTileColorVarianceFactor);
   });
 
-  private computeGridInstanceIndex = Fn(([data1 = vec4(0, 0, 0, 0)]) => {
-    // 1. Reconstruct final XY (2D) for each blade
-    //   tileData.x,y + uTileOffset.x,y
-    const tileOffset = this._uniforms.uTileOffset;
-    const finalX = data1.x.add(tileOffset.x);
-    const finalZ = data1.y.add(tileOffset.y);
+  private computeGridIndex = Fn(([tileIdx = float(0), bladeIdx = float(0)]) => {
+    // Compute the tile's row and column
+    const tileRow = floor(tileIdx.div(gridConfig.GRID_SIZE));
+    const tileCol = tileIdx.mod(gridConfig.GRID_SIZE);
 
-    // 2. Map finalX, finalZ to global row/col
-    const halfField = float(gridConfig.BLADES_PER_GRID_SIDE)
-      .mul(config.SPACING)
-      .mul(0.5);
+    // Compute the object's row and column within the tile
+    const objRow = floor(bladeIdx.div(config.BLADES_PER_SIDE));
+    const objCol = bladeIdx.mod(config.BLADES_PER_SIDE);
 
-    const colGrid = floor(finalX.add(halfField).div(config.SPACING));
-    const rowGrid = floor(finalZ.add(halfField).div(config.SPACING));
+    // Compute global row and column
+    const globalRow = tileRow.mul(config.BLADES_PER_SIDE).add(objRow);
+    const globalCol = tileCol.mul(config.BLADES_PER_SIDE).add(objCol);
 
-    // 3. clamp (optional)
-    const colClamped = min(
-      max(colGrid, float(0)),
-      float(gridConfig.BLADES_PER_GRID_SIDE - 1),
-    );
-    const rowClamped = min(
-      max(rowGrid, float(0)),
-      float(gridConfig.BLADES_PER_GRID_SIDE - 1),
-    );
-
-    // 4. final gridIndex
-    const gridIndex = rowClamped
-      .mul(float(gridConfig.BLADES_PER_GRID_SIDE))
-      .add(colClamped);
-
-    return gridIndex;
+    // Compute final global index
+    return globalRow.mul(gridConfig.BLADES_PER_GRID_SIDE).add(globalCol);
   });
 
   private createGrassMaterial() {
     this.precision = "lowp";
     this.side = DoubleSide;
     this.toneMapped = false;
-    const data1 = this._tileBuffer.element(instanceIndex);
-    const gridIndex = this.computeGridInstanceIndex(data1);
-    const data2 = this._gridBuffer.element(gridIndex);
+    const bladeIdx = float(instanceIndex);
+    const tileIdx = this._uniforms.uTileIdx;
+    const gridIdx = this.computeGridIndex(tileIdx, bladeIdx);
+    const data1 = this._gridBuffer.element(gridIdx);
+    const data2 = this._gridBuffer2.element(gridIdx);
     this.positionNode = this.computePosition(data1, data2);
-    // this.opacityNode = data2.z;
-    // this.alphaTest = 0.1;
+    this.opacityNode = data2.z;
+    this.alphaTest = 0.1;
     this.aoNode = smoothstep(-0.75, 1.25, uv().y);
-    // this.colorNode = this.computeDiffuseColor();
+    this.colorNode = this.computeDiffuseColor();
   }
 
   async update(state: State) {
     const { renderer } = state;
-    await Promise.all([
-      renderer.computeAsync(this.computeUpdateTile),
-      renderer.computeAsync(this.computeUpdateGrid),
-    ]);
+    await renderer.computeAsync(this.computeUpdate);
   }
 }
 
@@ -305,6 +289,8 @@ export default class Grass {
   private uDelta = uniform(new Vector2(0, 0));
   private uPlayerPosition = uniform(new Vector3(0, 0, 0));
 
+  private tileColor = new Array<number>(gridConfig.COUNT); // debug reason
+
   constructor(scene: State["scene"]) {
     this.geometry = this.createBladeGeometry();
     this.material = new GrassMaterial({
@@ -315,21 +301,25 @@ export default class Grass {
     scene.add(this.grassField);
   }
 
+  private onBeforeRenderTile =
+    (tileIdx: number): Object3D["onBeforeRender"] =>
+    (_, __, ___, ____, material: GrassMaterial) => {
+      material.setTileIndex(tileIdx);
+      const c = this.tileColor[tileIdx];
+      material.setRandomColorVariance(c);
+    };
+
   private createGrassGrid() {
     const grid = new Group();
-    const centerIdx = Math.floor(gridConfig.GRID_SIZE / 2);
+    // const centerIdx = Math.floor(gridConfig.GRID_SIZE / 2);
     let i = 0;
     for (let row = 0; row < gridConfig.GRID_SIZE; row++) {
+      // const z = (row - centerIdx) * config.TILE_SIZE;
       for (let col = 0; col < gridConfig.GRID_SIZE; col++) {
         const tile = this.createTile();
-        const x = (col - centerIdx) * config.TILE_SIZE;
-        const z = (row - centerIdx) * config.TILE_SIZE;
-
-        const f = MathUtils.randFloat(0, 1);
-        tile.onBeforeRender = (_, __, ___, ____, material: GrassMaterial) => {
-          material.setTileOffset(x, z);
-          material.setRandomColorVariance(f);
-        };
+        // const x = (col - centerIdx) * config.TILE_SIZE;
+        this.tileColor[i] = MathUtils.randFloat(0, 1);
+        tile.onBeforeRender = this.onBeforeRenderTile(i);
         grid.add(tile);
         i++;
       }
