@@ -27,7 +27,7 @@ import {
   floor,
   rotate,
   vec3,
-  mod,
+  mod, // note: ensure this mod returns a positive remainder
   vec4,
   vec2,
   texture,
@@ -38,11 +38,15 @@ import { MeshBasicNodeMaterial } from "three/webgpu";
 import { assetManager } from "../systems/AssetManager";
 import alphaTextureUrl from "/textures/test.webp?url";
 
+// -----------------------------------------------------------------------------
+// Configuration
+// -----------------------------------------------------------------------------
+
 const getConfig = () => {
   const BLADE_WIDTH = 0.075;
   const BLADE_HEIGHT = 1.25;
-  const TILE_SIZE = 25;
-  const BLADES_PER_SIDE = 100;
+  const TILE_SIZE = 15;
+  const BLADES_PER_SIDE = 75;
 
   return {
     BLADE_WIDTH,
@@ -56,17 +60,14 @@ const getConfig = () => {
       new Vector3(-TILE_SIZE / 2, 0, -TILE_SIZE / 2),
       new Vector3(TILE_SIZE / 2, BLADE_HEIGHT * 2, TILE_SIZE / 2),
     ),
-    boundingSphere: new Sphere(
-      new Vector3(0, 0, 0),
-      TILE_SIZE * Math.sqrt(2), // diagonal
-    ),
+    boundingSphere: new Sphere(new Vector3(0, 0, 0), TILE_SIZE * Math.sqrt(2)),
   };
 };
 
 const config = getConfig();
 
 const getGridConfig = () => {
-  const GRID_SIZE = 7; // STRICTLY odd numbers so there is a tile in the middle
+  const GRID_SIZE = 11; // must be an odd number so there is a center tile.
   return {
     GRID_SIZE,
     GRID_HALF_SIZE: GRID_SIZE / 2,
@@ -78,33 +79,40 @@ const getGridConfig = () => {
 
 const gridConfig = getGridConfig();
 
+// -----------------------------------------------------------------------------
+// Grass Class: Creates a grid of tiles, each of which is an instanced mesh.
+// The grid is not moved per se; instead, in update() we reposition the grid so that
+// its center tile is aligned with the player’s current tile and update a wrap offset.
+// -----------------------------------------------------------------------------
+
 export default class Grass {
-  private uDelta = uniform(new Vector2(0));
   private geometry: BufferGeometry;
   private material: GrassMaterial;
   private grassField: Group;
 
   constructor(scene: State["scene"]) {
     this.geometry = this.createBladeGeometry();
-    this.material = new GrassMaterial({ uDelta: this.uDelta });
+    this.material = new GrassMaterial();
 
     this.grassField = this.createGrassGrid();
+    // We leave the grassField at the origin; its position will be updated in update().
     scene.add(this.grassField);
   }
 
   private createGrassGrid() {
     const grid = new Group();
-    const offsetXZ =
-      gridConfig.GRID_HALF_SIZE * config.TILE_SIZE - config.TILE_HALF_SIZE;
-
+    const centerIdx = Math.floor(gridConfig.GRID_SIZE / 2);
     let i = 0;
     for (let rowIdx = 0; rowIdx < gridConfig.GRID_SIZE; rowIdx++) {
       for (let colIdx = 0; colIdx < gridConfig.GRID_SIZE; colIdx++) {
         const tile = this.createTile();
-        const x = config.TILE_SIZE * colIdx - offsetXZ;
-        const z = config.TILE_SIZE * rowIdx - offsetXZ;
+        // Compute a static offset for the tile relative to the grid center.
+        const tileOffsetX = (colIdx - centerIdx) * config.TILE_SIZE;
+        const tileOffsetZ = (rowIdx - centerIdx) * config.TILE_SIZE;
+        // onBeforeRender is called every frame for visible objects.
+        // Here we pass the tile’s static offset and a tile index.
         tile.onBeforeRender = (_, __, ___, ____, material: GrassMaterial) => {
-          material.setTileOffsetAndIndex(x, z, i);
+          material.setTileOffsetAndIndex(tileOffsetX, tileOffsetZ, i);
         };
         grid.add(tile);
         i++;
@@ -125,14 +133,6 @@ export default class Grass {
   }
 
   private createBladeGeometry() {
-    /**
-     *        C
-     *      /   \
-     *    A ------ B
-     *
-     *  - Single triangle:  A-B-C
-     */
-
     const halfWidth = config.BLADE_WIDTH / 2;
     const height = config.BLADE_HEIGHT;
 
@@ -157,40 +157,48 @@ export default class Grass {
       1, // C
     ]);
 
-    // const indices = new Uint8Array([
-    //   0,
-    //   1,
-    //   2, // A-B-C
-    // ]);
-
     const geometry = new BufferGeometry();
     geometry.setAttribute("position", new BufferAttribute(positions, 3));
     geometry.setAttribute("uv", new BufferAttribute(uvs, 2));
-    // geometry.setIndex(new BufferAttribute(indices, 1));
-    // geometry.computeVertexNormals();
-
     return geometry;
   }
 
   async update(state: State) {
     const { player } = state;
+    const tileSize = config.TILE_SIZE;
+    // const gridCenter = Math.floor(gridConfig.GRID_SIZE / 2);
 
-    const dx = player.position.x - this.grassField.position.x;
-    const dz = player.position.z - this.grassField.position.z;
+    // Compute the player's current tile coordinate.
+    const playerTileX = Math.floor(player.position.x / tileSize);
+    const playerTileZ = Math.floor(player.position.z / tileSize);
+    // Compute the fractional offset within the current tile.
+    const fracX = player.position.x - playerTileX * tileSize;
+    const fracZ = player.position.z - playerTileZ * tileSize;
 
-    this.uDelta.value.set(dx, dz);
-
+    // Reposition the grid so its center tile corresponds to the player's current tile.
+    // const gridPosX = playerTileX * tileSize - gridCenter * tileSize;
+    // const gridPosZ = playerTileZ * tileSize - gridCenter * tileSize;
+    // this.grassField.position.set(gridPosX, 0, gridPosZ);
     this.grassField.position.copy(player.position).setY(0);
+
+    // Update the per-frame wrap offset so the grass appears to slide within each tile.
+    this.material._uniforms.uTileWrapOffset.value.set(-fracX, -fracZ);
+
+    // Update other uniforms (if used by compute nodes).
+    this.material._uniforms.uPlayerPosition.value.copy(player.position);
 
     await this.material.update(state);
   }
 }
 
+// -----------------------------------------------------------------------------
+// Uniforms & Defaults
+// -----------------------------------------------------------------------------
+
 type UniformType<T> = ReturnType<typeof uniform<T>>;
 
 type GrassUniforms = {
-  // compute
-  uDelta: UniformType<Vector2>;
+  // Compute uniforms
   uPlayerPosition?: UniformType<Vector3>;
   uBladeMinScale?: UniformType<number>;
   uBladeMaxScale?: UniformType<number>;
@@ -200,18 +208,18 @@ type GrassUniforms = {
   uTrailRaiusSquared?: UniformType<number>;
   uBladeMaxBendAngle?: UniformType<number>;
 
-  // color
+  // Color uniforms
   uBaseColor?: UniformType<Color>;
   uTipColor?: UniformType<Color>;
 
-  // per tile instance
+  // Per-tile instance – static offset (set via onBeforeRender)
   uTileOffset?: UniformType<Vector2>;
+  // Additional per-frame wrap offset (computed in update)
+  uTileWrapOffset?: UniformType<Vector2>;
   uTileIndex?: UniformType<number>;
 };
 
 const defaultUniforms: Required<GrassUniforms> = {
-  // compute
-  uDelta: uniform(new Vector2(0, 0)),
   uPlayerPosition: uniform(new Vector3(0, 0, 0)),
   uBladeMinScale: uniform(0.5),
   uBladeMaxScale: uniform(1.25),
@@ -219,51 +227,60 @@ const defaultUniforms: Required<GrassUniforms> = {
   uTrailMinScale: uniform(0.1),
   uTrailRaius: uniform(0.65),
   uTrailRaiusSquared: uniform(0.65 * 0.65),
-  uBladeMaxBendAngle: uniform(Math.PI * 0.15), // ~ 27deg
-
-  // color
+  uBladeMaxBendAngle: uniform(Math.PI * 0.15),
   uBaseColor: uniform(new Color("#4f8a4f")),
   uTipColor: uniform(new Color("#f7ff3d")),
-
-  // per tile instance
   uTileOffset: uniform(new Vector2(0, 0)),
+  uTileWrapOffset: uniform(new Vector2(0, 0)),
   uTileIndex: uniform(0),
 };
 
+// -----------------------------------------------------------------------------
+// GrassMaterial: Handles compute nodes and the final shader composition.
+// The final blade world position is computed as:
+//   bladeLocalOffset (from computeInitTile) + uTileOffset (static per-tile) + uTileWrapOffset (dynamic)
+// -----------------------------------------------------------------------------
+
 class GrassMaterial extends MeshBasicNodeMaterial {
-  private _uniforms: Required<GrassUniforms>;
-  private _tileBuffer: ReturnType<typeof instancedArray>; // x, z (y), yaw, scale
-  private _gridBuffer: ReturnType<typeof instancedArray>; // current bending angle, original bending angle, opacity
+  // (Exposed publicly for convenience. In a production system, you might encapsulate these.)
+  public _uniforms: Required<GrassUniforms>;
+  private _tileBuffer: ReturnType<typeof instancedArray>; // holds: x,y (local offset), yaw, scale
+  private _gridBuffer: ReturnType<typeof instancedArray>; // grid data (for bending, alpha, etc.)
   private _alphaTexture: Texture;
 
-  constructor(uniforms: Pick<GrassUniforms, "uDelta">) {
+  constructor() {
     super();
-    this._uniforms = { ...defaultUniforms, ...uniforms };
+    this._uniforms = { ...defaultUniforms };
 
     this._tileBuffer = instancedArray(config.COUNT, "vec4");
     this._tileBuffer.setPBO(true);
+
     this._gridBuffer = instancedArray(gridConfig.COUNT, "vec3");
     this._gridBuffer.setPBO(true);
 
     this._alphaTexture = assetManager.textureLoader.load(alphaTextureUrl);
     this._alphaTexture.flipY = false;
-    this.computeUpdateTile.onInit(({ renderer }) => {
-      renderer.computeAsync(this.computeInitTile);
-    });
+
+    // Run the initial compute passes.
+    // Here we schedule the initial per-blade and grid initializations.
     this.computeUpdateGrid.onInit(({ renderer }) => {
+      renderer.computeAsync(this.computeInitTile);
       renderer.computeAsync(this.computeInitGrid);
     });
 
     this.createGrassMaterial();
   }
 
+  // Called per tile (via onBeforeRender) to set the static per-tile offset and index.
   setTileOffsetAndIndex(x: number, z: number, idx: number) {
     this._uniforms.uTileOffset.value.set(x, z);
     this._uniforms.uTileIndex.value = idx;
   }
 
+  // ---------------------------------------------------------------------------
+  // Compute Node: Initialize per-blade data (local offset, yaw, scale) once.
+  // ---------------------------------------------------------------------------
   private computeInitTile = Fn(() => {
-    // Position
     const tileData = this._tileBuffer.element(instanceIndex);
     const row = floor(float(instanceIndex).div(config.BLADES_PER_SIDE));
     const col = float(instanceIndex).mod(config.BLADES_PER_SIDE);
@@ -274,72 +291,54 @@ class GrassMaterial extends MeshBasicNodeMaterial {
     const offsetX = col
       .mul(config.SPACING)
       .sub(config.TILE_HALF_SIZE)
-      .add(randX.mul(config.SPACING * 0.5)); // Randomness
-
+      .add(randX.mul(config.SPACING * 0.5));
     const offsetZ = row
       .mul(config.SPACING)
       .sub(config.TILE_HALF_SIZE)
-      .add(randZ.mul(config.SPACING * 0.5)); // Randomness
+      .add(randZ.mul(config.SPACING * 0.5));
 
     tileData.x = offsetX;
     tileData.y = offsetZ;
 
-    // Yaw
+    // Yaw: Give each blade a random rotation.
     const randomBladeYaw = hash(instanceIndex.add(200))
       .mul(float(Math.PI * 2))
       .sub(float(Math.PI));
     tileData.z = randomBladeYaw;
 
-    // Scale
+    // Scale: Randomize the blade’s scale.
     const scaleRange = this._uniforms.uBladeMaxScale.sub(
       this._uniforms.uBladeMinScale,
     );
     const randomScale = hash(instanceIndex.add(100))
       .mul(scaleRange)
       .add(this._uniforms.uBladeMinScale);
-
     tileData.w = randomScale;
   })().compute(config.COUNT);
 
-  private computeUpdateTile = Fn(() => {
-    // Position
-    const tileData = this._tileBuffer.element(instanceIndex);
-    const newOffsetX = mod(
-      tileData.x.sub(this._uniforms.uDelta.x).add(config.TILE_HALF_SIZE),
-      config.TILE_SIZE,
-    ).sub(config.TILE_HALF_SIZE);
-    const newOffsetZ = mod(
-      tileData.y.sub(this._uniforms.uDelta.y).add(config.TILE_HALF_SIZE),
-      config.TILE_SIZE,
-    ).sub(config.TILE_HALF_SIZE);
-
-    tileData.x = newOffsetX;
-    tileData.y = newOffsetZ;
-  })().compute(config.COUNT);
-
+  // ---------------------------------------------------------------------------
+  // Compute Node: Initialize grid data for bending (run once).
+  // ---------------------------------------------------------------------------
   private computeInitGrid = Fn(() => {
     const gridData = this._gridBuffer.element(instanceIndex);
-
-    // Bending angle
-    const minOffset = this._uniforms.uBladeMaxBendAngle.mul(0.05); // Small offset to avoid zero
+    const minOffset = this._uniforms.uBladeMaxBendAngle.mul(0.05);
     const randomBladeBend = hash(instanceIndex.add(300))
-      .mul(this._uniforms.uBladeMaxBendAngle.mul(1.9)) // Slightly reduced range
-      .sub(this._uniforms.uBladeMaxBendAngle.sub(minOffset)); // Shift away from 0
-
+      .mul(this._uniforms.uBladeMaxBendAngle.mul(1.9))
+      .sub(this._uniforms.uBladeMaxBendAngle.sub(minOffset));
     gridData.x = randomBladeBend;
     gridData.y = randomBladeBend;
   })().compute(gridConfig.COUNT);
 
+  // ---------------------------------------------------------------------------
+  // Compute Node: Update grid data (such as alpha values) each frame.
+  // ---------------------------------------------------------------------------
   private computeUpdateGrid = Fn(() => {
     const gridData = this._gridBuffer.element(instanceIndex);
-
-    // Compute row and col in full grid
     const row = floor(
       float(instanceIndex).div(gridConfig.BLADES_PER_GRID_SIDE),
     );
     const col = float(instanceIndex).mod(gridConfig.BLADES_PER_GRID_SIDE);
 
-    // Compute world-space position of each blade in the grid
     const worldPos = vec2(
       col
         .mul(config.SPACING)
@@ -353,43 +352,38 @@ class GrassMaterial extends MeshBasicNodeMaterial {
         ),
     ).add(this._uniforms.uPlayerPosition.xz);
 
-    // Normalize world position to texture UV space (assuming 256x256 texture)
     const uvPos = worldPos.div(float(256)).add(float(0.5));
-
-    // Sample alpha texture
     const alphaValue = texture(this._alphaTexture, uvPos).r;
-
-    // Store alpha in grid buffer
     gridData.z = alphaValue;
   })().compute(gridConfig.COUNT);
 
+  // ---------------------------------------------------------------------------
+  // Compute Node: Final blade position.
+  // Combines the constant blade local offset, the static tile offset, and the dynamic wrap offset.
+  // ---------------------------------------------------------------------------
   private computePosition = Fn(
     ([tileData = vec4(0, 0, 0, 0), gridData = vec3(0, 0, 0)]) => {
-      const combinedOffset = tileData.xy.add(this._uniforms.uTileOffset);
+      const combinedOffset = tileData.xy
+        .add(this._uniforms.uTileOffset)
+        .add(this._uniforms.uTileWrapOffset);
       const offset = vec3(combinedOffset.x, 0, combinedOffset.y);
 
       const bendingAngle = gridData.x;
       const scale = tileData.w;
       const yawAngle = tileData.z;
 
-      // Compute bending strength based on vertex height
-      const bendAmount = bendingAngle.mul(uv().y); // More bending at the top
-
-      // Apply bending: Rotate around the X-axis to tilt forward/backward
+      const bendAmount = bendingAngle.mul(uv().y);
       const bentPosition = rotate(positionLocal, vec3(bendAmount, 0, 0));
-
-      // Apply scaling
-      const scaled = positionLocal.mul(vec3(1, scale, 1));
-
-      // Apply rotation
+      const scaled = bentPosition.mul(vec3(1, scale, 1));
       const rotated = rotate(scaled, vec3(0, yawAngle, 0));
-
-      // Final world position
       const worldPosition = rotated.add(offset);
       return worldPosition;
     },
   );
 
+  // ---------------------------------------------------------------------------
+  // Compute Node: Compute diffuse color.
+  // ---------------------------------------------------------------------------
   private computeDiffuseColor = Fn(() => {
     const factor = pow(uv().y, 1.5);
     const blendedColor = mix(
@@ -400,14 +394,14 @@ class GrassMaterial extends MeshBasicNodeMaterial {
     return blendedColor;
   });
 
+  // ---------------------------------------------------------------------------
+  // Compute Node: Compute the grid instance index (used for sampling grid data).
+  // ---------------------------------------------------------------------------
   private computeGridInstanceIndex = Fn(([tileData = vec4(0, 0, 0, 0)]) => {
-    // 1. Reconstruct final XY (2D) for each blade
-    //   tileData.x,y + uTileOffset.x,y
     const tileOffset = this._uniforms.uTileOffset;
     const finalX = tileData.x.add(tileOffset.x);
     const finalZ = tileData.y.add(tileOffset.y);
 
-    // 2. Map finalX, finalZ to global row/col
     const halfField = float(gridConfig.BLADES_PER_GRID_SIDE)
       .mul(config.SPACING)
       .mul(0.5);
@@ -415,7 +409,6 @@ class GrassMaterial extends MeshBasicNodeMaterial {
     const colGrid = floor(finalX.add(halfField).div(config.SPACING));
     const rowGrid = floor(finalZ.add(halfField).div(config.SPACING));
 
-    // 3. clamp (optional)
     const colClamped = min(
       max(colGrid, float(0)),
       float(gridConfig.BLADES_PER_GRID_SIDE - 1),
@@ -425,14 +418,15 @@ class GrassMaterial extends MeshBasicNodeMaterial {
       float(gridConfig.BLADES_PER_GRID_SIDE - 1),
     );
 
-    // 4. final gridIndex
     const gridIndex = rowClamped
       .mul(float(gridConfig.BLADES_PER_GRID_SIDE))
       .add(colClamped);
-
     return gridIndex;
   });
 
+  // ---------------------------------------------------------------------------
+  // Create the material by setting up the node chain.
+  // ---------------------------------------------------------------------------
   private createGrassMaterial() {
     this.precision = "lowp";
     this.side = DoubleSide;
@@ -443,6 +437,7 @@ class GrassMaterial extends MeshBasicNodeMaterial {
     const gridData = this._gridBuffer.element(gridInstanceIndex);
 
     this.positionNode = this.computePosition(tileData, gridData);
+    // Optionally, if alpha testing or opacity is desired, uncomment these lines:
     this.opacityNode = gridData.z;
     this.alphaTest = 0.1;
     this.aoNode = smoothstep(-0.75, 1.25, uv().y);
@@ -450,11 +445,7 @@ class GrassMaterial extends MeshBasicNodeMaterial {
   }
 
   async update(state: State) {
-    const { renderer, player } = state;
-    this._uniforms.uPlayerPosition.value.copy(player.position);
-    await Promise.all([
-      renderer.computeAsync(this.computeUpdateTile),
-      renderer.computeAsync(this.computeUpdateGrid),
-    ]);
+    const { renderer } = state;
+    await renderer.computeAsync(this.computeUpdateGrid);
   }
 }
