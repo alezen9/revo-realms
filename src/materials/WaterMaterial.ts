@@ -200,7 +200,7 @@ export default class WaterMaterial extends MeshBasicNodeMaterial {
   );
 
   private createWaterMaterial() {
-    this.precision = "mediump";
+    this.precision = "lowp";
     // Position
     const elevation = this.computeElevation(uv()).mul(1000);
     const position = this.computePosition(elevation);
