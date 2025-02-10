@@ -41,7 +41,7 @@ import alphaTextureUrl from "/textures/test.webp?url";
 
 const getConfig = () => {
   const BLADE_WIDTH = 0.15;
-  const BLADE_HEIGHT = 1.75;
+  const BLADE_HEIGHT = 1.5;
   const TILE_SIZE = 50;
   const BLADES_PER_SIDE = 150;
   return {
@@ -349,9 +349,41 @@ export default class Grass {
     return instances;
   }
 
+  // private createBladeGeometryLow() {
+  //   const halfWidth = config.BLADE_WIDTH / 2;
+  //   const height = config.BLADE_HEIGHT;
+  //   const positions = new Float32Array([
+  //     -halfWidth,
+  //     0,
+  //     0, // A
+  //     halfWidth,
+  //     0,
+  //     0, // B
+  //     0,
+  //     height,
+  //     0, // C
+  //   ]);
+  //   const uvs = new Float32Array([
+  //     0,
+  //     0, // A
+  //     1,
+  //     0, // B
+  //     0.5,
+  //     1, // C
+  //   ]);
+  //   const geometry = new BufferGeometry();
+  //   geometry.setAttribute("position", new BufferAttribute(positions, 3));
+  //   geometry.setAttribute("uv", new BufferAttribute(uvs, 2));
+  //   return geometry;
+  // }
+
   private createBladeGeometry() {
+    //    E
+    // C      D
+    // A      B
     const halfWidth = config.BLADE_WIDTH / 2;
-    const height = config.BLADE_HEIGHT;
+    const quarterWidth = halfWidth / 2;
+    const segmentHeight = config.BLADE_HEIGHT / 2;
     const positions = new Float32Array([
       -halfWidth,
       0,
@@ -359,21 +391,40 @@ export default class Grass {
       halfWidth,
       0,
       0, // B
-      0,
-      height,
+      -quarterWidth,
+      segmentHeight * 1,
       0, // C
+      quarterWidth,
+      segmentHeight * 1,
+      0, // D
+      0,
+      segmentHeight * 2,
+      0, // E
     ]);
     const uvs = new Float32Array([
       0,
       0, // A
       1,
       0, // B
+      0.25,
+      segmentHeight * 1, // C
+      0.75,
+      segmentHeight * 1, // D
       0.5,
-      1, // C
+      segmentHeight * 2, // E
     ]);
+
+    const indices = new Uint16Array([
+      // A-B-D A-D-C
+      0, 1, 3, 0, 3, 2,
+      // C-D-E
+      2, 3, 4,
+    ]);
+
     const geometry = new BufferGeometry();
     geometry.setAttribute("position", new BufferAttribute(positions, 3));
     geometry.setAttribute("uv", new BufferAttribute(uvs, 2));
+    geometry.setIndex(new BufferAttribute(indices, 1));
     return geometry;
   }
 
