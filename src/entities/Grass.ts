@@ -36,8 +36,13 @@ import {
   min,
   sin,
   fract,
+  abs,
 } from "three/tsl";
-import { MeshBasicNodeMaterial } from "three/webgpu";
+import {
+  MeshBasicNodeMaterial,
+  MeshLambertNodeMaterial,
+  MeshPhongNodeMaterial,
+} from "three/webgpu";
 import { assetManager } from "../systems/AssetManager";
 import alphaTextureUrl from "/textures/test.webp?url";
 
@@ -259,14 +264,35 @@ class GrassMaterial extends MeshBasicNodeMaterial {
     },
   );
 
+  // private computeDiffuseColor = Fn(() => {
+  //   const factor = pow(uv().y, 1.5);
+  //   const blendedColor = mix(
+  //     this._uniforms.uBaseColor,
+  //     this._uniforms.uTipColor,
+  //     factor,
+  //   );
+  //   return blendedColor;
+  // });
+
   private computeDiffuseColor = Fn(() => {
-    const factor = pow(uv().y, 1.5);
-    const blendedColor = mix(
+    // Standard vertical gradient (same as before)
+    const verticalFactor = pow(uv().y, 1.5);
+    const baseToTip = mix(
       this._uniforms.uBaseColor,
       this._uniforms.uTipColor,
-      factor,
+      verticalFactor,
     );
-    return blendedColor;
+
+    // **Blade color variation (subtle hue shift)**
+    const colorVariation = hash(instanceIndex).mul(0.05).sub(0.025); // Small variation in [-0.025, 0.025]
+    return baseToTip.add(colorVariation);
+  });
+
+  // **Separate AO function**
+  private computeAO = Fn(() => {
+    const sideAO = abs(sin(this._gridBuffer.element(instanceIndex).z)).mul(0.5); // Fake side shadow
+    const verticalAO = smoothstep(-0.75, 1.25, uv().y); // Existing vertical shading
+    return verticalAO.mul(float(1.0).sub(sideAO));
   });
 
   private computeGridIndex = Fn(([tileIdx = float(0), bladeIdx = float(0)]) => {
@@ -297,7 +323,7 @@ class GrassMaterial extends MeshBasicNodeMaterial {
     this.positionNode = this.computePosition(data1, data2);
     this.opacityNode = data2.z;
     this.alphaTest = 0.1;
-    this.aoNode = smoothstep(-0.75, 1.25, uv().y);
+    this.aoNode = this.computeAO();
     this.colorNode = this.computeDiffuseColor();
   }
 
