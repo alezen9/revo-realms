@@ -6,7 +6,6 @@ import LightingSystem from "./systems/LightingSystem";
 import InputManager from "./systems/InputManager";
 import RendererManager from "./systems/RendererManager";
 import SceneManager from "./systems/SceneManager";
-import MonitoringManager from "./systems/MonitoringManager";
 // import PostprocessingManager from "./systems/PostprocessingManager";
 import Environmentallumination from "./systems/Environmentallumination";
 import { WebGPURenderer } from "three/webgpu";
@@ -30,7 +29,6 @@ export default class Game {
   private rendererManager: RendererManager;
   private sceneManager: SceneManager;
   private inputManager: InputManager;
-  private monitoringManager: MonitoringManager;
   // private postprocessingManager: PostprocessingManager;
   private clock: Clock;
   private world: World;
@@ -50,7 +48,6 @@ export default class Game {
     //   this.sceneManager,
     // );
     this.inputManager = new InputManager();
-    this.monitoringManager = new MonitoringManager();
 
     this.clock = new Clock(false);
 
@@ -102,7 +99,7 @@ export default class Game {
   }
 
   async startLoop(callback?: (state: State) => void) {
-    await this.monitoringManager.stats.init(this.rendererManager.renderer);
+    await this.rendererManager.init();
     this.clock.start();
 
     const state: State = {
@@ -118,7 +115,6 @@ export default class Game {
     };
 
     const loop = async () => {
-      this.monitoringManager.stats.update();
       this.sceneManager.update();
 
       callback?.(state);
@@ -127,22 +123,12 @@ export default class Game {
       this.player.update(state);
       this.realm.update(state);
       this.lighting.update(state);
-      await this.grass.update(state);
-      // // Rread GPU compute time (not working)
-      // const computeTime =
-      //   await this.rendererManager.renderer.resolveTimestampsAsync("compute");
-      // console.log("GPU Compute Time ms:", computeTime);
+      await this.grass.updateAsync(state);
 
-      // await this.postprocessingManager.composer.renderAsync();
-      await this.rendererManager.renderer.renderAsync(
+      await this.rendererManager.renderAsync(
         this.sceneManager.scene,
         this.sceneManager.camera,
       );
-
-      // // Read GPU render time (not working)
-      // const renderTime =
-      //   await this.rendererManager.renderer.resolveTimestampsAsync("render");
-      // console.log("GPU Render Time ms:", renderTime);
     };
 
     // On resize
