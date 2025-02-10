@@ -112,17 +112,15 @@ export default class LightingSystem {
   // });
 
   material_computeIllumination = Fn(() => {
-    const light = vec3(0)
-      // .add(this.material_computeAmbientLight())
-      // .add(this.material_computeDirectionalLight())
-      .add(this.emissive.material_computeEmissiveLight());
+    const light = vec3(0);
+    // .add(this.material_computeAmbientLight())
+    // .add(this.material_computeDirectionalLight())
+    // .add(this.emissive.material_computeEmissiveLight());
     return light;
   });
 
-  // @ts-ignore
   public update(state: State) {
     const { player } = state;
-    if (!player) return;
     this.directionalLight.position
       .copy(player.position)
       .add(this.LIGHT_POSITION_OFFSET);

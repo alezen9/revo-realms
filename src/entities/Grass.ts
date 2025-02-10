@@ -38,11 +38,7 @@ import {
   fract,
   abs,
 } from "three/tsl";
-import {
-  MeshBasicNodeMaterial,
-  MeshLambertNodeMaterial,
-  MeshPhongNodeMaterial,
-} from "three/webgpu";
+import { MeshBasicNodeMaterial } from "three/webgpu";
 import { assetManager } from "../systems/AssetManager";
 import alphaTextureUrl from "/textures/test.webp?url";
 
@@ -147,6 +143,7 @@ class GrassMaterial extends MeshBasicNodeMaterial {
       float(instanceIndex).div(gridConfig.BLADES_PER_GRID_SIDE),
     );
     const col = float(instanceIndex).mod(gridConfig.BLADES_PER_GRID_SIDE);
+
     const randX = hash(instanceIndex).add(4321);
     const randZ = hash(instanceIndex.add(1234));
     const offsetX = col
@@ -194,8 +191,10 @@ class GrassMaterial extends MeshBasicNodeMaterial {
     gridData.x = newOffsetX;
     gridData.y = newOffsetZ;
 
+    const gridPos = vec2(gridData.x, gridData.y);
+
     // Wind
-    const windUV = vec2(gridData.x, gridData.y)
+    const windUV = gridPos
       .add(this._uniforms.uPlayerPosition.xz)
       .add(this._uniforms.uTime.mul(0.25))
       .mul(0.5);
@@ -210,12 +209,13 @@ class GrassMaterial extends MeshBasicNodeMaterial {
 
     const targetBendAngle = windStrength.mul(0.35);
 
-    gridData.w = mix(gridData.w, targetBendAngle, 0.1); // 0.1 = smoothing factor
+    // gridData.w = mix(gridData.w, targetBendAngle, 0.1); // 0.1 = smoothing factor
+    gridData.w = gridData.w.add(targetBendAngle.sub(gridData.w).mul(0.1));
 
     // Update alpha
     const gridData2 = this._gridBuffer2.element(instanceIndex);
     const mapSize = float(256);
-    const worldPos = vec2(gridData.x, gridData.y)
+    const worldPos = gridPos
       .add(this._uniforms.uPlayerPosition.xz)
       .add(mapSize.mul(0.5))
       .div(mapSize);
@@ -225,7 +225,7 @@ class GrassMaterial extends MeshBasicNodeMaterial {
     // Trail
     // Compute distance to player
     const playerPos = vec2(this._uniforms.uDelta.x, this._uniforms.uDelta.y);
-    const diff = vec2(gridData.x, gridData.y).sub(playerPos);
+    const diff = gridPos.sub(playerPos);
     const distSq = diff.dot(diff);
 
     // Check if the player is on the ground (arbitrary threshold for jumping)
@@ -264,18 +264,7 @@ class GrassMaterial extends MeshBasicNodeMaterial {
     },
   );
 
-  // private computeDiffuseColor = Fn(() => {
-  //   const factor = pow(uv().y, 1.5);
-  //   const blendedColor = mix(
-  //     this._uniforms.uBaseColor,
-  //     this._uniforms.uTipColor,
-  //     factor,
-  //   );
-  //   return blendedColor;
-  // });
-
   private computeDiffuseColor = Fn(() => {
-    // Standard vertical gradient (same as before)
     const verticalFactor = pow(uv().y, 1.5);
     const baseToTip = mix(
       this._uniforms.uBaseColor,
@@ -283,15 +272,13 @@ class GrassMaterial extends MeshBasicNodeMaterial {
       verticalFactor,
     );
 
-    // **Blade color variation (subtle hue shift)**
-    const colorVariation = hash(instanceIndex).mul(0.05).sub(0.025); // Small variation in [-0.025, 0.025]
+    const colorVariation = hash(instanceIndex).mul(0.05).sub(0.025);
     return baseToTip.add(colorVariation);
   });
 
-  // **Separate AO function**
   private computeAO = Fn(() => {
-    const sideAO = abs(sin(this._gridBuffer.element(instanceIndex).z)).mul(0.5); // Fake side shadow
-    const verticalAO = smoothstep(-0.75, 1.25, uv().y); // Existing vertical shading
+    const sideAO = abs(sin(this._gridBuffer.element(instanceIndex).z)).mul(0.5);
+    const verticalAO = smoothstep(-0.75, 1.25, uv().y);
     return verticalAO.mul(float(1.0).sub(sideAO));
   });
 
