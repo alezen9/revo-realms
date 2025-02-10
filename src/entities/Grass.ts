@@ -34,6 +34,8 @@ import {
   texture,
   step,
   min,
+  sin,
+  fract,
 } from "three/tsl";
 import { MeshBasicNodeMaterial } from "three/webgpu";
 import { assetManager } from "../systems/AssetManager";
@@ -43,7 +45,7 @@ const getConfig = () => {
   const BLADE_WIDTH = 0.15;
   const BLADE_HEIGHT = 1.5;
   const TILE_SIZE = 50;
-  const BLADES_PER_SIDE = 150;
+  const BLADES_PER_SIDE = 200;
   return {
     BLADE_WIDTH,
     BLADE_HEIGHT,
@@ -190,15 +192,20 @@ class GrassMaterial extends MeshBasicNodeMaterial {
     // Wind
     const windUV = vec2(gridData.x, gridData.y)
       .add(this._uniforms.uPlayerPosition.xz)
-      .add(this._uniforms.uTime.mul(0.01))
-      .mul(7.5)
-      .mod(1);
+      .add(this._uniforms.uTime.mul(0.25))
+      .mul(0.5);
 
-    // Sample wind texture with stable UVs
-    const windStrength = texture(assetManager.perlinNoiseTexture, windUV, 5).r;
+    const stableUV = fract(windUV);
 
-    // Reduce wind strength to prevent excessive bending
-    gridData.w = windStrength.mul(0.5);
+    const windStrength = texture(
+      assetManager.perlinNoiseTexture,
+      stableUV,
+      5,
+    ).r;
+
+    const targetBendAngle = windStrength.mul(0.35);
+
+    gridData.w = mix(gridData.w, targetBendAngle, 0.1); // 0.1 = smoothing factor
 
     // Update alpha
     const gridData2 = this._gridBuffer2.element(instanceIndex);
