@@ -43,10 +43,10 @@ import { assetManager } from "../systems/AssetManager";
 import alphaTextureUrl from "/textures/test.webp?url";
 
 const getConfig = () => {
-  const BLADE_WIDTH = 0.15;
+  const BLADE_WIDTH = 0.2;
   const BLADE_HEIGHT = 1.5;
   const TILE_SIZE = 50;
-  const BLADES_PER_SIDE = 200;
+  const BLADES_PER_SIDE = 175;
   return {
     BLADE_WIDTH,
     BLADE_HEIGHT,
@@ -68,7 +68,7 @@ const getConfig = () => {
 const config = getConfig();
 
 const getGridConfig = () => {
-  const GRID_SIZE = 3; // STRICT: odd number so player is at the center of the center tile
+  const GRID_SIZE = 3; // BETTER IF odd number so player is at the center of the center tile and back tiles are culled out
   return {
     GRID_SIZE,
     GRID_WIDTH: GRID_SIZE * config.TILE_SIZE,
@@ -119,9 +119,9 @@ class GrassMaterial extends MeshBasicNodeMaterial {
   private _gridBuffer1: ReturnType<typeof instancedArray>; // holds: vec4 = (localOffset.x, localOffset.y, yaw, bending angle)
   private _gridBuffer2: ReturnType<typeof instancedArray>; // holds: vec4 = (current scale, original scale, alpha, TBD)
   private _alphaTexture: Texture;
-  constructor(uniforms: GrassUniforms) {
+  constructor() {
     super();
-    this._uniforms = { ...defaultUniforms, ...uniforms };
+    this._uniforms = defaultUniforms;
     this._gridBuffer1 = instancedArray(gridConfig.COUNT, "vec4");
     this._gridBuffer1.setPBO(true);
     this._gridBuffer2 = instancedArray(gridConfig.COUNT, "vec4");
@@ -137,6 +137,10 @@ class GrassMaterial extends MeshBasicNodeMaterial {
 
   setTileIndex(idx: number) {
     this._uniforms.uTileIdx.value = idx;
+  }
+
+  setDelta(dx: number, dz: number) {
+    this._uniforms.uDelta.value.set(dx, dz);
   }
 
   private computeInit = Fn(() => {
@@ -160,11 +164,16 @@ class GrassMaterial extends MeshBasicNodeMaterial {
     gridData.x = offsetX;
     gridData.y = offsetZ;
 
+    const noiseUV = vec2(gridData.x, gridData.y)
+      .div(gridConfig.GRID_HALF_WIDTH)
+      .add(1);
+    const noiseScale = float(1);
+    const uv = fract(noiseUV.mul(noiseScale));
+    const noiseValue = texture(assetManager.randomNoiseTexture, uv).r;
+
     // Yaw
-    const randomBladeYaw = hash(instanceIndex.add(200))
-      .mul(float(Math.PI * 2))
-      .sub(float(Math.PI));
-    gridData.z = randomBladeYaw;
+    const yawVariation = noiseValue.sub(0.5).mul(float(Math.PI)); // Map noise to [-PI/2, PI/2]
+    gridData.z = yawVariation;
 
     // Scale
     const gridData2 = this._gridBuffer2.element(instanceIndex);
@@ -332,13 +341,9 @@ export default class Grass {
   private material: GrassMaterial;
   private grassField: Group;
 
-  private uDelta = uniform(new Vector2(0, 0));
-
   constructor(scene: State["scene"]) {
     this.geometry = this.createBladeGeometry();
-    this.material = new GrassMaterial({
-      uDelta: this.uDelta,
-    });
+    this.material = new GrassMaterial();
     this.grassField = this.createGrassGrid();
     scene.add(this.grassField);
   }
@@ -404,8 +409,10 @@ export default class Grass {
 
   private createBladeGeometry() {
     //    E
-    // C      D
-    // A      B
+    //   /  \
+    //  C----D
+    // |  \   |
+    // A------B
     const halfWidth = config.BLADE_WIDTH / 2;
     const quarterWidth = halfWidth / 2;
     const segmentHeight = config.BLADE_HEIGHT / 2;
@@ -457,7 +464,7 @@ export default class Grass {
     const { player } = state;
     const dx = player.position.x - this.grassField.position.x;
     const dz = player.position.z - this.grassField.position.z;
-    this.uDelta.value.set(dx, dz);
+    this.material.setDelta(dx, dz);
 
     this.grassField.position.copy(player.position).setY(0);
 
