@@ -41,7 +41,7 @@ import alphaTextureUrl from "/textures/test.webp?url";
 
 const getConfig = () => {
   const BLADE_WIDTH = 0.15;
-  const BLADE_HEIGHT = 1.25;
+  const BLADE_HEIGHT = 1.75;
   const TILE_SIZE = 50;
   const BLADES_PER_SIDE = 150;
   return {
@@ -76,6 +76,7 @@ const gridConfig = getGridConfig();
 
 type UniformType<T> = ReturnType<typeof uniform<T>>;
 type GrassUniforms = {
+  uTime?: UniformType<number>;
   uDelta: UniformType<Vector2>;
   uPlayerPosition?: UniformType<Vector3>;
   uBladeMinScale?: UniformType<number>;
@@ -92,6 +93,7 @@ type GrassUniforms = {
 };
 
 const defaultUniforms: Required<GrassUniforms> = {
+  uTime: uniform(0),
   uDelta: uniform(new Vector2(0, 0)),
   uPlayerPosition: uniform(new Vector3(0, 0, 0)),
   uBladeMinScale: uniform(0.5),
@@ -103,7 +105,6 @@ const defaultUniforms: Required<GrassUniforms> = {
   uBladeMaxBendAngle: uniform(Math.PI * 0.15),
   uBaseColor: uniform(new Color("#4f8a4f")),
   uTipColor: uniform(new Color("#f7ff3d")),
-
   uTileIdx: uniform(0),
 };
 
@@ -139,7 +140,7 @@ class GrassMaterial extends MeshBasicNodeMaterial {
       float(instanceIndex).div(gridConfig.BLADES_PER_GRID_SIDE),
     );
     const col = float(instanceIndex).mod(gridConfig.BLADES_PER_GRID_SIDE);
-    const randX = hash(instanceIndex);
+    const randX = hash(instanceIndex).add(4321);
     const randZ = hash(instanceIndex.add(1234));
     const offsetX = col
       .mul(gridConfig.SPACING)
@@ -157,12 +158,6 @@ class GrassMaterial extends MeshBasicNodeMaterial {
       .mul(float(Math.PI * 2))
       .sub(float(Math.PI));
     gridData.z = randomBladeYaw;
-
-    // Bending
-    const randomBladeBend = hash(instanceIndex.add(300))
-      .mul(this._uniforms.uBladeMaxBendAngle.mul(2))
-      .sub(this._uniforms.uBladeMaxBendAngle);
-    gridData.w = randomBladeBend;
 
     // Scale
     const gridData2 = this._gridBuffer2.element(instanceIndex);
@@ -191,6 +186,19 @@ class GrassMaterial extends MeshBasicNodeMaterial {
 
     gridData.x = newOffsetX;
     gridData.y = newOffsetZ;
+
+    // Wind
+    const windUV = vec2(gridData.x, gridData.y)
+      .add(this._uniforms.uPlayerPosition.xz)
+      .add(this._uniforms.uTime.mul(0.01))
+      .mul(7.5)
+      .mod(1);
+
+    // Sample wind texture with stable UVs
+    const windStrength = texture(assetManager.perlinNoiseTexture, windUV, 5).r;
+
+    // Reduce wind strength to prevent excessive bending
+    gridData.w = windStrength.mul(0.5);
 
     // Update alpha
     const gridData2 = this._gridBuffer2.element(instanceIndex);
@@ -274,7 +282,6 @@ class GrassMaterial extends MeshBasicNodeMaterial {
   private createGrassMaterial() {
     this.precision = "lowp";
     this.side = DoubleSide;
-    this.toneMapped = false;
     const bladeIdx = float(instanceIndex);
     const tileIdx = this._uniforms.uTileIdx;
     const gridIdx = this.computeGridIndex(tileIdx, bladeIdx);
@@ -288,7 +295,9 @@ class GrassMaterial extends MeshBasicNodeMaterial {
   }
 
   async update(state: State) {
-    const { renderer } = state;
+    const { renderer, player, clock } = state;
+    this._uniforms.uTime.value = clock.getElapsedTime();
+    this._uniforms.uPlayerPosition.value.copy(player.position);
     await renderer.computeAsync(this.computeUpdate);
   }
 }
@@ -299,13 +308,11 @@ export default class Grass {
   private grassField: Group;
 
   private uDelta = uniform(new Vector2(0, 0));
-  private uPlayerPosition = uniform(new Vector3(0, 0, 0));
 
   constructor(scene: State["scene"]) {
     this.geometry = this.createBladeGeometry();
     this.material = new GrassMaterial({
       uDelta: this.uDelta,
-      uPlayerPosition: this.uPlayerPosition,
     });
     this.grassField = this.createGrassGrid();
     scene.add(this.grassField);
@@ -377,7 +384,6 @@ export default class Grass {
     this.uDelta.value.set(dx, dz);
 
     this.grassField.position.copy(player.position).setY(0);
-    this.uPlayerPosition.value.copy(player.position);
 
     await this.material.update(state);
   }
