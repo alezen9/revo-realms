@@ -9,8 +9,8 @@ import SceneManager from "./systems/SceneManager";
 import MonitoringManager from "./systems/MonitoringManager";
 // import PostprocessingManager from "./systems/PostprocessingManager";
 import Environmentallumination from "./systems/Environmentallumination";
-import NewGrass from "./entities/NewGrass";
 import { WebGPURenderer } from "three/webgpu";
+import Grass from "./entities/Grass";
 
 export type State = {
   camera: PerspectiveCamera;
@@ -40,7 +40,7 @@ export default class Game {
   private lighting: LightingSystem;
   private environmentalIllumination: Environmentallumination;
 
-  private grass: NewGrass;
+  private grass: Grass;
 
   constructor() {
     this.rendererManager = new RendererManager();
@@ -76,7 +76,7 @@ export default class Game {
     });
 
     // Grass
-    this.grass = new NewGrass(this.sceneManager.scene);
+    this.grass = new Grass(this.sceneManager.scene);
   }
 
   private getSizes(): Sizes {
