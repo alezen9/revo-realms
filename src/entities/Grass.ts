@@ -59,7 +59,10 @@ const getConfig = () => {
       new Vector3(-TILE_SIZE / 2, 0, -TILE_SIZE / 2),
       new Vector3(TILE_SIZE / 2, BLADE_HEIGHT * 2, TILE_SIZE / 2),
     ),
-    boundingSphere: new Sphere(new Vector3(0, 0, 0), TILE_SIZE * Math.sqrt(2)),
+    boundingSphere: new Sphere(
+      new Vector3(0, 0, 0),
+      (TILE_SIZE / 2) * Math.sqrt(2),
+    ),
   };
 };
 const config = getConfig();
@@ -113,14 +116,14 @@ const defaultUniforms: Required<GrassUniforms> = {
 
 class GrassMaterial extends MeshBasicNodeMaterial {
   private _uniforms: Required<GrassUniforms>;
-  private _gridBuffer: ReturnType<typeof instancedArray>; // holds: vec4 = (localOffset.x, localOffset.y, yaw, bending angle)
+  private _gridBuffer1: ReturnType<typeof instancedArray>; // holds: vec4 = (localOffset.x, localOffset.y, yaw, bending angle)
   private _gridBuffer2: ReturnType<typeof instancedArray>; // holds: vec4 = (current scale, original scale, alpha, TBD)
   private _alphaTexture: Texture;
   constructor(uniforms: GrassUniforms) {
     super();
     this._uniforms = { ...defaultUniforms, ...uniforms };
-    this._gridBuffer = instancedArray(gridConfig.COUNT, "vec4");
-    this._gridBuffer.setPBO(true);
+    this._gridBuffer1 = instancedArray(gridConfig.COUNT, "vec4");
+    this._gridBuffer1.setPBO(true);
     this._gridBuffer2 = instancedArray(gridConfig.COUNT, "vec4");
     this._gridBuffer2.setPBO(true);
     this._alphaTexture = assetManager.textureLoader.load(alphaTextureUrl);
@@ -137,7 +140,7 @@ class GrassMaterial extends MeshBasicNodeMaterial {
   }
 
   private computeInit = Fn(() => {
-    const gridData = this._gridBuffer.element(instanceIndex);
+    const gridData = this._gridBuffer1.element(instanceIndex);
     // Position XZ
     const row = floor(
       float(instanceIndex).div(gridConfig.BLADES_PER_GRID_SIDE),
@@ -177,7 +180,7 @@ class GrassMaterial extends MeshBasicNodeMaterial {
   })().compute(gridConfig.COUNT);
 
   private computeUpdate = Fn(() => {
-    const gridData = this._gridBuffer.element(instanceIndex);
+    const gridData = this._gridBuffer1.element(instanceIndex);
     // Position
     const newOffsetX = mod(
       gridData.x.sub(this._uniforms.uDelta.x).add(gridConfig.GRID_HALF_WIDTH),
@@ -277,7 +280,9 @@ class GrassMaterial extends MeshBasicNodeMaterial {
   });
 
   private computeAO = Fn(() => {
-    const sideAO = abs(sin(this._gridBuffer.element(instanceIndex).z)).mul(0.5);
+    const sideAO = abs(sin(this._gridBuffer1.element(instanceIndex).z)).mul(
+      0.5,
+    );
     const verticalAO = smoothstep(-0.75, 1.25, uv().y);
     return verticalAO.mul(float(1.0).sub(sideAO));
   });
@@ -305,7 +310,7 @@ class GrassMaterial extends MeshBasicNodeMaterial {
     const bladeIdx = float(instanceIndex);
     const tileIdx = this._uniforms.uTileIdx;
     const gridIdx = this.computeGridIndex(tileIdx, bladeIdx);
-    const data1 = this._gridBuffer.element(gridIdx);
+    const data1 = this._gridBuffer1.element(gridIdx);
     const data2 = this._gridBuffer2.element(gridIdx);
     this.positionNode = this.computePosition(data1, data2);
     this.opacityNode = data2.z;
@@ -448,7 +453,7 @@ export default class Grass {
     return geometry;
   }
 
-  async update(state: State) {
+  async updateAsync(state: State) {
     const { player } = state;
     const dx = player.position.x - this.grassField.position.x;
     const dz = player.position.z - this.grassField.position.z;
