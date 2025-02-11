@@ -1,5 +1,6 @@
 import {
   Box3,
+  BoxHelper,
   BufferAttribute,
   BufferGeometry,
   Color,
@@ -45,17 +46,17 @@ import { assetManager } from "../systems/AssetManager";
 import alphaTextureUrl from "/textures/test.webp?url";
 
 const getConfig = () => {
-  const BLADE_WIDTH = 0.2;
+  const BLADE_WIDTH = 0.15;
   const BLADE_HEIGHT = 1.5;
   const TILE_SIZE = 50;
-  const BLADES_PER_SIDE = 175;
+  const BLADES_PER_SIDE = 150;
   return {
     BLADE_WIDTH,
     BLADE_HEIGHT,
     TILE_SIZE,
     TILE_HALF_SIZE: TILE_SIZE / 2,
     BLADES_PER_SIDE,
-    COUNT: BLADES_PER_SIDE * BLADES_PER_SIDE, // blades per tile
+    COUNT: BLADES_PER_SIDE * BLADES_PER_SIDE,
     SPACING: TILE_SIZE / BLADES_PER_SIDE,
     boundingBox: new Box3(
       new Vector3(-TILE_SIZE / 2, 0, -TILE_SIZE / 2),
@@ -108,6 +109,7 @@ type GrassUniforms = {
   // Updated externally
   uTileIdx?: UniformType<number>; // Per-tile uniforms
   uDelta: UniformType<Vector2>;
+  uTileOffset?: UniformType<Vector2>;
 };
 
 const defaultUniforms: Required<GrassUniforms> = {
@@ -135,6 +137,7 @@ const defaultUniforms: Required<GrassUniforms> = {
   // Updated externally
   uTileIdx: uniform(0),
   uDelta: uniform(new Vector2(0, 0)),
+  uTileOffset: uniform(new Vector2(0, 0)),
 };
 
 class GrassMaterial extends MeshLambertNodeMaterial {
@@ -162,6 +165,10 @@ class GrassMaterial extends MeshLambertNodeMaterial {
     this._uniforms.uTileIdx.value = idx;
   }
 
+  setTileOffset(x: number, z: number) {
+    this._uniforms.uTileOffset.value.set(x, z);
+  }
+
   setDelta(dx: number, dz: number) {
     this._uniforms.uDelta.value.set(dx, dz);
   }
@@ -174,7 +181,7 @@ class GrassMaterial extends MeshLambertNodeMaterial {
     );
     const col = float(instanceIndex).mod(gridConfig.BLADES_PER_GRID_SIDE);
 
-    const randX = hash(instanceIndex).add(4321);
+    const randX = hash(instanceIndex.add(4321));
     const randZ = hash(instanceIndex.add(1234));
     const offsetX = col
       .mul(gridConfig.SPACING)
@@ -328,7 +335,7 @@ class GrassMaterial extends MeshLambertNodeMaterial {
 
   private computePosition = Fn(
     ([data1 = vec4(0, 0, 0, 0), data2 = vec3(0, 0, 0)]) => {
-      const combinedOffset = data1.xy;
+      const combinedOffset = data1.xy.sub(this._uniforms.uTileOffset);
       const offset = vec3(combinedOffset.x, 0, combinedOffset.y);
       const yawAngle = data1.z;
       const bendingAngle = data1.w;
@@ -358,7 +365,8 @@ class GrassMaterial extends MeshLambertNodeMaterial {
       glowFactor,
     );
 
-    return finalColor;
+    // return finalColor;
+    return finalColor.mul(this._uniforms.uTileIdx);
   });
 
   private computeAO = Fn(() => {
@@ -422,18 +430,27 @@ export default class Grass {
   }
 
   private onBeforeRenderTile =
-    (tileIdx: number): Object3D["onBeforeRender"] =>
+    (tileIdx: number, x: number, z: number): Object3D["onBeforeRender"] =>
     (_, __, ___, ____, material: GrassMaterial) => {
       material.setTileIndex(tileIdx);
+      material.setTileOffset(x, z);
     };
 
   private createGrassGrid() {
     const grid = new Group();
+    grid.name = "grass";
+
+    const offsetXZ = gridConfig.GRID_HALF_WIDTH - config.TILE_HALF_SIZE;
+
     let i = 0;
     for (let row = 0; row < gridConfig.GRID_SIZE; row++) {
+      const z = config.TILE_SIZE * row - offsetXZ;
       for (let col = 0; col < gridConfig.GRID_SIZE; col++) {
+        const x = config.TILE_SIZE * col - offsetXZ;
         const tile = this.createTile();
-        tile.onBeforeRender = this.onBeforeRenderTile(i);
+        tile.position.set(x, 0, z);
+        tile.name = `grass-tile-${i}`;
+        tile.onBeforeRender = this.onBeforeRenderTile(i, x, z);
         grid.add(tile);
         i++;
       }
@@ -442,14 +459,10 @@ export default class Grass {
   }
 
   private createTile() {
-    const instances = new InstancedMesh(
-      this.geometry,
-      this.material,
-      config.COUNT,
-    );
-    instances.boundingBox = config.boundingBox;
-    instances.boundingSphere = config.boundingSphere;
-    return instances;
+    const tile = new InstancedMesh(this.geometry, this.material, config.COUNT);
+    tile.boundingBox = config.boundingBox;
+    tile.boundingSphere = config.boundingSphere;
+    return tile;
   }
 
   // private createBladeGeometryLow() {
@@ -526,12 +539,12 @@ export default class Grass {
       2, 3, 4,
     ]);
 
-    const angleDeg1 = 20;
+    const angleDeg1 = 25;
     const angleRad1 = (angleDeg1 * Math.PI) / 180;
     const cosTheta1 = Math.cos(angleRad1);
     const sinTheta1 = Math.sin(angleRad1);
 
-    const angleDeg2 = 10;
+    const angleDeg2 = 15;
     const angleRad2 = (angleDeg2 * Math.PI) / 180;
     const cosTheta2 = Math.cos(angleRad2);
     const sinTheta2 = Math.sin(angleRad2);
