@@ -39,8 +39,6 @@ import {
   abs,
   max,
   clamp,
-  length,
-  ceil,
 } from "three/tsl";
 import { MeshLambertNodeMaterial } from "three/webgpu";
 import { assetManager } from "../systems/AssetManager";
@@ -128,7 +126,7 @@ const defaultUniforms: Required<GrassUniforms> = {
   uGlowRadiusSquared: uniform(4),
   uGlowFadeIn: uniform(0.05),
   uGlowFadeOut: uniform(0.01),
-  uGlowColor: uniform(new Color("#FF9933")),
+  uGlowColor: uniform(new Color(1.0, 0.6, 0.1)),
   // Bending
   uBladeMaxBendAngle: uniform(Math.PI * 0.15),
   // Color
@@ -353,11 +351,10 @@ class GrassMaterial extends MeshLambertNodeMaterial {
     );
 
     const colorVariation = hash(instanceIndex).mul(0.05).sub(0.025);
-    // return baseToTip.add(colorVariation);
     const glowFactor = data2.w;
     const finalColor = mix(
       baseToTip.add(colorVariation),
-      vec3(1.0, 0.6, 0.1),
+      this._uniforms.uGlowColor,
       glowFactor,
     );
 
@@ -529,10 +526,39 @@ export default class Grass {
       2, 3, 4,
     ]);
 
+    const angleDeg1 = 20;
+    const angleRad1 = (angleDeg1 * Math.PI) / 180;
+    const cosTheta1 = Math.cos(angleRad1);
+    const sinTheta1 = Math.sin(angleRad1);
+
+    const angleDeg2 = 10;
+    const angleRad2 = (angleDeg2 * Math.PI) / 180;
+    const cosTheta2 = Math.cos(angleRad2);
+    const sinTheta2 = Math.sin(angleRad2);
+
+    const normals = new Float32Array([
+      -cosTheta1,
+      sinTheta1,
+      0, // A
+      cosTheta1,
+      sinTheta1,
+      0, // B
+      -cosTheta2,
+      sinTheta2,
+      0, // C
+      cosTheta2,
+      sinTheta2,
+      0, // D
+      0.0,
+      1.0,
+      0, // E (Tip remains straight)
+    ]);
+
     const geometry = new BufferGeometry();
     geometry.setAttribute("position", new BufferAttribute(positions, 3));
     geometry.setAttribute("uv", new BufferAttribute(uvs, 2));
     geometry.setIndex(new BufferAttribute(indices, 1));
+    geometry.setAttribute("normal", new BufferAttribute(normals, 3));
     return geometry;
   }
 
