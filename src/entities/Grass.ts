@@ -7,8 +7,11 @@ import {
   DoubleSide,
   Group,
   InstancedMesh,
+  Mesh,
+  MeshBasicMaterial,
   Object3D,
   Sphere,
+  SphereGeometry,
   Texture,
   Vector2,
   Vector3,
@@ -62,10 +65,14 @@ const getConfig = () => {
       new Vector3(-TILE_SIZE / 2, 0, -TILE_SIZE / 2),
       new Vector3(TILE_SIZE / 2, BLADE_HEIGHT * 2, TILE_SIZE / 2),
     ),
-    boundingSphere: new Sphere(
-      new Vector3(0, 0, 0),
-      (TILE_SIZE / 2) * Math.sqrt(2),
-    ),
+    // boundingSphere: new Sphere(
+    //   new Vector3(0, 0, 0),
+    //   (TILE_SIZE / 2) * Math.sqrt(2),
+    // ),
+    getBoundingSphere: (x: number, z: number) => {
+      const radius = TILE_SIZE * 2 * Math.sqrt(2);
+      return new Sphere(new Vector3(x, 0, z), radius);
+    },
   };
 };
 const config = getConfig();
@@ -141,7 +148,7 @@ const defaultUniforms: Required<GrassUniforms> = {
 };
 
 class GrassMaterial extends MeshLambertNodeMaterial {
-  private _uniforms: Required<GrassUniforms>;
+  _uniforms: Required<GrassUniforms>;
   private _gridBuffer1: ReturnType<typeof instancedArray>; // holds: vec4 = (localOffset.x, localOffset.y, yaw, bending angle)
   private _gridBuffer2: ReturnType<typeof instancedArray>; // holds: vec4 = (current scale, original scale, alpha, glow)
   private _alphaTexture: Texture;
@@ -365,8 +372,8 @@ class GrassMaterial extends MeshLambertNodeMaterial {
       glowFactor,
     );
 
-    // return finalColor;
-    return finalColor.mul(this._uniforms.uTileIdx);
+    return finalColor;
+    // return finalColor.mul(this._uniforms.uTileIdx);
   });
 
   private computeAO = Fn(() => {
@@ -417,6 +424,18 @@ class GrassMaterial extends MeshLambertNodeMaterial {
   }
 }
 
+const colors = [
+  "red",
+  "blue",
+  "green",
+  "purple",
+  "black",
+  "white",
+  "yellow",
+  "orange",
+  "coral",
+];
+
 export default class Grass {
   private geometry: BufferGeometry;
   private material: GrassMaterial;
@@ -434,6 +453,43 @@ export default class Grass {
     (_, __, ___, ____, material: GrassMaterial) => {
       material.setTileIndex(tileIdx);
       material.setTileOffset(x, z);
+
+      const tile = this.grassField.getObjectByName(`grass-tile-${tileIdx}`) as
+        | InstancedMesh
+        | undefined;
+      if (!tile) return;
+
+      // Read the player's (i.e. the grassField's) position.
+      const playerPos = this.grassField.position;
+
+      // Use the full grid width and half-width for the wrapping math.
+      const gridWidth = gridConfig.GRID_WIDTH; // e.g. n * m
+      const halfGridWidth = gridConfig.GRID_HALF_WIDTH; // i.e. gridWidth/2
+
+      // Compute the tile's offset from the player.
+      const dx = x - playerPos.x;
+      const dz = z - playerPos.z;
+
+      // Wrap each coordinate into the interval [-halfGridWidth, halfGridWidth]
+      // (Note: the extra "+ gridWidth" is to ensure a positive result before the second modulo)
+      const wrappedX =
+        ((((dx + halfGridWidth) % gridWidth) + gridWidth) % gridWidth) -
+        halfGridWidth;
+      const wrappedZ =
+        ((((dz + halfGridWidth) % gridWidth) + gridWidth) % gridWidth) -
+        halfGridWidth;
+
+      tile.boundingSphere?.center.set(wrappedX, 0, wrappedZ);
+
+      // // Get the bounding sphere mesh for this tile.
+      // const bs = this.grassField.getObjectByName(`bs-tile-${tileIdx}`) as
+      //   | Mesh
+      //   | undefined;
+      // if (!bs) return;
+
+      // // Update the bounding sphere center.
+      // // bs.position.set(wrappedX, 0, wrappedZ);
+      // bs.position.copy(tile.boundingSphere!.center);
     };
 
   private createGrassGrid() {
@@ -447,10 +503,17 @@ export default class Grass {
       const z = config.TILE_SIZE * row - offsetXZ;
       for (let col = 0; col < gridConfig.GRID_SIZE; col++) {
         const x = config.TILE_SIZE * col - offsetXZ;
-        const tile = this.createTile();
-        tile.position.set(x, 0, z);
+        const tile = this.createTile(x, z);
+        // tile.frustumCulled = false;
         tile.name = `grass-tile-${i}`;
         tile.onBeforeRender = this.onBeforeRenderTile(i, x, z);
+        // const bs = new Mesh(
+        //   new SphereGeometry(tile.boundingSphere!.radius),
+        //   new MeshBasicMaterial({ color: colors[i], wireframe: true }),
+        // );
+        // bs.position.copy(tile.boundingSphere!.center);
+        // bs.name = `bs-tile-${i}`;
+        // grid.add(bs);
         grid.add(tile);
         i++;
       }
@@ -458,10 +521,11 @@ export default class Grass {
     return grid;
   }
 
-  private createTile() {
+  private createTile(x = 0, z = 0) {
     const tile = new InstancedMesh(this.geometry, this.material, config.COUNT);
+    tile.position.set(x, 0, z);
     tile.boundingBox = config.boundingBox;
-    tile.boundingSphere = config.boundingSphere;
+    tile.boundingSphere = config.getBoundingSphere(x, z);
     return tile;
   }
 
