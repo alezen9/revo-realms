@@ -1,20 +1,15 @@
 import {
   Box3,
-  BoxHelper,
   BufferAttribute,
   BufferGeometry,
   Color,
   DoubleSide,
-  Group,
   InstancedMesh,
-  Mesh,
-  MeshBasicMaterial,
-  Object3D,
   Sphere,
-  SphereGeometry,
   Texture,
   Vector2,
   Vector3,
+  // BatchedMesh // IMPORTANT: keep an eye on this construct and perhaps try it another time
 } from "three";
 import { State } from "../Game";
 import {
@@ -51,8 +46,8 @@ import alphaTextureUrl from "/textures/test.webp?url";
 const getConfig = () => {
   const BLADE_WIDTH = 0.15;
   const BLADE_HEIGHT = 1.5;
-  const TILE_SIZE = 50;
-  const BLADES_PER_SIDE = 150;
+  const TILE_SIZE = 150;
+  const BLADES_PER_SIDE = 450;
   return {
     BLADE_WIDTH,
     BLADE_HEIGHT,
@@ -65,30 +60,13 @@ const getConfig = () => {
       new Vector3(-TILE_SIZE / 2, 0, -TILE_SIZE / 2),
       new Vector3(TILE_SIZE / 2, BLADE_HEIGHT * 2, TILE_SIZE / 2),
     ),
-    // boundingSphere: new Sphere(
-    //   new Vector3(0, 0, 0),
-    //   (TILE_SIZE / 2) * Math.sqrt(2),
-    // ),
-    getBoundingSphere: (x: number, z: number) => {
-      const radius = TILE_SIZE * 2 * Math.sqrt(2);
-      return new Sphere(new Vector3(x, 0, z), radius);
-    },
+    boundingSphere: new Sphere(
+      new Vector3(0, 0, 0),
+      (TILE_SIZE / 2) * Math.sqrt(2),
+    ),
   };
 };
 const config = getConfig();
-
-const getGridConfig = () => {
-  const GRID_SIZE = 3; // BETTER IF odd number so player is at the center of the center tile and back tiles are culled out
-  return {
-    GRID_SIZE,
-    GRID_WIDTH: GRID_SIZE * config.TILE_SIZE,
-    GRID_HALF_WIDTH: (GRID_SIZE * config.TILE_SIZE) / 2,
-    COUNT: GRID_SIZE * GRID_SIZE * config.COUNT,
-    BLADES_PER_GRID_SIDE: GRID_SIZE * config.BLADES_PER_SIDE,
-    SPACING: config.SPACING,
-  };
-};
-const gridConfig = getGridConfig();
 
 type UniformType<T> = ReturnType<typeof uniform<T>>;
 type GrassUniforms = {
@@ -114,9 +92,7 @@ type GrassUniforms = {
   uBaseColor?: UniformType<Color>;
   uTipColor?: UniformType<Color>;
   // Updated externally
-  uTileIdx?: UniformType<number>; // Per-tile uniforms
   uDelta: UniformType<Vector2>;
-  uTileOffset?: UniformType<Vector2>;
 };
 
 const defaultUniforms: Required<GrassUniforms> = {
@@ -142,23 +118,21 @@ const defaultUniforms: Required<GrassUniforms> = {
   uBaseColor: uniform(new Color("#4f8a4f")),
   uTipColor: uniform(new Color("#f7ff3d")),
   // Updated externally
-  uTileIdx: uniform(0),
   uDelta: uniform(new Vector2(0, 0)),
-  uTileOffset: uniform(new Vector2(0, 0)),
 };
 
 class GrassMaterial extends MeshLambertNodeMaterial {
   _uniforms: Required<GrassUniforms>;
-  private _gridBuffer1: ReturnType<typeof instancedArray>; // holds: vec4 = (localOffset.x, localOffset.y, yaw, bending angle)
-  private _gridBuffer2: ReturnType<typeof instancedArray>; // holds: vec4 = (current scale, original scale, alpha, glow)
+  private _buffer1: ReturnType<typeof instancedArray>; // holds: vec4 = (localOffset.x, localOffset.y, yaw, bending angle)
+  private _buffer2: ReturnType<typeof instancedArray>; // holds: vec4 = (current scale, original scale, alpha, glow)
   private _alphaTexture: Texture;
   constructor() {
     super();
     this._uniforms = defaultUniforms;
-    this._gridBuffer1 = instancedArray(gridConfig.COUNT, "vec4");
-    this._gridBuffer1.setPBO(true);
-    this._gridBuffer2 = instancedArray(gridConfig.COUNT, "vec4");
-    this._gridBuffer2.setPBO(true);
+    this._buffer1 = instancedArray(config.COUNT, "vec4");
+    this._buffer1.setPBO(true);
+    this._buffer2 = instancedArray(config.COUNT, "vec4");
+    this._buffer2.setPBO(true);
     this._alphaTexture = assetManager.textureLoader.load(alphaTextureUrl);
     this._alphaTexture.flipY = false;
 
@@ -168,52 +142,40 @@ class GrassMaterial extends MeshLambertNodeMaterial {
     this.createGrassMaterial();
   }
 
-  setTileIndex(idx: number) {
-    this._uniforms.uTileIdx.value = idx;
-  }
-
-  setTileOffset(x: number, z: number) {
-    this._uniforms.uTileOffset.value.set(x, z);
-  }
-
   setDelta(dx: number, dz: number) {
     this._uniforms.uDelta.value.set(dx, dz);
   }
 
   private computeInit = Fn(() => {
-    const gridData = this._gridBuffer1.element(instanceIndex);
+    const data1 = this._buffer1.element(instanceIndex);
     // Position XZ
-    const row = floor(
-      float(instanceIndex).div(gridConfig.BLADES_PER_GRID_SIDE),
-    );
-    const col = float(instanceIndex).mod(gridConfig.BLADES_PER_GRID_SIDE);
+    const row = floor(float(instanceIndex).div(config.BLADES_PER_SIDE));
+    const col = float(instanceIndex).mod(config.BLADES_PER_SIDE);
 
     const randX = hash(instanceIndex.add(4321));
     const randZ = hash(instanceIndex.add(1234));
     const offsetX = col
-      .mul(gridConfig.SPACING)
-      .sub(gridConfig.GRID_HALF_WIDTH)
-      .add(randX.mul(gridConfig.SPACING * 0.5));
+      .mul(config.SPACING)
+      .sub(config.TILE_HALF_SIZE)
+      .add(randX.mul(config.SPACING * 0.5));
     const offsetZ = row
-      .mul(gridConfig.SPACING)
-      .sub(gridConfig.GRID_HALF_WIDTH)
-      .add(randZ.mul(gridConfig.SPACING * 0.5));
-    gridData.x = offsetX;
-    gridData.y = offsetZ;
+      .mul(config.SPACING)
+      .sub(config.TILE_HALF_SIZE)
+      .add(randZ.mul(config.SPACING * 0.5));
+    data1.x = offsetX;
+    data1.y = offsetZ;
 
-    const noiseUV = vec2(gridData.x, gridData.y)
-      .div(gridConfig.GRID_HALF_WIDTH)
-      .add(1);
+    const noiseUV = vec2(data1.x, data1.y).div(config.TILE_HALF_SIZE).add(1);
     const noiseScale = float(1);
     const uv = fract(noiseUV.mul(noiseScale));
     const noiseValue = texture(assetManager.randomNoiseTexture, uv).r;
 
     // Yaw
     const yawVariation = noiseValue.sub(0.5).mul(float(Math.PI)); // Map noise to [-PI/2, PI/2]
-    gridData.z = yawVariation;
+    data1.z = yawVariation;
 
     // Scale
-    const gridData2 = this._gridBuffer2.element(instanceIndex);
+    const data2 = this._buffer2.element(instanceIndex);
     const scaleRange = this._uniforms.uBladeMaxScale.sub(
       this._uniforms.uBladeMinScale,
     );
@@ -221,29 +183,29 @@ class GrassMaterial extends MeshLambertNodeMaterial {
       .mul(scaleRange)
       .add(this._uniforms.uBladeMinScale);
 
-    gridData2.x = randomScale;
-    gridData2.y = randomScale;
-  })().compute(gridConfig.COUNT);
+    data2.x = randomScale;
+    data2.y = randomScale;
+  })().compute(config.COUNT);
 
   private computeUpdate = Fn(() => {
-    const gridData = this._gridBuffer1.element(instanceIndex);
+    const data1 = this._buffer1.element(instanceIndex);
     // Position
     const newOffsetX = mod(
-      gridData.x.sub(this._uniforms.uDelta.x).add(gridConfig.GRID_HALF_WIDTH),
-      gridConfig.GRID_WIDTH,
-    ).sub(gridConfig.GRID_HALF_WIDTH);
+      data1.x.sub(this._uniforms.uDelta.x).add(config.TILE_HALF_SIZE),
+      config.TILE_SIZE,
+    ).sub(config.TILE_HALF_SIZE);
     const newOffsetZ = mod(
-      gridData.y.sub(this._uniforms.uDelta.y).add(gridConfig.GRID_HALF_WIDTH),
-      gridConfig.GRID_WIDTH,
-    ).sub(gridConfig.GRID_HALF_WIDTH);
+      data1.y.sub(this._uniforms.uDelta.y).add(config.TILE_HALF_SIZE),
+      config.TILE_SIZE,
+    ).sub(config.TILE_HALF_SIZE);
 
-    gridData.x = newOffsetX;
-    gridData.y = newOffsetZ;
+    data1.x = newOffsetX;
+    data1.y = newOffsetZ;
 
-    const gridPos = vec2(gridData.x, gridData.y);
+    const pos = vec2(data1.x, data1.y);
 
     // Wind
-    const windUV = gridPos
+    const windUV = pos
       .add(this._uniforms.uPlayerPosition.xz)
       .add(this._uniforms.uTime.mul(0.25))
       .mul(0.5);
@@ -258,22 +220,22 @@ class GrassMaterial extends MeshLambertNodeMaterial {
 
     const targetBendAngle = windStrength.mul(0.35);
 
-    gridData.w = gridData.w.add(targetBendAngle.sub(gridData.w).mul(0.1));
+    data1.w = data1.w.add(targetBendAngle.sub(data1.w).mul(0.1));
 
     // Alpha
-    const gridData2 = this._gridBuffer2.element(instanceIndex);
+    const data2 = this._buffer2.element(instanceIndex);
     const mapSize = float(256);
-    const worldPos = gridPos
+    const worldPos = pos
       .add(this._uniforms.uPlayerPosition.xz)
       .add(mapSize.mul(0.5))
       .div(mapSize);
     const alphaValue = texture(this._alphaTexture, worldPos).r;
-    gridData2.z = alphaValue;
+    data2.z = alphaValue;
 
     // Trail
     // Compute distance to player
     const playerPos = vec2(this._uniforms.uDelta.x, this._uniforms.uDelta.y);
-    const diff = gridPos.sub(playerPos);
+    const diff = pos.sub(playerPos);
     const distSq = diff.dot(diff);
 
     // Check if the player is on the ground (arbitrary threshold for jumping)
@@ -285,7 +247,7 @@ class GrassMaterial extends MeshLambertNodeMaterial {
       distSq,
       this._uniforms.uTrailRaiusSquared,
     ).mul(isPlayerGrounded); // 1 if stepped on, 0 if not
-    const growScale = gridData2.x.add(this._uniforms.uTrailGrowthRate);
+    const growScale = data2.x.add(this._uniforms.uTrailGrowthRate);
 
     // Scale
     const growScaleFactor = float(1).sub(isBladeSteppedOn);
@@ -293,7 +255,7 @@ class GrassMaterial extends MeshLambertNodeMaterial {
       .mul(isBladeSteppedOn)
       .add(growScale.mul(growScaleFactor));
 
-    gridData2.x = min(targetScale, gridData2.y);
+    data2.x = min(targetScale, data2.y);
 
     // Glow
     const glowRadiusFactor = smoothstep(
@@ -316,9 +278,7 @@ class GrassMaterial extends MeshLambertNodeMaterial {
       .mul(isPlayerGrounded);
 
     // If moving or glow was already active, apply glow effect
-    const isBladeAffected = max(isPlayerMoving, gridData2.w).mul(
-      baseGlowFactor,
-    );
+    const isBladeAffected = max(isPlayerMoving, data2.w).mul(baseGlowFactor);
 
     // Compute fade-in when affected, fade-out when not affected
     const fadeIn = isBladeAffected.mul(this._uniforms.uGlowFadeIn);
@@ -330,20 +290,19 @@ class GrassMaterial extends MeshLambertNodeMaterial {
     const forceFadeOut = float(1)
       .sub(isPlayerMoving)
       .mul(this._uniforms.uGlowFadeOut)
-      .mul(gridData2.w);
+      .mul(data2.w);
 
     // Apply glow effect and ensure full fade-out when stationary
-    gridData2.w = clamp(
-      gridData2.w.add(fadeIn).sub(fadeOut).sub(forceFadeOut),
+    data2.w = clamp(
+      data2.w.add(fadeIn).sub(fadeOut).sub(forceFadeOut),
       0.0,
       1.0,
     );
-  })().compute(gridConfig.COUNT);
+  })().compute(config.COUNT);
 
   private computePosition = Fn(
     ([data1 = vec4(0, 0, 0, 0), data2 = vec3(0, 0, 0)]) => {
-      const combinedOffset = data1.xy.sub(this._uniforms.uTileOffset);
-      const offset = vec3(combinedOffset.x, 0, combinedOffset.y);
+      const offset = vec3(data1.x, 0, data1.y);
       const yawAngle = data1.z;
       const bendingAngle = data1.w;
       const scale = data2.x;
@@ -373,42 +332,19 @@ class GrassMaterial extends MeshLambertNodeMaterial {
     );
 
     return finalColor;
-    // return finalColor.mul(this._uniforms.uTileIdx);
   });
 
   private computeAO = Fn(() => {
-    const sideAO = abs(sin(this._gridBuffer1.element(instanceIndex).z)).mul(
-      0.5,
-    );
+    const sideAO = abs(sin(this._buffer1.element(instanceIndex).z)).mul(0.5);
     const verticalAO = smoothstep(-0.75, 1.25, uv().y);
     return verticalAO.mul(float(1.0).sub(sideAO));
-  });
-
-  private computeGridIndex = Fn(([tileIdx = float(0), bladeIdx = float(0)]) => {
-    // Compute the tile's row and column
-    const tileRow = floor(tileIdx.div(gridConfig.GRID_SIZE));
-    const tileCol = tileIdx.mod(gridConfig.GRID_SIZE);
-
-    // Compute the object's row and column within the tile
-    const objRow = floor(bladeIdx.div(config.BLADES_PER_SIDE));
-    const objCol = bladeIdx.mod(config.BLADES_PER_SIDE);
-
-    // Compute global row and column
-    const globalRow = tileRow.mul(config.BLADES_PER_SIDE).add(objRow);
-    const globalCol = tileCol.mul(config.BLADES_PER_SIDE).add(objCol);
-
-    // Compute final global index
-    return globalRow.mul(gridConfig.BLADES_PER_GRID_SIDE).add(globalCol);
   });
 
   private createGrassMaterial() {
     this.precision = "lowp";
     this.side = DoubleSide;
-    const bladeIdx = float(instanceIndex);
-    const tileIdx = this._uniforms.uTileIdx;
-    const gridIdx = this.computeGridIndex(tileIdx, bladeIdx);
-    const data1 = this._gridBuffer1.element(gridIdx);
-    const data2 = this._gridBuffer2.element(gridIdx);
+    const data1 = this._buffer1.element(instanceIndex);
+    const data2 = this._buffer2.element(instanceIndex);
     this.positionNode = this.computePosition(data1, data2);
     this.opacityNode = data2.z;
     this.alphaTest = 0.1;
@@ -424,114 +360,28 @@ class GrassMaterial extends MeshLambertNodeMaterial {
   }
 }
 
-const colors = [
-  "red",
-  "blue",
-  "green",
-  "purple",
-  "black",
-  "white",
-  "yellow",
-  "orange",
-  "coral",
-];
-
 export default class Grass {
-  private geometry: BufferGeometry;
   private material: GrassMaterial;
-  private grassField: Group;
+  private grassField: InstancedMesh;
 
   constructor(scene: State["scene"]) {
-    this.geometry = this.createBladeGeometry();
     this.material = new GrassMaterial();
-    this.grassField = this.createGrassGrid();
+    this.grassField = this.createGrassField();
     scene.add(this.grassField);
   }
 
-  private onBeforeRenderTile =
-    (tileIdx: number, x: number, z: number): Object3D["onBeforeRender"] =>
-    (_, __, ___, ____, material: GrassMaterial) => {
-      material.setTileIndex(tileIdx);
-      material.setTileOffset(x, z);
-
-      const tile = this.grassField.getObjectByName(`grass-tile-${tileIdx}`) as
-        | InstancedMesh
-        | undefined;
-      if (!tile) return;
-
-      // Read the player's (i.e. the grassField's) position.
-      const playerPos = this.grassField.position;
-
-      // Use the full grid width and half-width for the wrapping math.
-      const gridWidth = gridConfig.GRID_WIDTH; // e.g. n * m
-      const halfGridWidth = gridConfig.GRID_HALF_WIDTH; // i.e. gridWidth/2
-
-      // Compute the tile's offset from the player.
-      const dx = x - playerPos.x;
-      const dz = z - playerPos.z;
-
-      // Wrap each coordinate into the interval [-halfGridWidth, halfGridWidth]
-      // (Note: the extra "+ gridWidth" is to ensure a positive result before the second modulo)
-      const wrappedX =
-        ((((dx + halfGridWidth) % gridWidth) + gridWidth) % gridWidth) -
-        halfGridWidth;
-      const wrappedZ =
-        ((((dz + halfGridWidth) % gridWidth) + gridWidth) % gridWidth) -
-        halfGridWidth;
-
-      tile.boundingSphere?.center.set(wrappedX, 0, wrappedZ);
-
-      // // Get the bounding sphere mesh for this tile.
-      // const bs = this.grassField.getObjectByName(`bs-tile-${tileIdx}`) as
-      //   | Mesh
-      //   | undefined;
-      // if (!bs) return;
-
-      // // Update the bounding sphere center.
-      // // bs.position.set(wrappedX, 0, wrappedZ);
-      // bs.position.copy(tile.boundingSphere!.center);
-    };
-
-  private createGrassGrid() {
-    const grid = new Group();
-    grid.name = "grass";
-
-    const offsetXZ = gridConfig.GRID_HALF_WIDTH - config.TILE_HALF_SIZE;
-
-    let i = 0;
-    for (let row = 0; row < gridConfig.GRID_SIZE; row++) {
-      const z = config.TILE_SIZE * row - offsetXZ;
-      for (let col = 0; col < gridConfig.GRID_SIZE; col++) {
-        const x = config.TILE_SIZE * col - offsetXZ;
-        const tile = this.createTile(x, z);
-        // tile.frustumCulled = false;
-        tile.name = `grass-tile-${i}`;
-        tile.onBeforeRender = this.onBeforeRenderTile(i, x, z);
-        // const bs = new Mesh(
-        //   new SphereGeometry(tile.boundingSphere!.radius),
-        //   new MeshBasicMaterial({ color: colors[i], wireframe: true }),
-        // );
-        // bs.position.copy(tile.boundingSphere!.center);
-        // bs.name = `bs-tile-${i}`;
-        // grid.add(bs);
-        grid.add(tile);
-        i++;
-      }
-    }
-    return grid;
-  }
-
-  private createTile(x = 0, z = 0) {
-    const tile = new InstancedMesh(this.geometry, this.material, config.COUNT);
-    tile.position.set(x, 0, z);
+  private createGrassField() {
+    const geometry = this.createBladeGeometry();
+    const tile = new InstancedMesh(geometry, this.material, config.COUNT);
     tile.boundingBox = config.boundingBox;
-    tile.boundingSphere = config.getBoundingSphere(x, z);
+    tile.boundingSphere = config.boundingSphere;
     return tile;
   }
 
   // private createBladeGeometryLow() {
   //   const halfWidth = config.BLADE_WIDTH / 2;
   //   const height = config.BLADE_HEIGHT;
+
   //   const positions = new Float32Array([
   //     -halfWidth,
   //     0,
@@ -543,6 +393,7 @@ export default class Grass {
   //     height,
   //     0, // C
   //   ]);
+
   //   const uvs = new Float32Array([
   //     0,
   //     0, // A
@@ -551,9 +402,28 @@ export default class Grass {
   //     0.5,
   //     1, // C
   //   ]);
+
+  //   const angleDeg1 = 25;
+  //   const angleRad1 = (angleDeg1 * Math.PI) / 180;
+  //   const cosTheta1 = Math.cos(angleRad1);
+  //   const sinTheta1 = Math.sin(angleRad1);
+
+  //   const normals = new Float32Array([
+  //     -cosTheta1,
+  //     sinTheta1,
+  //     0, // A
+  //     cosTheta1,
+  //     sinTheta1,
+  //     0, // B
+  //     0.0,
+  //     1.0,
+  //     0, // C (Tip remains straight)
+  //   ]);
+
   //   const geometry = new BufferGeometry();
   //   geometry.setAttribute("position", new BufferAttribute(positions, 3));
   //   geometry.setAttribute("uv", new BufferAttribute(uvs, 2));
+  //   geometry.setAttribute("normal", new BufferAttribute(normals, 3));
   //   return geometry;
   // }
 
