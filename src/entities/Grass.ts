@@ -37,8 +37,12 @@ import {
   sin,
   fract,
   abs,
+  max,
+  clamp,
+  length,
+  ceil,
 } from "three/tsl";
-import { MeshBasicNodeMaterial } from "three/webgpu";
+import { MeshLambertNodeMaterial } from "three/webgpu";
 import { assetManager } from "../systems/AssetManager";
 import alphaTextureUrl from "/textures/test.webp?url";
 
@@ -83,41 +87,62 @@ const gridConfig = getGridConfig();
 type UniformType<T> = ReturnType<typeof uniform<T>>;
 type GrassUniforms = {
   uTime?: UniformType<number>;
-  uDelta: UniformType<Vector2>;
   uPlayerPosition?: UniformType<Vector3>;
+  // Scale
   uBladeMinScale?: UniformType<number>;
   uBladeMaxScale?: UniformType<number>;
+  // Trail
   uTrailGrowthRate?: UniformType<number>;
   uTrailMinScale?: UniformType<number>;
   uTrailRaius?: UniformType<number>;
   uTrailRaiusSquared?: UniformType<number>;
+  // Glow
+  uGlowRadius?: UniformType<number>;
+  uGlowRadiusSquared?: UniformType<number>;
+  uGlowFadeIn?: UniformType<number>;
+  uGlowFadeOut?: UniformType<number>;
+  uGlowColor?: UniformType<Color>;
+  // Bending
   uBladeMaxBendAngle?: UniformType<number>;
+  // Color
   uBaseColor?: UniformType<Color>;
   uTipColor?: UniformType<Color>;
-  // Per-tile uniforms:
-  uTileIdx?: UniformType<number>;
+  // Updated externally
+  uTileIdx?: UniformType<number>; // Per-tile uniforms
+  uDelta: UniformType<Vector2>;
 };
 
 const defaultUniforms: Required<GrassUniforms> = {
   uTime: uniform(0),
-  uDelta: uniform(new Vector2(0, 0)),
   uPlayerPosition: uniform(new Vector3(0, 0, 0)),
+  // Scale
   uBladeMinScale: uniform(0.5),
   uBladeMaxScale: uniform(1.25),
+  // Trail
   uTrailGrowthRate: uniform(0.004),
   uTrailMinScale: uniform(0.1),
   uTrailRaius: uniform(0.65),
   uTrailRaiusSquared: uniform(0.65 * 0.65),
+  // Glow
+  uGlowRadius: uniform(2),
+  uGlowRadiusSquared: uniform(4),
+  uGlowFadeIn: uniform(0.05),
+  uGlowFadeOut: uniform(0.01),
+  uGlowColor: uniform(new Color("#FF9933")),
+  // Bending
   uBladeMaxBendAngle: uniform(Math.PI * 0.15),
+  // Color
   uBaseColor: uniform(new Color("#4f8a4f")),
   uTipColor: uniform(new Color("#f7ff3d")),
+  // Updated externally
   uTileIdx: uniform(0),
+  uDelta: uniform(new Vector2(0, 0)),
 };
 
-class GrassMaterial extends MeshBasicNodeMaterial {
+class GrassMaterial extends MeshLambertNodeMaterial {
   private _uniforms: Required<GrassUniforms>;
   private _gridBuffer1: ReturnType<typeof instancedArray>; // holds: vec4 = (localOffset.x, localOffset.y, yaw, bending angle)
-  private _gridBuffer2: ReturnType<typeof instancedArray>; // holds: vec4 = (current scale, original scale, alpha, TBD)
+  private _gridBuffer2: ReturnType<typeof instancedArray>; // holds: vec4 = (current scale, original scale, alpha, glow)
   private _alphaTexture: Texture;
   constructor() {
     super();
@@ -221,10 +246,9 @@ class GrassMaterial extends MeshBasicNodeMaterial {
 
     const targetBendAngle = windStrength.mul(0.35);
 
-    // gridData.w = mix(gridData.w, targetBendAngle, 0.1); // 0.1 = smoothing factor
     gridData.w = gridData.w.add(targetBendAngle.sub(gridData.w).mul(0.1));
 
-    // Update alpha
+    // Alpha
     const gridData2 = this._gridBuffer2.element(instanceIndex);
     const mapSize = float(256);
     const worldPos = gridPos
@@ -251,13 +275,57 @@ class GrassMaterial extends MeshBasicNodeMaterial {
     ).mul(isPlayerGrounded); // 1 if stepped on, 0 if not
     const growScale = gridData2.x.add(this._uniforms.uTrailGrowthRate);
 
-    // Compute new scale
+    // Scale
     const growScaleFactor = float(1).sub(isBladeSteppedOn);
     const targetScale = this._uniforms.uTrailMinScale
       .mul(isBladeSteppedOn)
       .add(growScale.mul(growScaleFactor));
 
     gridData2.x = min(targetScale, gridData2.y);
+
+    // Glow
+    const glowRadiusFactor = smoothstep(
+      this._uniforms.uGlowRadiusSquared, // Outer radius (low intensity)
+      float(0), // Inner radius (high intensity)
+      distSq, // Distance squared to player
+    );
+
+    // Check if the player is moving (prevents constant glow when stationary)
+    const precision = 100.0;
+    const absDeltaX = floor(abs(this._uniforms.uDelta.x).mul(precision));
+    const absDeltaZ = floor(abs(this._uniforms.uDelta.y).mul(precision));
+
+    // Step function correctly returns 1 if sum > 0, else 0
+    const isPlayerMoving = step(1.0, absDeltaX.add(absDeltaZ));
+
+    // Base glow factor (only applies if within radius, not squished, and player grounded)
+    const baseGlowFactor = glowRadiusFactor
+      .mul(float(1).sub(isBladeSteppedOn))
+      .mul(isPlayerGrounded);
+
+    // If moving or glow was already active, apply glow effect
+    const isBladeAffected = max(isPlayerMoving, gridData2.w).mul(
+      baseGlowFactor,
+    );
+
+    // Compute fade-in when affected, fade-out when not affected
+    const fadeIn = isBladeAffected.mul(this._uniforms.uGlowFadeIn);
+    const fadeOut = float(1)
+      .sub(isBladeAffected)
+      .mul(this._uniforms.uGlowFadeOut);
+
+    // Force fade-out when **fully stationary**
+    const forceFadeOut = float(1)
+      .sub(isPlayerMoving)
+      .mul(this._uniforms.uGlowFadeOut)
+      .mul(gridData2.w);
+
+    // Apply glow effect and ensure full fade-out when stationary
+    gridData2.w = clamp(
+      gridData2.w.add(fadeIn).sub(fadeOut).sub(forceFadeOut),
+      0.0,
+      1.0,
+    );
   })().compute(gridConfig.COUNT);
 
   private computePosition = Fn(
@@ -276,7 +344,7 @@ class GrassMaterial extends MeshBasicNodeMaterial {
     },
   );
 
-  private computeDiffuseColor = Fn(() => {
+  private computeDiffuseColor = Fn(([data2 = vec4(0, 0, 0, 0)]) => {
     const verticalFactor = pow(uv().y, 1.5);
     const baseToTip = mix(
       this._uniforms.uBaseColor,
@@ -285,7 +353,15 @@ class GrassMaterial extends MeshBasicNodeMaterial {
     );
 
     const colorVariation = hash(instanceIndex).mul(0.05).sub(0.025);
-    return baseToTip.add(colorVariation);
+    // return baseToTip.add(colorVariation);
+    const glowFactor = data2.w;
+    const finalColor = mix(
+      baseToTip.add(colorVariation),
+      vec3(1.0, 0.6, 0.1),
+      glowFactor,
+    );
+
+    return finalColor;
   });
 
   private computeAO = Fn(() => {
@@ -325,7 +401,7 @@ class GrassMaterial extends MeshBasicNodeMaterial {
     this.opacityNode = data2.z;
     this.alphaTest = 0.1;
     this.aoNode = this.computeAO();
-    this.colorNode = this.computeDiffuseColor();
+    this.colorNode = this.computeDiffuseColor(data2);
   }
 
   async update(state: State) {
