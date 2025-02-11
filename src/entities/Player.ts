@@ -154,8 +154,7 @@ export default class Player {
 
     this.updateVerticalMovement(delta, world);
     this.updateHorizontalMovement(delta);
-    if (!camera.userData.isOrbitControlsEnabled)
-      this.updateCameraPosition(camera, delta);
+    this.updateCameraPosition(camera, delta);
   }
 
   private updateVerticalMovement(delta: number, world: World) {

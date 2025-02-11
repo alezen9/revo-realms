@@ -127,7 +127,7 @@ export default class Game {
 
       await this.rendererManager.renderAsync(
         this.sceneManager.scene,
-        this.sceneManager.camera,
+        this.sceneManager.renderCamera,
       );
     };
 
