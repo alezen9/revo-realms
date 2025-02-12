@@ -15,18 +15,58 @@ export default class RendererManager {
     this.canvas = canvas;
 
     this.device = device;
+
     const renderer = new WebGPURenderer({
       canvas,
       antialias: true,
       trackTimestamp: true,
       device,
     });
+    renderer.renderObject = this.createCustomRenderObjectFunction(renderer);
+    renderer.setRenderObjectFunction(
+      this.createCustomRenderObjectFunction(renderer),
+    );
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = VSMShadowMap;
     renderer.toneMapping = ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.5;
     this.renderer = renderer;
     this.monitoringManager = new MonitoringManager();
+  }
+
+  private createCustomRenderObjectFunction(
+    renderer: WebGPURenderer,
+  ): typeof this.renderer.renderObject {
+    const defaultRenderObject = renderer.renderObject.bind(renderer);
+
+    return (object, scene, camera, geometry, material, group, ...rest) => {
+      if (
+        "isInstancedGpuCulledMesh" in object &&
+        object.isInstancedGpuCulledMesh
+      ) {
+        object.onBeforeRender(
+          // @ts-expect-error expects a WebGL renderer but need this whole class
+          this,
+          scene,
+          camera,
+          geometry,
+          material,
+          group,
+        );
+        return; // Skip Three.js default rendering
+      }
+
+      // Call the original render function with remaining parameters
+      defaultRenderObject(
+        object,
+        scene,
+        camera,
+        geometry,
+        material,
+        group,
+        ...rest,
+      );
+    };
   }
 
   async initAsync() {

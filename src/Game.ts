@@ -1,4 +1,10 @@
-import { Scene, Clock, PerspectiveCamera } from "three";
+import {
+  Scene,
+  Clock,
+  PerspectiveCamera,
+  BoxGeometry,
+  MeshBasicMaterial,
+} from "three";
 import { World } from "@dimforge/rapier3d-compat";
 import Player from "./entities/Player";
 import PortfolioRealm from "./realms/PortfolioRealm";
@@ -10,6 +16,7 @@ import SceneManager from "./systems/SceneManager";
 import Environmentallumination from "./systems/Environmentallumination";
 import { WebGPURenderer } from "three/webgpu";
 import Grass from "./entities/Grass";
+import InstancedGpuCulledMesh from "./other/InstancedGpuCulledMesh/InstancedGpuCulledMesh";
 
 export type State = {
   camera: PerspectiveCamera;
@@ -56,6 +63,12 @@ export default class Game {
     this.environmentalIllumination = new Environmentallumination(
       this.sceneManager.scene,
     );
+
+    const geo = new BoxGeometry();
+    const mat = new MeshBasicMaterial({ color: "red" });
+    const testInstancedGpuCulledMesh = new InstancedGpuCulledMesh(geo, mat, 10);
+    // @ts-ignore
+    this.sceneManager.scene.add(testInstancedGpuCulledMesh);
 
     this.world = new World({ x: 0, y: -9.81, z: 0 });
 
