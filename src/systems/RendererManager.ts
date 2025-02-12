@@ -5,18 +5,21 @@ import MonitoringManager from "./MonitoringManager";
 export default class RendererManager {
   renderer: WebGPURenderer;
   canvas: HTMLCanvasElement;
+  device: GPUDevice;
   private monitoringManager: MonitoringManager;
 
-  constructor() {
+  constructor(device: GPUDevice) {
     const canvas = document.createElement("canvas");
     canvas.classList.add("revo-realms");
     document.body.appendChild(canvas);
     this.canvas = canvas;
 
+    this.device = device;
     const renderer = new WebGPURenderer({
       canvas,
       antialias: true,
       trackTimestamp: true,
+      device,
     });
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = VSMShadowMap;
@@ -26,7 +29,7 @@ export default class RendererManager {
     this.monitoringManager = new MonitoringManager();
   }
 
-  async init() {
+  async initAsync() {
     await this.monitoringManager.stats.init(this.renderer);
   }
 

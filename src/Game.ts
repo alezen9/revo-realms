@@ -40,8 +40,8 @@ export default class Game {
 
   private grass: Grass;
 
-  constructor() {
-    this.rendererManager = new RendererManager();
+  constructor(rendererManager: RendererManager) {
+    this.rendererManager = rendererManager;
     this.sceneManager = new SceneManager(this.rendererManager);
     // this.postprocessingManager = new PostprocessingManager(
     //   this.rendererManager,
@@ -99,7 +99,7 @@ export default class Game {
   }
 
   async startLoop(callback?: (state: State) => void) {
-    await this.rendererManager.init();
+    await this.rendererManager.initAsync();
     this.clock.start();
 
     const state: State = {
