@@ -65,13 +65,21 @@ const getConfig = () => {
       new Vector3(-TILE_SIZE / 2, 0, -TILE_SIZE / 2),
       new Vector3(TILE_SIZE / 2, BLADE_HEIGHT * 2, TILE_SIZE / 2),
     ),
+    getBoundingBox: (x: number, z: number) => {
+      const halfSize = TILE_SIZE / 2;
+      return new Box3(
+        new Vector3(-halfSize + x, 0, -halfSize + z),
+        new Vector3(halfSize + x, BLADE_HEIGHT * 2, halfSize + z),
+      );
+    },
     // boundingSphere: new Sphere(
     //   new Vector3(0, 0, 0),
     //   (TILE_SIZE / 2) * Math.sqrt(2),
     // ),
     getBoundingSphere: (x: number, z: number) => {
-      const radius = TILE_SIZE * 2 * Math.sqrt(2);
-      return new Sphere(new Vector3(x, 0, z), radius);
+      const radius = (TILE_SIZE / 2) * Math.sqrt(2);
+      const threshold = TILE_SIZE / 2;
+      return new Sphere(new Vector3(x, 0, z), radius + threshold);
     },
   };
 };
@@ -117,6 +125,7 @@ type GrassUniforms = {
   uTileIdx?: UniformType<number>; // Per-tile uniforms
   uDelta: UniformType<Vector2>;
   uTileOffset?: UniformType<Vector2>;
+  uTileColor?: UniformType<Color>;
 };
 
 const defaultUniforms: Required<GrassUniforms> = {
@@ -145,6 +154,7 @@ const defaultUniforms: Required<GrassUniforms> = {
   uTileIdx: uniform(0),
   uDelta: uniform(new Vector2(0, 0)),
   uTileOffset: uniform(new Vector2(0, 0)),
+  uTileColor: uniform(new Color()),
 };
 
 class GrassMaterial extends MeshLambertNodeMaterial {
@@ -170,6 +180,10 @@ class GrassMaterial extends MeshLambertNodeMaterial {
 
   setTileIndex(idx: number) {
     this._uniforms.uTileIdx.value = idx;
+  }
+
+  setTileColor(c: string) {
+    this._uniforms.uTileColor.value.set(c);
   }
 
   setTileOffset(x: number, z: number) {
@@ -227,18 +241,18 @@ class GrassMaterial extends MeshLambertNodeMaterial {
 
   private computeUpdate = Fn(() => {
     const gridData = this._gridBuffer1.element(instanceIndex);
-    // Position
-    const newOffsetX = mod(
-      gridData.x.sub(this._uniforms.uDelta.x).add(gridConfig.GRID_HALF_WIDTH),
-      gridConfig.GRID_WIDTH,
-    ).sub(gridConfig.GRID_HALF_WIDTH);
-    const newOffsetZ = mod(
-      gridData.y.sub(this._uniforms.uDelta.y).add(gridConfig.GRID_HALF_WIDTH),
-      gridConfig.GRID_WIDTH,
-    ).sub(gridConfig.GRID_HALF_WIDTH);
+    // // Position
+    // const newOffsetX = mod(
+    //   gridData.x.sub(this._uniforms.uDelta.x).add(gridConfig.GRID_HALF_WIDTH),
+    //   gridConfig.GRID_WIDTH,
+    // ).sub(gridConfig.GRID_HALF_WIDTH);
+    // const newOffsetZ = mod(
+    //   gridData.y.sub(this._uniforms.uDelta.y).add(gridConfig.GRID_HALF_WIDTH),
+    //   gridConfig.GRID_WIDTH,
+    // ).sub(gridConfig.GRID_HALF_WIDTH);
 
-    gridData.x = newOffsetX;
-    gridData.y = newOffsetZ;
+    // gridData.x = newOffsetX;
+    // gridData.y = newOffsetZ;
 
     const gridPos = vec2(gridData.x, gridData.y);
 
@@ -410,10 +424,11 @@ class GrassMaterial extends MeshLambertNodeMaterial {
     const data1 = this._gridBuffer1.element(gridIdx);
     const data2 = this._gridBuffer2.element(gridIdx);
     this.positionNode = this.computePosition(data1, data2);
-    this.opacityNode = data2.z;
-    this.alphaTest = 0.1;
+    // this.opacityNode = data2.z;
+    // this.alphaTest = 0.1;
     this.aoNode = this.computeAO();
-    this.colorNode = this.computeDiffuseColor(data2);
+    // this.colorNode = this.computeDiffuseColor(data2);
+    this.colorNode = this._uniforms.uTileColor;
   }
 
   async update(state: State) {
@@ -453,6 +468,8 @@ export default class Grass {
     (_, __, ___, ____, material: GrassMaterial) => {
       material.setTileIndex(tileIdx);
       material.setTileOffset(x, z);
+      const i = tileIdx % (gridConfig.COUNT - 1);
+      material.setTileColor(colors[i]);
 
       const tile = this.grassField.getObjectByName(`grass-tile-${tileIdx}`) as
         | InstancedMesh
@@ -479,7 +496,11 @@ export default class Grass {
         ((((dz + halfGridWidth) % gridWidth) + gridWidth) % gridWidth) -
         halfGridWidth;
 
-      tile.boundingSphere?.center.set(wrappedX, 0, wrappedZ);
+      tile.position.set(wrappedX, 0, wrappedZ);
+
+      tile.boundingBox?.copy(config.getBoundingBox(wrappedX, wrappedZ));
+
+      tile.boundingSphere?.copy(config.getBoundingSphere(wrappedX, wrappedZ));
 
       // // Get the bounding sphere mesh for this tile.
       // const bs = this.grassField.getObjectByName(`bs-tile-${tileIdx}`) as
