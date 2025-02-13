@@ -9,7 +9,6 @@ import {
   Texture,
   Vector2,
   Vector3,
-  // BatchedMesh // IMPORTANT: keep an eye on this construct and perhaps try it another time
 } from "three";
 import { State } from "../Game";
 import {
