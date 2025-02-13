@@ -22,12 +22,19 @@ import { assetManager } from "../systems/AssetManager";
 import WaterMaterial from "../materials/WaterMaterial";
 import { MeshLambertNodeMaterial } from "three/webgpu";
 
-export default class PortfolioRealm {
-  private readonly HALF_FLOOR_THICKNESS = 0.3;
-  private readonly MAP_SIZE = 256;
-  private readonly HALF_MAP_SIZE = this.MAP_SIZE / 2;
-  private readonly KINTOUN_ACTIVATION_THRESHOLD = 2;
+const getConfig = () => {
+  const MAP_SIZE = 256;
+  return Object.freeze({
+    MAP_SIZE,
+    HALF_MAP_SIZE: MAP_SIZE / 2,
+    KINTOUN_ACTIVATION_THRESHOLD: 2,
+    HALF_FLOOR_THICKNESS: 0.3,
+  });
+};
 
+export const realmConfig = getConfig();
+
+export default class PortfolioRealm {
   private kintounRigidBody: RigidBody; // Kintoun = Flying Nimbus cloud from dragon ball
   private kintounPosition = new Vector3();
 
@@ -151,9 +158,9 @@ export default class PortfolioRealm {
       rowsCount - 1,
       heights,
       {
-        x: this.MAP_SIZE,
+        x: realmConfig.MAP_SIZE,
         y: 1,
-        z: this.MAP_SIZE,
+        z: realmConfig.MAP_SIZE,
       },
       HeightFieldFlags.FIX_INTERNAL_EDGES,
     )
@@ -175,7 +182,7 @@ export default class PortfolioRealm {
 
     const colliderDesc = ColliderDesc.cuboid(
       halfSize,
-      this.HALF_FLOOR_THICKNESS,
+      realmConfig.HALF_FLOOR_THICKNESS,
       halfSize,
     )
       .setFriction(1)
@@ -185,7 +192,9 @@ export default class PortfolioRealm {
   }
 
   private useKintoun(playerPosition: Vector3) {
-    this.kintounPosition.copy(playerPosition).setY(-this.HALF_FLOOR_THICKNESS);
+    this.kintounPosition
+      .copy(playerPosition)
+      .setY(-realmConfig.HALF_FLOOR_THICKNESS);
     this.kintounRigidBody.setTranslation(this.kintounPosition, true);
   }
 
@@ -194,11 +203,11 @@ export default class PortfolioRealm {
     this.uTime.value = clock.getElapsedTime();
 
     const isPlayerNearEdgeX =
-      this.HALF_MAP_SIZE - Math.abs(player.position.x) <
-      this.KINTOUN_ACTIVATION_THRESHOLD;
+      realmConfig.HALF_MAP_SIZE - Math.abs(player.position.x) <
+      realmConfig.KINTOUN_ACTIVATION_THRESHOLD;
     const isPlayerNearEdgeZ =
-      this.HALF_MAP_SIZE - Math.abs(player.position.z) <
-      this.KINTOUN_ACTIVATION_THRESHOLD;
+      realmConfig.HALF_MAP_SIZE - Math.abs(player.position.z) <
+      realmConfig.KINTOUN_ACTIVATION_THRESHOLD;
 
     if (isPlayerNearEdgeX || isPlayerNearEdgeZ)
       this.useKintoun(player.position);
