@@ -36,8 +36,7 @@ export default class LightingSystem {
 
   constructor(scene: Scene) {
     this.emissive = new EmissiveIllumination();
-
-    // scene.add(this.target);
+    scene.add(this.target); // important! otherwise light wont follow
 
     this.directionalLight = this.setupDirectionalLighting();
     scene.add(this.directionalLight);
@@ -47,7 +46,7 @@ export default class LightingSystem {
   }
 
   private setupAmbientLighting() {
-    const ambientLight = new AmbientLight("white", 0.8);
+    const ambientLight = new AmbientLight("white", 0.4);
     // this.uAmbientHue.value.copy(ambientLight.color);
     // this.uAmbientIntensity.value = ambientLight.intensity;
     return ambientLight;

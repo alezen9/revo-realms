@@ -34,12 +34,12 @@ export default class Player {
   private readonly JUMP_IMPULSE = 5;
   private readonly JUMP_BUFFER_DURATION_IN_SECONDS = 0.2;
   private readonly MAX_CONSECUTIVE_JUMPS = 2;
-  private readonly JUMP_CUT_MULTIPLIER = 0.3;
-  private readonly FALL_MULTIPLIER = 1.5;
+  private readonly JUMP_CUT_MULTIPLIER = 0.25;
+  private readonly FALL_MULTIPLIER = 1.75;
   private readonly MAX_UPWARD_VELOCITY = 6;
   private readonly LINEAR_DAMPING = 0.2;
   private readonly ANGULAR_DAMPING = 0.5;
-  private readonly FORWARD_IMPULSE = 5; // base horizontal impulse
+  private readonly FORWARD_IMPULSE = 7.5; // base horizontal impulse
   private readonly TORQUE_STRENGTH = 1.5; // for rolling
 
   // Player State
@@ -52,6 +52,7 @@ export default class Player {
   private readonly RADIUS = 0.5;
   private readonly PLAYER_INITIAL_POSITION = new Vector3(0, 2, 0);
   private readonly CAMERA_OFFSET = new Vector3(0, 12, 17);
+  private readonly CAMERA_LERP_FACTOR = 7.5;
   private readonly UP = new Vector3(0, 1, 0);
   private readonly DOWN = new Vector3(0, -1, 0);
 
@@ -66,52 +67,6 @@ export default class Player {
 
     this.inputManager = inputManager;
     this.lighting = lighting;
-
-    // const box = new Mesh(
-    //   new BoxGeometry(),
-    //   new MeshLambertMaterial({
-    //     emissive: "red",
-    //     emissiveIntensity: 5,
-    //   }),
-    // );
-    // box.position.set(2, 0.5, 2);
-    // scene.add(box);
-    // lighting.emissive.registerEmitter({
-    //   position: box.position,
-    //   hue: box.material.emissive,
-    //   intensity: box.material.emissiveIntensity,
-    // });
-
-    // const box2 = new Mesh(
-    //   new BoxGeometry(),
-    //   new MeshLambertMaterial({
-    //     emissive: "green",
-    //     emissiveIntensity: 7,
-    //   }),
-    // );
-    // box2.position.set(0, 0.5, -2);
-    // scene.add(box2);
-    // lighting.emissive.registerEmitter({
-    //   position: box2.position,
-    //   hue: box2.material.emissive,
-    //   intensity: box2.material.emissiveIntensity,
-    // });
-
-    // const box3 = new Mesh(
-    //   new BoxGeometry(),
-    //   new MeshLambertMaterial({
-    //     emissive: "yellow",
-    //     emissiveIntensity: 2,
-    //   }),
-    // );
-    // box3.position.set(-1, 2, 1);
-    // scene.add(box3);
-    // lighting.emissive.registerEmitter({
-    //   position: box3.position,
-    //   hue: box3.material.emissive,
-    //   intensity: box3.material.emissiveIntensity,
-    // });
-
     this.mesh = this.createCharacterMesh();
     scene.add(this.mesh);
 
@@ -300,7 +255,7 @@ export default class Player {
     const desiredCameraPosition = position.add(offset);
 
     // Lerp
-    const lerpFactor = 7.5 * delta;
+    const lerpFactor = this.CAMERA_LERP_FACTOR * delta;
     this.smoothedCameraPosition.lerp(desiredCameraPosition, lerpFactor);
 
     // Lerp target as well
@@ -314,10 +269,6 @@ export default class Player {
     // For testing purpose, remove smoothing
     // camera.position.copy(desiredCameraPosition);
     // camera.lookAt(desiredTarget);
-  }
-
-  public getPosition() {
-    return this.mesh.position;
   }
 
   get position() {
