@@ -1,4 +1,4 @@
-import { Color, CubeTexture, MeshBasicNodeMaterial } from "three/webgpu";
+import { Color, MeshBasicNodeMaterial } from "three/webgpu";
 import {
   cameraPosition,
   clamp,
@@ -34,7 +34,6 @@ type UniformType<T> = ReturnType<typeof uniform<T>>;
 type WaterUniforms = {
   uTime?: UniformType<number>;
   uWavesSpeed?: UniformType<number>;
-  uEnvironmentMap: CubeTexture;
   uWavesAmplitude?: UniformType<number>;
   uWavesFrequency?: UniformType<number>;
   uTroughColor?: UniformType<Color>;
@@ -47,7 +46,7 @@ type WaterUniforms = {
   uFresnelScale?: UniformType<number>;
 };
 
-const defaultUniforms: Omit<Required<WaterUniforms>, "uEnvironmentMap"> = {
+const defaultUniforms: Required<WaterUniforms> = {
   uTime: uniform(0),
   uWavesSpeed: uniform(0.02),
   uWavesAmplitude: uniform(0.02),
@@ -130,7 +129,7 @@ export default class WaterMaterial extends MeshBasicNodeMaterial {
       let reflectedDirection = reflect(viewDirection, vNormal);
       reflectedDirection.x = reflectedDirection.x.negate();
 
-      return cubeTexture(this._uniforms.uEnvironmentMap, reflectedDirection);
+      return cubeTexture(assetManager.environmentMap, reflectedDirection);
     },
   );
 

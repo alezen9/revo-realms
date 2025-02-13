@@ -1,4 +1,4 @@
-import { Vector3, Mesh, CubeTexture } from "three";
+import { Vector3, Mesh } from "three";
 import {
   ColliderDesc,
   HeightFieldFlags,
@@ -33,14 +33,11 @@ export default class PortfolioRealm {
 
   // Water
   private uTime = uniform(0);
-  private uEnvironmentMap = new CubeTexture();
 
-  constructor(
-    state: Pick<State, "world" | "scene" | "environmentalIllumination">,
-  ) {
-    const { world, scene, environmentalIllumination } = state;
-
-    this.uEnvironmentMap.copy(environmentalIllumination.environmentMap);
+  constructor(state: Pick<State, "world" | "scene">) {
+    const { world, scene } = state;
+    scene.background = assetManager.environmentMap;
+    scene.environment = assetManager.environmentMap;
 
     this.createPhysics(world);
     this.createVisual(scene);
@@ -62,7 +59,6 @@ export default class PortfolioRealm {
     const lake = assetManager.realmModel.scene.getObjectByName("lake") as Mesh;
     const waterMaterial = new WaterMaterial({
       uTime: this.uTime,
-      uEnvironmentMap: this.uEnvironmentMap,
     });
     lake.material = waterMaterial;
     scene.add(lake);
@@ -76,21 +72,17 @@ export default class PortfolioRealm {
 
     const timeFactor = this.uTime.mul(0.1);
     const scaleFactor = float(10);
-
-    const scaledCausticsUvA = fract(
-      uv().mul(scaleFactor).add(vec2(timeFactor, 0)),
-    );
-    const scaledCausticsUvB = fract(
-      uv().mul(scaleFactor).add(vec2(0, timeFactor.negate())),
-    );
-
+    const scaledUv = uv().mul(scaleFactor);
+    const scaledCausticsUvA = fract(scaledUv.add(vec2(timeFactor, 0)));
+    const scaledCausticsUvB = fract(scaledUv.add(vec2(0, timeFactor.negate())));
     const noiseA = texture(causticsTexture, scaledCausticsUvA, 1).r;
     const noiseB = texture(causticsTexture, scaledCausticsUvB, 2).r;
-    const causticsFactor = float(1).sub(texture(causticsMap, uv()).r);
+
     const caustics = noiseA.add(noiseB).mul(0.5);
-    const adjustedCaustics = caustics.mul(caustics).mul(caustics);
+    const adjustedCaustics = pow(caustics, 3);
 
     const mapColor = texture(floorTexture, uv());
+    const causticsFactor = float(1).sub(texture(causticsMap, uv()).r);
 
     const causticsHighlightColor = vec3(1.2, 1.2, 0.8);
     const causticsShadowColor = mapColor;

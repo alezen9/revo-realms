@@ -6,7 +6,6 @@ import {
   DoubleSide,
   InstancedMesh,
   Sphere,
-  Texture,
   Vector2,
   Vector3,
 } from "three";
@@ -40,7 +39,6 @@ import {
 } from "three/tsl";
 import { MeshLambertNodeMaterial } from "three/webgpu";
 import { assetManager } from "../systems/AssetManager";
-import alphaTextureUrl from "/textures/test.webp?url";
 
 const getConfig = () => {
   const BLADE_WIDTH = 0.15;
@@ -124,7 +122,6 @@ class GrassMaterial extends MeshLambertNodeMaterial {
   _uniforms: Required<GrassUniforms>;
   private _buffer1: ReturnType<typeof instancedArray>; // holds: vec4 = (localOffset.x, localOffset.y, yaw, bending angle)
   private _buffer2: ReturnType<typeof instancedArray>; // holds: vec4 = (current scale, original scale, alpha, glow)
-  private _alphaTexture: Texture;
   constructor() {
     super();
     this._uniforms = defaultUniforms;
@@ -132,8 +129,6 @@ class GrassMaterial extends MeshLambertNodeMaterial {
     this._buffer1.setPBO(true);
     this._buffer2 = instancedArray(config.COUNT, "vec4");
     this._buffer2.setPBO(true);
-    this._alphaTexture = assetManager.textureLoader.load(alphaTextureUrl);
-    this._alphaTexture.flipY = false;
 
     this.computeUpdate.onInit(({ renderer }) => {
       renderer.computeAsync(this.computeInit);
@@ -228,7 +223,7 @@ class GrassMaterial extends MeshLambertNodeMaterial {
       .add(this._uniforms.uPlayerPosition.xz)
       .add(mapSize.mul(0.5))
       .div(mapSize);
-    const alphaValue = texture(this._alphaTexture, worldPos).r;
+    const alphaValue = texture(assetManager.realmGrassMap, worldPos).r;
     data2.z = alphaValue;
 
     // Trail
