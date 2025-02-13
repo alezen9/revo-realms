@@ -8,7 +8,8 @@ import {
 } from "@dimforge/rapier3d-compat";
 import { State } from "../Game";
 import worldModelUrl from "/models/world.glb?url";
-import floorTextureUrl from "/models/floor.webp?url";
+import floorTextureUrl from "/textures/realm/floor.webp?url";
+import floorNormalTextureUrl from "/textures/realm/floor_normal.webp?url";
 import { GLTF } from "three/examples/jsm/Addons.js";
 import { uniform } from "three/tsl";
 import { assetManager } from "../systems/AssetManager";
@@ -46,9 +47,15 @@ export default class PortfolioRealm {
     // Map floor
     const floorTexture = assetManager.textureLoader.load(floorTextureUrl);
     floorTexture.flipY = false;
+    const floorNormalTexture = assetManager.textureLoader.load(
+      floorNormalTextureUrl,
+    );
     const floor = worldModel.scene.getObjectByName("floor") as Mesh;
     floor.geometry.computeVertexNormals();
-    floor.material = new MeshLambertMaterial({ map: floorTexture });
+    floor.material = new MeshLambertMaterial({
+      map: floorTexture,
+      normalMap: floorNormalTexture,
+    });
     floor.receiveShadow = true;
     scene.add(floor);
 
@@ -156,15 +163,14 @@ export default class PortfolioRealm {
     const { player, clock } = state;
     this.uTime.value = clock.getElapsedTime();
 
-    const playerPosition = player.getPosition();
-
     const isPlayerNearEdgeX =
-      this.HALF_MAP_SIZE - Math.abs(playerPosition.x) <
+      this.HALF_MAP_SIZE - Math.abs(player.position.x) <
       this.KINTOUN_ACTIVATION_THRESHOLD;
     const isPlayerNearEdgeZ =
-      this.HALF_MAP_SIZE - Math.abs(playerPosition.z) <
+      this.HALF_MAP_SIZE - Math.abs(player.position.z) <
       this.KINTOUN_ACTIVATION_THRESHOLD;
 
-    if (isPlayerNearEdgeX || isPlayerNearEdgeZ) this.useKintoun(playerPosition);
+    if (isPlayerNearEdgeX || isPlayerNearEdgeZ)
+      this.useKintoun(player.position);
   }
 }

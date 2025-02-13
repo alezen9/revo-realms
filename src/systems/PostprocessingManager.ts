@@ -10,7 +10,7 @@ export default class PostprocessingManager {
   constructor(rendererManager: RendererManager, sceneManager: SceneManager) {
     this.composer = new PostProcessing(rendererManager.renderer);
 
-    const scenePass = pass(sceneManager.scene, sceneManager.camera);
+    const scenePass = pass(sceneManager.scene, sceneManager.renderCamera);
 
     // Setup Multiple Render Targets (MRT)
     scenePass.setMRT(

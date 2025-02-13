@@ -6,7 +6,6 @@ import LightingSystem from "./systems/LightingSystem";
 import InputManager from "./systems/InputManager";
 import RendererManager from "./systems/RendererManager";
 import SceneManager from "./systems/SceneManager";
-// import PostprocessingManager from "./systems/PostprocessingManager";
 import Environmentallumination from "./systems/Environmentallumination";
 import { WebGPURenderer } from "three/webgpu";
 import Grass from "./entities/Grass";
@@ -29,7 +28,6 @@ export default class Game {
   private rendererManager: RendererManager;
   private sceneManager: SceneManager;
   private inputManager: InputManager;
-  // private postprocessingManager: PostprocessingManager;
   private clock: Clock;
   private world: World;
 
@@ -43,10 +41,6 @@ export default class Game {
   constructor() {
     this.rendererManager = new RendererManager();
     this.sceneManager = new SceneManager(this.rendererManager);
-    // this.postprocessingManager = new PostprocessingManager(
-    //   this.rendererManager,
-    //   this.sceneManager,
-    // );
     this.inputManager = new InputManager();
 
     this.clock = new Clock(false);
@@ -99,7 +93,7 @@ export default class Game {
   }
 
   async startLoop(callback?: (state: State) => void) {
-    await this.rendererManager.init();
+    await this.rendererManager.init(this.sceneManager);
     this.clock.start();
 
     const state: State = {
