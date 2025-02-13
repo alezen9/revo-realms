@@ -1,10 +1,10 @@
 import "./style.css";
-import PhysicsManager from "./systems/PhysicsManager";
+import _SetupManager from "./systems/_SetupManager";
 import Game from "./Game";
 
-const physicsManager = new PhysicsManager();
+const _setupManager = new _SetupManager();
 
-physicsManager.init().then(() => {
+_setupManager.initAsync().then(() => {
   const game = new Game();
   game.startLoop();
 });
