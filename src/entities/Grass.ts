@@ -39,6 +39,7 @@ import {
 } from "three/tsl";
 import { MeshLambertNodeMaterial } from "three/webgpu";
 import { assetManager } from "../systems/AssetManager";
+import { realmConfig } from "../realms/PortfolioRealm";
 
 const getConfig = () => {
   const BLADE_WIDTH = 0.15;
@@ -63,7 +64,7 @@ const getConfig = () => {
     ),
   };
 };
-const config = getConfig();
+const grassConfig = getConfig();
 
 type UniformType<T> = ReturnType<typeof uniform<T>>;
 type GrassUniforms = {
@@ -125,9 +126,9 @@ class GrassMaterial extends MeshLambertNodeMaterial {
   constructor() {
     super();
     this._uniforms = defaultUniforms;
-    this._buffer1 = instancedArray(config.COUNT, "vec4");
+    this._buffer1 = instancedArray(grassConfig.COUNT, "vec4");
     this._buffer1.setPBO(true);
-    this._buffer2 = instancedArray(config.COUNT, "vec4");
+    this._buffer2 = instancedArray(grassConfig.COUNT, "vec4");
     this._buffer2.setPBO(true);
 
     this.computeUpdate.onInit(({ renderer }) => {
@@ -143,23 +144,25 @@ class GrassMaterial extends MeshLambertNodeMaterial {
   private computeInit = Fn(() => {
     const data1 = this._buffer1.element(instanceIndex);
     // Position XZ
-    const row = floor(float(instanceIndex).div(config.BLADES_PER_SIDE));
-    const col = float(instanceIndex).mod(config.BLADES_PER_SIDE);
+    const row = floor(float(instanceIndex).div(grassConfig.BLADES_PER_SIDE));
+    const col = float(instanceIndex).mod(grassConfig.BLADES_PER_SIDE);
 
     const randX = hash(instanceIndex.add(4321));
     const randZ = hash(instanceIndex.add(1234));
     const offsetX = col
-      .mul(config.SPACING)
-      .sub(config.TILE_HALF_SIZE)
-      .add(randX.mul(config.SPACING * 0.5));
+      .mul(grassConfig.SPACING)
+      .sub(grassConfig.TILE_HALF_SIZE)
+      .add(randX.mul(grassConfig.SPACING * 0.5));
     const offsetZ = row
-      .mul(config.SPACING)
-      .sub(config.TILE_HALF_SIZE)
-      .add(randZ.mul(config.SPACING * 0.5));
+      .mul(grassConfig.SPACING)
+      .sub(grassConfig.TILE_HALF_SIZE)
+      .add(randZ.mul(grassConfig.SPACING * 0.5));
     data1.x = offsetX;
     data1.y = offsetZ;
 
-    const noiseUV = vec2(data1.x, data1.y).div(config.TILE_HALF_SIZE).add(1);
+    const noiseUV = vec2(data1.x, data1.y)
+      .div(grassConfig.TILE_HALF_SIZE)
+      .add(1);
     const noiseScale = float(1);
     const uv = fract(noiseUV.mul(noiseScale));
     const noiseValue = texture(assetManager.randomNoiseTexture, uv).r;
@@ -179,19 +182,19 @@ class GrassMaterial extends MeshLambertNodeMaterial {
 
     data2.x = randomScale;
     data2.y = randomScale;
-  })().compute(config.COUNT);
+  })().compute(grassConfig.COUNT);
 
   private computeUpdate = Fn(() => {
     const data1 = this._buffer1.element(instanceIndex);
     // Position
     const newOffsetX = mod(
-      data1.x.sub(this._uniforms.uDelta.x).add(config.TILE_HALF_SIZE),
-      config.TILE_SIZE,
-    ).sub(config.TILE_HALF_SIZE);
+      data1.x.sub(this._uniforms.uDelta.x).add(grassConfig.TILE_HALF_SIZE),
+      grassConfig.TILE_SIZE,
+    ).sub(grassConfig.TILE_HALF_SIZE);
     const newOffsetZ = mod(
-      data1.y.sub(this._uniforms.uDelta.y).add(config.TILE_HALF_SIZE),
-      config.TILE_SIZE,
-    ).sub(config.TILE_HALF_SIZE);
+      data1.y.sub(this._uniforms.uDelta.y).add(grassConfig.TILE_HALF_SIZE),
+      grassConfig.TILE_SIZE,
+    ).sub(grassConfig.TILE_HALF_SIZE);
 
     data1.x = newOffsetX;
     data1.y = newOffsetZ;
@@ -218,7 +221,7 @@ class GrassMaterial extends MeshLambertNodeMaterial {
 
     // Alpha
     const data2 = this._buffer2.element(instanceIndex);
-    const mapSize = float(256);
+    const mapSize = float(realmConfig.MAP_SIZE);
     const worldPos = pos
       .add(this._uniforms.uPlayerPosition.xz)
       .add(mapSize.mul(0.5))
@@ -292,7 +295,7 @@ class GrassMaterial extends MeshLambertNodeMaterial {
       0.0,
       1.0,
     );
-  })().compute(config.COUNT);
+  })().compute(grassConfig.COUNT);
 
   private computePosition = Fn(
     ([data1 = vec4(0, 0, 0, 0), data2 = vec3(0, 0, 0)]) => {
@@ -366,15 +369,15 @@ export default class Grass {
 
   private createGrassField() {
     const geometry = this.createBladeGeometry();
-    const tile = new InstancedMesh(geometry, this.material, config.COUNT);
-    tile.boundingBox = config.boundingBox;
-    tile.boundingSphere = config.boundingSphere;
+    const tile = new InstancedMesh(geometry, this.material, grassConfig.COUNT);
+    tile.boundingBox = grassConfig.boundingBox;
+    tile.boundingSphere = grassConfig.boundingSphere;
     return tile;
   }
 
   // private createBladeGeometryLow() {
-  //   const halfWidth = config.BLADE_WIDTH / 2;
-  //   const height = config.BLADE_HEIGHT;
+  //   const halfWidth = grassConfig.BLADE_WIDTH / 2;
+  //   const height = grassConfig.BLADE_HEIGHT;
 
   //   const positions = new Float32Array([
   //     -halfWidth,
@@ -427,9 +430,9 @@ export default class Grass {
     //  C----D
     // |  \   |
     // A------B
-    const halfWidth = config.BLADE_WIDTH / 2;
+    const halfWidth = grassConfig.BLADE_WIDTH / 2;
     const quarterWidth = halfWidth / 2;
-    const segmentHeight = config.BLADE_HEIGHT / 2;
+    const segmentHeight = grassConfig.BLADE_HEIGHT / 2;
     const positions = new Float32Array([
       -halfWidth,
       0,
