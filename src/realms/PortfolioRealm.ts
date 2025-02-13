@@ -1,11 +1,4 @@
-import {
-  Vector3,
-  Mesh,
-  CubeTexture,
-  MeshLambertMaterial,
-  Group,
-  Texture,
-} from "three";
+import { Vector3, Mesh, CubeTexture } from "three";
 import {
   ColliderDesc,
   HeightFieldFlags,
@@ -14,18 +7,16 @@ import {
   World,
 } from "@dimforge/rapier3d-compat";
 import { State } from "../Game";
-import worldModelUrl from "/models/world.glb?url";
-import floorTextureUrl from "/textures/realm/floor.webp?url";
-import floorNormalTextureUrl from "/textures/realm/floor_normal.webp?url";
-import { GLTF } from "three/examples/jsm/Addons.js";
 import {
   float,
   fract,
   mix,
-  positionWorld,
+  pow,
   texture,
   uniform,
+  uv,
   vec2,
+  vec3,
 } from "three/tsl";
 import { assetManager } from "../systems/AssetManager";
 import WaterMaterial from "../materials/WaterMaterial";
@@ -51,38 +42,24 @@ export default class PortfolioRealm {
 
     this.uEnvironmentMap.copy(environmentalIllumination.environmentMap);
 
-    assetManager.gltfLoader.load(worldModelUrl, (worldModel) => {
-      this.createPhysics(worldModel, world);
-      this.createVisual(worldModel, scene);
-    });
+    this.createPhysics(world);
+    this.createVisual(scene);
 
     this.kintounRigidBody = this.createKintounCollider(world);
   }
 
-  private createVisual(worldModel: GLTF, scene: State["scene"]) {
+  private createVisual(scene: State["scene"]) {
     // Map floor
-    const floorTexture = assetManager.textureLoader.load(floorTextureUrl);
-    floorTexture.flipY = false;
-    const floorNormalTexture = assetManager.textureLoader.load(
-      floorNormalTextureUrl,
-    );
-    const floor = worldModel.scene.getObjectByName("floor") as Mesh;
+    const floor = assetManager.realmModel.scene.getObjectByName(
+      "floor",
+    ) as Mesh;
     floor.geometry.computeVertexNormals();
-    floor.material = new MeshLambertMaterial({
-      map: floorTexture,
-      normalMap: floorNormalTexture,
-    });
+    floor.material = this.createFloorMaterial();
     floor.receiveShadow = true;
     scene.add(floor);
 
-    // caustics
-    // lakeBed.geometry.computeVertexNormals();
-    // lakeBed.material = this.createLakeBedMaterial(floorTexture);
-    // lakeBed.receiveShadow = true;
-    // scene.add(lakeBed);
-
     // Water
-    const lake = worldModel.scene.getObjectByName("lake") as Mesh;
+    const lake = assetManager.realmModel.scene.getObjectByName("lake") as Mesh;
     const waterMaterial = new WaterMaterial({
       uTime: this.uTime,
       uEnvironmentMap: this.uEnvironmentMap,
@@ -91,41 +68,47 @@ export default class PortfolioRealm {
     scene.add(lake);
   }
 
-  private createLakeBedMaterial(floorTexture: Texture) {
+  private createFloorMaterial() {
     const material = new MeshLambertNodeMaterial();
     const causticsTexture = assetManager.voronoiNoiseTexture;
-
-    const scaledUv = positionWorld.xz
-      .add(float(this.HALF_MAP_SIZE))
-      .div(this.MAP_SIZE);
-
-    const mapColor = texture(floorTexture, scaledUv);
+    const causticsMap = assetManager.realmCausticsMap;
+    const floorTexture = assetManager.realmTexture;
 
     const timeFactor = this.uTime.mul(0.1);
     const scaleFactor = float(10);
 
     const scaledCausticsUvA = fract(
-      scaledUv.mul(scaleFactor).add(vec2(timeFactor, 0)),
+      uv().mul(scaleFactor).add(vec2(timeFactor, 0)),
     );
     const scaledCausticsUvB = fract(
-      scaledUv.mul(scaleFactor).add(vec2(0, timeFactor.negate())),
+      uv().mul(scaleFactor).add(vec2(0, timeFactor.negate())),
     );
 
     const noiseA = texture(causticsTexture, scaledCausticsUvA, 1).r;
     const noiseB = texture(causticsTexture, scaledCausticsUvB, 2).r;
-    const combinedNoise = noiseA.add(noiseB).mul(0.5);
+    const causticsFactor = float(1).sub(texture(causticsMap, uv()).r);
+    const caustics = noiseA.add(noiseB).mul(0.5);
+    const adjustedCaustics = caustics.mul(caustics).mul(caustics);
 
-    material.colorNode = mix(
-      mapColor,
-      mapColor.mul(0.6),
-      float(1).sub(combinedNoise),
+    const mapColor = texture(floorTexture, uv());
+
+    const causticsHighlightColor = vec3(1.2, 1.2, 0.8);
+    const causticsShadowColor = mapColor;
+    const causticsColor = mix(
+      causticsShadowColor,
+      causticsHighlightColor,
+      adjustedCaustics,
     );
+
+    material.colorNode = mix(mapColor, causticsColor, causticsFactor);
 
     return material;
   }
 
-  private getDisplacementData(worldModel: GLTF) {
-    const mesh = worldModel.scene.getObjectByName("heightfield") as Mesh;
+  private getDisplacementData() {
+    const mesh = assetManager.realmModel.scene.getObjectByName(
+      "heightfield",
+    ) as Mesh;
     const displacement = mesh.geometry.attributes._displacement.array[0]; // they are all the same
     const positionAttribute = mesh.geometry.attributes.position;
     if (!mesh.geometry.boundingBox) mesh.geometry.computeBoundingBox();
@@ -160,8 +143,8 @@ export default class PortfolioRealm {
     };
   }
 
-  private createPhysics(worldModel: GLTF, world: World) {
-    const displaceMentData = this.getDisplacementData(worldModel);
+  private createPhysics(world: World) {
+    const displaceMentData = this.getDisplacementData();
     const { rowsCount, heights, displacement } = displaceMentData;
 
     const rigidBodyDesc = RigidBodyDesc.fixed().setTranslation(
