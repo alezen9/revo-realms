@@ -6,7 +6,6 @@ import LightingSystem from "./systems/LightingSystem";
 import InputManager from "./systems/InputManager";
 import RendererManager from "./systems/RendererManager";
 import SceneManager from "./systems/SceneManager";
-import Environmentallumination from "./systems/Environmentallumination";
 import { WebGPURenderer } from "three/webgpu";
 import Grass from "./entities/Grass";
 
@@ -18,7 +17,6 @@ export type State = {
   inputManager: InputManager;
   world: World;
   lighting: LightingSystem;
-  environmentalIllumination: Environmentallumination;
   player: Player;
 };
 
@@ -34,7 +32,6 @@ export default class Game {
   private player: Player;
   private realm: PortfolioRealm;
   private lighting: LightingSystem;
-  private environmentalIllumination: Environmentallumination;
 
   private grass: Grass;
 
@@ -46,10 +43,6 @@ export default class Game {
     this.clock = new Clock(false);
 
     this.lighting = new LightingSystem(this.sceneManager.scene);
-
-    this.environmentalIllumination = new Environmentallumination(
-      this.sceneManager.scene,
-    );
 
     this.world = new World({ x: 0, y: -9.81, z: 0 });
 
@@ -63,7 +56,6 @@ export default class Game {
     this.realm = new PortfolioRealm({
       scene: this.sceneManager.scene,
       world: this.world,
-      environmentalIllumination: this.environmentalIllumination,
     });
 
     // Grass
@@ -102,7 +94,6 @@ export default class Game {
       camera: this.sceneManager.camera,
       inputManager: this.inputManager,
       lighting: this.lighting,
-      environmentalIllumination: this.environmentalIllumination,
       world: this.world,
       player: this.player,
       renderer: this.rendererManager.renderer,
