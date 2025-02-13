@@ -1,4 +1,11 @@
-import { Vector3, Mesh, CubeTexture, MeshLambertMaterial } from "three";
+import {
+  Vector3,
+  Mesh,
+  CubeTexture,
+  MeshLambertMaterial,
+  Group,
+  Texture,
+} from "three";
 import {
   ColliderDesc,
   HeightFieldFlags,
@@ -11,9 +18,18 @@ import worldModelUrl from "/models/world.glb?url";
 import floorTextureUrl from "/textures/realm/floor.webp?url";
 import floorNormalTextureUrl from "/textures/realm/floor_normal.webp?url";
 import { GLTF } from "three/examples/jsm/Addons.js";
-import { uniform } from "three/tsl";
+import {
+  float,
+  fract,
+  mix,
+  positionWorld,
+  texture,
+  uniform,
+  vec2,
+} from "three/tsl";
 import { assetManager } from "../systems/AssetManager";
 import WaterMaterial from "../materials/WaterMaterial";
+import { MeshLambertNodeMaterial } from "three/webgpu";
 
 export default class PortfolioRealm {
   private readonly HALF_FLOOR_THICKNESS = 0.3;
@@ -59,6 +75,12 @@ export default class PortfolioRealm {
     floor.receiveShadow = true;
     scene.add(floor);
 
+    // caustics
+    // lakeBed.geometry.computeVertexNormals();
+    // lakeBed.material = this.createLakeBedMaterial(floorTexture);
+    // lakeBed.receiveShadow = true;
+    // scene.add(lakeBed);
+
     // Water
     const lake = worldModel.scene.getObjectByName("lake") as Mesh;
     const waterMaterial = new WaterMaterial({
@@ -67,6 +89,39 @@ export default class PortfolioRealm {
     });
     lake.material = waterMaterial;
     scene.add(lake);
+  }
+
+  private createLakeBedMaterial(floorTexture: Texture) {
+    const material = new MeshLambertNodeMaterial();
+    const causticsTexture = assetManager.voronoiNoiseTexture;
+
+    const scaledUv = positionWorld.xz
+      .add(float(this.HALF_MAP_SIZE))
+      .div(this.MAP_SIZE);
+
+    const mapColor = texture(floorTexture, scaledUv);
+
+    const timeFactor = this.uTime.mul(0.1);
+    const scaleFactor = float(10);
+
+    const scaledCausticsUvA = fract(
+      scaledUv.mul(scaleFactor).add(vec2(timeFactor, 0)),
+    );
+    const scaledCausticsUvB = fract(
+      scaledUv.mul(scaleFactor).add(vec2(0, timeFactor.negate())),
+    );
+
+    const noiseA = texture(causticsTexture, scaledCausticsUvA, 1).r;
+    const noiseB = texture(causticsTexture, scaledCausticsUvB, 2).r;
+    const combinedNoise = noiseA.add(noiseB).mul(0.5);
+
+    material.colorNode = mix(
+      mapColor,
+      mapColor.mul(0.6),
+      float(1).sub(combinedNoise),
+    );
+
+    return material;
   }
 
   private getDisplacementData(worldModel: GLTF) {
