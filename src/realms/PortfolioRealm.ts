@@ -89,7 +89,7 @@ export default class PortfolioRealm {
     const adjustedCaustics = pow(caustics, 3);
 
     const mapColor = texture(floorTexture, uv());
-    const causticsFactor = float(1).sub(texture(causticsMap, uv()).r);
+    const causticsFactor = texture(causticsMap, uv()).r;
 
     const causticsHighlightColor = vec3(1.2, 1.2, 0.8);
     const causticsShadowColor = mapColor;

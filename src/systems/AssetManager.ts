@@ -13,7 +13,7 @@ import voronoiNoiseTextureUrl from "/textures/voronoi_noise.webp?url";
 // Realm
 import realmModelUrl from "/models/realm.glb?url";
 import floorTextureUrl from "/textures/realm/floor.webp?url";
-import floorCausticsMapTextureUrl from "/textures/realm/caustics_map.webp?url";
+import floorCausticsMapTextureUrl from "/textures/realm/water_map.webp?url";
 import floorGrassMapTextureUrl from "/textures/realm/grass_map.webp?url";
 // Environment
 import pxUrl from "/environment/px.webp?url";
