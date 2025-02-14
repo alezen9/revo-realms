@@ -45,7 +45,7 @@ const getConfig = () => {
   const BLADE_WIDTH = 0.15;
   const BLADE_HEIGHT = 1.5;
   const TILE_SIZE = 150;
-  const BLADES_PER_SIDE = 500;
+  const BLADES_PER_SIDE = 700;
   return {
     BLADE_WIDTH,
     BLADE_HEIGHT,
