@@ -37,15 +37,15 @@ import {
   max,
   clamp,
 } from "three/tsl";
-import { MeshLambertNodeMaterial } from "three/webgpu";
+import { MeshStandardNodeMaterial } from "three/webgpu";
 import { assetManager } from "../systems/AssetManager";
 import { realmConfig } from "../realms/PortfolioRealm";
 
 const getConfig = () => {
-  const BLADE_WIDTH = 0.15;
+  const BLADE_WIDTH = 0.2;
   const BLADE_HEIGHT = 1.25;
   const TILE_SIZE = 150;
-  const BLADES_PER_SIDE = 500;
+  const BLADES_PER_SIDE = 600;
   return {
     BLADE_WIDTH,
     BLADE_HEIGHT,
@@ -114,12 +114,12 @@ const defaultUniforms: Required<GrassUniforms> = {
   uBladeMaxBendAngle: uniform(Math.PI * 0.15),
   // Color
   uBaseColor: uniform(new Color("#4f8a4f")),
-  uTipColor: uniform(new Color("#f7ff3d")),
+  uTipColor: uniform(new Color("#bbde47")),
   // Updated externally
   uDelta: uniform(new Vector2(0, 0)),
 };
 
-class GrassMaterial extends MeshLambertNodeMaterial {
+class GrassMaterial extends MeshStandardNodeMaterial {
   _uniforms: Required<GrassUniforms>;
   private _buffer1: ReturnType<typeof instancedArray>; // holds: vec4 = (localOffset.x, localOffset.y, yaw, bending angle)
   private _buffer2: ReturnType<typeof instancedArray>; // holds: vec4 = (current scale, original scale, alpha, glow)

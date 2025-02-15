@@ -37,10 +37,10 @@ export default class Player {
   private readonly JUMP_CUT_MULTIPLIER = 0.25;
   private readonly FALL_MULTIPLIER = 1.75;
   private readonly MAX_UPWARD_VELOCITY = 6;
-  private readonly LINEAR_DAMPING = 0.2;
-  private readonly ANGULAR_DAMPING = 0.5;
-  private readonly FORWARD_IMPULSE = 7.5; // base horizontal impulse
-  private readonly TORQUE_STRENGTH = 1.5; // for rolling
+  private readonly LINEAR_DAMPING = 0.25;
+  private readonly ANGULAR_DAMPING = 1;
+  private readonly FORWARD_IMPULSE = 4.5; // base horizontal impulse
+  private readonly TORQUE_STRENGTH = 5.5; // for rolling
 
   // Player State
   private isOnGround = false;
