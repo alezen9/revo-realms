@@ -1,10 +1,9 @@
-import { Vector3, Mesh } from "three";
+import { Vector3, Mesh, InstancedMesh, MeshLambertMaterial } from "three";
 import {
   ColliderDesc,
   HeightFieldFlags,
   RigidBody,
   RigidBodyDesc,
-  World,
 } from "@dimforge/rapier3d-compat";
 import { State } from "../Game";
 import {
@@ -35,6 +34,9 @@ const getConfig = () => {
 export const realmConfig = getConfig();
 
 export default class PortfolioRealm {
+  private world: State["world"];
+  private scene: State["scene"];
+
   private kintounRigidBody: RigidBody; // Kintoun = Flying Nimbus cloud from dragon ball
   private kintounPosition = new Vector3();
 
@@ -43,32 +45,79 @@ export default class PortfolioRealm {
 
   constructor(state: Pick<State, "world" | "scene">) {
     const { world, scene } = state;
+    this.world = world;
+    this.scene = scene;
     scene.background = assetManager.environmentMap;
     scene.environment = assetManager.environmentMap;
 
-    this.createPhysics(world);
-    this.createVisual(scene);
+    this.createFloor();
+    this.createWater();
+    this.createFences();
 
-    this.kintounRigidBody = this.createKintounCollider(world);
+    this.kintounRigidBody = this.createKintoun();
   }
 
-  private createVisual(scene: State["scene"]) {
-    // Map floor
+  private createFloor() {
+    // Visual
     const floor = assetManager.realmModel.scene.getObjectByName(
       "floor",
     ) as Mesh;
     floor.geometry.computeVertexNormals();
     floor.material = this.createFloorMaterial();
     floor.receiveShadow = true;
-    scene.add(floor);
-
-    // Water
+    this.scene.add(floor);
+    // Physics
+    this.createFloorPhysics();
+  }
+  private createWater() {
+    // Visual
     const lake = assetManager.realmModel.scene.getObjectByName("lake") as Mesh;
     const waterMaterial = new WaterMaterial({
       uTime: this.uTime,
     });
     lake.material = waterMaterial;
-    scene.add(lake);
+    this.scene.add(lake);
+  }
+  private createFences() {
+    // Visual
+    const fence = assetManager.realmModel.scene.getObjectByName(
+      "fence",
+    ) as Mesh;
+    const fencePlaceholders = assetManager.realmModel.scene.children.filter(
+      ({ name }) => name.startsWith("fence-placeholder"),
+    ) as Mesh[];
+    const fenceMaterial = new MeshLambertMaterial({
+      map: assetManager.woodTexture,
+    });
+    fence.geometry.computeVertexNormals();
+    const instances = new InstancedMesh(
+      fence.geometry,
+      fenceMaterial,
+      fencePlaceholders.length,
+    );
+    const placeholderHalfSize = new Vector3();
+    fencePlaceholders[0].geometry.boundingBox
+      ?.getSize(placeholderHalfSize)
+      .divideScalar(2);
+    for (let i = 0; i < fencePlaceholders.length; i++) {
+      const placeholder = fencePlaceholders[i];
+      instances.setMatrixAt(i, placeholder.matrix);
+      // Physics
+      this.createFencePhysics(placeholder, placeholderHalfSize);
+    }
+
+    this.scene.add(instances);
+  }
+
+  private createFencePhysics(fencePlaceholder: Mesh, halfSize: Vector3) {
+    const rigidBodyDesc = RigidBodyDesc.fixed()
+      .setTranslation(...fencePlaceholder.position.toArray())
+      .setRotation(fencePlaceholder.quaternion);
+    const rigidBody = this.world.createRigidBody(rigidBodyDesc);
+    const colliderDesc = ColliderDesc.cuboid(...halfSize.toArray())
+      .setFriction(1)
+      .setRestitution(0.2);
+    this.world.createCollider(colliderDesc, rigidBody);
   }
 
   private createFloorMaterial() {
@@ -92,9 +141,8 @@ export default class PortfolioRealm {
     const causticsFactor = texture(causticsMap, uv()).r;
 
     const causticsHighlightColor = vec3(1.2, 1.2, 0.8);
-    const causticsShadowColor = mapColor;
     const causticsColor = mix(
-      causticsShadowColor,
+      mapColor, // causticsShadowColor
       causticsHighlightColor,
       adjustedCaustics,
     );
@@ -104,7 +152,7 @@ export default class PortfolioRealm {
     return material;
   }
 
-  private getDisplacementData() {
+  private getFloorDisplacementData() {
     const mesh = assetManager.realmModel.scene.getObjectByName(
       "heightfield",
     ) as Mesh;
@@ -142,8 +190,8 @@ export default class PortfolioRealm {
     };
   }
 
-  private createPhysics(world: World) {
-    const displaceMentData = this.getDisplacementData();
+  private createFloorPhysics() {
+    const displaceMentData = this.getFloorDisplacementData();
     const { rowsCount, heights, displacement } = displaceMentData;
 
     const rigidBodyDesc = RigidBodyDesc.fixed().setTranslation(
@@ -151,7 +199,7 @@ export default class PortfolioRealm {
       -displacement,
       0,
     );
-    const rigidBody = world.createRigidBody(rigidBodyDesc);
+    const rigidBody = this.world.createRigidBody(rigidBodyDesc);
 
     const colliderDesc = ColliderDesc.heightfield(
       rowsCount - 1,
@@ -167,16 +215,16 @@ export default class PortfolioRealm {
       .setFriction(1)
       .setRestitution(0.2);
 
-    world.createCollider(colliderDesc, rigidBody);
+    this.world.createCollider(colliderDesc, rigidBody);
   }
 
-  private createKintounCollider(world: World) {
+  private createKintoun() {
     const rigidBodyDesc = RigidBodyDesc.kinematicPositionBased().setTranslation(
       0,
       -20, // out of the physics world
       0,
     );
-    const rigidBody = world.createRigidBody(rigidBodyDesc);
+    const rigidBody = this.world.createRigidBody(rigidBodyDesc);
 
     const halfSize = 2;
 
@@ -187,7 +235,7 @@ export default class PortfolioRealm {
     )
       .setFriction(1)
       .setRestitution(0.2);
-    world.createCollider(colliderDesc, rigidBody);
+    this.world.createCollider(colliderDesc, rigidBody);
     return rigidBody;
   }
 

@@ -42,8 +42,8 @@ import { assetManager } from "../systems/AssetManager";
 import { realmConfig } from "../realms/PortfolioRealm";
 
 const getConfig = () => {
-  const BLADE_WIDTH = 0.15;
-  const BLADE_HEIGHT = 1.5;
+  const BLADE_WIDTH = 0.1;
+  const BLADE_HEIGHT = 1.25;
   const TILE_SIZE = 150;
   const BLADES_PER_SIDE = 700;
   return {

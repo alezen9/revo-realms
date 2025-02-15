@@ -11,10 +11,11 @@ import perlinNoiseTextureUrl from "/textures/perlin_noise.webp?url";
 import randomNoiseTextureUrl from "/textures/random_noise.webp?url";
 import voronoiNoiseTextureUrl from "/textures/voronoi_noise.webp?url";
 // Realm
-import realmModelUrl from "/models/realm.glb?url";
+import realmModelUrl from "/models/realm2.glb?url";
 import floorTextureUrl from "/textures/realm/floor.webp?url";
 import floorCausticsMapTextureUrl from "/textures/realm/water_map.webp?url";
 import floorGrassMapTextureUrl from "/textures/realm/grass_map.webp?url";
+import woodTextureUrl from "/textures/realm/fence.webp?url";
 // Environment
 import pxUrl from "/environment/px.webp?url";
 import nxUrl from "/environment/nx.webp?url";
@@ -24,7 +25,6 @@ import pzUrl from "/environment/pz.webp?url";
 import nzUrl from "/environment/nz.webp?url";
 
 class AssetManager {
-  manager: LoadingManager;
   textureLoader: TextureLoader;
   gltfLoader: GLTFLoader;
   cubeTextureLoader: CubeTextureLoader;
@@ -38,21 +38,24 @@ class AssetManager {
   realmTexture!: Texture;
   realmCausticsMap!: Texture;
   realmGrassMap!: Texture;
+  woodAoMap!: Texture;
+  woodNormalMap!: Texture;
+  woodTexture!: Texture;
 
   constructor() {
-    this.manager = this.createLoadingManager();
+    const manager = this.createLoadingManager();
 
     // Texture
-    this.textureLoader = new TextureLoader(this.manager);
+    this.textureLoader = new TextureLoader(manager);
 
     // GLTF
-    const dracoLoader = new DRACOLoader(this.manager);
+    const dracoLoader = new DRACOLoader(manager);
     dracoLoader.setDecoderPath("/draco/");
-    this.gltfLoader = new GLTFLoader(this.manager);
+    this.gltfLoader = new GLTFLoader(manager);
     this.gltfLoader.setDRACOLoader(dracoLoader);
 
     // Env maps
-    this.cubeTextureLoader = new CubeTextureLoader(this.manager);
+    this.cubeTextureLoader = new CubeTextureLoader(manager);
   }
 
   private createLoadingManager() {
@@ -88,7 +91,8 @@ class AssetManager {
     manager.onError = function (url) {
       console.log("There was an error loading " + url);
     };
-    return manager;
+    // return manager;
+    return undefined;
   }
 
   async initAsync() {
@@ -97,11 +101,7 @@ class AssetManager {
       this.textureLoader.loadAsync(perlinNoiseTextureUrl),
       this.textureLoader.loadAsync(randomNoiseTextureUrl),
       this.textureLoader.loadAsync(voronoiNoiseTextureUrl),
-      // Realm
-      this.gltfLoader.loadAsync(realmModelUrl),
-      this.textureLoader.loadAsync(floorTextureUrl),
-      this.textureLoader.loadAsync(floorCausticsMapTextureUrl),
-      assetManager.textureLoader.loadAsync(floorGrassMapTextureUrl),
+      // Environment
       assetManager.cubeTextureLoader.loadAsync([
         pxUrl, // positive x
         nxUrl, // negative x
@@ -110,18 +110,27 @@ class AssetManager {
         pzUrl, // positive z
         nzUrl, // negative z
       ]),
+      // Realm
+      this.gltfLoader.loadAsync(realmModelUrl),
+      this.textureLoader.loadAsync(floorTextureUrl),
+      this.textureLoader.loadAsync(floorCausticsMapTextureUrl),
+      assetManager.textureLoader.loadAsync(floorGrassMapTextureUrl),
+      assetManager.textureLoader.loadAsync(woodTextureUrl),
     ]);
     this.perlinNoiseTexture = res[0];
     this.randomNoiseTexture = res[1];
     this.voronoiNoiseTexture = res[2];
-    this.realmModel = res[3];
-    this.realmTexture = res[4];
+
+    this.environmentMap = res[3];
+
+    this.realmModel = res[4];
+    this.realmTexture = res[5];
     this.realmTexture.flipY = false;
-    this.realmCausticsMap = res[5];
+    this.realmCausticsMap = res[6];
     this.realmCausticsMap.flipY = false;
-    this.realmGrassMap = res[6];
+    this.realmGrassMap = res[7];
     this.realmGrassMap.flipY = false;
-    this.environmentMap = res[7];
+    this.woodTexture = res[8];
   }
 }
 
