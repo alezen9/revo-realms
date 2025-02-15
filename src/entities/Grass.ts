@@ -42,10 +42,10 @@ import { assetManager } from "../systems/AssetManager";
 import { realmConfig } from "../realms/PortfolioRealm";
 
 const getConfig = () => {
-  const BLADE_WIDTH = 0.1;
+  const BLADE_WIDTH = 0.15;
   const BLADE_HEIGHT = 1.25;
   const TILE_SIZE = 150;
-  const BLADES_PER_SIDE = 700;
+  const BLADES_PER_SIDE = 500;
   return {
     BLADE_WIDTH,
     BLADE_HEIGHT,
@@ -160,16 +160,19 @@ class GrassMaterial extends MeshLambertNodeMaterial {
     data1.x = offsetX;
     data1.y = offsetZ;
 
+    // Yaw
     const noiseUV = vec2(data1.x, data1.y)
       .div(grassConfig.TILE_HALF_SIZE)
       .add(1);
     const noiseScale = float(1);
     const uv = fract(noiseUV.mul(noiseScale));
     const noiseValue = texture(assetManager.randomNoiseTexture, uv).r;
-
-    // Yaw
     const yawVariation = noiseValue.sub(0.5).mul(float(Math.PI)); // Map noise to [-PI/2, PI/2]
     data1.z = yawVariation;
+    // const randomBladeYaw = hash(instanceIndex.add(200))
+    //   .mul(float(Math.PI * 2))
+    //   .sub(float(Math.PI));
+    // data1.z = randomBladeYaw;
 
     // Scale
     const data2 = this._buffer2.element(instanceIndex);

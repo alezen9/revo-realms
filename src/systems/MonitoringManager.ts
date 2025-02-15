@@ -5,7 +5,7 @@ export default class MonitoringManager {
   stats: Stats;
   private drawCallsPanel: Stats.Panel;
   private geometriesPanel: Stats.Panel;
-  constructor() {
+  constructor(enabled: boolean) {
     const stats = new Stats({
       trackGPU: true,
       logsPerSecond: 4,
@@ -15,7 +15,7 @@ export default class MonitoringManager {
       horizontal: false,
       precision: 2,
     });
-    document.body.appendChild(stats.dom);
+    if (enabled) document.body.appendChild(stats.dom);
     this.stats = stats;
     // @ts-ignore
     this.drawCallsPanel = this.createNumberPanel(
