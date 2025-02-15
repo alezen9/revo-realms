@@ -51,7 +51,7 @@ export default class Player {
   // Constants for geometry/camera offset
   private readonly RADIUS = 0.5;
   private readonly PLAYER_INITIAL_POSITION = new Vector3(0, 2, 0);
-  private readonly CAMERA_OFFSET = new Vector3(0, 12, 17);
+  private readonly CAMERA_OFFSET = new Vector3(0, 11, 17);
   private readonly CAMERA_LERP_FACTOR = 7.5;
   private readonly UP = new Vector3(0, 1, 0);
   private readonly DOWN = new Vector3(0, -1, 0);
