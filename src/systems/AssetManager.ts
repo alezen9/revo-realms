@@ -41,6 +41,7 @@ class AssetManager {
   woodAoMap!: Texture;
   woodNormalMap!: Texture;
   woodTexture!: Texture;
+  branchTexture!: Texture;
 
   constructor() {
     const manager = this.createLoadingManager();
