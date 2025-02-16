@@ -65,10 +65,10 @@ export default class LightingSystem {
 
     directionalLight.castShadow = true;
 
-    directionalLight.shadow.intensity = 0.5;
-    directionalLight.shadow.mapSize.width = 256;
-    directionalLight.shadow.mapSize.height = 256;
-    directionalLight.shadow.radius = 3;
+    directionalLight.shadow.intensity = 0.75;
+    directionalLight.shadow.mapSize.width = 64;
+    directionalLight.shadow.mapSize.height = 64;
+    directionalLight.shadow.radius = 2;
     directionalLight.shadow.camera.near = 0.5;
     directionalLight.shadow.camera.far = 50;
     directionalLight.shadow.bias = -0.003;
