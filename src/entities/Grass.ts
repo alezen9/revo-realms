@@ -1,10 +1,10 @@
 import {
   Box3,
   BufferAttribute,
-  BufferGeometry,
   Color,
   DoubleSide,
-  InstancedMesh,
+  InstancedBufferGeometry,
+  Mesh,
   Sphere,
   Vector2,
   Vector3,
@@ -37,7 +37,10 @@ import {
   max,
   clamp,
 } from "three/tsl";
-import { MeshStandardNodeMaterial } from "three/webgpu";
+import {
+  MeshStandardNodeMaterial,
+  IndirectStorageBufferAttribute,
+} from "three/webgpu";
 import { assetManager } from "../systems/AssetManager";
 import { realmConfig } from "../realms/PortfolioRealm";
 
@@ -123,8 +126,10 @@ class GrassMaterial extends MeshStandardNodeMaterial {
   _uniforms: Required<GrassUniforms>;
   private _buffer1: ReturnType<typeof instancedArray>; // holds: vec4 = (localOffset.x, localOffset.y, yaw, bending angle)
   private _buffer2: ReturnType<typeof instancedArray>; // holds: vec4 = (current scale, original scale, alpha, glow)
-  constructor() {
+  private drawBuffer: IndirectStorageBufferAttribute;
+  constructor(drawBuffer: IndirectStorageBufferAttribute) {
     super();
+    this.drawBuffer = drawBuffer;
     this._uniforms = defaultUniforms;
     this._buffer1 = instancedArray(grassConfig.COUNT, "vec4");
     this._buffer1.setPBO(true);
@@ -362,20 +367,23 @@ class GrassMaterial extends MeshStandardNodeMaterial {
 
 export default class Grass {
   private material: GrassMaterial;
-  private grassField: InstancedMesh;
+  private grassField: Mesh;
+  private drawBuffer!: IndirectStorageBufferAttribute;
 
   constructor(scene: State["scene"]) {
-    this.material = new GrassMaterial();
-    this.grassField = this.createGrassField();
-    scene.add(this.grassField);
-  }
-
-  private createGrassField() {
     const geometry = this.createBladeGeometry();
-    const tile = new InstancedMesh(geometry, this.material, grassConfig.COUNT);
-    tile.boundingBox = grassConfig.boundingBox;
-    tile.boundingSphere = grassConfig.boundingSphere;
-    return tile;
+    const uint32 = new Uint32Array(5);
+    uint32[0] = geometry.index!.count;
+    uint32[1] = grassConfig.COUNT; // alive count
+    uint32[2] = 0;
+    uint32[3] = 0;
+    uint32[4] = 0;
+    this.drawBuffer = new IndirectStorageBufferAttribute(uint32, 5);
+    geometry.setIndirect(this.drawBuffer);
+
+    this.material = new GrassMaterial(this.drawBuffer);
+    this.grassField = new Mesh(geometry, this.material);
+    scene.add(this.grassField);
   }
 
   // private createBladeGeometryLow() {
@@ -501,7 +509,7 @@ export default class Grass {
       0, // E (Tip remains straight)
     ]);
 
-    const geometry = new BufferGeometry();
+    const geometry = new InstancedBufferGeometry();
     geometry.setAttribute("position", new BufferAttribute(positions, 3));
     geometry.setAttribute("uv", new BufferAttribute(uvs, 2));
     geometry.setIndex(new BufferAttribute(indices, 1));
