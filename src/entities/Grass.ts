@@ -121,9 +121,9 @@ class GrassMaterial extends MeshBasicNodeMaterial {
   private _buffer1: ReturnType<typeof instancedArray>; // holds: vec4 = (localOffset.x, localOffset.y, yaw, bending angle)
   private _buffer2: ReturnType<typeof instancedArray>; // holds: vec4 = (current scale, original scale, alpha, glow)
 
-  constructor() {
+  constructor(uniforms?: GrassUniforms) {
     super();
-    this._uniforms = defaultUniforms;
+    this._uniforms = { ...defaultUniforms, ...uniforms };
     this._buffer1 = instancedArray(grassConfig.COUNT, "vec4");
     this._buffer1.setPBO(true);
     this._buffer2 = instancedArray(grassConfig.COUNT, "vec4");
@@ -133,10 +133,6 @@ class GrassMaterial extends MeshBasicNodeMaterial {
       renderer.computeAsync(this.computeInit);
     });
     this.createGrassMaterial();
-  }
-
-  setDelta(dx: number, dz: number) {
-    this._uniforms.uDelta.value.set(dx, dz);
   }
 
   private computeInit = Fn(() => {
@@ -403,13 +399,8 @@ class GrassMaterial extends MeshBasicNodeMaterial {
     this.colorNode = this.computeDiffuseColor(data2);
   }
 
-  async update(state: State) {
-    const { renderer, player, clock, camera } = state;
-    this._uniforms.uCameraMatrix.value
-      .copy(camera.projectionMatrix)
-      .multiply(camera.matrixWorldInverse);
-    this._uniforms.uTime.value = clock.getElapsedTime();
-    this._uniforms.uPlayerPosition.value.copy(player.position);
+  async updateAsync(state: State) {
+    const { renderer } = state;
     await renderer.computeAsync(this.computeUpdate);
   }
 }
@@ -417,6 +408,12 @@ class GrassMaterial extends MeshBasicNodeMaterial {
 export default class Grass {
   private material: GrassMaterial;
   private grassField: Mesh;
+  private uniforms = {
+    uDelta: uniform(new Vector2(0, 0)),
+    uPlayerPosition: uniform(new Vector3(0, 0, 0)),
+    uCameraMatrix: uniform(new Matrix4()),
+    uTime: uniform(0),
+  };
 
   constructor(scene: State["scene"]) {
     const geometry = this.createBladeGeometry();
@@ -430,7 +427,7 @@ export default class Grass {
     geometry.setIndirect(drawBuffer);
     // const s = storage(drawBuffer, "vec4");
 
-    this.material = new GrassMaterial();
+    this.material = new GrassMaterial(this.uniforms);
     this.grassField = new Mesh(geometry, this.material);
     scene.add(this.grassField);
   }
@@ -567,13 +564,18 @@ export default class Grass {
   }
 
   async updateAsync(state: State) {
-    const { player } = state;
+    const { player, camera, clock } = state;
     const dx = player.position.x - this.grassField.position.x;
     const dz = player.position.z - this.grassField.position.z;
-    this.material.setDelta(dx, dz);
+    this.uniforms.uDelta.value.set(dx, dz);
+    this.uniforms.uPlayerPosition.value.copy(player.position);
+    this.uniforms.uCameraMatrix.value
+      .copy(camera.projectionMatrix)
+      .multiply(camera.matrixWorldInverse);
+    this.uniforms.uTime.value = clock.getElapsedTime();
 
     this.grassField.position.copy(player.position).setY(0);
 
-    await this.material.update(state);
+    await this.material.updateAsync(state);
   }
 }
