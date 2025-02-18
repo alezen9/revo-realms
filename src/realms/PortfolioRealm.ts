@@ -96,6 +96,8 @@ export default class PortfolioRealm {
       map: assetManager.woodTexture,
     });
     fence.geometry.computeVertexNormals();
+    fence.geometry.computeBoundingSphere();
+    fence.geometry.computeBoundingBox();
     const totalFences = fencePlaceholders.length;
     const batchedMesh = new BatchedMesh(
       totalFences,
