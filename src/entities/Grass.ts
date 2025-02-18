@@ -2,7 +2,6 @@ import {
   BufferAttribute,
   Color,
   DoubleSide,
-  InstancedBufferAttribute,
   InstancedBufferGeometry,
   Matrix4,
   Mesh,
@@ -37,8 +36,6 @@ import {
   max,
   clamp,
   If,
-  normalize,
-  atan,
 } from "three/tsl";
 import {
   IndirectStorageBufferAttribute,
