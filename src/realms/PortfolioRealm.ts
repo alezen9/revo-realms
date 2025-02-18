@@ -1,10 +1,4 @@
-import {
-  Vector3,
-  Mesh,
-  InstancedMesh,
-  MeshLambertMaterial,
-  BatchedMesh,
-} from "three";
+import { Vector3, Mesh, MeshLambertMaterial, BatchedMesh } from "three";
 import {
   ColliderDesc,
   HeightFieldFlags,
