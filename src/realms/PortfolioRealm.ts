@@ -1,4 +1,10 @@
-import { Vector3, Mesh, InstancedMesh, MeshLambertMaterial } from "three";
+import {
+  Vector3,
+  Mesh,
+  InstancedMesh,
+  MeshLambertMaterial,
+  BatchedMesh,
+} from "three";
 import {
   ColliderDesc,
   HeightFieldFlags,
@@ -90,23 +96,35 @@ export default class PortfolioRealm {
       map: assetManager.woodTexture,
     });
     fence.geometry.computeVertexNormals();
-    const instances = new InstancedMesh(
-      fence.geometry,
+    const totalFences = fencePlaceholders.length;
+    const batchedMesh = new BatchedMesh(
+      totalFences,
+      fence.geometry.attributes.position.count * totalFences,
+      (fence.geometry.index?.count ?? 0) * totalFences,
       fenceMaterial,
-      fencePlaceholders.length,
     );
+    batchedMesh.sortObjects = false;
+    const geomId = batchedMesh.addGeometry(fence.geometry);
+    // const instances = new InstancedMesh(
+    //   fence.geometry,
+    //   fenceMaterial,
+    //   fencePlaceholders.length,
+    // );
     const placeholderHalfSize = new Vector3();
     fencePlaceholders[0].geometry.boundingBox
       ?.getSize(placeholderHalfSize)
       .divideScalar(2);
+
     for (let i = 0; i < fencePlaceholders.length; i++) {
       const placeholder = fencePlaceholders[i];
-      instances.setMatrixAt(i, placeholder.matrix);
+      const instanceId = batchedMesh.addInstance(geomId);
+      batchedMesh.setMatrixAt(instanceId, placeholder.matrix);
+      // instances.setMatrixAt(i, placeholder.matrix);
       // Physics
       this.createFencePhysics(placeholder, placeholderHalfSize);
     }
-
-    this.scene.add(instances);
+    this.scene.add(batchedMesh);
+    // this.scene.add(instances);
   }
 
   private createFencePhysics(fencePlaceholder: Mesh, halfSize: Vector3) {
