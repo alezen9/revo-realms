@@ -1,12 +1,10 @@
 import {
-  Box3,
   BufferAttribute,
   Color,
   DoubleSide,
   InstancedBufferGeometry,
   Matrix4,
   Mesh,
-  Sphere,
   Vector2,
   Vector3,
 } from "three";
@@ -37,31 +35,20 @@ import {
   abs,
   max,
   clamp,
-  cameraViewMatrix,
-  cameraWorldMatrix,
-  cameraProjectionMatrix,
-  cameraProjectionMatrixInverse,
-  cameraNear,
-  cameraFar,
-  cameraPosition,
-  cameraIndex,
-  cameraNormalMatrix,
   If,
-  bool,
-  Return,
 } from "three/tsl";
 import {
-  MeshStandardNodeMaterial,
   IndirectStorageBufferAttribute,
+  MeshBasicNodeMaterial,
 } from "three/webgpu";
 import { assetManager } from "../systems/AssetManager";
 import { realmConfig } from "../realms/PortfolioRealm";
 
 const getConfig = () => {
-  const BLADE_WIDTH = 0.2;
+  const BLADE_WIDTH = 0.1;
   const BLADE_HEIGHT = 1.25;
   const TILE_SIZE = 150;
-  const BLADES_PER_SIDE = 600;
+  const BLADES_PER_SIDE = 1000;
   return {
     BLADE_WIDTH,
     BLADE_HEIGHT,
@@ -71,14 +58,6 @@ const getConfig = () => {
     BLADES_PER_SIDE,
     COUNT: BLADES_PER_SIDE * BLADES_PER_SIDE,
     SPACING: TILE_SIZE / BLADES_PER_SIDE,
-    boundingBox: new Box3(
-      new Vector3(-TILE_SIZE / 2, 0, -TILE_SIZE / 2),
-      new Vector3(TILE_SIZE / 2, BLADE_HEIGHT * 2, TILE_SIZE / 2),
-    ),
-    boundingSphere: new Sphere(
-      new Vector3(0, 0, 0),
-      (TILE_SIZE / 2) * Math.sqrt(2),
-    ),
   };
 };
 const grassConfig = getConfig();
@@ -87,8 +66,6 @@ type UniformType<T> = ReturnType<typeof uniform<T>>;
 type GrassUniforms = {
   uTime?: UniformType<number>;
   uPlayerPosition?: UniformType<Vector3>;
-  uCameraProjectionMatrix?: UniformType<Matrix4>;
-  uCameraModelViewMatrix?: UniformType<Matrix4>;
   uCameraMatrix?: UniformType<Matrix4>;
   // Scale
   uBladeMinScale?: UniformType<number>;
@@ -116,8 +93,6 @@ type GrassUniforms = {
 const defaultUniforms: Required<GrassUniforms> = {
   uTime: uniform(0),
   uPlayerPosition: uniform(new Vector3(0, 0, 0)),
-  uCameraProjectionMatrix: uniform(new Matrix4()),
-  uCameraModelViewMatrix: uniform(new Matrix4()),
   uCameraMatrix: uniform(new Matrix4()),
   // Scale
   uBladeMinScale: uniform(0.5),
@@ -141,7 +116,7 @@ const defaultUniforms: Required<GrassUniforms> = {
   // Updated externally
   uDelta: uniform(new Vector2(0, 0)),
 };
-class GrassMaterial extends MeshStandardNodeMaterial {
+class GrassMaterial extends MeshBasicNodeMaterial {
   _uniforms: Required<GrassUniforms>;
   private _buffer1: ReturnType<typeof instancedArray>; // holds: vec4 = (localOffset.x, localOffset.y, yaw, bending angle)
   private _buffer2: ReturnType<typeof instancedArray>; // holds: vec4 = (current scale, original scale, alpha, glow)
@@ -210,11 +185,11 @@ class GrassMaterial extends MeshStandardNodeMaterial {
     data2.y = randomScale;
   })().compute(grassConfig.COUNT);
 
-  private isVisible = Fn(([worldPos = vec3(0, 0, 0)]) => {
+  private isVisible = Fn(([worldPos = vec3(0)]) => {
     const clipPos = this._uniforms.uCameraMatrix.mul(vec4(worldPos, 1.0));
 
-    // Convert to normalized device coordinates:
-    let ndc = clipPos.xyz.div(clipPos.w);
+    // Convert to normalized device coordinates
+    const ndc = clipPos.xyz.div(clipPos.w);
 
     // Compute an approximate threshold for the blade's radius in NDC space.
     const radiusNDC = grassConfig.BLADE_BOUNDING_SPHERE_RADIUS;
@@ -232,29 +207,8 @@ class GrassMaterial extends MeshStandardNodeMaterial {
     return visible;
   });
 
-  private computeUpdate = Fn(() => {
-    const data1 = this._buffer1.element(instanceIndex);
-    // Position
-    const newOffsetX = mod(
-      data1.x.sub(this._uniforms.uDelta.x).add(grassConfig.TILE_HALF_SIZE),
-      grassConfig.TILE_SIZE,
-    ).sub(grassConfig.TILE_HALF_SIZE);
-    const newOffsetZ = mod(
-      data1.y.sub(this._uniforms.uDelta.y).add(grassConfig.TILE_HALF_SIZE),
-      grassConfig.TILE_SIZE,
-    ).sub(grassConfig.TILE_HALF_SIZE);
-
-    data1.x = newOffsetX;
-    data1.y = newOffsetZ;
-
-    const pos = vec3(data1.x, 0, data1.y);
-    const worldPos = pos.add(this._uniforms.uPlayerPosition);
-
-    const isVisible = this.isVisible(worldPos);
-    const data2 = this._buffer2.element(instanceIndex);
-    data2.z = isVisible;
-    If(isVisible, () => {
-      // Wind
+  private computeBending = Fn(
+    ([data1 = vec4(0, 0, 0, 0), worldPos = vec3(0, 0, 0)]) => {
       const windUV = worldPos.xz.add(this._uniforms.uTime.mul(0.25)).mul(0.5);
 
       const stableUV = fract(windUV);
@@ -267,40 +221,38 @@ class GrassMaterial extends MeshStandardNodeMaterial {
 
       const targetBendAngle = windStrength.mul(0.35);
 
-      data1.w = data1.w.add(targetBendAngle.sub(data1.w).mul(0.1));
+      return data1.w.add(targetBendAngle.sub(data1.w).mul(0.1));
+    },
+  );
 
-      // Alpha
-      const mapSize = float(realmConfig.MAP_SIZE);
-      const alphaUv = worldPos.xz.add(mapSize.mul(0.5)).div(mapSize);
-      const alphaValue = texture(assetManager.realmGrassMap, alphaUv).r;
-      data2.z = alphaValue;
+  private computeAlpha = Fn(([worldPos = vec3(0)]) => {
+    const alphaUv = worldPos.xz
+      .add(realmConfig.HALF_MAP_SIZE)
+      .div(realmConfig.MAP_SIZE);
+    const alphaValue = texture(assetManager.realmGrassMap, alphaUv).r;
+    return alphaValue;
+  });
 
-      // Trail
-      // Compute distance to player
-      const playerPos = vec2(this._uniforms.uDelta.x, this._uniforms.uDelta.y);
-      const diff = pos.xz.sub(playerPos);
-      const distSq = diff.dot(diff);
-
-      // Check if the player is on the ground (arbitrary threshold for jumping)
-      const isPlayerGrounded = step(
-        0.1,
-        float(1).sub(this._uniforms.uPlayerPosition.y),
-      ); // 1 if grounded, 0 if airborne
-      const isBladeSteppedOn = step(
-        distSq,
-        this._uniforms.uTrailRaiusSquared,
-      ).mul(isPlayerGrounded); // 1 if stepped on, 0 if not
+  private computeTrailScale = Fn(
+    ([data2 = vec4(0), isBladeSteppedOn = float(0)]) => {
       const growScale = data2.x.add(this._uniforms.uTrailGrowthRate);
 
-      // Scale
       const growScaleFactor = float(1).sub(isBladeSteppedOn);
       const targetScale = this._uniforms.uTrailMinScale
         .mul(isBladeSteppedOn)
         .add(growScale.mul(growScaleFactor));
 
-      data2.x = min(targetScale, data2.y);
+      return min(targetScale, data2.y);
+    },
+  );
 
-      // Glow
+  private computeTrailGlow = Fn(
+    ([
+      data2 = vec4(0),
+      distSq = float(0),
+      isBladeSteppedOn = float(0),
+      isPlayerGrounded = float(0),
+    ]) => {
       const glowRadiusFactor = smoothstep(
         this._uniforms.uGlowRadiusSquared, // Outer radius (low intensity)
         float(0), // Inner radius (high intensity)
@@ -336,30 +288,85 @@ class GrassMaterial extends MeshStandardNodeMaterial {
         .mul(data2.w);
 
       // Apply glow effect and ensure full fade-out when stationary
-      data2.w = clamp(
+      return clamp(
         data2.w.add(fadeIn).sub(fadeOut).sub(forceFadeOut),
         0.0,
         1.0,
       );
-    });
-  })().compute(grassConfig.COUNT);
-
-  private computePosition = Fn(
-    ([data1 = vec4(0, 0, 0, 0), data2 = vec3(0, 0, 0)]) => {
-      const offset = vec3(data1.x, 0, data1.y);
-      const yawAngle = data1.z;
-      const bendingAngle = data1.w;
-      const scale = data2.x;
-      const bendAmount = bendingAngle.mul(uv().y);
-      const bentPosition = rotate(positionLocal, vec3(bendAmount, 0, 0));
-      const scaled = bentPosition.mul(vec3(1, scale, 1));
-      const rotated = rotate(scaled, vec3(0, yawAngle, 0));
-      const worldPosition = rotated.add(offset);
-      return worldPosition;
     },
   );
 
-  private computeDiffuseColor = Fn(([data2 = vec4(0, 0, 0, 0)]) => {
+  private computeUpdate = Fn(() => {
+    const data1 = this._buffer1.element(instanceIndex);
+    const data2 = this._buffer2.element(instanceIndex);
+    // Position
+    const newOffsetX = mod(
+      data1.x.sub(this._uniforms.uDelta.x).add(grassConfig.TILE_HALF_SIZE),
+      grassConfig.TILE_SIZE,
+    ).sub(grassConfig.TILE_HALF_SIZE);
+    const newOffsetZ = mod(
+      data1.y.sub(this._uniforms.uDelta.y).add(grassConfig.TILE_HALF_SIZE),
+      grassConfig.TILE_SIZE,
+    ).sub(grassConfig.TILE_HALF_SIZE);
+    const pos = vec3(newOffsetX, 0, newOffsetZ);
+
+    data1.x = newOffsetX;
+    data1.y = newOffsetZ;
+
+    const worldPos = pos.add(this._uniforms.uPlayerPosition);
+
+    // Visibility
+    const isVisible = this.isVisible(worldPos);
+    data2.z = isVisible;
+
+    // Soft culling
+    If(isVisible, () => {
+      // Compute distance to player
+      const playerPos = vec2(this._uniforms.uDelta.x, this._uniforms.uDelta.y);
+      const diff = pos.xz.sub(playerPos);
+      const distSq = diff.dot(diff);
+
+      // Check if the player is on the ground
+      const isPlayerGrounded = step(
+        0.1,
+        float(1).sub(this._uniforms.uPlayerPosition.y),
+      ); // 1 if grounded, 0 if airborne
+
+      const isBladeSteppedOn = step(
+        distSq,
+        this._uniforms.uTrailRaiusSquared,
+      ).mul(isPlayerGrounded); // 1 if stepped on, 0 if not
+
+      // Trail
+      data2.x = this.computeTrailScale(data2, isBladeSteppedOn);
+      // Alpha
+      data2.z = this.computeAlpha(worldPos);
+      // Wind
+      data1.w = this.computeBending(data1, worldPos);
+      // Glow
+      data2.w = this.computeTrailGlow(
+        data2,
+        distSq,
+        isBladeSteppedOn,
+        isPlayerGrounded,
+      );
+    });
+  })().compute(grassConfig.COUNT);
+
+  private computePosition = Fn(([data1 = vec4(0), data2 = vec4(0)]) => {
+    const offset = vec3(data1.x, 0, data1.y);
+    const yawAngle = data1.z;
+    const bendingAngle = data1.w;
+    const scale = data2.x;
+    const bendAmount = bendingAngle.mul(uv().y);
+    const bentPosition = rotate(positionLocal, vec3(bendAmount, 0, 0));
+    const scaled = bentPosition.mul(vec3(1, scale, 1));
+    const rotated = rotate(scaled, vec3(0, yawAngle, 0));
+    const worldPosition = rotated.add(offset);
+    return worldPosition;
+  });
+
+  private computeDiffuseColor = Fn(([data2 = vec4(0)]) => {
     const verticalFactor = pow(uv().y, 1.5);
     const baseToTip = mix(
       this._uniforms.uBaseColor,
@@ -398,8 +405,6 @@ class GrassMaterial extends MeshStandardNodeMaterial {
 
   async update(state: State) {
     const { renderer, player, clock, camera } = state;
-    // this._uniforms.uCameraProjectionMatrix.value.copy(camera.projectionMatrix);
-    // this._uniforms.uCameraModelViewMatrix.value.copy(camera.modelViewMatrix);
     this._uniforms.uCameraMatrix.value
       .copy(camera.projectionMatrix)
       .multiply(camera.matrixWorldInverse);
