@@ -2,6 +2,7 @@ import {
   BufferAttribute,
   Color,
   DoubleSide,
+  InstancedBufferAttribute,
   InstancedBufferGeometry,
   Matrix4,
   Mesh,
@@ -36,6 +37,8 @@ import {
   max,
   clamp,
   If,
+  normalize,
+  atan,
 } from "three/tsl";
 import {
   IndirectStorageBufferAttribute,
@@ -317,7 +320,6 @@ class GrassMaterial extends MeshBasicNodeMaterial {
 
     // Soft culling
     If(isVisible, () => {
-      // atomicAdd(this._counterBufferStorage.element(0), uint(1));
       // Compute distance to player
       const playerPos = vec2(this._uniforms.uDelta.x, this._uniforms.uDelta.y);
       const diff = pos.xz.sub(playerPos);
@@ -474,10 +476,13 @@ export default class Grass {
   //     0, // C (Tip remains straight)
   //   ]);
 
-  //   const geometry = new BufferGeometry();
+  //   const indices = new Uint16Array([0, 1, 2]);
+
+  //   const geometry = new InstancedBufferGeometry();
   //   geometry.setAttribute("position", new BufferAttribute(positions, 3));
   //   geometry.setAttribute("uv", new BufferAttribute(uvs, 2));
   //   geometry.setAttribute("normal", new BufferAttribute(normals, 3));
+  //   geometry.setIndex(new BufferAttribute(indices, 1));
   //   return geometry;
   // }
 
