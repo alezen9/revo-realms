@@ -36,10 +36,19 @@ import {
   max,
   clamp,
   If,
+  storage,
+  assign,
+  atomicStore,
+  atomicAdd,
+  uint,
+  atomicLoad,
+  buffer,
+  bufferAttribute,
 } from "three/tsl";
 import {
   IndirectStorageBufferAttribute,
   MeshBasicNodeMaterial,
+  StorageBufferAttribute,
 } from "three/webgpu";
 import { assetManager } from "../systems/AssetManager";
 import { realmConfig } from "../realms/PortfolioRealm";
@@ -120,9 +129,22 @@ class GrassMaterial extends MeshBasicNodeMaterial {
   _uniforms: Required<GrassUniforms>;
   private _buffer1: ReturnType<typeof instancedArray>; // holds: vec4 = (localOffset.x, localOffset.y, yaw, bending angle)
   private _buffer2: ReturnType<typeof instancedArray>; // holds: vec4 = (current scale, original scale, alpha, glow)
+  // private _drawBuffer: IndirectStorageBufferAttribute;
+  // private _drawBufferStorage: ReturnType<typeof storage>;
+  // private _counterBuffer: StorageBufferAttribute;
+  // private _counterBufferStorage: ReturnType<typeof storage>;
 
-  constructor(uniforms?: GrassUniforms) {
+  constructor(
+    drawBuffer: IndirectStorageBufferAttribute,
+    drawBufferStorage: ReturnType<typeof storage>,
+    uniforms?: GrassUniforms,
+  ) {
     super();
+    // this._drawBuffer = drawBuffer;
+    // this._counterBuffer = new StorageBufferAttribute(new Uint32Array(1), 1);
+    // this._counterBufferStorage = storage(this._counterBuffer, "atomic<u32>");
+    // this._drawBufferStorage = drawBufferStorage;
+
     this._uniforms = { ...defaultUniforms, ...uniforms };
     this._buffer1 = instancedArray(grassConfig.COUNT, "vec4");
     this._buffer1.setPBO(true);
@@ -317,6 +339,7 @@ class GrassMaterial extends MeshBasicNodeMaterial {
 
     // Soft culling
     If(isVisible, () => {
+      // atomicAdd(this._counterBufferStorage.element(0), uint(1));
       // Compute distance to player
       const playerPos = vec2(this._uniforms.uDelta.x, this._uniforms.uDelta.y);
       const diff = pos.xz.sub(playerPos);
@@ -399,9 +422,20 @@ class GrassMaterial extends MeshBasicNodeMaterial {
     this.colorNode = this.computeDiffuseColor(data2);
   }
 
+  // private updateDrawBuffer = Fn(() => {
+  //   const count = atomicLoad(this._counterBufferStorage.element(0)); // Read atomic counter
+  //   assign(this._drawBufferStorage.element(0).y, count); // Store it in the indirect buffer
+  //   atomicStore(this._counterBufferStorage.element(0), uint(0)); // Reset for next frame
+  // })().compute(1);
+
   async updateAsync(state: State) {
     const { renderer } = state;
     await renderer.computeAsync(this.computeUpdate);
+    // Not good because cpu side and also inconsistent, on reload sometimes it works sometimes it doesnt
+    // const counter = await renderer.getArrayBufferAsync(this._counterBuffer);
+    // const count = new Uint32Array(counter)[0];
+    // this._drawBuffer.array[1] = count;
+    // await renderer.computeAsync(this.updateDrawBuffer);
   }
 }
 
@@ -423,11 +457,15 @@ export default class Grass {
     uint32[2] = 0;
     uint32[3] = 0;
     uint32[4] = 0;
-    const drawBuffer = new IndirectStorageBufferAttribute(uint32, 4);
+    const drawBuffer = new IndirectStorageBufferAttribute(uint32, 5);
     geometry.setIndirect(drawBuffer);
-    // const s = storage(drawBuffer, "vec4");
+    const drawBufferStorage = storage(drawBuffer);
 
-    this.material = new GrassMaterial(this.uniforms);
+    this.material = new GrassMaterial(
+      drawBuffer,
+      drawBufferStorage,
+      this.uniforms,
+    );
     this.grassField = new Mesh(geometry, this.material);
     scene.add(this.grassField);
   }
