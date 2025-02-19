@@ -15,7 +15,7 @@ import realmModelUrl from "/models/realm2.glb?url";
 import floorTextureUrl from "/textures/realm/floor.webp?url";
 import floorCausticsMapTextureUrl from "/textures/realm/water_map.webp?url";
 import floorGrassMapTextureUrl from "/textures/realm/grass_map.webp?url";
-import woodTextureUrl from "/textures/realm/fence.webp?url";
+import fenceTextureUrl from "/textures/realm/fence.webp?url";
 // Environment
 import pxUrl from "/environment/px.webp?url";
 import nxUrl from "/environment/nx.webp?url";
@@ -38,10 +38,7 @@ class AssetManager {
   realmTexture!: Texture;
   realmCausticsMap!: Texture;
   realmGrassMap!: Texture;
-  woodAoMap!: Texture;
-  woodNormalMap!: Texture;
-  woodTexture!: Texture;
-  branchTexture!: Texture;
+  fenceTexture!: Texture;
 
   constructor() {
     const manager = this.createLoadingManager();
@@ -116,7 +113,7 @@ class AssetManager {
       this.textureLoader.loadAsync(floorTextureUrl),
       this.textureLoader.loadAsync(floorCausticsMapTextureUrl),
       assetManager.textureLoader.loadAsync(floorGrassMapTextureUrl),
-      assetManager.textureLoader.loadAsync(woodTextureUrl),
+      assetManager.textureLoader.loadAsync(fenceTextureUrl),
     ]);
     this.perlinNoiseTexture = res[0];
     this.randomNoiseTexture = res[1];
@@ -125,13 +122,18 @@ class AssetManager {
     this.environmentMap = res[3];
 
     this.realmModel = res[4];
+
     this.realmTexture = res[5];
     this.realmTexture.flipY = false;
+
     this.realmCausticsMap = res[6];
     this.realmCausticsMap.flipY = false;
+
     this.realmGrassMap = res[7];
     this.realmGrassMap.flipY = false;
-    this.woodTexture = res[8];
+
+    this.fenceTexture = res[8];
+    this.fenceTexture.flipY = false;
   }
 }
 

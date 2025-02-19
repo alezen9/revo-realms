@@ -3,6 +3,7 @@ import { WebGPURenderer } from "three/webgpu";
 import MonitoringManager from "./MonitoringManager";
 import PostprocessingManager from "./PostprocessingManager";
 import SceneManager from "./SceneManager";
+import { debugManager } from "./DebugManager";
 
 export default class RendererManager {
   renderer: WebGPURenderer;
@@ -11,6 +12,7 @@ export default class RendererManager {
   private postprocessingManager!: PostprocessingManager;
   private readonly POSTPROCESSING_ENABLED = false;
   private readonly MONITORING_ENABLED = true;
+  private readonly DEBUGGING_ENABLED = true;
 
   constructor() {
     const canvas = document.createElement("canvas");
@@ -29,6 +31,7 @@ export default class RendererManager {
     renderer.toneMappingExposure = 1.5;
     this.renderer = renderer;
     this.monitoringManager = new MonitoringManager(this.MONITORING_ENABLED);
+    debugManager.setVisibility(this.DEBUGGING_ENABLED);
   }
 
   async init(sceneManager: SceneManager) {

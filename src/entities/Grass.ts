@@ -151,13 +151,13 @@ class GrassMaterial extends MeshBasicNodeMaterial {
       .mul(grassConfig.SPACING)
       .sub(grassConfig.TILE_HALF_SIZE)
       .add(randZ.mul(grassConfig.SPACING * 0.5));
+    const worldPos = vec3(offsetX, 0, offsetZ);
+
     data1.x = offsetX;
     data1.y = offsetZ;
 
     // Yaw
-    const noiseUV = vec2(data1.x, data1.y)
-      .div(grassConfig.TILE_HALF_SIZE)
-      .add(1);
+    const noiseUV = worldPos.xz.div(grassConfig.TILE_HALF_SIZE).add(1);
     const noiseScale = float(1);
     const uv = fract(noiseUV.mul(noiseScale));
     const noiseValue = texture(assetManager.randomNoiseTexture, uv).r;
@@ -225,8 +225,7 @@ class GrassMaterial extends MeshBasicNodeMaterial {
     const alphaUv = worldPos.xz
       .add(realmConfig.HALF_MAP_SIZE)
       .div(realmConfig.MAP_SIZE);
-    const alphaValue = texture(assetManager.realmGrassMap, alphaUv).r;
-    return alphaValue;
+    return texture(assetManager.realmGrassMap, alphaUv).r;
   });
 
   private computeTrailScale = Fn(
