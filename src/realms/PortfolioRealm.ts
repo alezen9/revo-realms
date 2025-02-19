@@ -87,7 +87,7 @@ export default class PortfolioRealm {
       ({ name }) => name.startsWith("fence-placeholder"),
     ) as Mesh[];
     const fenceMaterial = new MeshLambertMaterial({
-      map: assetManager.woodTexture,
+      map: assetManager.fenceTexture,
     });
     fence.geometry.computeVertexNormals();
     fence.geometry.computeBoundingSphere();

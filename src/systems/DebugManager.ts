@@ -8,6 +8,10 @@ class DebugManager {
     this.panel.element.parentElement!.style.zIndex = "1";
     this.panel.element.parentElement!.style.width = "340px";
   }
+
+  setVisibility(visible: boolean) {
+    this.panel.hidden = !visible;
+  }
 }
 
 export const debugManager = new DebugManager();
