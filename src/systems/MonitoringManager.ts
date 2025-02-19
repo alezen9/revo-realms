@@ -3,6 +3,8 @@ import RendererManager from "./RendererManager";
 
 export default class MonitoringManager {
   stats: Stats;
+  private lastSecond = performance.now();
+
   private drawCallsPanel: Stats.Panel;
   private geometriesPanel: Stats.Panel;
   constructor(enabled: boolean) {
@@ -68,8 +70,11 @@ export default class MonitoringManager {
   }
 
   updateCustomPanels(renderer: RendererManager["renderer"]) {
+    const now = performance.now();
+    if (now - this.lastSecond < 1000) return;
     const { render, memory } = renderer.info;
     this.drawCallsPanel.update(render.drawCalls, 0);
     this.geometriesPanel.update(memory.geometries, 0);
+    this.lastSecond = now;
   }
 }

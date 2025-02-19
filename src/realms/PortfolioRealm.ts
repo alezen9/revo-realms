@@ -1,4 +1,4 @@
-import { Vector3, Mesh, MeshLambertMaterial, BatchedMesh } from "three";
+import { Vector3, Mesh, MeshLambertMaterial, BatchedMesh, Group } from "three";
 import {
   ColliderDesc,
   HeightFieldFlags,
@@ -53,8 +53,34 @@ export default class PortfolioRealm {
     this.createFloor();
     this.createWater();
     this.createFences();
+    this.createNpcs();
 
     this.kintounRigidBody = this.createKintoun();
+  }
+
+  private createNpcs() {
+    // Visual
+    const luffyModel = assetManager.npcsModel.scene.getObjectByName(
+      "luffy_model",
+    ) as Group;
+    this.scene.add(luffyModel);
+
+    // Physics
+    const luffyColliderBall = assetManager.npcsModel.scene.getObjectByName(
+      "luffy_collider_ball",
+    ) as Mesh;
+    this.createNpcBallPhysics(luffyColliderBall);
+  }
+
+  private createNpcBallPhysics(colliderSphere: Mesh) {
+    colliderSphere.geometry.computeBoundingSphere();
+    const radius = colliderSphere.geometry.boundingSphere?.radius ?? 0;
+    const rigidBodyDesc = RigidBodyDesc.fixed()
+      .setTranslation(...colliderSphere.position.toArray())
+      .setRotation(colliderSphere.quaternion);
+    const rigidBody = this.world.createRigidBody(rigidBodyDesc);
+    const colliderDesc = ColliderDesc.ball(radius).setRestitution(0.2);
+    this.world.createCollider(colliderDesc, rigidBody);
   }
 
   private createFloor() {
