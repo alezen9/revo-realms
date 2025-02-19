@@ -11,7 +11,8 @@ import perlinNoiseTextureUrl from "/textures/perlin_noise.webp?url";
 import randomNoiseTextureUrl from "/textures/random_noise.webp?url";
 import voronoiNoiseTextureUrl from "/textures/voronoi_noise.webp?url";
 // Realm
-import realmModelUrl from "/models/realm2.glb?url";
+import realmModelUrl from "/models/realm.glb?url";
+import npcsModelUrl from "/models/npcs.glb?url";
 import floorTextureUrl from "/textures/realm/floor.webp?url";
 import floorCausticsMapTextureUrl from "/textures/realm/water_map.webp?url";
 import floorGrassMapTextureUrl from "/textures/realm/grass_map.webp?url";
@@ -39,6 +40,8 @@ class AssetManager {
   realmCausticsMap!: Texture;
   realmGrassMap!: Texture;
   fenceTexture!: Texture;
+  // Npcs
+  npcsModel!: GLTF;
 
   constructor() {
     const manager = this.createLoadingManager();
@@ -114,6 +117,7 @@ class AssetManager {
       this.textureLoader.loadAsync(floorCausticsMapTextureUrl),
       assetManager.textureLoader.loadAsync(floorGrassMapTextureUrl),
       assetManager.textureLoader.loadAsync(fenceTextureUrl),
+      assetManager.gltfLoader.loadAsync(npcsModelUrl),
     ]);
     this.perlinNoiseTexture = res[0];
     this.randomNoiseTexture = res[1];
@@ -134,6 +138,8 @@ class AssetManager {
 
     this.fenceTexture = res[8];
     this.fenceTexture.flipY = false;
+
+    this.npcsModel = res[9];
   }
 }
 

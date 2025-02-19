@@ -5,6 +5,8 @@ import {
   Quaternion,
   Camera,
   MeshStandardMaterial,
+  MeshPhysicalMaterial,
+  MeshToonMaterial,
 } from "three";
 import {
   ColliderDesc,
@@ -77,7 +79,7 @@ export default class Player {
   private createCharacterMesh() {
     const geometry = new IcosahedronGeometry(this.RADIUS, 3);
     const material = new MeshStandardMaterial({
-      color: "purple",
+      color: "grey",
       flatShading: true,
       metalness: 1,
       roughness: 0.5,

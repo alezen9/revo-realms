@@ -28,6 +28,7 @@ export default class InputManager {
   }
 
   public isKeyPressed(key: string): boolean {
+    if (key === "*") return this.keysPressed.size > 0;
     return this.keysPressed.has(key.toLowerCase());
   }
 
