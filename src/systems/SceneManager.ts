@@ -37,7 +37,7 @@ export default class SceneManager {
       rendererManager.canvas,
     );
     orbitControlsCamera.near = 0.01;
-    orbitControlsCamera.far = 1000;
+    orbitControlsCamera.far = 5000;
     this.orbitControlsCamera = orbitControlsCamera;
     controls.enableDamping = true;
     controls.maxPolarAngle = Math.PI / 2.05;

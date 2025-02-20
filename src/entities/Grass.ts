@@ -181,7 +181,7 @@ class GrassMaterial extends MeshBasicNodeMaterial {
     data2.y = randomScale;
   })().compute(grassConfig.COUNT);
 
-  private isVisible = Fn(([worldPos = vec3(0)]) => {
+  private computeVisibility = Fn(([worldPos = vec3(0)]) => {
     const clipPos = this._uniforms.uCameraMatrix.mul(vec4(worldPos, 1.0));
 
     // Convert to normalized device coordinates
@@ -311,7 +311,7 @@ class GrassMaterial extends MeshBasicNodeMaterial {
     const worldPos = pos.add(this._uniforms.uPlayerPosition);
 
     // Visibility
-    const isVisible = this.isVisible(worldPos);
+    const isVisible = this.computeVisibility(worldPos);
     data2.z = isVisible;
 
     // Soft culling
@@ -393,7 +393,7 @@ class GrassMaterial extends MeshBasicNodeMaterial {
     const data2 = this._buffer2.element(instanceIndex);
     this.positionNode = this.computePosition(data1, data2);
     this.opacityNode = data2.z;
-    this.alphaTest = 0.1;
+    this.alphaTest = 0.25;
     this.aoNode = this.computeAO();
     this.colorNode = this.computeDiffuseColor(data2);
   }

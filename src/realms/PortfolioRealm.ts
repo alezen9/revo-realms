@@ -8,8 +8,10 @@ import {
 import { State } from "../Game";
 import {
   float,
+  Fn,
   fract,
   mix,
+  positionWorld,
   pow,
   texture,
   uniform,
@@ -19,7 +21,8 @@ import {
 } from "three/tsl";
 import { assetManager } from "../systems/AssetManager";
 import WaterMaterial from "../materials/WaterMaterial";
-import { MeshLambertNodeMaterial } from "three/webgpu";
+import { MeshStandardNodeMaterial } from "three/webgpu";
+import { UniformType } from "../types";
 
 const getConfig = () => {
   const MAP_SIZE = 256;
@@ -28,6 +31,8 @@ const getConfig = () => {
     HALF_MAP_SIZE: MAP_SIZE / 2,
     KINTOUN_ACTIVATION_THRESHOLD: 2,
     HALF_FLOOR_THICKNESS: 0.3,
+    OUTER_MAP_SIZE: MAP_SIZE * 3,
+    OUTER_HALF_MAP_SIZE: MAP_SIZE * 1.5,
   });
 };
 
@@ -39,6 +44,7 @@ export default class PortfolioRealm {
 
   private kintounRigidBody: RigidBody; // Kintoun = Flying Nimbus cloud from dragon ball
   private kintounPosition = new Vector3();
+  private outerFloorMesh: Mesh;
 
   // Water
   private uTime = uniform(0);
@@ -55,7 +61,18 @@ export default class PortfolioRealm {
     this.createFences();
     this.createNpcs();
 
+    this.outerFloorMesh = this.createOuterFloorVisual();
+    this.scene.add(this.outerFloorMesh);
+
     this.kintounRigidBody = this.createKintoun();
+  }
+
+  private createOuterFloorVisual() {
+    const outerFloor = assetManager.realmModel.scene.getObjectByName(
+      "outer_world",
+    ) as Mesh;
+    outerFloor.material = new OuterFloorMaterial();
+    return outerFloor;
   }
 
   private createNpcs() {
@@ -88,8 +105,7 @@ export default class PortfolioRealm {
     const floor = assetManager.realmModel.scene.getObjectByName(
       "floor",
     ) as Mesh;
-    floor.geometry.computeVertexNormals();
-    floor.material = this.createFloorMaterial();
+    floor.material = new FloorMaterial({ uTime: this.uTime });
     floor.receiveShadow = true;
     this.scene.add(floor);
     // Physics
@@ -160,37 +176,59 @@ export default class PortfolioRealm {
     this.world.createCollider(colliderDesc, rigidBody);
   }
 
-  private createFloorMaterial() {
-    const material = new MeshLambertNodeMaterial();
-    const causticsTexture = assetManager.voronoiNoiseTexture;
-    const causticsMap = assetManager.realmCausticsMap;
-    const floorTexture = assetManager.realmTexture;
+  // private createFloorMaterial() {
+  //   const material = new MeshStandardNodeMaterial();
 
-    const timeFactor = this.uTime.mul(0.1);
-    const scaleFactor = float(10);
-    const scaledUv = uv().mul(scaleFactor);
-    const scaledCausticsUvA = fract(scaledUv.add(vec2(timeFactor, 0)));
-    const scaledCausticsUvB = fract(scaledUv.add(vec2(0, timeFactor.negate())));
-    const noiseA = texture(causticsTexture, scaledCausticsUvA, 1).r;
-    const noiseB = texture(causticsTexture, scaledCausticsUvB, 2).r;
+  //   const timeFactor = this.uTime.mul(0.1);
 
-    const caustics = noiseA.add(noiseB).mul(0.5);
-    const adjustedCaustics = pow(caustics, 3);
+  //   const waterFactor = texture(assetManager.realmWaterMap, uv()).r;
 
-    const mapColor = texture(floorTexture, uv());
-    const causticsFactor = texture(causticsMap, uv()).r;
+  //   // floor sample (probably not needed in a moment)
+  //   const mapColor = texture(assetManager.realmTexture, uv());
 
-    const causticsHighlightColor = vec3(1.2, 1.2, 0.8);
-    const causticsColor = mix(
-      mapColor, // causticsShadowColor
-      causticsHighlightColor,
-      adjustedCaustics,
-    );
+  //   // caustics noise
+  //   const scaleFactor = float(10);
+  //   const scaledUv = uv().mul(scaleFactor);
+  //   const scaledCausticsUvA = fract(scaledUv.add(vec2(timeFactor, 0)));
+  //   const scaledCausticsUvB = fract(scaledUv.add(vec2(0, timeFactor.negate())));
+  //   const noiseA = texture(
+  //     assetManager.voronoiNoiseTexture,
+  //     scaledCausticsUvA,
+  //     1,
+  //   ).r;
+  //   const noiseB = texture(
+  //     assetManager.voronoiNoiseTexture,
+  //     scaledCausticsUvB,
+  //     2,
+  //   ).r;
+  //   const caustics = noiseA.add(noiseB).mul(0.5);
+  //   const adjustedCaustics = pow(caustics, 3);
 
-    material.colorNode = mix(mapColor, causticsColor, causticsFactor);
+  //   const causticsHighlightColor = vec3(1.2, 1.2, 0.8);
+  //   const lakeUv = fract(uv().mul(20));
+  //   const sandColor = texture(assetManager.sandDiffuseTexture, lakeUv);
+  //   const causticsColor = mix(
+  //     sandColor, // causticsShadowColor
+  //     causticsHighlightColor,
+  //     adjustedCaustics,
+  //   );
 
-    return material;
-  }
+  //   const floorWaterColor = mix(mapColor, causticsColor, waterFactor);
+
+  //   material.colorNode = floorWaterColor;
+
+  //   const sandNormal = texture(assetManager.sandNormalTexture, lakeUv);
+  //   material.normalNode = mix(normalWorld, sandNormal, waterFactor);
+
+  //   const sandARM = texture(assetManager.sandNormalTexture, lakeUv).mul(
+  //     waterFactor,
+  //   );
+  //   material.aoNode = sandARM.r.mul(2);
+  //   material.roughnessNode = sandARM.g.mul(4);
+  //   material.metalnessNode = sandARM.b;
+
+  //   return material;
+  // }
 
   private getFloorDisplacementData() {
     const mesh = assetManager.realmModel.scene.getObjectByName(
@@ -299,5 +337,141 @@ export default class PortfolioRealm {
 
     if (isPlayerNearEdgeX || isPlayerNearEdgeZ)
       this.useKintoun(player.position);
+
+    const outerFloorThresold = realmConfig.MAP_SIZE;
+    const absPlayerX = Math.abs(player.position.x);
+    const dirX = Math.sign(player.position.x);
+    const absPlayerZ = Math.abs(player.position.z);
+    const dirZ = Math.sign(player.position.z);
+
+    const dx =
+      absPlayerX > outerFloorThresold ? absPlayerX - outerFloorThresold : 0;
+    const dz =
+      absPlayerZ > outerFloorThresold ? absPlayerZ - outerFloorThresold : 0;
+    this.outerFloorMesh.position.set(dx * dirX, 0, dz * dirZ);
+  }
+}
+
+type FloorUniforms = {
+  uTime?: UniformType<number>;
+};
+
+const defaultUniforms: FloorUniforms = {
+  uTime: uniform(0),
+};
+
+class FloorMaterial extends MeshStandardNodeMaterial {
+  private _uniforms: FloorUniforms;
+  constructor(uniforms: FloorUniforms) {
+    super();
+
+    this._uniforms = { ...defaultUniforms, ...uniforms };
+    this.createMaterial();
+  }
+
+  private computeCausticsDiffuse = Fn(
+    ([timer = float(0), causticsShadowColor = vec3(0, 0, 0)]) => {
+      const scaleFactor = float(10);
+      const scaledUv = uv().mul(scaleFactor);
+      const scaledCausticsUvA = fract(scaledUv.add(vec2(timer, 0)));
+      const scaledCausticsUvB = fract(scaledUv.add(vec2(0, timer.negate())));
+      const noiseA = texture(
+        assetManager.voronoiNoiseTexture,
+        scaledCausticsUvA,
+        1,
+      ).r;
+      const noiseB = texture(
+        assetManager.voronoiNoiseTexture,
+        scaledCausticsUvB,
+        2,
+      ).r;
+      const caustics = noiseA.add(noiseB).mul(0.5);
+      const adjustedCaustics = pow(caustics, 3);
+
+      // const causticsHighlightColor = vec3(1.2, 1.2, 0.8);
+      const causticsHighlightColor = vec3(3.2, 3.2, 2.8);
+      const causticsColor = mix(
+        causticsShadowColor,
+        causticsHighlightColor,
+        adjustedCaustics,
+      );
+
+      return causticsColor;
+    },
+  );
+
+  private createMaterial() {
+    const timer = this._uniforms.uTime.mul(0.1);
+
+    const waterFactor = texture(assetManager.realmWaterMap, uv(), 3).r;
+    const grassFactor = texture(assetManager.realmGrassMap, uv(), 3).r;
+    const sandFactor = float(1).sub(grassFactor);
+    const pathFactor = sandFactor.sub(waterFactor);
+
+    const noiseUv = fract(uv().mul(10));
+    const noise = texture(assetManager.randomNoiseTexture, noiseUv, 2);
+
+    // Diffuse
+    // Water caustics
+    const scaledSandUv = fract(uv().mul(20));
+    const sandColor = texture(
+      assetManager.sandDiffuseTexture,
+      scaledSandUv,
+    ).mul(sandFactor);
+    const pathColor = texture(assetManager.realmTexture, uv(), 2).mul(
+      pathFactor,
+    );
+    const causticsColor = this.computeCausticsDiffuse(timer, sandColor).mul(
+      waterFactor,
+    );
+
+    const darkGreen = vec3(0.145, 0.322, 0.129);
+    const grassColor = darkGreen.mul(noise.r.mul(1.5)).mul(grassFactor);
+
+    this.colorNode = pathColor
+      .add(sandColor)
+      .add(causticsColor)
+      .add(grassColor);
+
+    // Normal
+    const sandNormal = texture(
+      assetManager.sandNormalTexture,
+      scaledSandUv,
+    ).mul(sandFactor);
+
+    const grassNormal = vec3(1, 1, 1).mul(grassFactor);
+    this.normalNode = grassNormal.add(sandNormal);
+
+    // ARM
+    const sandARM = texture(assetManager.sandARMTexture, scaledSandUv).mul(
+      waterFactor,
+    );
+    const sandAo = sandARM.r.mul(0.5);
+
+    const grassARM = vec3(1, 1, 0).mul(pathFactor.add(grassFactor));
+    const grassAo = grassARM.r;
+
+    this.aoNode = grassAo.add(sandAo);
+  }
+}
+
+class OuterFloorMaterial extends MeshStandardNodeMaterial {
+  constructor() {
+    super();
+    this.createMaterial();
+  }
+
+  private createMaterial() {
+    const scaledUv = positionWorld.xz
+      .add(realmConfig.OUTER_HALF_MAP_SIZE)
+      .div(realmConfig.OUTER_MAP_SIZE)
+      .mul(20);
+    const modulatedUv = fract(scaledUv);
+    const noise = texture(assetManager.randomNoiseTexture, modulatedUv, 2);
+
+    const darkGreen = vec3(0.145, 0.322, 0.129);
+    const grassColor = darkGreen.mul(noise.r.mul(1.5));
+
+    this.colorNode = grassColor;
   }
 }
