@@ -5,8 +5,6 @@ import {
   Quaternion,
   Camera,
   MeshStandardMaterial,
-  MeshPhysicalMaterial,
-  MeshToonMaterial,
 } from "three";
 import {
   ColliderDesc,

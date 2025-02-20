@@ -14,9 +14,24 @@ import voronoiNoiseTextureUrl from "/textures/voronoi_noise.webp?url";
 import realmModelUrl from "/models/realm.glb?url";
 import npcsModelUrl from "/models/npcs.glb?url";
 import floorTextureUrl from "/textures/realm/floor.webp?url";
-import floorCausticsMapTextureUrl from "/textures/realm/water_map.webp?url";
+import floorWaterMapTextureUrl from "/textures/realm/water_map.webp?url";
 import floorGrassMapTextureUrl from "/textures/realm/grass_map.webp?url";
 import fenceTextureUrl from "/textures/realm/fence.webp?url";
+
+// Sand
+import sandDiffuseTextureUrl from "/textures/realm/coast_sand_diff.webp?url";
+import sandNormalTextureUrl from "/textures/realm/coast_sand_nor.webp?url";
+import sandARMTextureUrl from "/textures/realm/coast_sand_arm.webp?url";
+
+// Leaves
+import leavesDiffuseTextureUrl from "/textures/realm/grass_diff.jpg?url";
+import leavesNormalTextureUrl from "/textures/realm/grass_nor.png?url";
+import leavesARMTextureUrl from "/textures/realm/leaves_arm.jpg?url";
+
+// Stone
+import stoneDiffuseTextureUrl from "/textures/realm/stone_diff.jpg?url";
+import stoneNormalTextureUrl from "/textures/realm/stone_nor.jpg?url";
+import stoneARMTextureUrl from "/textures/realm/stone_arm.jpg?url";
 // Environment
 import pxUrl from "/environment/px.webp?url";
 import nxUrl from "/environment/nx.webp?url";
@@ -37,9 +52,21 @@ class AssetManager {
   environmentMap!: CubeTexture;
   realmModel!: GLTF;
   realmTexture!: Texture;
-  realmCausticsMap!: Texture;
+  realmWaterMap!: Texture;
   realmGrassMap!: Texture;
   fenceTexture!: Texture;
+
+  sandDiffuseTexture!: Texture;
+  sandNormalTexture!: Texture;
+  sandARMTexture!: Texture;
+
+  mudDiffuseTexture!: Texture;
+  mudNormalTexture!: Texture;
+  mudARMTexture!: Texture;
+
+  stoneDiffuseTexture!: Texture;
+  stoneNormalTexture!: Texture;
+  stoneARMTexture!: Texture;
   // Npcs
   npcsModel!: GLTF;
 
@@ -114,10 +141,22 @@ class AssetManager {
       // Realm
       this.gltfLoader.loadAsync(realmModelUrl),
       this.textureLoader.loadAsync(floorTextureUrl),
-      this.textureLoader.loadAsync(floorCausticsMapTextureUrl),
+      this.textureLoader.loadAsync(floorWaterMapTextureUrl),
       assetManager.textureLoader.loadAsync(floorGrassMapTextureUrl),
       assetManager.textureLoader.loadAsync(fenceTextureUrl),
       assetManager.gltfLoader.loadAsync(npcsModelUrl),
+
+      assetManager.textureLoader.loadAsync(sandDiffuseTextureUrl),
+      assetManager.textureLoader.loadAsync(sandNormalTextureUrl),
+      assetManager.textureLoader.loadAsync(sandARMTextureUrl),
+
+      assetManager.textureLoader.loadAsync(leavesDiffuseTextureUrl),
+      assetManager.textureLoader.loadAsync(leavesNormalTextureUrl),
+      assetManager.textureLoader.loadAsync(leavesARMTextureUrl),
+
+      assetManager.textureLoader.loadAsync(stoneDiffuseTextureUrl),
+      assetManager.textureLoader.loadAsync(stoneNormalTextureUrl),
+      assetManager.textureLoader.loadAsync(stoneARMTextureUrl),
     ]);
     this.perlinNoiseTexture = res[0];
     this.randomNoiseTexture = res[1];
@@ -130,8 +169,8 @@ class AssetManager {
     this.realmTexture = res[5];
     this.realmTexture.flipY = false;
 
-    this.realmCausticsMap = res[6];
-    this.realmCausticsMap.flipY = false;
+    this.realmWaterMap = res[6];
+    this.realmWaterMap.flipY = false;
 
     this.realmGrassMap = res[7];
     this.realmGrassMap.flipY = false;
@@ -140,6 +179,18 @@ class AssetManager {
     this.fenceTexture.flipY = false;
 
     this.npcsModel = res[9];
+
+    this.sandDiffuseTexture = res[10];
+    this.sandNormalTexture = res[11];
+    this.sandARMTexture = res[12];
+
+    this.mudDiffuseTexture = res[13];
+    this.mudNormalTexture = res[14];
+    this.mudARMTexture = res[15];
+
+    this.stoneDiffuseTexture = res[16];
+    this.stoneNormalTexture = res[17];
+    this.stoneARMTexture = res[18];
   }
 }
 
