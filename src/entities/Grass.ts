@@ -36,6 +36,11 @@ import {
   max,
   clamp,
   If,
+  uint,
+  assign,
+  Loop,
+  log2,
+  Break,
 } from "three/tsl";
 import {
   IndirectStorageBufferAttribute,
@@ -48,7 +53,8 @@ const getConfig = () => {
   const BLADE_WIDTH = 0.1;
   const BLADE_HEIGHT = 1.25;
   const TILE_SIZE = 150;
-  const BLADES_PER_SIDE = 700;
+  const BLADES_PER_SIDE = 1024; // STRICT: pow of 2 (for better thread utilization during compute)
+  const COUNT = BLADES_PER_SIDE * BLADES_PER_SIDE;
   return {
     BLADE_WIDTH,
     BLADE_HEIGHT,
@@ -56,8 +62,10 @@ const getConfig = () => {
     TILE_SIZE,
     TILE_HALF_SIZE: TILE_SIZE / 2,
     BLADES_PER_SIDE,
-    COUNT: BLADES_PER_SIDE * BLADES_PER_SIDE,
+    COUNT,
     SPACING: TILE_SIZE / BLADES_PER_SIDE,
+    RENDERED_COUNT: Math.ceil(COUNT * 0.55),
+    PREFIX_SUM_ITERATIONS: Math.log2(COUNT),
   };
 };
 const grassConfig = getConfig();
@@ -121,6 +129,10 @@ class GrassMaterial extends MeshBasicNodeMaterial {
   private _buffer1: ReturnType<typeof instancedArray>; // holds: vec4 = (localOffset.x, localOffset.y, yaw, bending angle)
   private _buffer2: ReturnType<typeof instancedArray>; // holds: vec4 = (current scale, original scale, alpha, glow)
 
+  private _idxBuffer: ReturnType<typeof instancedArray>; // holds: vec4 = (original blade idx, _, __, ___) // using vec4 to avoid wasting space due to padding, i have 3 available slots currently if needed
+  private _visibilityBuffer: ReturnType<typeof instancedArray>; // 0 = culled, 1 = visible
+  private _prefixSumBuffer: ReturnType<typeof instancedArray>; // Prefix sum buffer
+
   constructor(uniforms?: GrassUniforms) {
     super();
     this._uniforms = { ...defaultUniforms, ...uniforms };
@@ -128,6 +140,14 @@ class GrassMaterial extends MeshBasicNodeMaterial {
     this._buffer1.setPBO(true);
     this._buffer2 = instancedArray(grassConfig.COUNT, "vec4");
     this._buffer2.setPBO(true);
+
+    this._idxBuffer = instancedArray(grassConfig.RENDERED_COUNT, "vec4"); // only hold visible blades
+    this._idxBuffer.setPBO(true);
+    this._visibilityBuffer = instancedArray(grassConfig.COUNT, "uint");
+    this._visibilityBuffer.setPBO(true);
+
+    this._prefixSumBuffer = instancedArray(grassConfig.COUNT, "uint");
+    this._prefixSumBuffer.setPBO(true);
 
     this.computeUpdate.onInit(({ renderer }) => {
       renderer.computeAsync(this.computeInit);
@@ -314,6 +334,11 @@ class GrassMaterial extends MeshBasicNodeMaterial {
     const isVisible = this.computeVisibility(worldPos);
     data2.z = isVisible;
 
+    const visibilityFlag = this._visibilityBuffer.element(instanceIndex);
+    visibilityFlag.assign(isVisible);
+    const prefixSum = this._prefixSumBuffer.element(instanceIndex);
+    prefixSum.assign(isVisible);
+
     // Soft culling
     If(isVisible, () => {
       // Compute distance to player
@@ -347,6 +372,81 @@ class GrassMaterial extends MeshBasicNodeMaterial {
       );
     });
   })().compute(grassConfig.COUNT);
+
+  // private computePrefixSumUpsweep = Fn(() => {
+  //   Loop(grassConfig.PREFIX_SUM_ITERATIONS, ({ i }) => {
+  //     const offset = uint(1).shiftLeft(i); // Compute step as 2^i
+  //     const updateIdx = instanceIndex.add(1).mul(offset).mul(2).sub(1);
+
+  //     If(updateIdx.greaterThanEqual(grassConfig.COUNT), () => {
+  //       Break();
+  //     });
+
+  //     const a = this._prefixSumBuffer.element(updateIdx.sub(offset));
+  //     const b = this._prefixSumBuffer.element(updateIdx);
+  //     b.addAssign(a);
+  //   });
+  // })().compute(grassConfig.COUNT / 2);
+
+  private computePrefixSumUpsweepIteration = Fn(([level = uint(0)]) => {
+    const offset = uint(1).shiftLeft(level); // Compute step as 2^level
+    const updateIdx = instanceIndex.mul(offset).mul(2).add(offset).sub(1);
+
+    const a = this._prefixSumBuffer.element(updateIdx.sub(offset));
+    const b = this._prefixSumBuffer.element(updateIdx);
+    b.addAssign(a);
+  });
+
+  private computePrefixSumSetIdentity = Fn(() => {
+    const last = this._prefixSumBuffer.element(grassConfig.COUNT - 1);
+    last.addAssign(0);
+  })().compute(1);
+
+  private computePrefixSumDownsweepIteration = Fn(([level = uint(0)]) => {
+    const offset = uint(1).shiftLeft(
+      uint(grassConfig.PREFIX_SUM_ITERATIONS).sub(level).sub(1),
+    ); // Compute step as 2^(maxLevel - level - 1)
+    const updateIdx = instanceIndex.mul(offset).mul(2).add(offset).sub(1);
+
+    const a = this._prefixSumBuffer.element(updateIdx.sub(offset));
+    const b = this._prefixSumBuffer.element(updateIdx);
+
+    const temp = b; // Store the original value
+    b.assign(a); // Replace with left child's value
+    a.addAssign(temp); // Update left child
+  });
+
+  // private computePrefixSumDownsweep = Fn(() => {
+  //   // Set the last element to zero (identity for sum)
+  //   If(instanceIndex.equal(grassConfig.COUNT - 1), () => {
+  //     this._prefixSumBuffer.element(instanceIndex).assign(uint(0));
+  //   });
+
+  //   Loop(grassConfig.PREFIX_SUM_ITERATIONS, ({ i }) => {
+  //     const offset = uint(1).shiftLeft(
+  //       uint(grassConfig.PREFIX_SUM_ITERATIONS).sub(i).sub(1),
+  //     ); // Compute step as 2^(maxIterations - i - 1)
+  //     const updateIdx = instanceIndex.add(1).mul(offset).mul(2).sub(1);
+
+  //     const leftValue = this._prefixSumBuffer.element(updateIdx.sub(offset));
+  //     const rightValue = this._prefixSumBuffer.element(updateIdx);
+
+  //     // Swap the values
+  //     this._prefixSumBuffer.element(updateIdx.sub(offset)).assign(rightValue);
+  //     this._prefixSumBuffer
+  //       .element(updateIdx)
+  //       .assign(rightValue.add(leftValue));
+  //   });
+  // })().compute(grassConfig.COUNT / 2);
+
+  private computeCompaction = Fn(() => {
+    const scanIdx = this._prefixSumBuffer.element(instanceIndex);
+    const isVisible = this._visibilityBuffer.element(instanceIndex);
+
+    // Step-based approach instead of If
+    const el = this._idxBuffer.element(scanIdx);
+    el.assign(isVisible.mul(instanceIndex));
+  })().compute(grassConfig.COUNT); // **Runs on ALL blades**
 
   private computePosition = Fn(([data1 = vec4(0), data2 = vec4(0)]) => {
     const offset = vec3(data1.x, 0, data1.y);
@@ -389,18 +489,38 @@ class GrassMaterial extends MeshBasicNodeMaterial {
   private createGrassMaterial() {
     this.precision = "lowp";
     this.side = DoubleSide;
+    const originalIndex = this._idxBuffer.element(instanceIndex);
+    const isVisible = this._visibilityBuffer.element(instanceIndex);
+
     const data1 = this._buffer1.element(instanceIndex);
     const data2 = this._buffer2.element(instanceIndex);
     this.positionNode = this.computePosition(data1, data2);
     this.opacityNode = data2.z;
     this.alphaTest = 0.25;
     this.aoNode = this.computeAO();
+    // this.colorNode = vec3(isVisible, isVisible, isVisible);
     this.colorNode = this.computeDiffuseColor(data2);
   }
 
   async updateAsync(state: State) {
     const { renderer } = state;
     await renderer.computeAsync(this.computeUpdate);
+    for (let level = 0; level < grassConfig.PREFIX_SUM_ITERATIONS; level++) {
+      const nThreads = grassConfig.COUNT >> (level + 1);
+      await renderer.computeAsync(
+        this.computePrefixSumUpsweepIteration(level).compute(nThreads),
+      );
+    }
+    await renderer.computeAsync(this.computePrefixSumSetIdentity);
+    for (let level = 0; level < grassConfig.PREFIX_SUM_ITERATIONS; level++) {
+      const nThreads = grassConfig.COUNT >> (level + 1);
+      await renderer.computeAsync(
+        this.computePrefixSumDownsweepIteration(level).compute(nThreads),
+      );
+    }
+    // await renderer.computeAsync(this.computePrefixSumUpsweep);
+    // await renderer.computeAsync(this.computePrefixSumDownsweep);
+    // await renderer.computeAsync(this.computeCompaction);
   }
 }
 
@@ -418,7 +538,7 @@ export default class Grass {
     const geometry = this.createBladeGeometry();
     const uint32 = new Uint32Array(5);
     uint32[0] = geometry.index!.count;
-    uint32[1] = grassConfig.COUNT; // instance count
+    uint32[1] = grassConfig.RENDERED_COUNT; // instance count
     uint32[2] = 0;
     uint32[3] = 0;
     uint32[4] = 0;
