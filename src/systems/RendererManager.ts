@@ -12,7 +12,7 @@ export default class RendererManager {
   private postprocessingManager!: PostprocessingManager;
   private readonly POSTPROCESSING_ENABLED = false;
   private readonly MONITORING_ENABLED = false;
-  private readonly DEBUGGING_ENABLED = false;
+  private readonly DEBUGGING_ENABLED = true;
 
   constructor() {
     const canvas = document.createElement("canvas");
