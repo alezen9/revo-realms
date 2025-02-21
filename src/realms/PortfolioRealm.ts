@@ -423,10 +423,11 @@ class FloorMaterial extends MeshStandardNodeMaterial {
       waterFactor,
     );
 
-    const noiseUv = fract(uv().mul(2));
-    const noise = texture(assetManager.randomNoiseTexture, noiseUv, 2);
+    const noiseScale = 0.5;
+    const noiseUv = fract(uv().mul(noiseScale));
+    const noise = texture(assetManager.randomNoiseTexture, noiseUv, 1);
     const darkGreen = vec3(0.145, 0.322, 0.129);
-    const grassColor = darkGreen.mul(noise.r).mul(grassFactor);
+    const grassColor = darkGreen.mul(noise.r.add(0.1)).mul(grassFactor);
 
     this.colorNode = pathColor
       .add(sandColor)
@@ -462,15 +463,16 @@ class OuterFloorMaterial extends MeshStandardNodeMaterial {
   }
 
   private createMaterial() {
+    const noiseScale = 0.5;
     const scaledUv = positionWorld.xz
-      .add(realmConfig.OUTER_HALF_MAP_SIZE)
-      .div(realmConfig.OUTER_MAP_SIZE)
-      .mul(2);
+      .add(realmConfig.HALF_MAP_SIZE)
+      .div(realmConfig.MAP_SIZE)
+      .mul(noiseScale);
     const modulatedUv = fract(scaledUv);
     const noise = texture(assetManager.randomNoiseTexture, modulatedUv, 1);
 
     const darkGreen = vec3(0.145, 0.322, 0.129);
-    const grassColor = darkGreen.mul(noise.r.mul(1.5));
+    const grassColor = darkGreen.mul(noise.r.add(0.1));
 
     this.colorNode = grassColor;
   }
