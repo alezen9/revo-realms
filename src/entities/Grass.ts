@@ -38,7 +38,7 @@ import {
   If,
 } from "three/tsl";
 import {
-  IndirectStorageBufferAttribute,
+  // IndirectStorageBufferAttribute,
   MeshBasicNodeMaterial,
 } from "three/webgpu";
 import { assetManager } from "../systems/AssetManager";
