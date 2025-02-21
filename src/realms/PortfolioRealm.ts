@@ -71,6 +71,7 @@ export default class PortfolioRealm {
     const outerFloor = assetManager.realmModel.scene.getObjectByName(
       "outer_world",
     ) as Mesh;
+    outerFloor.geometry.computeVertexNormals();
     outerFloor.material = new OuterFloorMaterial();
     return outerFloor;
   }
@@ -408,9 +409,6 @@ class FloorMaterial extends MeshStandardNodeMaterial {
     const sandFactor = float(1).sub(grassFactor);
     const pathFactor = sandFactor.sub(waterFactor);
 
-    const noiseUv = fract(uv().mul(10));
-    const noise = texture(assetManager.randomNoiseTexture, noiseUv, 2);
-
     // Diffuse
     // Water caustics
     const scaledSandUv = fract(uv().mul(20));
@@ -425,8 +423,10 @@ class FloorMaterial extends MeshStandardNodeMaterial {
       waterFactor,
     );
 
+    const noiseUv = fract(uv().mul(2));
+    const noise = texture(assetManager.randomNoiseTexture, noiseUv, 2);
     const darkGreen = vec3(0.145, 0.322, 0.129);
-    const grassColor = darkGreen.mul(noise.r.mul(1.5)).mul(grassFactor);
+    const grassColor = darkGreen.mul(noise.r).mul(grassFactor);
 
     this.colorNode = pathColor
       .add(sandColor)
@@ -465,9 +465,9 @@ class OuterFloorMaterial extends MeshStandardNodeMaterial {
     const scaledUv = positionWorld.xz
       .add(realmConfig.OUTER_HALF_MAP_SIZE)
       .div(realmConfig.OUTER_MAP_SIZE)
-      .mul(20);
+      .mul(2);
     const modulatedUv = fract(scaledUv);
-    const noise = texture(assetManager.randomNoiseTexture, modulatedUv, 2);
+    const noise = texture(assetManager.randomNoiseTexture, modulatedUv, 1);
 
     const darkGreen = vec3(0.145, 0.322, 0.129);
     const grassColor = darkGreen.mul(noise.r.mul(1.5));

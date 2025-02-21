@@ -157,11 +157,13 @@ class GrassMaterial extends MeshBasicNodeMaterial {
     data1.y = offsetZ;
 
     // Yaw
-    const noiseUV = worldPos.xz.div(grassConfig.TILE_HALF_SIZE).add(1);
-    const noiseScale = float(1);
+    const noiseUV = worldPos.xz
+      .add(grassConfig.TILE_HALF_SIZE)
+      .div(grassConfig.TILE_SIZE);
+    const noiseScale = float(2);
     const uv = fract(noiseUV.mul(noiseScale));
-    const noiseValue = texture(assetManager.randomNoiseTexture, uv).r;
-    const yawVariation = noiseValue.sub(0.5).mul(float(Math.PI)); // Map noise to [-PI/2, PI/2]
+    const noiseValue = texture(assetManager.randomNoiseTexture, uv, 1).r;
+    const yawVariation = noiseValue.sub(0.5).mul(float(Math.PI * 2)); // Map noise to [-PI/2, PI/2]
     data1.z = yawVariation;
     // const randomBladeYaw = hash(instanceIndex.add(200))
     //   .mul(float(Math.PI * 2))
