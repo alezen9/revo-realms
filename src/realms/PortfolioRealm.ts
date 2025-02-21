@@ -411,11 +411,20 @@ class FloorMaterial extends MeshStandardNodeMaterial {
 
     // Diffuse
     // Water caustics
-    const scaledSandUv = fract(uv().mul(20));
-    const sandColor = texture(
+    const scaledSandUv1 = fract(uv().mul(25));
+    const sandColor1 = texture(
       assetManager.sandDiffuseTexture,
-      scaledSandUv,
+      scaledSandUv1,
     ).mul(sandFactor);
+
+    const scaledSandUv2 = fract(uv().mul(10));
+    const sandColor2 = texture(
+      assetManager.sandDiffuseTexture,
+      scaledSandUv2,
+    ).mul(sandFactor);
+
+    const sandColor = sandColor1.mul(sandColor2).mul(1.5);
+
     const pathColor = texture(assetManager.realmTexture, uv(), 2).mul(
       pathFactor,
     );
@@ -437,14 +446,14 @@ class FloorMaterial extends MeshStandardNodeMaterial {
     // Normal
     const sandNormal = texture(
       assetManager.sandNormalTexture,
-      scaledSandUv,
+      scaledSandUv1,
     ).mul(sandFactor);
 
     const grassNormal = vec3(1, 1, 1).mul(grassFactor);
     this.normalNode = grassNormal.add(sandNormal);
 
     // ARM
-    const sandARM = texture(assetManager.sandARMTexture, scaledSandUv).mul(
+    const sandARM = texture(assetManager.sandARMTexture, scaledSandUv1).mul(
       waterFactor,
     );
     const sandAo = sandARM.r.mul(0.5);

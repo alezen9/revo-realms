@@ -163,7 +163,7 @@ class GrassMaterial extends MeshBasicNodeMaterial {
     const noiseScale = float(2);
     const uv = fract(noiseUV.mul(noiseScale));
     const noiseValue = texture(assetManager.randomNoiseTexture, uv, 1).r;
-    const yawVariation = noiseValue.sub(0.5).mul(float(Math.PI * 2)); // Map noise to [-PI/2, PI/2]
+    const yawVariation = noiseValue.sub(0.5).mul(float(Math.PI * 2)); // Map noise to [-PI, PI]
     data1.z = yawVariation;
     // const randomBladeYaw = hash(instanceIndex.add(200))
     //   .mul(float(Math.PI * 2))
@@ -418,14 +418,15 @@ export default class Grass {
 
   constructor(scene: State["scene"]) {
     const geometry = this.createBladeGeometry();
-    const uint32 = new Uint32Array(5);
-    uint32[0] = geometry.index!.count;
-    uint32[1] = grassConfig.COUNT; // instance count
-    uint32[2] = 0;
-    uint32[3] = 0;
-    uint32[4] = 0;
-    const drawBuffer = new IndirectStorageBufferAttribute(uint32, 5);
-    geometry.setIndirect(drawBuffer);
+    geometry.instanceCount = grassConfig.COUNT;
+    // const uint32 = new Uint32Array(5);
+    // uint32[0] = geometry.index!.count;
+    // uint32[1] = grassConfig.COUNT; // instance count
+    // uint32[2] = 0;
+    // uint32[3] = 0;
+    // uint32[4] = 0;
+    // const drawBuffer = new IndirectStorageBufferAttribute(uint32, 5);
+    // geometry.setIndirect(drawBuffer);
 
     this.material = new GrassMaterial(this.uniforms);
     this.grassField = new Mesh(geometry, this.material);
