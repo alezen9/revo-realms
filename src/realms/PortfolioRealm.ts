@@ -1,10 +1,4 @@
-import {
-  Vector3,
-  Mesh,
-  MeshLambertMaterial,
-  BatchedMesh,
-  MeshBasicMaterial,
-} from "three";
+import { Vector3, Mesh, MeshLambertMaterial, BatchedMesh } from "three";
 import {
   ColliderDesc,
   HeightFieldFlags,
@@ -82,31 +76,31 @@ export default class PortfolioRealm {
     return outerFloor;
   }
 
-  private createNpcs() {
-    console.log(assetManager.npcsModel.scene);
-    const npcs: Mesh[] = [];
-    assetManager.npcsModel.scene.traverse((el) => {
-      if (el.type !== "Mesh") return;
-      if (el.name.includes("bounding_sphere"))
-        this.createNpcSphereCollider(el as Mesh);
-      else {
-        npcs.push(el as Mesh);
-      }
-      console.log(el);
-    });
-    this.scene.add(...npcs);
-  }
+  // private createNpcs() {
+  //   console.log(assetManager.npcsModel.scene);
+  //   const npcs: Mesh[] = [];
+  //   assetManager.npcsModel.scene.traverse((el) => {
+  //     if (el.type !== "Mesh") return;
+  //     if (el.name.includes("bounding_sphere"))
+  //       this.createNpcSphereCollider(el as Mesh);
+  //     else {
+  //       npcs.push(el as Mesh);
+  //     }
+  //     console.log(el);
+  //   });
+  //   this.scene.add(...npcs);
+  // }
 
-  private createNpcSphereCollider(colliderSphere: Mesh) {
-    colliderSphere.geometry.computeBoundingSphere();
-    const radius = colliderSphere.geometry.boundingSphere?.radius ?? 0;
-    const rigidBodyDesc = RigidBodyDesc.fixed()
-      .setTranslation(...colliderSphere.position.toArray())
-      .setRotation(colliderSphere.quaternion);
-    const rigidBody = this.world.createRigidBody(rigidBodyDesc);
-    const colliderDesc = ColliderDesc.ball(radius).setRestitution(0.2);
-    this.world.createCollider(colliderDesc, rigidBody);
-  }
+  // private createNpcSphereCollider(colliderSphere: Mesh) {
+  //   colliderSphere.geometry.computeBoundingSphere();
+  //   const radius = colliderSphere.geometry.boundingSphere?.radius ?? 0;
+  //   const rigidBodyDesc = RigidBodyDesc.fixed()
+  //     .setTranslation(...colliderSphere.position.toArray())
+  //     .setRotation(colliderSphere.quaternion);
+  //   const rigidBody = this.world.createRigidBody(rigidBodyDesc);
+  //   const colliderDesc = ColliderDesc.ball(radius).setRestitution(0.2);
+  //   this.world.createCollider(colliderDesc, rigidBody);
+  // }
 
   private createFloor() {
     // Visual
