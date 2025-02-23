@@ -11,7 +11,7 @@ export default class RendererManager {
   private monitoringManager: MonitoringManager;
   private postprocessingManager!: PostprocessingManager;
   private readonly POSTPROCESSING_ENABLED = false;
-  private readonly MONITORING_ENABLED = false;
+  private readonly MONITORING_ENABLED = true;
   private readonly DEBUGGING_ENABLED = true;
 
   constructor() {

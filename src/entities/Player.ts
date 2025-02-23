@@ -77,7 +77,7 @@ export default class Player {
   private createCharacterMesh() {
     const geometry = new IcosahedronGeometry(this.RADIUS, 3);
     const material = new MeshStandardMaterial({
-      color: "grey",
+      color: "silver",
       flatShading: true,
       metalness: 1,
       roughness: 0.5,

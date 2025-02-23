@@ -129,7 +129,7 @@ export default class WaterMaterial extends MeshBasicNodeMaterial {
       let reflectedDirection = reflect(viewDirection, vNormal);
       reflectedDirection.x = reflectedDirection.x.negate();
 
-      return cubeTexture(assetManager.environmentMap, reflectedDirection);
+      return cubeTexture(assetManager.envMapTexture, reflectedDirection);
     },
   );
 

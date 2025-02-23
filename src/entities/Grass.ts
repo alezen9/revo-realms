@@ -48,7 +48,7 @@ const getConfig = () => {
   const BLADE_WIDTH = 0.1;
   const BLADE_HEIGHT = 1.25;
   const TILE_SIZE = 150;
-  const BLADES_PER_SIDE = 700;
+  const BLADES_PER_SIDE = 800;
   return {
     BLADE_WIDTH,
     BLADE_HEIGHT,
@@ -111,8 +111,10 @@ const defaultUniforms: Required<GrassUniforms> = {
   // Bending
   uBladeMaxBendAngle: uniform(Math.PI * 0.15),
   // Color
-  uBaseColor: uniform(new Color("#4f8a4f")),
-  uTipColor: uniform(new Color("#bbde47")),
+  // uBaseColor: uniform(new Color("#4f8a4f")),
+  // uTipColor: uniform(new Color("#bbde47")),
+  uBaseColor: uniform(new Color().setRGB(0.05, 0.2, 0.01)),
+  uTipColor: uniform(new Color().setRGB(0.5, 0.5, 0.1)),
   // Updated externally
   uDelta: uniform(new Vector2(0, 0)),
 };
@@ -227,7 +229,7 @@ class GrassMaterial extends MeshBasicNodeMaterial {
     const alphaUv = worldPos.xz
       .add(realmConfig.HALF_MAP_SIZE)
       .div(realmConfig.MAP_SIZE);
-    return texture(assetManager.realmGrassMap, alphaUv).r;
+    return texture(assetManager.floorGrassWaterMap, alphaUv).g;
   });
 
   private computeTrailScale = Fn(
