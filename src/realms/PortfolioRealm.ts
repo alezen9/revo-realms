@@ -1,4 +1,10 @@
-import { Vector3, Mesh, MeshLambertMaterial, BatchedMesh, Group } from "three";
+import {
+  Vector3,
+  Mesh,
+  MeshLambertMaterial,
+  BatchedMesh,
+  MeshBasicMaterial,
+} from "three";
 import {
   ColliderDesc,
   HeightFieldFlags,
@@ -21,7 +27,7 @@ import {
 } from "three/tsl";
 import { assetManager } from "../systems/AssetManager";
 import WaterMaterial from "../materials/WaterMaterial";
-import { MeshStandardNodeMaterial } from "three/webgpu";
+import { MeshLambertNodeMaterial } from "three/webgpu";
 import { UniformType } from "../types";
 
 const getConfig = () => {
@@ -53,13 +59,13 @@ export default class PortfolioRealm {
     const { world, scene } = state;
     this.world = world;
     this.scene = scene;
-    scene.background = assetManager.environmentMap;
-    scene.environment = assetManager.environmentMap;
+    scene.background = assetManager.envMapTexture;
+    // scene.environment = assetManager.envMapTexture;
 
     this.createFloor();
     this.createWater();
     this.createFences();
-    this.createNpcs();
+    // this.createNpcs();
 
     this.outerFloorMesh = this.createOuterFloorVisual();
     this.scene.add(this.outerFloorMesh);
@@ -77,20 +83,21 @@ export default class PortfolioRealm {
   }
 
   private createNpcs() {
-    // Visual
-    const luffyModel = assetManager.npcsModel.scene.getObjectByName(
-      "luffy_model",
-    ) as Group;
-    this.scene.add(luffyModel);
-
-    // Physics
-    const luffyColliderBall = assetManager.npcsModel.scene.getObjectByName(
-      "luffy_collider_ball",
-    ) as Mesh;
-    this.createNpcBallPhysics(luffyColliderBall);
+    console.log(assetManager.npcsModel.scene);
+    const npcs: Mesh[] = [];
+    assetManager.npcsModel.scene.traverse((el) => {
+      if (el.type !== "Mesh") return;
+      if (el.name.includes("bounding_sphere"))
+        this.createNpcSphereCollider(el as Mesh);
+      else {
+        npcs.push(el as Mesh);
+      }
+      console.log(el);
+    });
+    this.scene.add(...npcs);
   }
 
-  private createNpcBallPhysics(colliderSphere: Mesh) {
+  private createNpcSphereCollider(colliderSphere: Mesh) {
     colliderSphere.geometry.computeBoundingSphere();
     const radius = colliderSphere.geometry.boundingSphere?.radius ?? 0;
     const rigidBodyDesc = RigidBodyDesc.fixed()
@@ -176,60 +183,6 @@ export default class PortfolioRealm {
       .setRestitution(0.2);
     this.world.createCollider(colliderDesc, rigidBody);
   }
-
-  // private createFloorMaterial() {
-  //   const material = new MeshStandardNodeMaterial();
-
-  //   const timeFactor = this.uTime.mul(0.1);
-
-  //   const waterFactor = texture(assetManager.realmWaterMap, uv()).r;
-
-  //   // floor sample (probably not needed in a moment)
-  //   const mapColor = texture(assetManager.realmTexture, uv());
-
-  //   // caustics noise
-  //   const scaleFactor = float(10);
-  //   const scaledUv = uv().mul(scaleFactor);
-  //   const scaledCausticsUvA = fract(scaledUv.add(vec2(timeFactor, 0)));
-  //   const scaledCausticsUvB = fract(scaledUv.add(vec2(0, timeFactor.negate())));
-  //   const noiseA = texture(
-  //     assetManager.voronoiNoiseTexture,
-  //     scaledCausticsUvA,
-  //     1,
-  //   ).r;
-  //   const noiseB = texture(
-  //     assetManager.voronoiNoiseTexture,
-  //     scaledCausticsUvB,
-  //     2,
-  //   ).r;
-  //   const caustics = noiseA.add(noiseB).mul(0.5);
-  //   const adjustedCaustics = pow(caustics, 3);
-
-  //   const causticsHighlightColor = vec3(1.2, 1.2, 0.8);
-  //   const lakeUv = fract(uv().mul(20));
-  //   const sandColor = texture(assetManager.sandDiffuseTexture, lakeUv);
-  //   const causticsColor = mix(
-  //     sandColor, // causticsShadowColor
-  //     causticsHighlightColor,
-  //     adjustedCaustics,
-  //   );
-
-  //   const floorWaterColor = mix(mapColor, causticsColor, waterFactor);
-
-  //   material.colorNode = floorWaterColor;
-
-  //   const sandNormal = texture(assetManager.sandNormalTexture, lakeUv);
-  //   material.normalNode = mix(normalWorld, sandNormal, waterFactor);
-
-  //   const sandARM = texture(assetManager.sandNormalTexture, lakeUv).mul(
-  //     waterFactor,
-  //   );
-  //   material.aoNode = sandARM.r.mul(2);
-  //   material.roughnessNode = sandARM.g.mul(4);
-  //   material.metalnessNode = sandARM.b;
-
-  //   return material;
-  // }
 
   private getFloorDisplacementData() {
     const mesh = assetManager.realmModel.scene.getObjectByName(
@@ -361,7 +314,7 @@ const defaultUniforms: FloorUniforms = {
   uTime: uniform(0),
 };
 
-class FloorMaterial extends MeshStandardNodeMaterial {
+class FloorMaterial extends MeshLambertNodeMaterial {
   private _uniforms: FloorUniforms;
   constructor(uniforms: FloorUniforms) {
     super();
@@ -404,8 +357,10 @@ class FloorMaterial extends MeshStandardNodeMaterial {
   private createMaterial() {
     const timer = this._uniforms.uTime.mul(0.1);
 
-    const waterFactor = texture(assetManager.realmWaterMap, uv(), 3).r;
-    const grassFactor = texture(assetManager.realmGrassMap, uv(), 3).r;
+    const factors = texture(assetManager.floorGrassWaterMap, uv(), 3);
+
+    const grassFactor = factors.g;
+    const waterFactor = factors.b;
     const sandFactor = float(1).sub(grassFactor);
     const pathFactor = sandFactor.sub(waterFactor);
 
@@ -425,7 +380,7 @@ class FloorMaterial extends MeshStandardNodeMaterial {
 
     const sandColor = sandColor1.mul(sandColor2).mul(1.5);
 
-    const pathColor = texture(assetManager.realmTexture, uv(), 2).mul(
+    const pathColor = texture(assetManager.floorTexture, uv(), 2).mul(
       pathFactor,
     );
     const causticsColor = this.computeCausticsDiffuse(timer, sandColor).mul(
@@ -449,7 +404,7 @@ class FloorMaterial extends MeshStandardNodeMaterial {
       scaledSandUv1,
     ).mul(sandFactor);
 
-    const grassNormal = vec3(1, 1, 1).mul(grassFactor);
+    const grassNormal = vec3(0, 1, 0).mul(grassFactor);
     this.normalNode = grassNormal.add(sandNormal);
 
     // ARM
@@ -465,7 +420,7 @@ class FloorMaterial extends MeshStandardNodeMaterial {
   }
 }
 
-class OuterFloorMaterial extends MeshStandardNodeMaterial {
+class OuterFloorMaterial extends MeshLambertNodeMaterial {
   constructor() {
     super();
     this.createMaterial();
