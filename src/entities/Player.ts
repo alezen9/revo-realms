@@ -25,10 +25,13 @@ export default class Player {
 
   // Camera smoothing
   private smoothedCameraPosition = new Vector3();
+  private desiredCameraPosition = new Vector3();
   private smoothedCameraTarget = new Vector3();
+  private desiredTargetPosition = new Vector3();
 
   // Yaw (rotation around Y-axis)
   private yawInRadians = 0;
+  private yawQuaternion = new Quaternion();
 
   // Jump & Movement Configuration
   private readonly JUMP_IMPULSE = 5;
@@ -39,8 +42,12 @@ export default class Player {
   private readonly MAX_UPWARD_VELOCITY = 6;
   private readonly LINEAR_DAMPING = 0.25;
   private readonly ANGULAR_DAMPING = 1;
-  private readonly FORWARD_IMPULSE = 4.5; // base horizontal impulse
-  private readonly TORQUE_STRENGTH = 5.5; // for rolling
+
+  private readonly LIN_VEL_STRENGTH = 25;
+  private readonly ANG_VEL_STRENGTH = 25;
+  private newLinVel = new Vector3();
+  private newAngVel = new Vector3();
+  private torqueAxis = new Vector3();
 
   // Player State
   private isOnGround = false;
@@ -213,55 +220,54 @@ export default class Player {
       -Math.cos(this.yawInRadians),
     );
 
-    const impulse = new Vector3();
-    const torque = new Vector3();
-    const torqueAxis = new Vector3()
-      .crossVectors(this.UP, forwardVec)
-      .normalize();
+    this.torqueAxis.crossVectors(this.UP, forwardVec).normalize();
+
+    this.newLinVel.copy(this.rigidBody.linvel());
+    this.newAngVel.copy(this.rigidBody.angvel());
+
+    const linVelScale = this.LIN_VEL_STRENGTH * delta;
+    const angVelScale = this.ANG_VEL_STRENGTH * delta;
 
     if (isForward) {
-      impulse.addScaledVector(forwardVec, this.FORWARD_IMPULSE * delta);
-      torque.addScaledVector(torqueAxis, this.TORQUE_STRENGTH * delta);
+      this.newLinVel.addScaledVector(forwardVec, linVelScale);
+      this.newAngVel.addScaledVector(this.torqueAxis, angVelScale);
     }
     if (isBackward) {
-      impulse.addScaledVector(forwardVec, -this.FORWARD_IMPULSE * delta);
-      torque.addScaledVector(torqueAxis, -this.TORQUE_STRENGTH * delta);
+      this.newLinVel.addScaledVector(forwardVec, -linVelScale);
+      this.newAngVel.addScaledVector(this.torqueAxis, -angVelScale);
     }
 
-    this.rigidBody.applyImpulse(impulse, true);
-    this.rigidBody.applyTorqueImpulse(torque, true);
+    this.rigidBody.setLinvel(this.newLinVel, true);
+    this.rigidBody.setAngvel(this.newAngVel, true);
 
     this.syncMeshWithBody();
   }
 
   private syncMeshWithBody() {
-    const position = this.rigidBody.translation();
-    this.mesh.position.set(position.x, position.y, position.z);
-
-    const rotation = this.rigidBody.rotation();
-    this.mesh.quaternion.copy(rotation);
+    this.mesh.position.copy(this.rigidBody.translation());
+    this.mesh.quaternion.copy(this.rigidBody.rotation());
   }
 
   private updateCameraPosition(camera: Camera, delta: number) {
     // Build yaw quaternion
-    const yawQuaternion = new Quaternion();
-    yawQuaternion.setFromAxisAngle(this.UP, this.yawInRadians);
+    this.yawQuaternion.setFromAxisAngle(this.UP, this.yawInRadians);
 
     // Rotate offset
-    const offset = this.CAMERA_OFFSET.clone().applyQuaternion(yawQuaternion);
+    const offset = this.CAMERA_OFFSET.clone().applyQuaternion(
+      this.yawQuaternion,
+    );
 
     // Desired camera pos
-    const position = this.mesh.position.clone();
-    const desiredCameraPosition = position.add(offset);
+    this.desiredCameraPosition.copy(this.mesh.position).add(offset);
 
     // Lerp
     const lerpFactor = this.CAMERA_LERP_FACTOR * delta;
-    this.smoothedCameraPosition.lerp(desiredCameraPosition, lerpFactor);
+    this.smoothedCameraPosition.lerp(this.desiredCameraPosition, lerpFactor);
 
     // Lerp target as well
-    const desiredTarget = this.mesh.position.clone();
-    desiredTarget.y += 1;
-    this.smoothedCameraTarget.lerp(desiredTarget, lerpFactor);
+    this.desiredTargetPosition.copy(this.mesh.position);
+    this.desiredTargetPosition.y += 1;
+    this.smoothedCameraTarget.lerp(this.desiredTargetPosition, lerpFactor);
 
     // Assign to camera
     camera.position.copy(this.smoothedCameraPosition);

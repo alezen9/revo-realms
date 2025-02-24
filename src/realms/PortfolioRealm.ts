@@ -1,4 +1,4 @@
-import { Vector3, Mesh, MeshLambertMaterial, BatchedMesh } from "three";
+import { Vector3, Mesh } from "three";
 import {
   ColliderDesc,
   HeightFieldFlags,
@@ -53,12 +53,12 @@ export default class PortfolioRealm {
     const { world, scene } = state;
     this.world = world;
     this.scene = scene;
-    scene.background = assetManager.envMapTexture;
+    // scene.background = assetManager.envMapTexture;
     // scene.environment = assetManager.envMapTexture;
 
     this.createFloor();
     this.createWater();
-    this.createFences();
+    // this.createFences();
     // this.createNpcs();
 
     this.outerFloorMesh = this.createOuterFloorVisual();
@@ -122,61 +122,61 @@ export default class PortfolioRealm {
     lake.material = waterMaterial;
     this.scene.add(lake);
   }
-  private createFences() {
-    // Visual
-    const fence = assetManager.realmModel.scene.getObjectByName(
-      "fence",
-    ) as Mesh;
-    const fencePlaceholders = assetManager.realmModel.scene.children.filter(
-      ({ name }) => name.startsWith("fence-placeholder"),
-    ) as Mesh[];
-    const fenceMaterial = new MeshLambertMaterial({
-      map: assetManager.fenceTexture,
-    });
-    fence.geometry.computeVertexNormals();
-    fence.geometry.computeBoundingSphere();
-    fence.geometry.computeBoundingBox();
-    const totalFences = fencePlaceholders.length;
-    const batchedMesh = new BatchedMesh(
-      totalFences,
-      fence.geometry.attributes.position.count * totalFences,
-      (fence.geometry.index?.count ?? 0) * totalFences,
-      fenceMaterial,
-    );
-    batchedMesh.sortObjects = false;
-    const geomId = batchedMesh.addGeometry(fence.geometry);
-    // const instances = new InstancedMesh(
-    //   fence.geometry,
-    //   fenceMaterial,
-    //   fencePlaceholders.length,
-    // );
-    const placeholderHalfSize = new Vector3();
-    fencePlaceholders[0].geometry.boundingBox
-      ?.getSize(placeholderHalfSize)
-      .divideScalar(2);
+  // private createFences() {
+  //   // Visual
+  //   const fence = assetManager.realmModel.scene.getObjectByName(
+  //     "fence",
+  //   ) as Mesh;
+  //   const fencePlaceholders = assetManager.realmModel.scene.children.filter(
+  //     ({ name }) => name.startsWith("fence-placeholder"),
+  //   ) as Mesh[];
+  //   const fenceMaterial = new MeshLambertMaterial({
+  //     map: assetManager.fenceTexture,
+  //   });
+  //   fence.geometry.computeVertexNormals();
+  //   // fence.geometry.computeBoundingSphere();
+  //   // fence.geometry.computeBoundingBox();
+  //   // const totalFences = fencePlaceholders.length;
+  //   // const batchedMesh = new BatchedMesh(
+  //   //   totalFences,
+  //   //   fence.geometry.attributes.position.count * totalFences,
+  //   //   (fence.geometry.index?.count ?? 0) * totalFences,
+  //   //   fenceMaterial,
+  //   // );
+  //   // batchedMesh.sortObjects = false;
+  //   // const geomId = batchedMesh.addGeometry(fence.geometry);
+  //   const instances = new InstancedMesh(
+  //     fence.geometry,
+  //     fenceMaterial,
+  //     fencePlaceholders.length,
+  //   );
+  //   const placeholderHalfSize = new Vector3();
+  //   fencePlaceholders[0].geometry.boundingBox
+  //     ?.getSize(placeholderHalfSize)
+  //     .divideScalar(2);
 
-    for (let i = 0; i < fencePlaceholders.length; i++) {
-      const placeholder = fencePlaceholders[i];
-      const instanceId = batchedMesh.addInstance(geomId);
-      batchedMesh.setMatrixAt(instanceId, placeholder.matrix);
-      // instances.setMatrixAt(i, placeholder.matrix);
-      // Physics
-      this.createFencePhysics(placeholder, placeholderHalfSize);
-    }
-    this.scene.add(batchedMesh);
-    // this.scene.add(instances);
-  }
+  //   for (let i = 0; i < fencePlaceholders.length; i++) {
+  //     const placeholder = fencePlaceholders[i];
+  //     // const instanceId = batchedMesh.addInstance(geomId);
+  //     // batchedMesh.setMatrixAt(instanceId, placeholder.matrix);
+  //     instances.setMatrixAt(i, placeholder.matrix);
+  //     // Physics
+  //     this.createFencePhysics(placeholder, placeholderHalfSize);
+  //   }
+  //   // this.scene.add(batchedMesh);
+  //   this.scene.add(instances);
+  // }
 
-  private createFencePhysics(fencePlaceholder: Mesh, halfSize: Vector3) {
-    const rigidBodyDesc = RigidBodyDesc.fixed()
-      .setTranslation(...fencePlaceholder.position.toArray())
-      .setRotation(fencePlaceholder.quaternion);
-    const rigidBody = this.world.createRigidBody(rigidBodyDesc);
-    const colliderDesc = ColliderDesc.cuboid(...halfSize.toArray())
-      .setFriction(1)
-      .setRestitution(0.2);
-    this.world.createCollider(colliderDesc, rigidBody);
-  }
+  // private createFencePhysics(fencePlaceholder: Mesh, halfSize: Vector3) {
+  //   const rigidBodyDesc = RigidBodyDesc.fixed()
+  //     .setTranslation(...fencePlaceholder.position.toArray())
+  //     .setRotation(fencePlaceholder.quaternion);
+  //   const rigidBody = this.world.createRigidBody(rigidBodyDesc);
+  //   const colliderDesc = ColliderDesc.cuboid(...halfSize.toArray())
+  //     .setFriction(1)
+  //     .setRestitution(0.2);
+  //   this.world.createCollider(colliderDesc, rigidBody);
+  // }
 
   private getFloorDisplacementData() {
     const mesh = assetManager.realmModel.scene.getObjectByName(

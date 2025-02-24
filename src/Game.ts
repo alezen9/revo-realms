@@ -84,7 +84,7 @@ export default class Game {
     this.rendererManager.renderer.setPixelRatio(sizes.dpr);
   }
 
-  async startLoop(callback?: (state: State) => void) {
+  async startLoop() {
     await this.rendererManager.init(this.sceneManager);
     this.clock.start();
 
@@ -101,8 +101,6 @@ export default class Game {
 
     const loop = async () => {
       this.sceneManager.update();
-
-      callback?.(state);
 
       this.world.step();
       this.player.update(state);
