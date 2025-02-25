@@ -100,7 +100,7 @@ export default class Game {
     };
 
     const loop = async () => {
-      this.sceneManager.update();
+      if (import.meta.env.DEV) this.sceneManager.update();
 
       this.world.step();
       this.player.update(state);

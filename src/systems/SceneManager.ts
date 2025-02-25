@@ -6,10 +6,10 @@ import { debugManager } from "./DebugManager";
 export default class SceneManager {
   scene: Scene;
   camera: PerspectiveCamera;
-  private cameraHelper: CameraHelper;
   renderCamera: PerspectiveCamera;
-  private controls: OrbitControls;
-  private orbitControlsCamera: PerspectiveCamera;
+  private cameraHelper?: CameraHelper;
+  private controls?: OrbitControls;
+  private orbitControlsCamera?: PerspectiveCamera;
 
   constructor(rendererManager: RendererManager) {
     // Scene
@@ -25,6 +25,11 @@ export default class SceneManager {
     camera.position.set(0, 5, 10);
     this.camera = camera;
     scene.add(camera);
+
+    // Default render camera
+    this.renderCamera = camera;
+
+    if (!import.meta.env.DEV) return;
     const cameraHelper = new CameraHelper(camera);
     cameraHelper.visible = false;
     scene.add(cameraHelper);
@@ -44,24 +49,23 @@ export default class SceneManager {
     controls.enabled = false;
     this.controls = controls;
 
-    // Default render camera
-    this.renderCamera = camera;
-
     // Debug
     this.debug();
   }
 
   private debug() {
+    if (!this.controls) return;
     const folder = debugManager.panel.addFolder({ title: "🎥 View" });
     folder
       .addBinding(this.controls, "enabled", { label: "Enable orbit controls" })
       .on("change", ({ value: isEnabled }) => {
+        if (!this.cameraHelper || !this.orbitControlsCamera) return;
         this.renderCamera = isEnabled ? this.orbitControlsCamera : this.camera;
         this.cameraHelper.visible = isEnabled;
       });
   }
 
   update() {
-    if (this.controls.enabled) this.controls.update();
+    if (this.controls?.enabled) this.controls.update();
   }
 }
