@@ -9,10 +9,20 @@ import {
 } from "@dimforge/rapier3d-compat";
 import InputManager from "../systems/InputManager";
 import { type State } from "../Game";
-import { color, float, positionWorld, step, uniform } from "three/tsl";
+import {
+  color,
+  float,
+  fract,
+  positionWorld,
+  sin,
+  step,
+  texture,
+  uniform,
+} from "three/tsl";
 import LightingSystem from "../systems/LightingSystem";
 import { MeshStandardNodeMaterial } from "three/webgpu";
-// import { UniformType } from "../types";
+import { assetManager } from "../systems/AssetManager";
+import { UniformType } from "../types";
 
 export default class Player {
   private mesh: Mesh;
@@ -86,8 +96,7 @@ export default class Player {
 
   private createCharacterMesh() {
     const geometry = new IcosahedronGeometry(this.RADIUS, 3);
-    // const material = new PlayerMaterial({ uTime: this.uTime });
-    const material = new PlayerMaterial();
+    const material = new PlayerMaterial({ uTime: this.uTime });
     const mesh = new Mesh(geometry, material);
     mesh.castShadow = true;
     mesh.position.copy(this.PLAYER_INITIAL_POSITION);
@@ -272,98 +281,46 @@ export default class Player {
   get yaw() {
     return this.yawInRadians;
   }
-
-  // private createMaterial() {
-  //   const materialNode = new MeshBasicNodeMaterial();
-
-  //   const baseColor = color("purple");
-
-  //   const waterLevel = float(-0.35);
-  //   const underwaterColor = baseColor.mul(0.25);
-
-  //   const underwaterFactor = float(1).sub(
-  //     smoothstep(-1, waterLevel, positionWorld.y),
-  //   );
-
-  //   const finalColor = mix(baseColor, underwaterColor, underwaterFactor);
-
-  //   const light = this.lighting.material_computeIllumination();
-
-  //   materialNode.colorNode = finalColor.mul(light);
-
-  //   return materialNode;
-  // }
-
-  // private createMaterial() {
-  //   const denimTexture = assetManager.textureLoader.load(denimTextureUrl);
-  //   const materialNode = new MeshBasicNodeMaterial();
-  //   const baseColor = texture(denimTexture, uv());
-
-  //   // Base material color (can be a texture or color)
-  //   // const baseColor = color("purple"); // Replace with a texture if needed
-
-  //   // Water-related parameters
-  //   const waterLevel = float(-0.5); // Y-coordinate for the waterline
-  //   const underwaterTint = vec4(0.5, 0.75, 1, 0.05); // Whiteish tint for underwater
-
-  //   // Factor for underwater blending
-  //   const underwaterFactor = float(1).sub(
-  //     smoothstep(waterLevel.sub(0.25), waterLevel, positionWorld.y),
-  //   );
-
-  //   // Apply the blueish tint on top of the base color
-  //   const tintedUnderwaterColor = mix(baseColor, underwaterTint, 0.5) // Add the underwater tint to the base color
-  //     .mul(1); // Darken the result slightly underwater
-
-  //   // Blend the base color with the tinted underwater color
-  //   const finalColor = mix(baseColor, tintedUnderwaterColor, underwaterFactor);
-
-  //   // Apply lighting
-  //   const light = this.lighting.material_computeIllumination();
-  //   materialNode.colorNode = finalColor.mul(light);
-
-  //   return materialNode;
-  // }
 }
 
 class PlayerMaterial extends MeshStandardNodeMaterial {
-  // private _uniforms: { uTime: UniformType<number> };
-  // constructor(uniforms: { uTime: UniformType<number> }) {
-  constructor() {
+  private _uniforms: { uTime: UniformType<number> };
+  constructor(uniforms: { uTime: UniformType<number> }) {
     super();
-    // this._uniforms = { ...uniforms };
+    this._uniforms = { ...uniforms };
     this.createMaterial();
   }
 
   private createMaterial() {
     this.flatShading = true;
-    // this.metalness = 1;
-    // this.roughness = 0.5;
 
-    const waterLevel = float(-0.15);
+    this.roughness = 0.5;
 
-    const underwaterFactor = step(waterLevel, positionWorld.y);
+    const noiseValue = texture(
+      assetManager.perlinNoiseTexture,
+      fract(positionWorld.xz),
+      3,
+    ).r;
+
+    const timer = sin(this._uniforms.uTime.mul(2.5).add(noiseValue.mul(5))).mul(
+      0.05,
+    );
+
+    const waterLevel = float(-0.15).add(timer);
+
+    const underwaterFactor = float(1).sub(step(waterLevel, positionWorld.y));
     const abovewaterFactor = float(1).sub(underwaterFactor);
 
-    const underwaterTint = color(0.7, 0.9, 1).mul(underwaterFactor);
-    const baseColor = color("silver").mul(abovewaterFactor);
+    const baseColor = color("silver");
+    const aboveWater = baseColor.mul(abovewaterFactor);
+    const underwaterTint = baseColor.mul(1.5).mul(underwaterFactor);
 
-    const tintedColor = baseColor.add(underwaterTint);
-
-    // const noiseValue = texture(
-    //   assetManager.randomNoiseTexture,
-    //   uv().mul(5).add(this._uniforms.uTime.mul(0.1)),
-    // ).r;
-    // const outlineColor = color(1, 0, 0);
-    // const timer = this._uniforms.uTime.mul(0.01);
-    // const threshold = float(0.1).mul(sin(timer.add(noiseValue.mul(2.0))));
-    // const factorA = step(waterLevel.sub(threshold), positionWorld.y);
-    // const factorB = float(1).sub(
-    //   step(waterLevel.add(threshold), positionWorld.y),
-    // );
-    // const outlineFactor = factorA.mul(factorB);
-    // const finalColor = mix(tintedColor, outlineColor, outlineFactor);
+    const tintedColor = aboveWater.add(underwaterTint);
 
     this.colorNode = tintedColor;
+
+    const aboveWaterMetalness = float(0.9).mul(abovewaterFactor);
+    const underwaterMetalness = float(0.65).mul(underwaterFactor);
+    this.metalnessNode = aboveWaterMetalness.add(underwaterMetalness);
   }
 }
