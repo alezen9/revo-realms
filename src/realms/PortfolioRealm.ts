@@ -12,9 +12,9 @@ import {
   Fn,
   fract,
   mix,
-  normalize,
   positionWorld,
   pow,
+  rotate,
   smoothstep,
   texture,
   uniform,
@@ -344,11 +344,12 @@ class FloorMaterial extends MeshLambertNodeMaterial {
 
     // Normal
     const scaledSandUv1 = fract(_uv.mul(30));
-    const scaledSandUv2 = fract(_uv.mul(15));
+    const scaledSandUv2 = fract(_uv.mul(-30));
     const normal1 = texture(assetManager.sandNormalTexture, scaledSandUv1);
     const normal2 = texture(assetManager.sandNormalTexture, scaledSandUv2);
+    const rotatedNormal2 = rotate(normal2.rgb, vec3(1, 0, 0));
 
-    this.normalNode = normalize(normal1.mul(normal2));
+    this.normalNode = normal1.mul(rotatedNormal2);
   }
 }
 
@@ -371,8 +372,9 @@ class OuterFloorMaterial extends MeshLambertNodeMaterial {
     const scaledSandUv2 = fract(_uv.mul(15));
     const normal1 = texture(assetManager.sandNormalTexture, scaledSandUv1);
     const normal2 = texture(assetManager.sandNormalTexture, scaledSandUv2);
+    const rotatedNormal2 = rotate(normal2.rgb, vec3(1, 0, 0));
 
-    this.normalNode = normalize(normal1.mul(normal2));
+    this.normalNode = normal1.mul(rotatedNormal2);
 
     this.colorNode = grassColor;
   }

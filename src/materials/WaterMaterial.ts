@@ -64,11 +64,12 @@ const defaultUniforms: Required<WaterUniforms> = {
 export default class WaterMaterial extends MeshBasicNodeMaterial {
   private _uniforms: Required<WaterUniforms>;
   private debugFolder: FolderApi;
-  constructor(uniforms: WaterUniforms, enableDebug = false) {
+  constructor(uniforms: WaterUniforms) {
     super();
     this._uniforms = { ...defaultUniforms, ...uniforms };
     this.createWaterMaterial();
     this.debugFolder = debugManager.panel.addFolder({ title: "🌊 Water" });
+    const enableDebug = import.meta.env.DEV;
     this.debugFolder.hidden = !enableDebug;
     if (!enableDebug) return;
     this.debugWaves();
@@ -77,12 +78,11 @@ export default class WaterMaterial extends MeshBasicNodeMaterial {
   }
 
   private computeElevation = Fn(([pos = vec2(0, 0)]) => {
-    const waterTexture = assetManager.randomNoiseTexture;
     const timer = this._uniforms.uTime.mul(this._uniforms.uWavesSpeed).mul(0.1);
 
     const baseUV = mod(pos.mul(this._uniforms.uWavesFrequency).add(timer), 1);
-    const noiseValue = texture(waterTexture, baseUV, 0.5).r; // Base layer
-    const noiseDetail = texture(waterTexture, baseUV, 1.5).r; // Higher-frequency noise
+    const noiseValue = texture(assetManager.randomNoiseTexture, baseUV, 0.5).r; // Base layer
+    const noiseDetail = texture(assetManager.randomNoiseTexture, baseUV, 1.5).r; // Higher-frequency noise
 
     const mixedNoise = mix(noiseValue, noiseDetail, 0.5);
 

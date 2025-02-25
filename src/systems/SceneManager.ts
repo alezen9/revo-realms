@@ -50,10 +50,10 @@ export default class SceneManager {
     this.controls = controls;
 
     // Debug
-    this.debug();
+    this.debugScene();
   }
 
-  private debug() {
+  private debugScene() {
     if (!this.controls) return;
     const folder = debugManager.panel.addFolder({ title: "🎥 View" });
     folder
