@@ -7,15 +7,18 @@ import {
 } from "@dimforge/rapier3d-compat";
 import { State } from "../Game";
 import {
+  color,
   float,
   Fn,
   fract,
   mix,
+  normalize,
   positionWorld,
   pow,
+  smoothstep,
   texture,
   uniform,
-  uv,
+  varying,
   vec2,
   vec3,
 } from "three/tsl";
@@ -53,12 +56,9 @@ export default class PortfolioRealm {
     const { world, scene } = state;
     this.world = world;
     this.scene = scene;
-    // scene.background = assetManager.envMapTexture;
-    // scene.environment = assetManager.envMapTexture;
 
     this.createFloor();
     this.createWater();
-    // this.createFences();
     // this.createNpcs();
 
     this.outerFloorMesh = this.createOuterFloorVisual();
@@ -122,61 +122,6 @@ export default class PortfolioRealm {
     lake.material = waterMaterial;
     this.scene.add(lake);
   }
-  // private createFences() {
-  //   // Visual
-  //   const fence = assetManager.realmModel.scene.getObjectByName(
-  //     "fence",
-  //   ) as Mesh;
-  //   const fencePlaceholders = assetManager.realmModel.scene.children.filter(
-  //     ({ name }) => name.startsWith("fence-placeholder"),
-  //   ) as Mesh[];
-  //   const fenceMaterial = new MeshLambertMaterial({
-  //     map: assetManager.fenceTexture,
-  //   });
-  //   fence.geometry.computeVertexNormals();
-  //   // fence.geometry.computeBoundingSphere();
-  //   // fence.geometry.computeBoundingBox();
-  //   // const totalFences = fencePlaceholders.length;
-  //   // const batchedMesh = new BatchedMesh(
-  //   //   totalFences,
-  //   //   fence.geometry.attributes.position.count * totalFences,
-  //   //   (fence.geometry.index?.count ?? 0) * totalFences,
-  //   //   fenceMaterial,
-  //   // );
-  //   // batchedMesh.sortObjects = false;
-  //   // const geomId = batchedMesh.addGeometry(fence.geometry);
-  //   const instances = new InstancedMesh(
-  //     fence.geometry,
-  //     fenceMaterial,
-  //     fencePlaceholders.length,
-  //   );
-  //   const placeholderHalfSize = new Vector3();
-  //   fencePlaceholders[0].geometry.boundingBox
-  //     ?.getSize(placeholderHalfSize)
-  //     .divideScalar(2);
-
-  //   for (let i = 0; i < fencePlaceholders.length; i++) {
-  //     const placeholder = fencePlaceholders[i];
-  //     // const instanceId = batchedMesh.addInstance(geomId);
-  //     // batchedMesh.setMatrixAt(instanceId, placeholder.matrix);
-  //     instances.setMatrixAt(i, placeholder.matrix);
-  //     // Physics
-  //     this.createFencePhysics(placeholder, placeholderHalfSize);
-  //   }
-  //   // this.scene.add(batchedMesh);
-  //   this.scene.add(instances);
-  // }
-
-  // private createFencePhysics(fencePlaceholder: Mesh, halfSize: Vector3) {
-  //   const rigidBodyDesc = RigidBodyDesc.fixed()
-  //     .setTranslation(...fencePlaceholder.position.toArray())
-  //     .setRotation(fencePlaceholder.quaternion);
-  //   const rigidBody = this.world.createRigidBody(rigidBodyDesc);
-  //   const colliderDesc = ColliderDesc.cuboid(...halfSize.toArray())
-  //     .setFriction(1)
-  //     .setRestitution(0.2);
-  //   this.world.createCollider(colliderDesc, rigidBody);
-  // }
 
   private getFloorDisplacementData() {
     const mesh = assetManager.realmModel.scene.getObjectByName(
@@ -318,9 +263,10 @@ class FloorMaterial extends MeshLambertNodeMaterial {
   }
 
   private computeCausticsDiffuse = Fn(
-    ([timer = float(0), causticsShadowColor = vec3(0, 0, 0)]) => {
-      const scaleFactor = float(10);
-      const scaledUv = uv().mul(scaleFactor);
+    ([vUv = vec2(0, 0), causticsShadowColor = vec3(0, 0, 0)]) => {
+      const timer = this._uniforms.uTime.mul(0.1);
+      const scaleFactor = float(15);
+      const scaledUv = vUv.mul(scaleFactor);
       const scaledCausticsUvA = fract(scaledUv.add(vec2(timer, 0)));
       const scaledCausticsUvB = fract(scaledUv.add(vec2(0, timer.negate())));
       const noiseA = texture(
@@ -333,11 +279,10 @@ class FloorMaterial extends MeshLambertNodeMaterial {
         scaledCausticsUvB,
         2,
       ).r;
-      const caustics = noiseA.add(noiseB).mul(0.5);
+      const caustics = noiseA.add(noiseB);
       const adjustedCaustics = pow(caustics, 3);
 
-      // const causticsHighlightColor = vec3(1.2, 1.2, 0.8);
-      const causticsHighlightColor = vec3(3.2, 3.2, 2.8);
+      const causticsHighlightColor = vec3(1.2, 1.2, 0.8).mul(0.15);
       const causticsColor = mix(
         causticsShadowColor,
         causticsHighlightColor,
@@ -348,69 +293,62 @@ class FloorMaterial extends MeshLambertNodeMaterial {
     },
   );
 
-  private createMaterial() {
-    const timer = this._uniforms.uTime.mul(0.1);
+  private computeWaterDiffuse = Fn(([vDepth = float(0), vUv = vec2(0, 0)]) => {
+    const depth1 = float(5.0); // Transition depth
+    const epsilon = float(0.001); // Prevents precision issues
 
-    const factors = texture(assetManager.floorGrassWaterMap, uv(), 3);
+    const blendFactor = smoothstep(0.0, depth1.add(epsilon), vDepth); // How much tint is applied
+
+    const sandColor = color("#D8C098"); // Sand color
+    const waterTint = sandColor.mul(0.5); // Blue-green tint in deeper water
+
+    const waterBaseColor = sandColor.add(
+      waterTint.sub(sandColor).mul(blendFactor),
+    );
+
+    const causticsColor = this.computeCausticsDiffuse(vUv);
+
+    return waterBaseColor.add(causticsColor);
+  });
+
+  private createMaterial() {
+    // Diffuse
+    const _uv = positionWorld.xz
+      .add(realmConfig.HALF_MAP_SIZE)
+      .div(realmConfig.MAP_SIZE);
+    const vUv = varying(_uv);
+
+    const factors = texture(assetManager.floorGrassWaterMap, vUv, 2.5);
 
     const grassFactor = factors.g;
     const waterFactor = factors.b;
     const sandFactor = float(1).sub(grassFactor);
     const pathFactor = sandFactor.sub(waterFactor);
 
-    // Diffuse
-    // Water caustics
-    const scaledSandUv1 = fract(uv().mul(25));
-    const sandColor1 = texture(
-      assetManager.sandDiffuseTexture,
-      scaledSandUv1,
-    ).mul(sandFactor);
+    const noiseFactor = texture(assetManager.randomNoiseTexture, _uv, 2).r;
 
-    const scaledSandUv2 = fract(uv().mul(10));
-    const sandColor2 = texture(
-      assetManager.sandDiffuseTexture,
-      scaledSandUv2,
-    ).mul(sandFactor);
-
-    const sandColor = sandColor1.mul(sandColor2).mul(1.5);
-
-    const pathColor = texture(assetManager.floorTexture, uv(), 2).mul(
-      pathFactor,
-    );
-    const causticsColor = this.computeCausticsDiffuse(timer, sandColor).mul(
-      waterFactor,
+    const grassColor = mix(color("#A3A16D"), color("#8C865A"), noiseFactor).mul(
+      grassFactor,
     );
 
-    const noiseScale = 0.5;
-    const noiseUv = fract(uv().mul(noiseScale));
-    const noise = texture(assetManager.randomNoiseTexture, noiseUv, 1);
-    const darkGreen = vec3(0.145, 0.322, 0.129);
-    const grassColor = darkGreen.mul(noise.r.add(0.1)).mul(grassFactor);
+    const pathColor = mix(color("#D8C098"), color("#B89A77"), noiseFactor)
+      .mul(2.25)
+      .mul(pathFactor);
 
-    this.colorNode = pathColor
-      .add(sandColor)
-      .add(causticsColor)
-      .add(grassColor);
+    const vDepth = varying(positionWorld.y.negate());
+    const waterBaseColor = this.computeWaterDiffuse(vDepth, vUv);
+
+    const waterColor = waterBaseColor.mul(waterFactor);
+
+    this.colorNode = grassColor.add(pathColor).add(waterColor);
 
     // Normal
-    const sandNormal = texture(
-      assetManager.sandNormalTexture,
-      scaledSandUv1,
-    ).mul(sandFactor);
+    const scaledSandUv1 = fract(_uv.mul(30));
+    const scaledSandUv2 = fract(_uv.mul(15));
+    const normal1 = texture(assetManager.sandNormalTexture, scaledSandUv1);
+    const normal2 = texture(assetManager.sandNormalTexture, scaledSandUv2);
 
-    const grassNormal = vec3(0, 1, 0).mul(grassFactor);
-    this.normalNode = grassNormal.add(sandNormal);
-
-    // ARM
-    const sandARM = texture(assetManager.sandARMTexture, scaledSandUv1).mul(
-      waterFactor,
-    );
-    const sandAo = sandARM.r.mul(0.5);
-
-    const grassARM = vec3(1, 1, 0).mul(pathFactor.add(grassFactor));
-    const grassAo = grassARM.r;
-
-    this.aoNode = grassAo.add(sandAo);
+    this.normalNode = normalize(normal1.mul(normal2));
   }
 }
 
@@ -421,16 +359,20 @@ class OuterFloorMaterial extends MeshLambertNodeMaterial {
   }
 
   private createMaterial() {
-    const noiseScale = 0.5;
-    const scaledUv = positionWorld.xz
+    const _uv = positionWorld.xz
       .add(realmConfig.HALF_MAP_SIZE)
-      .div(realmConfig.MAP_SIZE)
-      .mul(noiseScale);
-    const modulatedUv = fract(scaledUv);
-    const noise = texture(assetManager.randomNoiseTexture, modulatedUv, 1);
+      .div(realmConfig.MAP_SIZE);
+    const modulatedUv = fract(_uv);
+    const noise = texture(assetManager.randomNoiseTexture, modulatedUv, 2).r;
 
-    const darkGreen = vec3(0.145, 0.322, 0.129);
-    const grassColor = darkGreen.mul(noise.r.add(0.1));
+    const grassColor = mix(color("#A3A16D"), color("#8C865A"), noise);
+
+    const scaledSandUv1 = fract(_uv.mul(30));
+    const scaledSandUv2 = fract(_uv.mul(15));
+    const normal1 = texture(assetManager.sandNormalTexture, scaledSandUv1);
+    const normal2 = texture(assetManager.sandNormalTexture, scaledSandUv2);
+
+    this.normalNode = normalize(normal1.mul(normal2));
 
     this.colorNode = grassColor;
   }
