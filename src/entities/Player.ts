@@ -45,7 +45,7 @@ export default class Player {
   private readonly JUMP_BUFFER_DURATION_IN_SECONDS = 0.2;
   private readonly MAX_CONSECUTIVE_JUMPS = 2;
   private readonly JUMP_CUT_MULTIPLIER = 0.25;
-  private readonly FALL_MULTIPLIER = 1.75;
+  private readonly FALL_MULTIPLIER = 2.75;
   private readonly MAX_UPWARD_VELOCITY = 6;
   private readonly LINEAR_DAMPING = 0.25;
   private readonly ANGULAR_DAMPING = 1;
