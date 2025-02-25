@@ -66,7 +66,7 @@ export default class Player {
 
   // Constants for geometry/camera offset
   private readonly RADIUS = 0.5;
-  private readonly PLAYER_INITIAL_POSITION = new Vector3(-95, 5, 45);
+  private readonly PLAYER_INITIAL_POSITION = new Vector3(0, 5, 0);
   private readonly CAMERA_OFFSET = new Vector3(0, 11, 17);
   private readonly CAMERA_LERP_FACTOR = 7.5;
   private readonly UP = new Vector3(0, 1, 0);
@@ -89,6 +89,8 @@ export default class Player {
     this.lighting = lighting;
     this.mesh = this.createCharacterMesh();
     scene.add(this.mesh);
+
+    lighting.setTarget(this.mesh);
 
     this.rigidBody = world.createRigidBody(this.createRigidBodyDesc());
     world.createCollider(this.createColliderDesc(), this.rigidBody);
@@ -122,7 +124,6 @@ export default class Player {
 
     this.uTime.value = clock.getElapsedTime();
 
-    // Build yaw quaternion
     if (this.prevYawInRadians !== this.yawInRadians) {
       this.yawQuaternion.setFromAxisAngle(this.UP, this.yawInRadians);
       this.prevYawInRadians = this.yawInRadians;

@@ -1,79 +1,87 @@
 import {
   AmbientLight,
-  // Color,
   DirectionalLight,
   Object3D,
   Scene,
   Vector3,
 } from "three";
 import EmissiveIllumination from "./EmissiveIllumination";
-import {
-  // dot,
-  // float,
-  Fn,
-  // max,
-  // normalWorld,
-  // pow,
-  // uniform,
-  vec3,
-} from "three/tsl";
+import { Fn, vec3 } from "three/tsl";
 import { State } from "../Game";
+import { debugManager } from "./DebugManager";
 
 export default class LightingSystem {
   private directionalLight: DirectionalLight;
-  // private uDirectionalHue = uniform(new Color());
-  // private uDirectionalIntensity = uniform(0);
-  // private uDirectionalDirection = uniform(new Vector3());
 
   private ambientLight: AmbientLight;
-  // private uAmbientHue = uniform(new Color());
-  // private uAmbientIntensity = uniform(0);
 
   emissive = new EmissiveIllumination();
   private readonly LIGHT_POSITION_OFFSET = new Vector3(10, 20, 10);
 
-  private target = new Object3D();
-
   constructor(scene: Scene) {
     this.emissive = new EmissiveIllumination();
-    scene.add(this.target); // important! otherwise light wont follow
 
     this.directionalLight = this.setupDirectionalLighting();
     scene.add(this.directionalLight);
 
     this.ambientLight = this.setupAmbientLighting();
     scene.add(this.ambientLight);
+
+    this.debugLight();
   }
 
   private setupAmbientLighting() {
     const ambientLight = new AmbientLight("white", 0.4);
-    // this.uAmbientHue.value.copy(ambientLight.color);
-    // this.uAmbientIntensity.value = ambientLight.intensity;
+    ambientLight.intensity = 0.5;
+    ambientLight.color.setRGB(1, 0.95, 0.6);
     return ambientLight;
   }
 
   private setupDirectionalLighting() {
-    const directionalLight = new DirectionalLight("white", 1);
+    const directionalLight = new DirectionalLight();
+    directionalLight.intensity = 1;
+    directionalLight.color.setRGB(1, 0.85, 0.73);
     directionalLight.position.copy(this.LIGHT_POSITION_OFFSET);
-    // this.uDirectionalHue.value.copy(directionalLight.color);
-    // this.uDirectionalIntensity.value = directionalLight.intensity;
-    // this.uDirectionalDirection.value.copy(
-    //   directionalLight.position.sub(this.target.position).normalize(),
-    // );
 
-    directionalLight.target = this.target;
+    directionalLight.target = new Object3D();
 
     directionalLight.castShadow = true;
 
     directionalLight.shadow.intensity = 0.75;
     directionalLight.shadow.mapSize.width = 64;
     directionalLight.shadow.mapSize.height = 64;
-    directionalLight.shadow.radius = 2;
+    // directionalLight.shadow.radius = 2;
     directionalLight.shadow.camera.near = 0.5;
     directionalLight.shadow.camera.far = 50;
     directionalLight.shadow.bias = -0.003;
 
     return directionalLight;
+  }
+
+  private debugLight() {
+    const lightFolder = debugManager.panel.addFolder({ title: "💡 Light" });
+
+    lightFolder.addBinding(this.directionalLight, "color", {
+      label: "Directional Color",
+      view: "color",
+      color: { type: "float" },
+    });
+    lightFolder.addBinding(this.directionalLight, "intensity", {
+      min: 0,
+      max: 1,
+      label: "Directional intensity",
+    });
+
+    lightFolder.addBinding(this.ambientLight, "color", {
+      label: "Ambient Color",
+      view: "color",
+      color: { type: "float" },
+    });
+    lightFolder.addBinding(this.ambientLight, "intensity", {
+      min: 0,
+      max: 1,
+      label: "Ambient intensity",
+    });
   }
 
   // // Simple version
@@ -118,11 +126,14 @@ export default class LightingSystem {
     return light;
   });
 
+  setTarget(target: Object3D) {
+    this.directionalLight.target = target;
+  }
+
   public update(state: State) {
     const { player } = state;
     this.directionalLight.position
       .copy(player.position)
       .add(this.LIGHT_POSITION_OFFSET);
-    this.target.position.copy(player.position);
   }
 }
