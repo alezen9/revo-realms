@@ -106,7 +106,7 @@ export default class Game {
       this.player.update(state);
       this.realm.update(state);
       this.lighting.update(state);
-      await this.grass.updateAsync(state);
+      this.grass.updateAsync(state);
 
       await this.rendererManager.renderAsync(
         this.sceneManager.scene,
