@@ -8,6 +8,7 @@ import RendererManager from "./systems/RendererManager";
 import SceneManager from "./systems/SceneManager";
 import { WebGPURenderer } from "three/webgpu";
 import Grass from "./entities/Grass";
+import Plants from "./entities/Plants";
 
 export type State = {
   camera: PerspectiveCamera;
@@ -41,6 +42,8 @@ export default class Game {
     this.inputManager = new InputManager();
 
     this.clock = new Clock(false);
+
+    new Plants(this.sceneManager.scene);
 
     this.lighting = new LightingSystem(this.sceneManager.scene);
 
