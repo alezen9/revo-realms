@@ -53,6 +53,12 @@ export default class LightingSystem {
     // directionalLight.shadow.radius = 2;
     directionalLight.shadow.camera.near = 0.5;
     directionalLight.shadow.camera.far = 50;
+    directionalLight.shadow.camera.left = -0.5; // Adjust based on scene size
+    directionalLight.shadow.camera.right = 0.5;
+    directionalLight.shadow.camera.top = 0.5;
+    directionalLight.shadow.camera.bottom = -0.5;
+
+    // ✅ Small bias tweak to prevent light frustum artifacts
     directionalLight.shadow.bias = -0.003;
 
     return directionalLight;
