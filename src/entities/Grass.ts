@@ -43,6 +43,7 @@ import {
 } from "three/webgpu";
 import { assetManager } from "../systems/AssetManager";
 import { realmConfig } from "../realms/PortfolioRealm";
+import { debugManager } from "../systems/DebugManager";
 
 const getConfig = () => {
   const BLADE_WIDTH = 0.15;
@@ -107,12 +108,10 @@ const defaultUniforms: Required<GrassUniforms> = {
   uGlowRadiusSquared: uniform(4),
   uGlowFadeIn: uniform(0.05),
   uGlowFadeOut: uniform(0.01),
-  uGlowColor: uniform(new Color(1.0, 0.6, 0.1)),
+  uGlowColor: uniform(new Color().setRGB(1.0, 0.6, 0.1)),
   // Bending
   uBladeMaxBendAngle: uniform(Math.PI * 0.15),
   // Color
-  // uBaseColor: uniform(new Color("#4f8a4f")),
-  // uTipColor: uniform(new Color("#bbde47")),
   uBaseColor: uniform(new Color().setRGB(0.05, 0.2, 0.01)),
   uTipColor: uniform(new Color().setRGB(0.5, 0.5, 0.1)),
   // Updated externally
@@ -412,6 +411,7 @@ export default class Grass {
   private material: GrassMaterial;
   private grassField: Mesh;
   private uniforms = {
+    ...defaultUniforms,
     uDelta: uniform(new Vector2(0, 0)),
     uPlayerPosition: uniform(new Vector3(0, 0, 0)),
     uCameraMatrix: uniform(new Matrix4()),
@@ -433,6 +433,29 @@ export default class Grass {
     this.material = new GrassMaterial(this.uniforms);
     this.grassField = new Mesh(geometry, this.material);
     scene.add(this.grassField);
+
+    if (!import.meta.env.DEV) return;
+    this.debugGrass();
+  }
+
+  private debugGrass() {
+    const grassFolder = debugManager.panel.addFolder({ title: "🌱 Grass" });
+
+    grassFolder.addBinding(this.uniforms.uTipColor, "value", {
+      label: "Tip Color",
+      view: "color",
+      color: { type: "float" },
+    });
+    grassFolder.addBinding(this.uniforms.uBaseColor, "value", {
+      label: "Base Color",
+      view: "color",
+      color: { type: "float" },
+    });
+    grassFolder.addBinding(this.uniforms.uGlowColor, "value", {
+      label: "Glow Color",
+      view: "color",
+      color: { type: "float" },
+    });
   }
 
   // private createBladeGeometryLow() {
