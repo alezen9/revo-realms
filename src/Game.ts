@@ -35,6 +35,7 @@ export default class Game {
   private lighting: LightingSystem;
 
   private grass: Grass;
+  private plants: Plants;
 
   constructor() {
     this.rendererManager = new RendererManager();
@@ -43,7 +44,7 @@ export default class Game {
 
     this.clock = new Clock(false);
 
-    new Plants(this.sceneManager.scene);
+    this.plants = new Plants(this.sceneManager.scene);
 
     this.lighting = new LightingSystem(this.sceneManager.scene);
 
@@ -109,6 +110,7 @@ export default class Game {
       this.player.update(state);
       this.realm.update(state);
       this.lighting.update(state);
+      this.plants.update(state);
       this.grass.updateAsync(state);
 
       await this.rendererManager.renderAsync(

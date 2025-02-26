@@ -18,6 +18,9 @@ import floorGrassWaterMapTextureUrl from "/textures/realm/water_grass_map.webp?u
 // Sand
 import sandNormalTextureUrl from "/textures/realm/coast_sand_nor.webp?url";
 
+// Plant
+import leafTextureUrl from "/textures/realm/leaf.webp?url";
+
 // Environment
 import pxUrl from "/textures/environment/px.webp?url";
 import nxUrl from "/textures/environment/nx.webp?url";
@@ -39,6 +42,8 @@ class AssetManager {
   floorGrassWaterMap!: Texture;
 
   sandNormalTexture!: Texture;
+
+  leafTexture!: Texture;
 
   // Models
   npcsModel!: GLTF;
@@ -118,6 +123,7 @@ class AssetManager {
       // Floor textures
       this.textureLoader.loadAsync(floorGrassWaterMapTextureUrl), // Grass, Water map
       this.textureLoader.loadAsync(sandNormalTextureUrl), // Sand normal
+      this.textureLoader.loadAsync(leafTextureUrl), // Sand normal
     ]);
     // Environment
     this.envMapTexture = res[0];
@@ -133,6 +139,8 @@ class AssetManager {
     this.floorGrassWaterMap.flipY = false;
 
     this.sandNormalTexture = res[7];
+
+    this.leafTexture = res[8];
   }
 }
 
