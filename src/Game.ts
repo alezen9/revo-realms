@@ -1,5 +1,4 @@
 import { Scene, Clock, PerspectiveCamera } from "three";
-import { World } from "@dimforge/rapier3d";
 import Player from "./entities/Player";
 import PortfolioRealm from "./realms/PortfolioRealm";
 import LightingSystem from "./systems/LightingSystem";
@@ -17,7 +16,6 @@ export type State = {
   clock: Clock;
   renderer: WebGPURenderer;
   inputManager: InputManager;
-  world: World;
   lighting: LightingSystem;
   player: Player;
 };
@@ -52,12 +50,10 @@ export default class Game {
       scene: this.sceneManager.scene,
       inputManager: this.inputManager,
       lighting: this.lighting,
-      world: physics.world,
     });
 
     this.realm = new PortfolioRealm({
       scene: this.sceneManager.scene,
-      world: physics.world,
     });
 
     // Grass
@@ -96,7 +92,6 @@ export default class Game {
       camera: this.sceneManager.camera,
       inputManager: this.inputManager,
       lighting: this.lighting,
-      world: physics.world,
       player: this.player,
       renderer: this.rendererManager.renderer,
     };

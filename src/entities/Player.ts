@@ -3,7 +3,6 @@ import {
   ColliderDesc,
   RigidBody,
   RigidBodyDesc,
-  World,
   Ray,
   Vector,
 } from "@dimforge/rapier3d";
@@ -23,6 +22,7 @@ import LightingSystem from "../systems/LightingSystem";
 import { MeshStandardNodeMaterial } from "three/webgpu";
 import { assetManager } from "../systems/AssetManager";
 import { UniformType } from "../types";
+import { physics } from "../systems/Physics";
 
 export default class Player {
   private mesh: Mesh;
@@ -80,10 +80,8 @@ export default class Player {
 
   private uTime = uniform(0);
 
-  constructor(
-    state: Pick<State, "inputManager" | "scene" | "world" | "lighting">,
-  ) {
-    const { scene, world, inputManager, lighting } = state;
+  constructor(state: Pick<State, "inputManager" | "scene" | "lighting">) {
+    const { scene, inputManager, lighting } = state;
 
     this.inputManager = inputManager;
     this.lighting = lighting;
@@ -92,8 +90,8 @@ export default class Player {
 
     lighting.setTarget(this.mesh);
 
-    this.rigidBody = world.createRigidBody(this.createRigidBodyDesc());
-    world.createCollider(this.createColliderDesc(), this.rigidBody);
+    this.rigidBody = physics.world.createRigidBody(this.createRigidBodyDesc());
+    physics.world.createCollider(this.createColliderDesc(), this.rigidBody);
   }
 
   private createCharacterMesh() {
@@ -118,7 +116,7 @@ export default class Player {
   }
 
   public update(state: State) {
-    const { clock, camera, world } = state;
+    const { clock, camera } = state;
 
     const delta = clock.getDelta();
 
@@ -129,16 +127,16 @@ export default class Player {
       this.prevYawInRadians = this.yawInRadians;
     }
 
-    this.updateVerticalMovement(delta, world);
+    this.updateVerticalMovement(delta);
     this.updateHorizontalMovement(delta);
     this.updateCameraPosition(camera, delta);
   }
 
-  private updateVerticalMovement(delta: number, world: World) {
+  private updateVerticalMovement(delta: number) {
     const isJumpKeyPressed = this.inputManager.isKeyPressed(" ");
 
     // 1) Ground check
-    this.isOnGround = this.checkIfGrounded(world);
+    this.isOnGround = this.checkIfGrounded();
     if (this.isOnGround) {
       this.jumpCount = 0;
     }
@@ -160,7 +158,7 @@ export default class Player {
     // 4) Mid-air logic (jump cut, fast fall, clamp)
     const velocity = this.rigidBody.linvel();
     this.handleJumpCut(isJumpKeyPressed, velocity);
-    this.handleFastFall(delta, velocity, world.gravity.y);
+    this.handleFastFall(delta, velocity, physics.world.gravity.y);
     this.clampUpwardVelocity(velocity);
     this.rigidBody.setLinvel(velocity, true);
 
@@ -168,12 +166,12 @@ export default class Player {
     this.wasJumpHeld = isJumpKeyPressed;
   }
 
-  private checkIfGrounded(world: World): boolean {
+  private checkIfGrounded(): boolean {
     // Cast a ray downward from just below the sphere’s center
     this.rayOrigin.copy(this.rigidBody.translation());
     this.rayOrigin.y -= this.RADIUS + 0.01;
     const maxDistance = 0.2;
-    const hit = world.castRay(this.ray, maxDistance, true);
+    const hit = physics.world.castRay(this.ray, maxDistance, true);
     if (!hit) return false;
     const distanceToGround = hit.timeOfImpact * maxDistance;
     return distanceToGround < 0.01;
