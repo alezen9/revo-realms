@@ -1,5 +1,5 @@
 import { Scene, Clock, PerspectiveCamera } from "three";
-import { World } from "@dimforge/rapier3d-compat";
+import { World } from "@dimforge/rapier3d";
 import Player from "./entities/Player";
 import PortfolioRealm from "./realms/PortfolioRealm";
 import LightingSystem from "./systems/LightingSystem";
@@ -9,6 +9,7 @@ import SceneManager from "./systems/SceneManager";
 import { WebGPURenderer } from "three/webgpu";
 import Grass from "./entities/Grass";
 import Plants from "./entities/Plants";
+import { physics } from "./systems/Physics";
 
 export type State = {
   camera: PerspectiveCamera;
@@ -28,7 +29,6 @@ export default class Game {
   private sceneManager: SceneManager;
   private inputManager: InputManager;
   private clock: Clock;
-  private world: World;
 
   private player: Player;
   private realm: PortfolioRealm;
@@ -48,18 +48,16 @@ export default class Game {
 
     this.lighting = new LightingSystem(this.sceneManager.scene);
 
-    this.world = new World({ x: 0, y: -9.81, z: 0 });
-
     this.player = new Player({
       scene: this.sceneManager.scene,
       inputManager: this.inputManager,
       lighting: this.lighting,
-      world: this.world,
+      world: physics.world,
     });
 
     this.realm = new PortfolioRealm({
       scene: this.sceneManager.scene,
-      world: this.world,
+      world: physics.world,
     });
 
     // Grass
@@ -98,7 +96,7 @@ export default class Game {
       camera: this.sceneManager.camera,
       inputManager: this.inputManager,
       lighting: this.lighting,
-      world: this.world,
+      world: physics.world,
       player: this.player,
       renderer: this.rendererManager.renderer,
     };
@@ -106,7 +104,7 @@ export default class Game {
     const loop = async () => {
       if (import.meta.env.DEV) this.sceneManager.update();
 
-      this.world.step();
+      physics.update();
       this.player.update(state);
       this.realm.update(state);
       this.lighting.update(state);
