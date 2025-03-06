@@ -24,7 +24,7 @@ import { debugManager } from "../systems/DebugManager";
 export default class Plants {
   private uniforms = {
     uTime: uniform(0),
-    uPlantColor: uniform(new Color().setRGB(1, 0.75, 0.75)),
+    uPlantColor: uniform(new Color().setRGB(0.4, 0.7, 0.35)),
   };
   constructor(scene: State["scene"]) {
     const plant = assetManager.realmModel.scene.getObjectByName(
