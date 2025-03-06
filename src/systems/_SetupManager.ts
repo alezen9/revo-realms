@@ -1,8 +1,8 @@
 import { assetManager } from "./AssetManager";
+import { physics } from "./Physics";
 
 export default class _SetupManager {
   async initAsync() {
-    const rapier = await import("@dimforge/rapier3d-compat");
-    await Promise.all([rapier.init(), assetManager.initAsync()]);
+    await Promise.all([physics.init(), assetManager.initAsync()]);
   }
 }

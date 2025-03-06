@@ -12,7 +12,7 @@ import { Color, Mesh, MeshLambertNodeMaterial } from "three/webgpu";
 import { UniformType } from "../types";
 import { assetManager } from "../systems/AssetManager";
 import { State } from "../Game";
-import { ColliderDesc, RigidBodyDesc } from "@dimforge/rapier3d-compat";
+import { ColliderDesc, RigidBodyDesc } from "@dimforge/rapier3d";
 import { debugManager } from "../systems/DebugManager";
 
 type StoneMaterialUniforms = {

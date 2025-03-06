@@ -6,7 +6,7 @@ import {
   World,
   Ray,
   Vector,
-} from "@dimforge/rapier3d-compat";
+} from "@dimforge/rapier3d";
 import InputManager from "../systems/InputManager";
 import { type State } from "../Game";
 import {

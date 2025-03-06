@@ -4,7 +4,7 @@ import {
   HeightFieldFlags,
   RigidBody,
   RigidBodyDesc,
-} from "@dimforge/rapier3d-compat";
+} from "@dimforge/rapier3d";
 import { State } from "../Game";
 import {
   color,
