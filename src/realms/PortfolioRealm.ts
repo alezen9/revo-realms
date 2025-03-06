@@ -27,6 +27,7 @@ import WaterMaterial from "../materials/WaterMaterial";
 import { MeshLambertNodeMaterial } from "three/webgpu";
 import { UniformType } from "../types";
 import Monuments from "../entities/Monuments";
+import { physics } from "../systems/Physics";
 
 const getConfig = () => {
   const MAP_SIZE = 256;
@@ -43,7 +44,6 @@ const getConfig = () => {
 export const realmConfig = getConfig();
 
 export default class PortfolioRealm {
-  private world: State["world"];
   private scene: State["scene"];
 
   private kintounRigidBody: RigidBody; // Kintoun = Flying Nimbus cloud from dragon ball
@@ -53,9 +53,8 @@ export default class PortfolioRealm {
   // Water
   private uTime = uniform(0);
 
-  constructor(state: Pick<State, "world" | "scene">) {
-    const { world, scene } = state;
-    this.world = world;
+  constructor(state: Pick<State, "scene">) {
+    const { scene } = state;
     this.scene = scene;
 
     this.createFloor();
@@ -148,7 +147,7 @@ export default class PortfolioRealm {
       -displacement,
       0,
     );
-    const rigidBody = this.world.createRigidBody(rigidBodyDesc);
+    const rigidBody = physics.world.createRigidBody(rigidBodyDesc);
 
     const colliderDesc = ColliderDesc.heightfield(
       rowsCount - 1,
@@ -164,7 +163,7 @@ export default class PortfolioRealm {
       .setFriction(1)
       .setRestitution(0.2);
 
-    this.world.createCollider(colliderDesc, rigidBody);
+    physics.world.createCollider(colliderDesc, rigidBody);
   }
 
   private createKintoun() {
@@ -173,7 +172,7 @@ export default class PortfolioRealm {
       -20, // out of the physics world
       0,
     );
-    const rigidBody = this.world.createRigidBody(rigidBodyDesc);
+    const rigidBody = physics.world.createRigidBody(rigidBodyDesc);
 
     const halfSize = 2;
 
@@ -184,7 +183,7 @@ export default class PortfolioRealm {
     )
       .setFriction(1)
       .setRestitution(0.2);
-    this.world.createCollider(colliderDesc, rigidBody);
+    physics.world.createCollider(colliderDesc, rigidBody);
     return rigidBody;
   }
 

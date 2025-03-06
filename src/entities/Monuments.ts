@@ -14,6 +14,7 @@ import { assetManager } from "../systems/AssetManager";
 import { State } from "../Game";
 import { ColliderDesc, RigidBodyDesc } from "@dimforge/rapier3d";
 import { debugManager } from "../systems/DebugManager";
+import { physics } from "../systems/Physics";
 
 type StoneMaterialUniforms = {
   uBaseColor: UniformType<Color>;
@@ -60,8 +61,8 @@ class StoneMaterial extends MeshLambertNodeMaterial {
 export default class Monuments {
   private uniforms = defaultUniforms;
 
-  constructor(partialState: Pick<State, "scene" | "world">) {
-    const { scene, world } = partialState;
+  constructor(partialState: Pick<State, "scene">) {
+    const { scene } = partialState;
 
     // Visual
     const material = new StoneMaterial(this.uniforms);
@@ -81,12 +82,12 @@ export default class Monuments {
       const rigidBodyDesc = RigidBodyDesc.fixed()
         .setTranslation(...colliderBox.position.toArray())
         .setRotation(colliderBox.quaternion);
-      const rigidBody = world.createRigidBody(rigidBodyDesc);
+      const rigidBody = physics.world.createRigidBody(rigidBodyDesc);
       const hx = 0.5 * colliderBox.scale.x;
       const hy = 0.5 * colliderBox.scale.y;
       const hz = 0.5 * colliderBox.scale.z;
       const colliderDesc = ColliderDesc.cuboid(hx, hy, hz).setRestitution(0.2);
-      world.createCollider(colliderDesc, rigidBody);
+      physics.world.createCollider(colliderDesc, rigidBody);
     });
 
     this.debugMonument();
