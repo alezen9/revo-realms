@@ -26,6 +26,7 @@ import { assetManager } from "../systems/AssetManager";
 import WaterMaterial from "../materials/WaterMaterial";
 import { MeshLambertNodeMaterial } from "three/webgpu";
 import { UniformType } from "../types";
+import Monuments from "../entities/Monuments";
 
 const getConfig = () => {
   const MAP_SIZE = 256;
@@ -59,7 +60,7 @@ export default class PortfolioRealm {
 
     this.createFloor();
     this.createWater();
-    // this.createNpcs();
+    new Monuments(state);
 
     this.outerFloorMesh = this.createOuterFloorVisual();
     this.scene.add(this.outerFloorMesh);
@@ -71,42 +72,16 @@ export default class PortfolioRealm {
     const outerFloor = assetManager.realmModel.scene.getObjectByName(
       "outer_world",
     ) as Mesh;
-    outerFloor.geometry.computeVertexNormals();
     outerFloor.material = new OuterFloorMaterial();
     return outerFloor;
   }
-
-  // private createNpcs() {
-  //   console.log(assetManager.npcsModel.scene);
-  //   const npcs: Mesh[] = [];
-  //   assetManager.npcsModel.scene.traverse((el) => {
-  //     if (el.type !== "Mesh") return;
-  //     if (el.name.includes("bounding_sphere"))
-  //       this.createNpcSphereCollider(el as Mesh);
-  //     else {
-  //       npcs.push(el as Mesh);
-  //     }
-  //     console.log(el);
-  //   });
-  //   this.scene.add(...npcs);
-  // }
-
-  // private createNpcSphereCollider(colliderSphere: Mesh) {
-  //   colliderSphere.geometry.computeBoundingSphere();
-  //   const radius = colliderSphere.geometry.boundingSphere?.radius ?? 0;
-  //   const rigidBodyDesc = RigidBodyDesc.fixed()
-  //     .setTranslation(...colliderSphere.position.toArray())
-  //     .setRotation(colliderSphere.quaternion);
-  //   const rigidBody = this.world.createRigidBody(rigidBodyDesc);
-  //   const colliderDesc = ColliderDesc.ball(radius).setRestitution(0.2);
-  //   this.world.createCollider(colliderDesc, rigidBody);
-  // }
 
   private createFloor() {
     // Visual
     const floor = assetManager.realmModel.scene.getObjectByName(
       "floor",
     ) as Mesh;
+    delete floor.geometry.attributes.normal;
     floor.material = new FloorMaterial({ uTime: this.uTime });
     floor.receiveShadow = true;
     this.scene.add(floor);
@@ -115,12 +90,15 @@ export default class PortfolioRealm {
   }
   private createWater() {
     // Visual
-    const lake = assetManager.realmModel.scene.getObjectByName("lake") as Mesh;
+    const water = assetManager.realmModel.scene.getObjectByName(
+      "water",
+    ) as Mesh;
+    delete water.geometry.attributes.normal;
     const waterMaterial = new WaterMaterial({
       uTime: this.uTime,
     });
-    lake.material = waterMaterial;
-    this.scene.add(lake);
+    water.material = waterMaterial;
+    this.scene.add(water);
   }
 
   private getFloorDisplacementData() {

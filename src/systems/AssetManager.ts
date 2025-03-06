@@ -12,11 +12,10 @@ import randomNoiseTextureUrl from "/textures/noise/random_noise.webp?url";
 import voronoiNoiseTextureUrl from "/textures/noise/voronoi_noise.webp?url";
 // Realm
 import realmModelUrl from "/models/realm.glb?url";
-import npcsModelUrl from "/models/npcs.glb?url";
 import floorGrassWaterMapTextureUrl from "/textures/realm/water_grass_map.webp?url";
 
 // Sand
-import sandNormalTextureUrl from "/textures/realm/coast_sand_nor.webp?url";
+import sandNormalTextureUrl from "/textures/realm/sand_nor.webp?url";
 
 // Plant
 import leafTextureUrl from "/textures/realm/leaf.webp?url";
@@ -33,7 +32,7 @@ class AssetManager {
   textureLoader: TextureLoader;
   gltfLoader: GLTFLoader;
   cubeTextureLoader: CubeTextureLoader;
-  // Nosie Textures
+  // Noise Textures
   perlinNoiseTexture!: Texture;
   randomNoiseTexture!: Texture;
   voronoiNoiseTexture!: Texture;
@@ -42,7 +41,6 @@ class AssetManager {
   floorGrassWaterMap!: Texture;
 
   sandNormalTexture!: Texture;
-
   leafTexture!: Texture;
 
   // Models
@@ -118,12 +116,11 @@ class AssetManager {
       this.textureLoader.loadAsync(randomNoiseTextureUrl),
       this.textureLoader.loadAsync(voronoiNoiseTextureUrl),
       // Models
-      this.gltfLoader.loadAsync(npcsModelUrl),
       this.gltfLoader.loadAsync(realmModelUrl),
       // Floor textures
       this.textureLoader.loadAsync(floorGrassWaterMapTextureUrl), // Grass, Water map
       this.textureLoader.loadAsync(sandNormalTextureUrl), // Sand normal
-      this.textureLoader.loadAsync(leafTextureUrl), // Sand normal
+      this.textureLoader.loadAsync(leafTextureUrl), // Leaf diffuse
     ]);
     // Environment
     this.envMapTexture = res[0];
@@ -132,15 +129,13 @@ class AssetManager {
     this.randomNoiseTexture = res[2];
     this.voronoiNoiseTexture = res[3];
     // Models
-    this.npcsModel = res[4];
-    this.realmModel = res[5];
+    this.realmModel = res[4];
     // Floor textures
-    this.floorGrassWaterMap = res[6];
+    this.floorGrassWaterMap = res[5];
     this.floorGrassWaterMap.flipY = false;
 
-    this.sandNormalTexture = res[7];
-
-    this.leafTexture = res[8];
+    this.sandNormalTexture = res[6];
+    this.leafTexture = res[7];
   }
 }
 
