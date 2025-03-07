@@ -1,63 +1,25 @@
-import { Scene, Clock, PerspectiveCamera } from "three";
+import { Clock } from "three";
 import Player from "./entities/Player";
 import PortfolioRealm from "./realms/PortfolioRealm";
-import LightingSystem from "./systems/LightingSystem";
-import InputManager from "./systems/InputManager";
-import RendererManager from "./systems/RendererManager";
-import SceneManager from "./systems/SceneManager";
-import { WebGPURenderer } from "three/webgpu";
-import Grass from "./entities/Grass";
-import Plants from "./entities/Plants";
+import { sceneManager } from "./systems/SceneManager";
 import { physics } from "./systems/Physics";
+import { rendererManager } from "./systems/RendererManager";
+import { lighting } from "./systems/LightingSystem";
 
 export type State = {
-  camera: PerspectiveCamera;
-  scene: Scene;
   clock: Clock;
-  renderer: WebGPURenderer;
-  inputManager: InputManager;
-  lighting: LightingSystem;
   player: Player;
 };
 
 type Sizes = { width: number; height: number; dpr: number; aspect: number };
 
 export default class Game {
-  private rendererManager: RendererManager;
-  private sceneManager: SceneManager;
-  private inputManager: InputManager;
-  private clock: Clock;
-
   private player: Player;
   private realm: PortfolioRealm;
-  private lighting: LightingSystem;
-
-  private grass: Grass;
-  private plants: Plants;
 
   constructor() {
-    this.rendererManager = new RendererManager();
-    this.sceneManager = new SceneManager(this.rendererManager);
-    this.inputManager = new InputManager();
-
-    this.clock = new Clock(false);
-
-    this.plants = new Plants(this.sceneManager.scene);
-
-    this.lighting = new LightingSystem(this.sceneManager.scene);
-
-    this.player = new Player({
-      scene: this.sceneManager.scene,
-      inputManager: this.inputManager,
-      lighting: this.lighting,
-    });
-
-    this.realm = new PortfolioRealm({
-      scene: this.sceneManager.scene,
-    });
-
-    // Grass
-    this.grass = new Grass(this.sceneManager.scene);
+    this.player = new Player();
+    this.realm = new PortfolioRealm();
   }
 
   private getSizes(): Sizes {
@@ -74,42 +36,32 @@ export default class Game {
   private onResize() {
     const sizes = this.getSizes();
     // Update camera
-    this.sceneManager.camera.aspect = sizes.aspect;
-    this.sceneManager.camera.updateProjectionMatrix();
+    sceneManager.camera.aspect = sizes.aspect;
+    sceneManager.camera.updateProjectionMatrix();
 
     // Update renderer
-    this.rendererManager.renderer.setSize(sizes.width, sizes.height);
-    this.rendererManager.renderer.setPixelRatio(sizes.dpr);
+    rendererManager.renderer.setSize(sizes.width, sizes.height);
+    rendererManager.renderer.setPixelRatio(sizes.dpr);
   }
 
   async startLoop() {
-    await this.rendererManager.init(this.sceneManager);
-    this.clock.start();
+    await rendererManager.init();
+    const clock = new Clock(true);
 
     const state: State = {
-      clock: this.clock,
-      scene: this.sceneManager.scene,
-      camera: this.sceneManager.camera,
-      inputManager: this.inputManager,
-      lighting: this.lighting,
+      clock,
       player: this.player,
-      renderer: this.rendererManager.renderer,
     };
 
     const loop = async () => {
-      if (import.meta.env.DEV) this.sceneManager.update();
+      if (import.meta.env.DEV) sceneManager.update();
 
       physics.update();
       this.player.update(state);
-      this.realm.update(state);
-      this.lighting.update(state);
-      this.plants.update(state);
-      this.grass.updateAsync(state);
+      lighting.update(state);
+      this.realm.updateAsync(state);
 
-      await this.rendererManager.renderAsync(
-        this.sceneManager.scene,
-        this.sceneManager.renderCamera,
-      );
+      await rendererManager.renderAsync();
     };
 
     // On resize
@@ -118,6 +70,6 @@ export default class Game {
     });
     resizeObserver.observe(document.body);
 
-    this.rendererManager.renderer.setAnimationLoop(loop);
+    rendererManager.renderer.setAnimationLoop(loop);
   }
 }

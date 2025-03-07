@@ -44,6 +44,8 @@ import {
 import { assetManager } from "../systems/AssetManager";
 import { realmConfig } from "../realms/PortfolioRealm";
 import { debugManager } from "../systems/DebugManager";
+import { rendererManager } from "../systems/RendererManager";
+import { sceneManager } from "../systems/SceneManager";
 
 const getConfig = () => {
   const BLADE_WIDTH = 0.15;
@@ -403,9 +405,8 @@ class GrassMaterial extends MeshLambertNodeMaterial {
     this.colorNode = this.computeDiffuseColor(data2);
   }
 
-  async updateAsync(state: State) {
-    const { renderer } = state;
-    await renderer.computeAsync(this.computeUpdate);
+  async updateAsync() {
+    await rendererManager.renderer.computeAsync(this.computeUpdate);
   }
 }
 
@@ -420,7 +421,7 @@ export default class Grass {
     uTime: uniform(0),
   };
 
-  constructor(scene: State["scene"]) {
+  constructor() {
     const geometry = this.createBladeGeometry();
     geometry.instanceCount = grassConfig.COUNT;
     // const uint32 = new Uint32Array(5);
@@ -434,7 +435,7 @@ export default class Grass {
 
     this.material = new GrassMaterial(this.uniforms);
     this.grassField = new Mesh(geometry, this.material);
-    scene.add(this.grassField);
+    sceneManager.scene.add(this.grassField);
 
     if (!import.meta.env.DEV) return;
     this.debugGrass();
@@ -595,18 +596,18 @@ export default class Grass {
   }
 
   async updateAsync(state: State) {
-    const { player, camera, clock } = state;
+    const { player, clock } = state;
     const dx = player.position.x - this.grassField.position.x;
     const dz = player.position.z - this.grassField.position.z;
     this.uniforms.uDelta.value.set(dx, dz);
     this.uniforms.uPlayerPosition.value.copy(player.position);
     this.uniforms.uCameraMatrix.value
-      .copy(camera.projectionMatrix)
-      .multiply(camera.matrixWorldInverse);
+      .copy(sceneManager.camera.projectionMatrix)
+      .multiply(sceneManager.camera.matrixWorldInverse);
     this.uniforms.uTime.value = clock.getElapsedTime();
 
     this.grassField.position.copy(player.position).setY(0);
 
-    await this.material.updateAsync(state);
+    await this.material.updateAsync();
   }
 }

@@ -1,16 +1,11 @@
-import {
-  AmbientLight,
-  DirectionalLight,
-  Object3D,
-  Scene,
-  Vector3,
-} from "three";
+import { AmbientLight, DirectionalLight, Object3D, Vector3 } from "three";
 import EmissiveIllumination from "./EmissiveIllumination";
 import { Fn, vec3 } from "three/tsl";
 import { State } from "../Game";
 import { debugManager } from "./DebugManager";
+import { sceneManager } from "./SceneManager";
 
-export default class LightingSystem {
+class LightingSystem {
   private directionalLight: DirectionalLight;
 
   private ambientLight: AmbientLight;
@@ -18,14 +13,14 @@ export default class LightingSystem {
   emissive = new EmissiveIllumination();
   private readonly LIGHT_POSITION_OFFSET = new Vector3(10, 20, 10);
 
-  constructor(scene: Scene) {
+  constructor() {
     this.emissive = new EmissiveIllumination();
 
     this.directionalLight = this.setupDirectionalLighting();
-    scene.add(this.directionalLight);
+    sceneManager.scene.add(this.directionalLight);
 
     this.ambientLight = this.setupAmbientLighting();
-    scene.add(this.ambientLight);
+    sceneManager.scene.add(this.ambientLight);
 
     this.debugLight();
   }
@@ -143,3 +138,5 @@ export default class LightingSystem {
       .add(this.LIGHT_POSITION_OFFSET);
   }
 }
+
+export const lighting = new LightingSystem();

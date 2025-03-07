@@ -20,13 +20,14 @@ import {
 } from "three/tsl";
 import { UniformType } from "../types";
 import { debugManager } from "../systems/DebugManager";
+import { sceneManager } from "../systems/SceneManager";
 
 export default class Plants {
   private uniforms = {
     uTime: uniform(0),
     uPlantColor: uniform(new Color().setRGB(0.4, 0.7, 0.35)),
   };
-  constructor(scene: State["scene"]) {
+  constructor() {
     const plant = assetManager.realmModel.scene.getObjectByName(
       "plant",
     ) as Mesh;
@@ -45,7 +46,7 @@ export default class Plants {
     for (let i = 0; i < plantPlaceholders.length; i++) {
       instances.setMatrixAt(i, plantPlaceholders[i].matrix);
     }
-    scene.add(instances);
+    sceneManager.scene.add(instances);
 
     this.debugPlants();
   }

@@ -11,10 +11,10 @@ import {
 import { Color, Mesh, MeshLambertNodeMaterial } from "three/webgpu";
 import { UniformType } from "../types";
 import { assetManager } from "../systems/AssetManager";
-import { State } from "../Game";
 import { ColliderDesc, RigidBodyDesc } from "@dimforge/rapier3d";
 import { debugManager } from "../systems/DebugManager";
 import { physics } from "../systems/Physics";
+import { sceneManager } from "../systems/SceneManager";
 
 type StoneMaterialUniforms = {
   uBaseColor: UniformType<Color>;
@@ -61,9 +61,7 @@ class StoneMaterial extends MeshLambertNodeMaterial {
 export default class Monuments {
   private uniforms = defaultUniforms;
 
-  constructor(partialState: Pick<State, "scene">) {
-    const { scene } = partialState;
-
+  constructor() {
     // Visual
     const material = new StoneMaterial(this.uniforms);
     const monuments = assetManager.realmModel.scene.children.filter(
@@ -72,7 +70,7 @@ export default class Monuments {
     monuments.forEach((monument) => {
       monument.material = material;
     });
-    scene.add(...monuments);
+    sceneManager.scene.add(...monuments);
 
     // Physics
     const colliders = assetManager.realmModel.scene.children.filter(
