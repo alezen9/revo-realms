@@ -1,4 +1,4 @@
-export default class InputManager {
+class InputManager {
   private keysPressed: Set<string>;
   private keyDownListeners: Map<string, VoidFunction>;
   private keyUpListeners: Map<string, VoidFunction>;
@@ -45,3 +45,5 @@ export default class InputManager {
     window.removeEventListener("keyup", this.handleKeyUp.bind(this));
   }
 }
+
+export const inputManager = new InputManager();

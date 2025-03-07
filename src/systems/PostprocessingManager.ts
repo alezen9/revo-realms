@@ -1,13 +1,13 @@
 import { PostProcessing } from "three/webgpu";
 import { emissive, mrt, output, pass } from "three/tsl";
 import { bloom } from "three/examples/jsm/tsl/display/BloomNode.js";
-import RendererManager from "./RendererManager";
-import SceneManager from "./SceneManager";
+import { rendererManager } from "./RendererManager";
+import { sceneManager } from "./SceneManager";
 
 export default class PostprocessingManager {
   composer: PostProcessing;
 
-  constructor(rendererManager: RendererManager, sceneManager: SceneManager) {
+  constructor() {
     this.composer = new PostProcessing(rendererManager.renderer);
 
     const scenePass = pass(sceneManager.scene, sceneManager.renderCamera);

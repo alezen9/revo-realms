@@ -1,9 +1,9 @@
 import { CameraHelper, PerspectiveCamera, Scene } from "three";
-import { OrbitControls } from "three/examples/jsm/Addons.js";
-import RendererManager from "./RendererManager";
+import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { debugManager } from "./DebugManager";
+import { rendererManager } from "./RendererManager";
 
-export default class SceneManager {
+class SceneManager {
   scene: Scene;
   camera: PerspectiveCamera;
   renderCamera: PerspectiveCamera;
@@ -11,7 +11,7 @@ export default class SceneManager {
   private controls?: OrbitControls;
   private orbitControlsCamera?: PerspectiveCamera;
 
-  constructor(rendererManager: RendererManager) {
+  constructor() {
     // Scene
     const scene = new Scene();
     this.scene = scene;
@@ -69,3 +69,5 @@ export default class SceneManager {
     if (this.controls?.enabled) this.controls.update();
   }
 }
+
+export const sceneManager = new SceneManager();

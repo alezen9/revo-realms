@@ -2,10 +2,10 @@ import { ACESFilmicToneMapping, VSMShadowMap } from "three";
 import { WebGPURenderer } from "three/webgpu";
 import MonitoringManager from "./MonitoringManager";
 import PostprocessingManager from "./PostprocessingManager";
-import SceneManager from "./SceneManager";
 import { debugManager } from "./DebugManager";
+import { sceneManager } from "./SceneManager";
 
-export default class RendererManager {
+class RendererManager {
   renderer: WebGPURenderer;
   canvas: HTMLCanvasElement;
   private monitoringManager: MonitoringManager;
@@ -34,22 +34,28 @@ export default class RendererManager {
     debugManager.setVisibility(this.DEBUGGING_ENABLED);
   }
 
-  async init(sceneManager: SceneManager) {
-    this.postprocessingManager = new PostprocessingManager(this, sceneManager);
+  async init() {
+    this.postprocessingManager = new PostprocessingManager();
     if (this.MONITORING_ENABLED)
       await this.monitoringManager.stats.init(this.renderer);
   }
 
-  async renderAsync(...args: Parameters<typeof this.renderer.renderAsync>) {
+  async renderAsync() {
     if (this.MONITORING_ENABLED)
       await this.renderer.resolveTimestampsAsync("compute");
     if (this.POSTPROCESSING_ENABLED)
       await this.postprocessingManager.composer.renderAsync();
-    else await this.renderer.renderAsync(...args);
+    else
+      await this.renderer.renderAsync(
+        sceneManager.scene,
+        sceneManager.renderCamera,
+      );
     if (this.MONITORING_ENABLED) {
-      this.monitoringManager.updateCustomPanels(this.renderer);
+      this.monitoringManager.updateCustomPanels();
       await this.renderer.resolveTimestampsAsync("render");
       this.monitoringManager.stats.update();
     }
   }
 }
+
+export const rendererManager = new RendererManager();

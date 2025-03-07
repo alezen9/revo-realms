@@ -5,7 +5,8 @@ import {
   Texture,
   TextureLoader,
 } from "three";
-import { DRACOLoader, GLTF, GLTFLoader } from "three/examples/jsm/Addons.js";
+import { GLTF, GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { DRACOLoader } from "three/addons/loaders/DRACOLoader.js";
 // Noise
 import perlinNoiseTextureUrl from "/textures/noise/perlin_noise.webp?url";
 import randomNoiseTextureUrl from "/textures/noise/random_noise.webp?url";

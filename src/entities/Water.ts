@@ -1,4 +1,4 @@
-import { Color, MeshBasicNodeMaterial } from "three/webgpu";
+import { Color, Mesh, MeshBasicNodeMaterial } from "three/webgpu";
 import {
   cameraPosition,
   clamp,
@@ -28,6 +28,7 @@ import {
 import { assetManager } from "../systems/AssetManager";
 import { FolderApi } from "tweakpane";
 import { debugManager } from "../systems/DebugManager";
+import { sceneManager } from "../systems/SceneManager";
 
 type UniformType<T> = ReturnType<typeof uniform<T>>;
 
@@ -286,5 +287,27 @@ export default class WaterMaterial extends MeshBasicNodeMaterial {
       max: 1,
       label: "Scale",
     });
+  }
+}
+
+export class Water {
+  private uTime = uniform(0);
+
+  constructor() {
+    const water = this.createWater();
+    sceneManager.scene.add(water);
+  }
+
+  private createWater() {
+    // Visual
+    const water = assetManager.realmModel.scene.getObjectByName(
+      "water",
+    ) as Mesh;
+    delete water.geometry.attributes.normal;
+    const waterMaterial = new WaterMaterial({
+      uTime: this.uTime,
+    });
+    water.material = waterMaterial;
+    return water;
   }
 }

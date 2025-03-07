@@ -1,4 +1,4 @@
-import { Mesh, IcosahedronGeometry, Vector3, Quaternion, Camera } from "three";
+import { Mesh, IcosahedronGeometry, Vector3, Quaternion } from "three";
 import {
   ColliderDesc,
   RigidBody,
@@ -6,7 +6,7 @@ import {
   Ray,
   Vector,
 } from "@dimforge/rapier3d";
-import InputManager from "../systems/InputManager";
+import { inputManager } from "../systems/InputManager";
 import { type State } from "../Game";
 import {
   color,
@@ -18,16 +18,16 @@ import {
   texture,
   uniform,
 } from "three/tsl";
-import LightingSystem from "../systems/LightingSystem";
 import { MeshStandardNodeMaterial } from "three/webgpu";
 import { assetManager } from "../systems/AssetManager";
 import { UniformType } from "../types";
 import { physics } from "../systems/Physics";
+import { sceneManager } from "../systems/SceneManager";
+import { lighting } from "../systems/LightingSystem";
 
 export default class Player {
   private mesh: Mesh;
   private rigidBody: RigidBody;
-  private inputManager: InputManager;
 
   // Camera smoothing
   private smoothedCameraPosition = new Vector3();
@@ -76,17 +76,11 @@ export default class Player {
   private rayOrigin = new Vector3();
   private ray = new Ray(this.rayOrigin, this.DOWN);
 
-  lighting: LightingSystem;
-
   private uTime = uniform(0);
 
-  constructor(state: Pick<State, "inputManager" | "scene" | "lighting">) {
-    const { scene, inputManager, lighting } = state;
-
-    this.inputManager = inputManager;
-    this.lighting = lighting;
+  constructor() {
     this.mesh = this.createCharacterMesh();
-    scene.add(this.mesh);
+    sceneManager.scene.add(this.mesh);
 
     lighting.setTarget(this.mesh);
 
@@ -116,7 +110,7 @@ export default class Player {
   }
 
   public update(state: State) {
-    const { clock, camera } = state;
+    const { clock } = state;
 
     const delta = clock.getDelta();
 
@@ -129,11 +123,11 @@ export default class Player {
 
     this.updateVerticalMovement(delta);
     this.updateHorizontalMovement(delta);
-    this.updateCameraPosition(camera, delta);
+    this.updateCameraPosition(delta);
   }
 
   private updateVerticalMovement(delta: number) {
-    const isJumpKeyPressed = this.inputManager.isKeyPressed(" ");
+    const isJumpKeyPressed = inputManager.isKeyPressed(" ");
 
     // 1) Ground check
     this.isOnGround = this.checkIfGrounded();
@@ -206,17 +200,13 @@ export default class Player {
 
   private updateHorizontalMovement(delta: number) {
     const isForward =
-      this.inputManager.isKeyPressed("w") ||
-      this.inputManager.isKeyPressed("arrowup");
+      inputManager.isKeyPressed("w") || inputManager.isKeyPressed("arrowup");
     const isBackward =
-      this.inputManager.isKeyPressed("s") ||
-      this.inputManager.isKeyPressed("arrowdown");
+      inputManager.isKeyPressed("s") || inputManager.isKeyPressed("arrowdown");
     const isLeftward =
-      this.inputManager.isKeyPressed("a") ||
-      this.inputManager.isKeyPressed("arrowleft");
+      inputManager.isKeyPressed("a") || inputManager.isKeyPressed("arrowleft");
     const isRightward =
-      this.inputManager.isKeyPressed("d") ||
-      this.inputManager.isKeyPressed("arrowright");
+      inputManager.isKeyPressed("d") || inputManager.isKeyPressed("arrowright");
 
     const turnSpeed = 2; // radians/sec
     if (isLeftward) this.yawInRadians += turnSpeed * delta;
@@ -252,7 +242,7 @@ export default class Player {
     this.mesh.quaternion.copy(this.rigidBody.rotation());
   }
 
-  private updateCameraPosition(camera: Camera, delta: number) {
+  private updateCameraPosition(delta: number) {
     // Rotate desired camera pos
     this.desiredCameraPosition
       .copy(this.CAMERA_OFFSET)
@@ -269,8 +259,8 @@ export default class Player {
     this.smoothedCameraTarget.lerp(this.desiredTargetPosition, lerpFactor);
 
     // Assign to camera
-    camera.position.copy(this.smoothedCameraPosition);
-    camera.lookAt(this.smoothedCameraTarget);
+    sceneManager.camera.position.copy(this.smoothedCameraPosition);
+    sceneManager.camera.lookAt(this.smoothedCameraTarget);
   }
 
   get position() {
