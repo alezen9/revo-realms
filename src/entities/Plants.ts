@@ -85,7 +85,7 @@ class PlantMaterial extends MeshLambertNodeMaterial {
     const noiseUv = fract(
       positionWorld.xz.add(this._uniforms.uTime.mul(0.075)),
     );
-    const noise = texture(assetManager.perlinNoiseTexture, noiseUv, 3)
+    const noise = texture(assetManager.noiseTexture, noiseUv, 3)
       .r.mul(1.5)
       .mul(strength);
     const newPosition = positionLocal.add(vec3(0, noise.negate(), 0));

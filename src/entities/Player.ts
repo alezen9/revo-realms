@@ -286,7 +286,7 @@ class PlayerMaterial extends MeshStandardNodeMaterial {
     this.roughness = 0.5;
 
     const noiseValue = texture(
-      assetManager.perlinNoiseTexture,
+      assetManager.noiseTexture,
       fract(positionWorld.xz),
       3,
     ).r;

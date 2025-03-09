@@ -52,16 +52,8 @@ class InnerTerainMaterial extends MeshLambertNodeMaterial {
       const scaledUv = vUv.mul(scaleFactor);
       const scaledCausticsUvA = fract(scaledUv.add(vec2(timer, 0)));
       const scaledCausticsUvB = fract(scaledUv.add(vec2(0, timer.negate())));
-      const noiseA = texture(
-        assetManager.voronoiNoiseTexture,
-        scaledCausticsUvA,
-        1,
-      ).r;
-      const noiseB = texture(
-        assetManager.voronoiNoiseTexture,
-        scaledCausticsUvB,
-        2,
-      ).r;
+      const noiseA = texture(assetManager.noiseTexture, scaledCausticsUvA, 1).g;
+      const noiseB = texture(assetManager.noiseTexture, scaledCausticsUvB, 2).g;
       const caustics = noiseA.add(noiseB);
       const adjustedCaustics = pow(caustics, 3);
 
@@ -108,7 +100,7 @@ class InnerTerainMaterial extends MeshLambertNodeMaterial {
     const sandFactor = float(1).sub(grassFactor);
     const pathFactor = sandFactor.sub(waterFactor);
 
-    const noiseFactor = texture(assetManager.randomNoiseTexture, _uv, 2).r;
+    const noiseFactor = texture(assetManager.noiseTexture, _uv, 2).b;
 
     const grassColor = mix(color("#A3A16D"), color("#8C865A"), noiseFactor).mul(
       grassFactor,
@@ -147,7 +139,7 @@ class OuterTerainMaterial extends MeshLambertNodeMaterial {
       .add(realmConfig.HALF_MAP_SIZE)
       .div(realmConfig.MAP_SIZE);
     const modulatedUv = fract(_uv);
-    const noise = texture(assetManager.randomNoiseTexture, modulatedUv, 2).r;
+    const noise = texture(assetManager.noiseTexture, modulatedUv, 2).b;
 
     const grassColor = mix(color("#A3A16D"), color("#8C865A"), noise);
 

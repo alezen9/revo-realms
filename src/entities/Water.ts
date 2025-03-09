@@ -82,8 +82,8 @@ export default class WaterMaterial extends MeshBasicNodeMaterial {
     const timer = this._uniforms.uTime.mul(this._uniforms.uWavesSpeed).mul(0.1);
 
     const baseUV = mod(pos.mul(this._uniforms.uWavesFrequency).add(timer), 1);
-    const noiseValue = texture(assetManager.randomNoiseTexture, baseUV, 0.5).r; // Base layer
-    const noiseDetail = texture(assetManager.randomNoiseTexture, baseUV, 1.5).r; // Higher-frequency noise
+    const noiseValue = texture(assetManager.noiseTexture, baseUV, 0.5).b; // Base layer
+    const noiseDetail = texture(assetManager.noiseTexture, baseUV, 1.5).b; // Higher-frequency noise
 
     const mixedNoise = mix(noiseValue, noiseDetail, 0.5);
 
