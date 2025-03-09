@@ -167,7 +167,7 @@ class GrassMaterial extends MeshLambertNodeMaterial {
       .div(grassConfig.TILE_SIZE);
     const noiseScale = float(2);
     const uv = fract(noiseUV.mul(noiseScale));
-    const noiseValue = texture(assetManager.randomNoiseTexture, uv, 1).r;
+    const noiseValue = texture(assetManager.noiseTexture, uv, 1).b;
     const yawVariation = noiseValue.sub(0.5).mul(float(Math.PI * 2)); // Map noise to [-PI, PI]
     data1.z = yawVariation;
     // const randomBladeYaw = hash(instanceIndex.add(200))
@@ -216,11 +216,7 @@ class GrassMaterial extends MeshLambertNodeMaterial {
 
       const stableUV = fract(windUV);
 
-      const windStrength = texture(
-        assetManager.perlinNoiseTexture,
-        stableUV,
-        5,
-      ).r;
+      const windStrength = texture(assetManager.noiseTexture, stableUV, 5).r;
 
       const targetBendAngle = windStrength.mul(0.35);
 

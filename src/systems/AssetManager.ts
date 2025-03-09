@@ -8,9 +8,7 @@ import {
 import { GLTF, GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { DRACOLoader } from "three/addons/loaders/DRACOLoader.js";
 // Noise
-import perlinNoiseTextureUrl from "/textures/noise/perlin_noise.webp?url";
-import randomNoiseTextureUrl from "/textures/noise/random_noise.webp?url";
-import voronoiNoiseTextureUrl from "/textures/noise/voronoi_noise.webp?url";
+import noiseTextureUrl from "/textures/noise/noise.webp?url";
 // Realm
 import realmModelUrl from "/models/realm.glb?url";
 import floorGrassWaterMapTextureUrl from "/textures/realm/water_grass_map.webp?url";
@@ -33,11 +31,8 @@ class AssetManager {
   textureLoader: TextureLoader;
   gltfLoader: GLTFLoader;
   cubeTextureLoader: CubeTextureLoader;
-  // Noise Textures
-  perlinNoiseTexture!: Texture;
-  randomNoiseTexture!: Texture;
-  voronoiNoiseTexture!: Texture;
   // Textures
+  noiseTexture!: Texture;
   envMapTexture!: CubeTexture;
   floorGrassWaterMap!: Texture;
 
@@ -113,9 +108,7 @@ class AssetManager {
         nzUrl, // negative z
       ]),
       // Noise
-      this.textureLoader.loadAsync(perlinNoiseTextureUrl),
-      this.textureLoader.loadAsync(randomNoiseTextureUrl),
-      this.textureLoader.loadAsync(voronoiNoiseTextureUrl),
+      this.textureLoader.loadAsync(noiseTextureUrl), // R = Perlin, G = Voronoi, B = Random
       // Models
       this.gltfLoader.loadAsync(realmModelUrl),
       // Floor textures
@@ -126,17 +119,15 @@ class AssetManager {
     // Environment
     this.envMapTexture = res[0];
     // Noise
-    this.perlinNoiseTexture = res[1];
-    this.randomNoiseTexture = res[2];
-    this.voronoiNoiseTexture = res[3];
+    this.noiseTexture = res[1];
     // Models
-    this.realmModel = res[4];
+    this.realmModel = res[2];
     // Floor textures
-    this.floorGrassWaterMap = res[5];
+    this.floorGrassWaterMap = res[3];
     this.floorGrassWaterMap.flipY = false;
 
-    this.sandNormalTexture = res[6];
-    this.leafTexture = res[7];
+    this.sandNormalTexture = res[4];
+    this.leafTexture = res[5];
   }
 }
 

@@ -36,16 +36,15 @@ class StoneMaterial extends MeshLambertNodeMaterial {
     this.flatShading = false;
 
     const fineNoise = texture(
-      assetManager.randomNoiseTexture,
+      assetManager.noiseTexture,
       fract(uv().mul(1.5)),
     ).mul(0.1);
-    const coarseNoise = texture(
-      assetManager.randomNoiseTexture,
-      uv().mul(0.5),
-    ).mul(0.05);
+    const coarseNoise = texture(assetManager.noiseTexture, uv().mul(0.5)).mul(
+      0.05,
+    );
     const combinedNoise = fineNoise.add(coarseNoise);
 
-    const roughnessVariation = this._uniforms.uBaseColor.add(combinedNoise);
+    const roughnessVariation = this._uniforms.uBaseColor.add(combinedNoise.b);
 
     const ambientOcclusion = clamp(
       dot(normalGeometry, vec3(0.0, 1.0, 0.0)),
@@ -65,7 +64,7 @@ export default class Monuments {
     // Visual
     const material = new StoneMaterial(this.uniforms);
     const monuments = assetManager.realmModel.scene.children.filter(
-      ({ name }) => name.endsWith("_statue"),
+      ({ name }) => name.endsWith("_monument"),
     ) as Mesh[];
     monuments.forEach((monument) => {
       monument.material = material;
@@ -74,7 +73,7 @@ export default class Monuments {
 
     // Physics
     const colliders = assetManager.realmModel.scene.children.filter(
-      ({ name }) => name.startsWith("statue_collider"),
+      ({ name }) => name.startsWith("monument_collider"),
     ) as Mesh[];
     colliders.forEach((colliderBox) => {
       const rigidBodyDesc = RigidBodyDesc.fixed()
