@@ -1,10 +1,4 @@
-import {
-  Color,
-  DoubleSide,
-  InstancedMesh,
-  Mesh,
-  MeshLambertNodeMaterial,
-} from "three/webgpu";
+import { Color, DoubleSide, Mesh, MeshLambertNodeMaterial } from "three/webgpu";
 import { State } from "../Game";
 import { assetManager } from "../systems/AssetManager";
 import {
