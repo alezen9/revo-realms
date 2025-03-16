@@ -1,4 +1,4 @@
-import { ACESFilmicToneMapping, VSMShadowMap } from "three";
+import { ACESFilmicToneMapping } from "three";
 import { WebGPURenderer } from "three/webgpu";
 import MonitoringManager from "./MonitoringManager";
 import PostprocessingManager from "./PostprocessingManager";
@@ -26,7 +26,6 @@ class RendererManager {
       trackTimestamp: false,
     });
     renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = VSMShadowMap;
     renderer.toneMapping = ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.5;
     this.renderer = renderer;

@@ -91,11 +91,11 @@ export default class Monuments {
   }
 
   private debugMonument() {
-    const plantsFolder = debugManager.panel.addFolder({
+    const monumentsFolder = debugManager.panel.addFolder({
       title: "🗽 Monuments",
     });
-
-    plantsFolder.addBinding(this.uniforms.uBaseColor, "value", {
+    monumentsFolder.expanded = false;
+    monumentsFolder.addBinding(this.uniforms.uBaseColor, "value", {
       label: "Color",
       view: "color",
       color: { type: "float" },

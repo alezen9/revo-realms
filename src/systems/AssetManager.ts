@@ -18,6 +18,8 @@ import sandNormalTextureUrl from "/textures/realm/sand_nor.webp?url";
 
 // Plant
 import leafTextureUrl from "/textures/realm/leaf.webp?url";
+import waterLiliesTextureUrl from "/textures/realm/water_lilies.webp?url";
+import waterLiliesAlphaTextureUrl from "/textures/realm/water_lilies_alpha.webp?url";
 
 // Environment
 import pxUrl from "/textures/environment/px.webp?url";
@@ -38,6 +40,8 @@ class AssetManager {
 
   sandNormalTexture!: Texture;
   leafTexture!: Texture;
+  waterLiliesTexture!: Texture;
+  waterLiliesAlphaTexture!: Texture;
 
   // Models
   npcsModel!: GLTF;
@@ -115,6 +119,8 @@ class AssetManager {
       this.textureLoader.loadAsync(floorGrassWaterMapTextureUrl), // Grass, Water map
       this.textureLoader.loadAsync(sandNormalTextureUrl), // Sand normal
       this.textureLoader.loadAsync(leafTextureUrl), // Leaf diffuse
+      this.textureLoader.loadAsync(waterLiliesTextureUrl), // Water lilies diffuse
+      this.textureLoader.loadAsync(waterLiliesAlphaTextureUrl), // Water lilies alpha
     ]);
     // Environment
     this.envMapTexture = res[0];
@@ -127,7 +133,10 @@ class AssetManager {
     this.floorGrassWaterMap.flipY = false;
 
     this.sandNormalTexture = res[4];
+
     this.leafTexture = res[5];
+    this.waterLiliesTexture = res[6];
+    this.waterLiliesAlphaTexture = res[7];
   }
 }
 

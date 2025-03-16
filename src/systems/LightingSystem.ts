@@ -1,26 +1,28 @@
 import { AmbientLight, DirectionalLight, Object3D, Vector3 } from "three";
-import EmissiveIllumination from "./EmissiveIllumination";
 import { Fn, vec3 } from "three/tsl";
 import { State } from "../Game";
 import { debugManager } from "./DebugManager";
 import { sceneManager } from "./SceneManager";
+import { eventsManager } from "./EventsManager";
 
 class LightingSystem {
   private directionalLight: DirectionalLight;
 
   private ambientLight: AmbientLight;
 
-  emissive = new EmissiveIllumination();
-  private readonly LIGHT_POSITION_OFFSET = new Vector3(10, 20, 10);
+  // emissive = new EmissiveIllumination();
+  private readonly LIGHT_POSITION_OFFSET = new Vector3(20, 30, 20);
 
   constructor() {
-    this.emissive = new EmissiveIllumination();
+    // this.emissive = new EmissiveIllumination();
 
     this.directionalLight = this.setupDirectionalLighting();
     sceneManager.scene.add(this.directionalLight);
 
     this.ambientLight = this.setupAmbientLighting();
     sceneManager.scene.add(this.ambientLight);
+
+    eventsManager.on("update", this.update.bind(this));
 
     this.debugLight();
   }
@@ -42,18 +44,18 @@ class LightingSystem {
 
     directionalLight.castShadow = true;
 
-    directionalLight.shadow.intensity = 0.75;
-    directionalLight.shadow.mapSize.width = 64;
-    directionalLight.shadow.mapSize.height = 64;
-    // directionalLight.shadow.radius = 2;
-    directionalLight.shadow.camera.near = 0.5;
-    directionalLight.shadow.camera.far = 50;
-    directionalLight.shadow.camera.left = -0.5; // Adjust based on scene size
-    directionalLight.shadow.camera.right = 0.5;
-    directionalLight.shadow.camera.top = 0.5;
-    directionalLight.shadow.camera.bottom = -0.5;
+    directionalLight.shadow.mapSize.width = 2048;
+    directionalLight.shadow.mapSize.height = 2048;
 
-    // ✅ Small bias tweak to prevent light frustum artifacts
+    const frustumSize = 50;
+
+    directionalLight.shadow.radius = 2;
+    directionalLight.shadow.camera.left = -frustumSize;
+    directionalLight.shadow.camera.right = frustumSize;
+    directionalLight.shadow.camera.top = frustumSize;
+    directionalLight.shadow.camera.bottom = -frustumSize;
+    directionalLight.shadow.camera.far = 75;
+
     directionalLight.shadow.bias = -0.003;
 
     return directionalLight;
@@ -61,7 +63,7 @@ class LightingSystem {
 
   private debugLight() {
     const lightFolder = debugManager.panel.addFolder({ title: "💡 Light" });
-
+    lightFolder.expanded = false;
     lightFolder.addBinding(this.directionalLight, "color", {
       label: "Directional Color",
       view: "color",
@@ -131,7 +133,7 @@ class LightingSystem {
     this.directionalLight.target = target;
   }
 
-  public update(state: State) {
+  private update(state: State) {
     const { player } = state;
     this.directionalLight.position
       .copy(player.position)

@@ -24,6 +24,7 @@ import { UniformType } from "../types";
 import { physics } from "../systems/Physics";
 import { sceneManager } from "../systems/SceneManager";
 import { lighting } from "../systems/LightingSystem";
+import { eventsManager } from "../systems/EventsManager";
 
 export default class Player {
   private mesh: Mesh;
@@ -67,7 +68,7 @@ export default class Player {
   // Constants for geometry/camera offset
   private readonly RADIUS = 0.5;
   private readonly PLAYER_INITIAL_POSITION = new Vector3(0, 5, 0);
-  private readonly CAMERA_OFFSET = new Vector3(0, 13, 16);
+  private readonly CAMERA_OFFSET = new Vector3(0, 12, 16);
   private readonly CAMERA_LERP_FACTOR = 7.5;
   private readonly UP = new Vector3(0, 1, 0);
   private readonly DOWN = new Vector3(0, -1, 0);
@@ -86,6 +87,8 @@ export default class Player {
 
     this.rigidBody = physics.world.createRigidBody(this.createRigidBodyDesc());
     physics.world.createCollider(this.createColliderDesc(), this.rigidBody);
+
+    eventsManager.on("update", this.update.bind(this));
   }
 
   private createCharacterMesh() {
@@ -109,7 +112,7 @@ export default class Player {
     return ColliderDesc.ball(this.RADIUS).setRestitution(0.2).setFriction(1);
   }
 
-  public update(state: State) {
+  private update(state: State) {
     const { clock } = state;
 
     const delta = clock.getDelta();

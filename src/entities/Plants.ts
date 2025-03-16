@@ -28,31 +28,23 @@ export default class Plants {
     uPlantColor: uniform(new Color().setRGB(0.4, 0.7, 0.35)),
   };
   constructor() {
-    const plant = assetManager.realmModel.scene.getObjectByName(
-      "plant",
-    ) as Mesh;
-    plant.geometry.computeVertexNormals();
-    plant.material = new PlantMaterial(this.uniforms);
-    plant.position.set(0, 0, -30);
-
-    const plantPlaceholders = assetManager.realmModel.scene.children.filter(
-      (el) => el.name.startsWith("plant_placeholder"),
+    const agglomerates = assetManager.realmModel.scene.children.filter((el) =>
+      el.name.startsWith("plant_agglomerate"),
     ) as Mesh[];
-    const instances = new InstancedMesh(
-      plant.geometry,
-      plant.material,
-      plantPlaceholders.length,
-    );
-    for (let i = 0; i < plantPlaceholders.length; i++) {
-      instances.setMatrixAt(i, plantPlaceholders[i].matrix);
-    }
-    sceneManager.scene.add(instances);
+
+    const material = new PlantMaterial(this.uniforms);
+    agglomerates.forEach((agglomerate) => {
+      agglomerate.material = material;
+    });
+
+    sceneManager.scene.add(...agglomerates);
 
     this.debugPlants();
   }
 
   private debugPlants() {
     const plantsFolder = debugManager.panel.addFolder({ title: "🌿 Plants" });
+    plantsFolder.expanded = false;
 
     plantsFolder.addBinding(this.uniforms.uPlantColor, "value", {
       label: "Color",

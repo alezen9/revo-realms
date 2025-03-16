@@ -29,6 +29,8 @@ import { assetManager } from "../systems/AssetManager";
 import { FolderApi } from "tweakpane";
 import { debugManager } from "../systems/DebugManager";
 import { sceneManager } from "../systems/SceneManager";
+import { State } from "../Game";
+import { eventsManager } from "../systems/EventsManager";
 
 type UniformType<T> = ReturnType<typeof uniform<T>>;
 
@@ -70,6 +72,8 @@ export default class WaterMaterial extends MeshBasicNodeMaterial {
     this._uniforms = { ...defaultUniforms, ...uniforms };
     this.createWaterMaterial();
     this.debugFolder = debugManager.panel.addFolder({ title: "🌊 Water" });
+    this.debugFolder.expanded = false;
+
     const enableDebug = import.meta.env.DEV;
     this.debugFolder.hidden = !enableDebug;
     if (!enableDebug) return;
@@ -296,6 +300,7 @@ export class Water {
   constructor() {
     const water = this.createWater();
     sceneManager.scene.add(water);
+    eventsManager.on("update", this.update.bind(this));
   }
 
   private createWater() {
@@ -309,5 +314,10 @@ export class Water {
     });
     water.material = waterMaterial;
     return water;
+  }
+
+  private update(state: State) {
+    const { clock } = state;
+    this.uTime.value = clock.getElapsedTime();
   }
 }

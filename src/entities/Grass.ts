@@ -36,6 +36,7 @@ import {
   max,
   clamp,
   If,
+  Discard,
 } from "three/tsl";
 import {
   // IndirectStorageBufferAttribute,
@@ -46,12 +47,13 @@ import { realmConfig } from "../realms/PortfolioRealm";
 import { debugManager } from "../systems/DebugManager";
 import { rendererManager } from "../systems/RendererManager";
 import { sceneManager } from "../systems/SceneManager";
+import { eventsManager } from "../systems/EventsManager";
 
 const getConfig = () => {
   const BLADE_WIDTH = 0.15;
   const BLADE_HEIGHT = 1.25;
-  const TILE_SIZE = 120;
-  const BLADES_PER_SIDE = 600;
+  const TILE_SIZE = 130;
+  const BLADES_PER_SIDE = 500;
   return {
     BLADE_WIDTH,
     BLADE_HEIGHT,
@@ -86,6 +88,7 @@ type GrassUniforms = {
   uGlowColor?: UniformType<Color>;
   // Bending
   uBladeMaxBendAngle?: UniformType<number>;
+  uWindStrength?: UniformType<number>;
   // Color
   uBaseColor?: UniformType<Color>;
   uTipColor?: UniformType<Color>;
@@ -113,11 +116,10 @@ const defaultUniforms: Required<GrassUniforms> = {
   uGlowColor: uniform(new Color().setRGB(1.0, 0.6, 0.1)),
   // Bending
   uBladeMaxBendAngle: uniform(Math.PI * 0.15),
+  uWindStrength: uniform(0.35),
   // Color
   uBaseColor: uniform(new Color().setRGB(0.1, 0.2, 0)),
   uTipColor: uniform(new Color().setRGB(0.8, 0.9, 0.2)),
-  // {r: 0.09, g: 0.21, b: 0.02}
-  // {r: 0.82, g: 0.89, b: 0.19}
   // Updated externally
   uDelta: uniform(new Vector2(0, 0)),
 };
@@ -170,10 +172,6 @@ class GrassMaterial extends MeshLambertNodeMaterial {
     const noiseValue = texture(assetManager.noiseTexture, uv, 1).b;
     const yawVariation = noiseValue.sub(0.5).mul(float(Math.PI * 2)); // Map noise to [-PI, PI]
     data1.z = yawVariation;
-    // const randomBladeYaw = hash(instanceIndex.add(200))
-    //   .mul(float(Math.PI * 2))
-    //   .sub(float(Math.PI));
-    // data1.z = randomBladeYaw;
 
     // Scale
     const data2 = this._buffer2.element(instanceIndex);
@@ -218,7 +216,7 @@ class GrassMaterial extends MeshLambertNodeMaterial {
 
       const windStrength = texture(assetManager.noiseTexture, stableUV, 5).r;
 
-      const targetBendAngle = windStrength.mul(0.35);
+      const targetBendAngle = windStrength.mul(this._uniforms.uWindStrength);
 
       return data1.w.add(targetBendAngle.sub(data1.w).mul(0.1));
     },
@@ -383,8 +381,8 @@ class GrassMaterial extends MeshLambertNodeMaterial {
     return finalColor;
   });
 
-  private computeAO = Fn(() => {
-    const sideAO = abs(sin(this._buffer1.element(instanceIndex).z)).mul(0.5);
+  private computeAO = Fn(([data1 = vec4(0)]) => {
+    const sideAO = abs(sin(data1.z)).mul(0.5);
     const verticalAO = smoothstep(-0.75, 1.25, uv().y);
     return verticalAO.mul(float(1.0).sub(sideAO));
   });
@@ -394,10 +392,11 @@ class GrassMaterial extends MeshLambertNodeMaterial {
     this.side = DoubleSide;
     const data1 = this._buffer1.element(instanceIndex);
     const data2 = this._buffer2.element(instanceIndex);
+    Discard(data2.z.equal(0));
     this.positionNode = this.computePosition(data1, data2);
     this.opacityNode = data2.z;
     this.alphaTest = 0.25;
-    this.aoNode = this.computeAO();
+    this.aoNode = this.computeAO(data1);
     this.colorNode = this.computeDiffuseColor(data2);
   }
 
@@ -433,13 +432,15 @@ export default class Grass {
     this.grassField = new Mesh(geometry, this.material);
     sceneManager.scene.add(this.grassField);
 
+    eventsManager.on("update", this.updateAsync.bind(this));
+
     if (!import.meta.env.DEV) return;
     this.debugGrass();
   }
 
   private debugGrass() {
     const grassFolder = debugManager.panel.addFolder({ title: "🌱 Grass" });
-
+    grassFolder.expanded = false;
     grassFolder.addBinding(this.uniforms.uTipColor, "value", {
       label: "Tip Color",
       view: "color",
@@ -454,6 +455,12 @@ export default class Grass {
       label: "Glow Color",
       view: "color",
       color: { type: "float" },
+    });
+    grassFolder.addBinding(this.uniforms.uWindStrength, "value", {
+      label: "Wind strength",
+      min: 0,
+      max: Math.PI / 2,
+      step: 0.1,
     });
   }
 
@@ -591,7 +598,7 @@ export default class Grass {
     return geometry;
   }
 
-  async updateAsync(state: State) {
+  private async updateAsync(state: State) {
     const { player, clock } = state;
     const dx = player.position.x - this.grassField.position.x;
     const dz = player.position.z - this.grassField.position.z;

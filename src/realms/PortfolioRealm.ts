@@ -1,8 +1,7 @@
-import { State } from "../Game";
 import Grass from "../entities/Grass";
 import Monuments from "../entities/Monuments";
-import Plants from "../entities/Plants";
 import { Terrain } from "../entities/Terrain";
+import Vegetation from "../entities/Vegetation";
 import { Water } from "../entities/Water";
 
 const getConfig = () => {
@@ -20,21 +19,12 @@ const getConfig = () => {
 export const realmConfig = getConfig();
 
 export default class PortfolioRealm {
-  private terrain: Terrain;
-  private plants: Plants;
-  private grass: Grass;
-
   constructor() {
-    this.terrain = new Terrain();
-    this.plants = new Plants();
-    this.grass = new Grass();
+    new Terrain();
+    // new Plants();
+    new Grass();
     new Monuments();
     new Water();
-  }
-
-  async updateAsync(state: State) {
-    this.terrain.update(state);
-    this.plants.update(state);
-    await this.grass.updateAsync(state);
+    new Vegetation();
   }
 }

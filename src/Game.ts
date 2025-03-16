@@ -4,7 +4,7 @@ import PortfolioRealm from "./realms/PortfolioRealm";
 import { sceneManager } from "./systems/SceneManager";
 import { physics } from "./systems/Physics";
 import { rendererManager } from "./systems/RendererManager";
-import { lighting } from "./systems/LightingSystem";
+import { eventsManager } from "./systems/EventsManager";
 
 export type State = {
   clock: Clock;
@@ -15,11 +15,10 @@ type Sizes = { width: number; height: number; dpr: number; aspect: number };
 
 export default class Game {
   private player: Player;
-  private realm: PortfolioRealm;
 
   constructor() {
     this.player = new Player();
-    this.realm = new PortfolioRealm();
+    new PortfolioRealm();
   }
 
   private getSizes(): Sizes {
@@ -55,11 +54,8 @@ export default class Game {
 
     const loop = async () => {
       if (import.meta.env.DEV) sceneManager.update();
-
       physics.update();
-      this.player.update(state);
-      lighting.update(state);
-      this.realm.updateAsync(state);
+      eventsManager.emit("update", state);
 
       await rendererManager.renderAsync();
     };

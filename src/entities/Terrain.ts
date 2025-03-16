@@ -1,5 +1,4 @@
 import {
-  color,
   float,
   Fn,
   fract,
@@ -15,7 +14,7 @@ import {
   vec3,
 } from "three/tsl";
 import { UniformType } from "../types";
-import { Mesh, MeshLambertNodeMaterial, Vector3 } from "three/webgpu";
+import { Color, Mesh, MeshLambertNodeMaterial, Vector3 } from "three/webgpu";
 import { assetManager } from "../systems/AssetManager";
 import { realmConfig } from "../realms/PortfolioRealm";
 import {
@@ -27,18 +26,30 @@ import {
 import { physics } from "../systems/Physics";
 import { State } from "../Game";
 import { sceneManager } from "../systems/SceneManager";
+import { debugManager } from "../systems/DebugManager";
+import { eventsManager } from "../systems/EventsManager";
 
-type FloorUniforms = {
+type TerrainUniforms = {
   uTime?: UniformType<number>;
+  uWaterSandColor?: UniformType<Color>;
+  uPathColor1?: UniformType<Color>;
+  uPathColor2?: UniformType<Color>;
+  uGrassColor1?: UniformType<Color>;
+  uGrassColor2?: UniformType<Color>;
 };
 
-const defaultUniforms: FloorUniforms = {
+const defaultUniforms: TerrainUniforms = {
   uTime: uniform(0),
+  uWaterSandColor: uniform(new Color("#D8C098")),
+  uPathColor1: uniform(new Color("#D8C098")),
+  uPathColor2: uniform(new Color("#B89A77")),
+  uGrassColor1: uniform(new Color("#A3A16D")),
+  uGrassColor2: uniform(new Color("#8C865A")),
 };
 
-class InnerTerainMaterial extends MeshLambertNodeMaterial {
-  private _uniforms: FloorUniforms;
-  constructor(uniforms: FloorUniforms) {
+class TerainMaterial extends MeshLambertNodeMaterial {
+  private _uniforms: TerrainUniforms;
+  constructor(uniforms: TerrainUniforms) {
     super();
 
     this._uniforms = { ...defaultUniforms, ...uniforms };
@@ -74,7 +85,7 @@ class InnerTerainMaterial extends MeshLambertNodeMaterial {
 
     const blendFactor = smoothstep(0.0, depth1.add(epsilon), vDepth); // How much tint is applied
 
-    const sandColor = color("#D8C098"); // Sand color
+    const sandColor = this._uniforms.uWaterSandColor; // Sand color
     const waterTint = sandColor.mul(0.5); // Blue-green tint in deeper water
 
     const waterBaseColor = sandColor.add(
@@ -100,13 +111,19 @@ class InnerTerainMaterial extends MeshLambertNodeMaterial {
     const sandFactor = float(1).sub(grassFactor);
     const pathFactor = sandFactor.sub(waterFactor);
 
-    const noiseFactor = texture(assetManager.noiseTexture, _uv, 2).b;
+    const noiseFactor = texture(assetManager.noiseTexture, fract(_uv), 2).b;
 
-    const grassColor = mix(color("#A3A16D"), color("#8C865A"), noiseFactor).mul(
-      grassFactor,
-    );
+    const grassColor = mix(
+      this._uniforms.uGrassColor1,
+      this._uniforms.uGrassColor2,
+      noiseFactor,
+    ).mul(grassFactor);
 
-    const pathColor = mix(color("#D8C098"), color("#B89A77"), noiseFactor)
+    const pathColor = mix(
+      this._uniforms.uPathColor1,
+      this._uniforms.uPathColor2,
+      noiseFactor,
+    )
       .mul(2.25)
       .mul(pathFactor);
 
@@ -128,38 +145,10 @@ class InnerTerainMaterial extends MeshLambertNodeMaterial {
   }
 }
 
-class OuterTerainMaterial extends MeshLambertNodeMaterial {
-  constructor() {
-    super();
-    this.createMaterial();
-  }
-
-  private createMaterial() {
-    const _uv = positionWorld.xz
-      .add(realmConfig.HALF_MAP_SIZE)
-      .div(realmConfig.MAP_SIZE);
-    const modulatedUv = fract(_uv);
-    const noise = texture(assetManager.noiseTexture, modulatedUv, 2).b;
-
-    const grassColor = mix(color("#A3A16D"), color("#8C865A"), noise);
-
-    const scaledSandUv1 = fract(_uv.mul(30));
-    const scaledSandUv2 = fract(_uv.mul(15));
-    const normal1 = texture(assetManager.sandNormalTexture, scaledSandUv1);
-    const normal2 = texture(assetManager.sandNormalTexture, scaledSandUv2);
-    const rotatedNormal2 = rotate(normal2.rgb, vec3(1, 0, 0));
-
-    this.normalNode = normal1.mul(rotatedNormal2);
-
-    this.colorNode = grassColor;
-  }
-}
-
 class InnerTerrain {
-  private uTime = uniform(0);
-
-  constructor() {
+  constructor(material: TerainMaterial) {
     const floor = this.createFloor();
+    floor.material = material;
     sceneManager.scene.add(floor);
   }
 
@@ -169,7 +158,6 @@ class InnerTerrain {
       "floor",
     ) as Mesh;
     delete floor.geometry.attributes.normal;
-    floor.material = new InnerTerainMaterial({ uTime: this.uTime });
     floor.receiveShadow = true;
     // Physics
     this.createFloorPhysics();
@@ -241,11 +229,6 @@ class InnerTerrain {
 
     physics.world.createCollider(colliderDesc, rigidBody);
   }
-
-  update(state: State) {
-    const { clock } = state;
-    this.uTime.value = clock.getElapsedTime();
-  }
 }
 
 class OuterTerrain {
@@ -253,8 +236,9 @@ class OuterTerrain {
   private kintoun: RigidBody; // Kintoun = Flying Nimbus cloud from dragon ball
   private kintounPosition = new Vector3();
 
-  constructor() {
+  constructor(material: TerainMaterial) {
     this.outerFloor = this.createOuterFloorVisual();
+    this.outerFloor.material = material;
     this.kintoun = this.createKintoun();
     sceneManager.scene.add(this.outerFloor);
   }
@@ -263,7 +247,6 @@ class OuterTerrain {
     const outerFloor = assetManager.realmModel.scene.getObjectByName(
       "outer_world",
     ) as Mesh;
-    outerFloor.material = new OuterTerainMaterial();
     return outerFloor;
   }
 
@@ -322,16 +305,59 @@ class OuterTerrain {
 }
 
 export class Terrain {
-  private innerTerrain: InnerTerrain;
   private outerTerrain: OuterTerrain;
+  private uniforms: TerrainUniforms = {
+    uTime: uniform(0),
+    uWaterSandColor: uniform(new Color("#D8C098")),
+    uPathColor1: uniform(new Color("#D8C098")),
+    uPathColor2: uniform(new Color("#B89A77")),
+    uGrassColor1: uniform(new Color("#A3A16D")),
+    uGrassColor2: uniform(new Color("#8C865A")),
+  };
 
   constructor() {
-    this.innerTerrain = new InnerTerrain();
-    this.outerTerrain = new OuterTerrain();
+    const terrainMaterial = new TerainMaterial(this.uniforms);
+    new InnerTerrain(terrainMaterial);
+    this.outerTerrain = new OuterTerrain(terrainMaterial);
+    eventsManager.on("update", this.update.bind(this));
+
+    if (!import.meta.env.DEV) return;
+    this.debugTerrain();
   }
 
-  update(state: State) {
-    this.innerTerrain.update(state);
+  private debugTerrain() {
+    const terrainFolder = debugManager.panel.addFolder({ title: "⛰️ Terrain" });
+    terrainFolder.expanded = false;
+    terrainFolder.addBinding(this.uniforms.uGrassColor1, "value", {
+      label: "Grass terrain Color 1",
+      view: "color",
+      color: { type: "float" },
+    });
+    terrainFolder.addBinding(this.uniforms.uGrassColor2, "value", {
+      label: "Grass terrain Color 2",
+      view: "color",
+      color: { type: "float" },
+    });
+    terrainFolder.addBinding(this.uniforms.uPathColor1, "value", {
+      label: "Path terrain Color 1",
+      view: "color",
+      color: { type: "float" },
+    });
+    terrainFolder.addBinding(this.uniforms.uPathColor2, "value", {
+      label: "Path terrain Color 2",
+      view: "color",
+      color: { type: "float" },
+    });
+    terrainFolder.addBinding(this.uniforms.uWaterSandColor, "value", {
+      label: "Water sand Color",
+      view: "color",
+      color: { type: "float" },
+    });
+  }
+
+  private update(state: State) {
+    const { clock } = state;
+    this.uniforms.uTime.value = clock.getElapsedTime();
     this.outerTerrain.update(state);
   }
 }
