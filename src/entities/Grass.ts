@@ -53,7 +53,7 @@ const getConfig = () => {
   const BLADE_WIDTH = 0.15;
   const BLADE_HEIGHT = 1.25;
   const TILE_SIZE = 130;
-  const BLADES_PER_SIDE = 500;
+  const BLADES_PER_SIDE = 600;
   return {
     BLADE_WIDTH,
     BLADE_HEIGHT,
@@ -101,11 +101,11 @@ const defaultUniforms: Required<GrassUniforms> = {
   uPlayerPosition: uniform(new Vector3(0, 0, 0)),
   uCameraMatrix: uniform(new Matrix4()),
   // Scale
-  uBladeMinScale: uniform(0.5),
+  uBladeMinScale: uniform(0.25),
   uBladeMaxScale: uniform(1.25),
   // Trail
   uTrailGrowthRate: uniform(0.004),
-  uTrailMinScale: uniform(0.1),
+  uTrailMinScale: uniform(0.25),
   uTrailRaius: uniform(0.65),
   uTrailRaiusSquared: uniform(0.65 * 0.65),
   // Glow
@@ -358,7 +358,15 @@ class GrassMaterial extends MeshLambertNodeMaterial {
     const bentPosition = rotate(positionLocal, vec3(bendAmount, 0, 0));
     const scaled = bentPosition.mul(vec3(1, scale, 1));
     const rotated = rotate(scaled, vec3(0, yawAngle, 0));
-    const worldPosition = rotated.add(offset);
+
+    const randomPhase = hash(instanceIndex).mul(6.28); // Random phase in range [0, 2π]
+    const swayAmount = sin(
+      this._uniforms.uTime.mul(5.0).add(data1.w).add(randomPhase),
+    ).mul(0.1);
+    const swayFactor = uv().y.mul(data2.w);
+    const swayOffset = swayAmount.mul(swayFactor);
+
+    const worldPosition = rotated.add(offset).add(vec3(swayOffset));
     return worldPosition;
   });
 
@@ -374,7 +382,7 @@ class GrassMaterial extends MeshLambertNodeMaterial {
     const glowFactor = data2.w;
     const finalColor = mix(
       baseToTip.add(colorVariation),
-      this._uniforms.uGlowColor,
+      this._uniforms.uGlowColor.mul(0.75),
       glowFactor,
     );
 

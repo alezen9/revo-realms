@@ -7,6 +7,7 @@ export default defineConfig({
   base: "/revo-realms",
   build: {
     target: "esnext",
+    chunkSizeWarningLimit: 1024,
     rollupOptions: {
       output: {
         manualChunks(id) {
