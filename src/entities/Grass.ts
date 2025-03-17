@@ -25,7 +25,6 @@ import {
   vec3,
   vec4,
   smoothstep,
-  mod,
   vec2,
   texture,
   step,
@@ -37,10 +36,11 @@ import {
   clamp,
   If,
   Discard,
+  mod,
 } from "three/tsl";
 import {
+  MeshBasicNodeMaterial,
   // IndirectStorageBufferAttribute,
-  MeshLambertNodeMaterial,
 } from "three/webgpu";
 import { assetManager } from "../systems/AssetManager";
 import { realmConfig } from "../realms/PortfolioRealm";
@@ -50,10 +50,10 @@ import { sceneManager } from "../systems/SceneManager";
 import { eventsManager } from "../systems/EventsManager";
 
 const getConfig = () => {
-  const BLADE_WIDTH = 0.15;
+  const BLADE_WIDTH = 0.065;
   const BLADE_HEIGHT = 1.25;
   const TILE_SIZE = 130;
-  const BLADES_PER_SIDE = 600;
+  const BLADES_PER_SIDE = 650;
   return {
     BLADE_WIDTH,
     BLADE_HEIGHT,
@@ -101,7 +101,7 @@ const defaultUniforms: Required<GrassUniforms> = {
   uPlayerPosition: uniform(new Vector3(0, 0, 0)),
   uCameraMatrix: uniform(new Matrix4()),
   // Scale
-  uBladeMinScale: uniform(0.25),
+  uBladeMinScale: uniform(0.5),
   uBladeMaxScale: uniform(1.25),
   // Trail
   uTrailGrowthRate: uniform(0.004),
@@ -116,14 +116,14 @@ const defaultUniforms: Required<GrassUniforms> = {
   uGlowColor: uniform(new Color().setRGB(1.0, 0.6, 0.1)),
   // Bending
   uBladeMaxBendAngle: uniform(Math.PI * 0.15),
-  uWindStrength: uniform(0.35),
+  uWindStrength: uniform(0.45),
   // Color
-  uBaseColor: uniform(new Color().setRGB(0.1, 0.2, 0)),
-  uTipColor: uniform(new Color().setRGB(0.8, 0.9, 0.2)),
+  uBaseColor: uniform(new Color().setRGB(0.15, 0.2, 0.05)),
+  uTipColor: uniform(new Color().setRGB(0.35, 0.35, 0.05)),
   // Updated externally
   uDelta: uniform(new Vector2(0, 0)),
 };
-class GrassMaterial extends MeshLambertNodeMaterial {
+class GrassMaterial extends MeshBasicNodeMaterial {
   _uniforms: Required<GrassUniforms>;
   private _buffer1: ReturnType<typeof instancedArray>; // holds: vec4 = (localOffset.x, localOffset.y, yaw, bending angle)
   private _buffer2: ReturnType<typeof instancedArray>; // holds: vec4 = (current scale, original scale, alpha, glow)
@@ -158,16 +158,25 @@ class GrassMaterial extends MeshLambertNodeMaterial {
       .mul(grassConfig.SPACING)
       .sub(grassConfig.TILE_HALF_SIZE)
       .add(randZ.mul(grassConfig.SPACING * 0.5));
-    const worldPos = vec3(offsetX, 0, offsetZ);
 
-    data1.x = offsetX;
-    data1.y = offsetZ;
+    const _uv = vec3(offsetX, 0, offsetZ)
+      .xz.add(grassConfig.TILE_HALF_SIZE)
+      .div(grassConfig.TILE_SIZE)
+      .abs();
+
+    const noiseX = texture(assetManager.noiseTexture, _uv).b.sub(0.5).mul(30);
+    const noiseZ = texture(assetManager.noiseTexture, _uv).g.sub(0.5).mul(10);
+
+    data1.x = offsetX.add(noiseX);
+    data1.y = offsetZ.add(noiseZ);
+
+    const worldPos = vec3(data1.x, 0, data1.y);
 
     // Yaw
     const noiseUV = worldPos.xz
       .add(grassConfig.TILE_HALF_SIZE)
       .div(grassConfig.TILE_SIZE);
-    const noiseScale = float(2);
+    const noiseScale = float(20);
     const uv = fract(noiseUV.mul(noiseScale));
     const noiseValue = texture(assetManager.noiseTexture, uv, 1).b;
     const yawVariation = noiseValue.sub(0.5).mul(float(Math.PI * 2)); // Map noise to [-PI, PI]
@@ -382,7 +391,7 @@ class GrassMaterial extends MeshLambertNodeMaterial {
     const glowFactor = data2.w;
     const finalColor = mix(
       baseToTip.add(colorVariation),
-      this._uniforms.uGlowColor.mul(0.75),
+      this._uniforms.uGlowColor.mul(0.5),
       glowFactor,
     );
 

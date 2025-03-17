@@ -21,6 +21,10 @@ import leafTextureUrl from "/textures/realm/leaf.webp?url";
 import waterLiliesTextureUrl from "/textures/realm/water_lilies.webp?url";
 import waterLiliesAlphaTextureUrl from "/textures/realm/water_lilies_alpha.webp?url";
 
+// Grass
+import grassDiffTextureUrl from "/textures/realm/grass_diff.webp?url";
+import grassNorTextureUrl from "/textures/realm/grass_nor.webp?url";
+
 // Environment
 import pxUrl from "/textures/environment/px.webp?url";
 import nxUrl from "/textures/environment/nx.webp?url";
@@ -42,6 +46,9 @@ class AssetManager {
   leafTexture!: Texture;
   waterLiliesTexture!: Texture;
   waterLiliesAlphaTexture!: Texture;
+
+  grassDiffTexture!: Texture;
+  grassNorTexture!: Texture;
 
   // Models
   npcsModel!: GLTF;
@@ -121,6 +128,9 @@ class AssetManager {
       this.textureLoader.loadAsync(leafTextureUrl), // Leaf diffuse
       this.textureLoader.loadAsync(waterLiliesTextureUrl), // Water lilies diffuse
       this.textureLoader.loadAsync(waterLiliesAlphaTextureUrl), // Water lilies alpha
+
+      this.textureLoader.loadAsync(grassDiffTextureUrl), // Grass diffuse
+      this.textureLoader.loadAsync(grassNorTextureUrl), // Grass normal
     ]);
     // Environment
     this.envMapTexture = res[0];
@@ -136,7 +146,14 @@ class AssetManager {
 
     this.leafTexture = res[5];
     this.waterLiliesTexture = res[6];
+    this.waterLiliesTexture.generateMipmaps = false;
     this.waterLiliesAlphaTexture = res[7];
+    this.waterLiliesAlphaTexture.generateMipmaps = false;
+
+    this.grassDiffTexture = res[8];
+    this.grassDiffTexture.generateMipmaps = false;
+    this.grassNorTexture = res[9];
+    this.grassNorTexture.generateMipmaps = false;
   }
 }
 

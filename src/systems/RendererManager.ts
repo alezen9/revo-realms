@@ -1,4 +1,4 @@
-import { ACESFilmicToneMapping } from "three";
+import { ACESFilmicToneMapping, SRGBColorSpace } from "three";
 import { WebGPURenderer } from "three/webgpu";
 import MonitoringManager from "./MonitoringManager";
 import PostprocessingManager from "./PostprocessingManager";
@@ -27,6 +27,9 @@ class RendererManager {
     });
     renderer.shadowMap.enabled = true;
     renderer.toneMapping = ACESFilmicToneMapping;
+    renderer.outputColorSpace = SRGBColorSpace;
+    renderer.setClearColor(0x000000, 1);
+
     renderer.toneMappingExposure = 1.5;
     this.renderer = renderer;
     this.monitoringManager = new MonitoringManager(this.MONITORING_ENABLED);
