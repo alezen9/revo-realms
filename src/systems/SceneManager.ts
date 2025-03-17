@@ -21,7 +21,7 @@ class SceneManager {
     const aspect = width / height;
 
     // Camera
-    const camera = new PerspectiveCamera(45, aspect, 0.01, 100);
+    const camera = new PerspectiveCamera(45, aspect, 0.01, 150);
     camera.position.set(0, 5, 10);
     this.camera = camera;
     scene.add(camera);

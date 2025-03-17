@@ -52,8 +52,8 @@ import { eventsManager } from "../systems/EventsManager";
 const getConfig = () => {
   const BLADE_WIDTH = 0.065;
   const BLADE_HEIGHT = 1.25;
-  const TILE_SIZE = 130;
-  const BLADES_PER_SIDE = 650;
+  const TILE_SIZE = 150;
+  const BLADES_PER_SIDE = 850;
   return {
     BLADE_WIDTH,
     BLADE_HEIGHT,

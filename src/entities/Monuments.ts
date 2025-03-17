@@ -83,7 +83,7 @@ export default class Monuments {
       const hx = 0.5 * colliderBox.scale.x;
       const hy = 0.5 * colliderBox.scale.y;
       const hz = 0.5 * colliderBox.scale.z;
-      const colliderDesc = ColliderDesc.cuboid(hx, hy, hz).setRestitution(0.2);
+      const colliderDesc = ColliderDesc.cuboid(hx, hy, hz).setRestitution(0.75);
       physics.world.createCollider(colliderDesc, rigidBody);
     });
 

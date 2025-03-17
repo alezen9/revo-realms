@@ -42,17 +42,17 @@ export default class Player {
   private yawQuaternion = new Quaternion();
 
   // Jump & Movement Configuration
-  private readonly JUMP_IMPULSE = 5;
+  private readonly JUMP_IMPULSE = 75;
   private readonly JUMP_BUFFER_DURATION_IN_SECONDS = 0.2;
   private readonly MAX_CONSECUTIVE_JUMPS = 2;
   private readonly JUMP_CUT_MULTIPLIER = 0.25;
   private readonly FALL_MULTIPLIER = 2.75;
   private readonly MAX_UPWARD_VELOCITY = 6;
-  private readonly LINEAR_DAMPING = 0.25;
-  private readonly ANGULAR_DAMPING = 1;
+  private readonly LINEAR_DAMPING = 0.35;
+  private readonly ANGULAR_DAMPING = 0.6;
   private jumpImpulse = new Vector3(0, this.JUMP_IMPULSE, 0);
 
-  private readonly LIN_VEL_STRENGTH = 25;
+  private readonly LIN_VEL_STRENGTH = 35;
   private readonly ANG_VEL_STRENGTH = 25;
   private newLinVel = new Vector3();
   private newAngVel = new Vector3();
@@ -68,7 +68,7 @@ export default class Player {
   // Constants for geometry/camera offset
   private readonly RADIUS = 0.5;
   private readonly PLAYER_INITIAL_POSITION = new Vector3(0, 5, 0);
-  private readonly CAMERA_OFFSET = new Vector3(0, 12, 16);
+  private readonly CAMERA_OFFSET = new Vector3(0, 11, 17);
   private readonly CAMERA_LERP_FACTOR = 7.5;
   private readonly UP = new Vector3(0, 1, 0);
   private readonly DOWN = new Vector3(0, -1, 0);
@@ -109,7 +109,10 @@ export default class Player {
   }
 
   private createColliderDesc() {
-    return ColliderDesc.ball(this.RADIUS).setRestitution(0.2).setFriction(1);
+    return ColliderDesc.ball(this.RADIUS)
+      .setRestitution(0.2)
+      .setFriction(1)
+      .setMass(3);
   }
 
   private update(state: State) {
