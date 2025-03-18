@@ -1,7 +1,6 @@
-import Grass from "../entities/Grass";
 import Monuments from "../entities/Monuments";
 import { Terrain } from "../entities/Terrain";
-import Vegetation from "../entities/Vegetation";
+import Vegetation from "../entities/Vegetation/Vegetation";
 import { Water } from "../entities/Water";
 
 const getConfig = () => {
@@ -21,8 +20,6 @@ export const realmConfig = getConfig();
 export default class PortfolioRealm {
   constructor() {
     new Terrain();
-    // new Plants();
-    new Grass();
     new Monuments();
     new Water();
     new Vegetation();

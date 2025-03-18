@@ -8,7 +8,7 @@ import {
   Vector2,
   Vector3,
 } from "three";
-import { State } from "../Game";
+import { State } from "../../Game";
 import {
   Fn,
   mix,
@@ -42,18 +42,19 @@ import {
   MeshBasicNodeMaterial,
   // IndirectStorageBufferAttribute,
 } from "three/webgpu";
-import { assetManager } from "../systems/AssetManager";
-import { realmConfig } from "../realms/PortfolioRealm";
-import { debugManager } from "../systems/DebugManager";
-import { rendererManager } from "../systems/RendererManager";
-import { sceneManager } from "../systems/SceneManager";
-import { eventsManager } from "../systems/EventsManager";
+import { assetManager } from "../../systems/AssetManager";
+import { realmConfig } from "../../realms/PortfolioRealm";
+import { debugManager } from "../../systems/DebugManager";
+import { rendererManager } from "../../systems/RendererManager";
+import { sceneManager } from "../../systems/SceneManager";
+import { eventsManager } from "../../systems/EventsManager";
+import { UniformType } from "../../types";
 
 const getConfig = () => {
   const BLADE_WIDTH = 0.065;
   const BLADE_HEIGHT = 1.25;
   const TILE_SIZE = 150;
-  const BLADES_PER_SIDE = 850;
+  const BLADES_PER_SIDE = 650;
   return {
     BLADE_WIDTH,
     BLADE_HEIGHT,
@@ -67,7 +68,6 @@ const getConfig = () => {
 };
 const grassConfig = getConfig();
 
-type UniformType<T> = ReturnType<typeof uniform<T>>;
 type GrassUniforms = {
   uTime?: UniformType<number>;
   uPlayerPosition?: UniformType<Vector3>;
@@ -123,6 +123,7 @@ const defaultUniforms: Required<GrassUniforms> = {
   // Updated externally
   uDelta: uniform(new Vector2(0, 0)),
 };
+
 class GrassMaterial extends MeshBasicNodeMaterial {
   _uniforms: Required<GrassUniforms>;
   private _buffer1: ReturnType<typeof instancedArray>; // holds: vec4 = (localOffset.x, localOffset.y, yaw, bending angle)

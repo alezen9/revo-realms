@@ -1,6 +1,8 @@
 import { Mesh } from "three";
-import { assetManager } from "../systems/AssetManager";
-import { sceneManager } from "../systems/SceneManager";
+import { assetManager } from "../../systems/AssetManager";
+import { sceneManager } from "../../systems/SceneManager";
+import { eventsManager } from "../../systems/EventsManager";
+import { State } from "../../Game";
 import { MeshLambertNodeMaterial } from "three/webgpu";
 import {
   fract,
@@ -10,12 +12,14 @@ import {
   texture,
   uniform,
 } from "three/tsl";
-import { State } from "../Game";
-import { eventsManager } from "../systems/EventsManager";
+import Grass from "./Grass";
+import { Flowers } from "./Flowers";
 
 export default class Vegetation {
   constructor() {
+    new Grass();
     new WaterLilies();
+    new Flowers();
   }
 }
 
