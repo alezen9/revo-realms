@@ -160,8 +160,8 @@ class FlowerMaterial extends MeshLambertNodeMaterial {
       .div(flowersConfig.TILE_SIZE)
       .abs();
 
-    const noiseX = texture(assetManager.noiseTexture, _uv).b.sub(0.5).mul(100);
-    const noiseZ = texture(assetManager.noiseTexture, _uv).g.sub(0.5).mul(50);
+    const noiseX = texture(assetManager.noiseTexture, _uv).r.sub(0.5).mul(100);
+    const noiseZ = texture(assetManager.noiseTexture, _uv).b.sub(0.5).mul(50);
 
     data1.x = offsetX.add(noiseX);
     data1.y = offsetZ.add(noiseZ);

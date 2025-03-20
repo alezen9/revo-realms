@@ -5,7 +5,6 @@ import {
   mix,
   positionWorld,
   pow,
-  rotate,
   smoothstep,
   texture,
   uniform,
@@ -94,68 +93,57 @@ class TerainMaterial extends MeshLambertNodeMaterial {
   });
 
   private createMaterial() {
-    // Diffuse
+    this.flatShading = false;
     const _uv = positionWorld.xz
       .add(realmConfig.HALF_MAP_SIZE)
       .div(realmConfig.MAP_SIZE);
     const vUv = varying(_uv);
 
     const factors = texture(assetManager.floorGrassWaterMap, vUv, 2.5);
-
     const grassFactor = factors.g;
     const waterFactor = factors.b;
     const sandFactor = float(1).sub(grassFactor);
     const pathFactor = sandFactor.sub(waterFactor);
 
-    const noiseFactor = texture(assetManager.noiseTexture, fract(vUv), 2).b;
-
-    const grassColor1 = texture(
-      assetManager.grassDiffTexture,
-      fract(vUv.mul(20)),
+    // Normal
+    const sandNormal = texture(
+      assetManager.sandNormalTexture,
+      fract(vUv.mul(30)),
     );
 
-    const sandAlpha = float(1).sub(grassColor1.a);
+    const grassUv = fract(vUv.mul(20));
+    const grassNormal = texture(assetManager.grassNorTexture, grassUv)
+      .dot(sandNormal)
+      .mul(0.75);
 
+    // Diffuse
+    // Grass
+    const grassColorSample = texture(assetManager.grassDiffTexture, grassUv);
+    const sandAlpha = float(1).sub(grassColorSample.a);
     const grassColor = this._uniforms.uWaterSandColor
       .mul(sandAlpha)
-      .add(grassColor1)
+      .add(grassColorSample)
       .mul(grassFactor)
-      .mul(1.5);
+      .mul(0.8);
 
+    // Paths
     const pathColor = mix(
       this._uniforms.uPathColor1,
       this._uniforms.uPathColor2,
-      noiseFactor,
+      0.25,
     )
-      .mul(2.25)
+      .mul(0.8)
       .mul(pathFactor);
 
+    // Water
     const vDepth = varying(positionWorld.y.negate());
     const waterBaseColor = this.computeWaterDiffuse(vDepth, vUv);
-
     const waterColor = waterBaseColor.mul(waterFactor);
 
-    this.colorNode = grassColor.add(pathColor).add(waterColor);
-
-    // Normal
-    const scaledSandUv1 = fract(vUv.mul(30));
-    const scaledSandUv2 = fract(vUv.mul(-30));
-    const normal1 = texture(assetManager.sandNormalTexture, scaledSandUv1);
-    const normal2 = texture(assetManager.sandNormalTexture, scaledSandUv2);
-    const rotatedNormal2 = rotate(normal2.rgb, vec3(1, 0, 0));
-
-    const nonGrassFactor = float(1).sub(grassFactor);
-
-    const sandNormal = normal1.mul(rotatedNormal2).mul(nonGrassFactor);
-
-    const grassNormal = texture(
-      assetManager.grassNorTexture,
-      fract(vUv.mul(20)),
-    )
-      .dot(sandNormal)
-      .mul(grassFactor);
-
-    this.normalNode = sandNormal.add(grassNormal);
+    // Final diffuse
+    this.colorNode = grassColor
+      .add(pathColor.mul(grassNormal))
+      .add(waterColor.mul(grassNormal).mul(0.5));
   }
 }
 
@@ -171,8 +159,8 @@ class InnerTerrain {
     const floor = assetManager.realmModel.scene.getObjectByName(
       "floor",
     ) as Mesh;
-    delete floor.geometry.attributes.normal;
     floor.receiveShadow = true;
+
     // Physics
     this.createFloorPhysics();
     return floor;

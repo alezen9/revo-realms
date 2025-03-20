@@ -11,7 +11,7 @@ class LightingSystem {
   private ambientLight: AmbientLight;
 
   // emissive = new EmissiveIllumination();
-  private readonly LIGHT_POSITION_OFFSET = new Vector3(20, 30, 20);
+  private readonly LIGHT_POSITION_OFFSET = new Vector3(50, 70, 50);
 
   constructor() {
     // this.emissive = new EmissiveIllumination();
@@ -48,15 +48,17 @@ class LightingSystem {
     directionalLight.shadow.mapSize.height = 2048;
 
     const frustumSize = 50;
-
+    directionalLight.shadow.intensity = 0.85;
     directionalLight.shadow.radius = 2;
     directionalLight.shadow.camera.left = -frustumSize;
     directionalLight.shadow.camera.right = frustumSize;
     directionalLight.shadow.camera.top = frustumSize;
     directionalLight.shadow.camera.bottom = -frustumSize;
-    directionalLight.shadow.camera.far = 75;
+    directionalLight.shadow.camera.near = 5;
+    directionalLight.shadow.camera.far = 175;
 
-    directionalLight.shadow.bias = -0.003;
+    directionalLight.shadow.normalBias = 0.02;
+    directionalLight.shadow.bias = 0;
 
     return directionalLight;
   }

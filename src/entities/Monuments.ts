@@ -68,6 +68,8 @@ export default class Monuments {
     ) as Mesh[];
     monuments.forEach((monument) => {
       monument.material = material;
+      monument.castShadow = true;
+      monument.receiveShadow = true;
     });
     sceneManager.scene.add(...monuments);
 

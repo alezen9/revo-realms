@@ -95,6 +95,7 @@ export default class Player {
     const geometry = new IcosahedronGeometry(this.RADIUS, 3);
     const material = new PlayerMaterial({ uTime: this.uTime });
     const mesh = new Mesh(geometry, material);
+    mesh.receiveShadow = true;
     mesh.castShadow = true;
     mesh.position.copy(this.PLAYER_INITIAL_POSITION);
     return mesh;
