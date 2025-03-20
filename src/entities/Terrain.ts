@@ -30,16 +30,16 @@ import { eventsManager } from "../systems/EventsManager";
 
 type TerrainUniforms = {
   uTime?: UniformType<number>;
+  uGrassTerrainColor?: UniformType<Color>;
   uWaterSandColor?: UniformType<Color>;
-  uPathColor1?: UniformType<Color>;
-  uPathColor2?: UniformType<Color>;
+  uPathSandColor?: UniformType<Color>;
 };
 
 const defaultUniforms: TerrainUniforms = {
   uTime: uniform(0),
-  uWaterSandColor: uniform(new Color("#D8C098")),
-  uPathColor1: uniform(new Color("#D8C098")),
-  uPathColor2: uniform(new Color("#B89A77")),
+  uGrassTerrainColor: uniform(new Color()),
+  uWaterSandColor: uniform(new Color()),
+  uPathSandColor: uniform(new Color()),
 };
 
 class TerainMaterial extends MeshLambertNodeMaterial {
@@ -112,28 +112,20 @@ class TerainMaterial extends MeshLambertNodeMaterial {
     );
 
     const grassUv = fract(vUv.mul(20));
-    const grassNormal = texture(assetManager.grassNorTexture, grassUv)
-      .dot(sandNormal)
-      .mul(0.75);
+    const grassNormal = texture(assetManager.grassNorTexture, grassUv);
+    const terrainNoise = grassNormal.dot(sandNormal).mul(0.65);
 
     // Diffuse
     // Grass
     const grassColorSample = texture(assetManager.grassDiffTexture, grassUv);
     const sandAlpha = float(1).sub(grassColorSample.a);
-    const grassColor = this._uniforms.uWaterSandColor
+    const grassColor = this._uniforms.uGrassTerrainColor
       .mul(sandAlpha)
       .add(grassColorSample)
       .mul(grassFactor)
-      .mul(0.8);
+      .mul(0.5);
 
-    // Paths
-    const pathColor = mix(
-      this._uniforms.uPathColor1,
-      this._uniforms.uPathColor2,
-      0.25,
-    )
-      .mul(0.8)
-      .mul(pathFactor);
+    const pathColor = this._uniforms.uPathSandColor.mul(0.8).mul(pathFactor);
 
     // Water
     const vDepth = varying(positionWorld.y.negate());
@@ -142,8 +134,8 @@ class TerainMaterial extends MeshLambertNodeMaterial {
 
     // Final diffuse
     this.colorNode = grassColor
-      .add(pathColor.mul(grassNormal))
-      .add(waterColor.mul(grassNormal).mul(0.5));
+      .add(pathColor.mul(terrainNoise))
+      .add(waterColor.mul(terrainNoise).mul(0.5));
   }
 }
 
@@ -249,6 +241,7 @@ class OuterTerrain {
     const outerFloor = assetManager.realmModel.scene.getObjectByName(
       "outer_world",
     ) as Mesh;
+    outerFloor.receiveShadow = true;
     return outerFloor;
   }
 
@@ -311,9 +304,9 @@ export class Terrain {
 
   private uniforms: TerrainUniforms = {
     uTime: uniform(0),
-    uWaterSandColor: uniform(new Color("#D8C098")),
-    uPathColor1: uniform(new Color("#D8C098")),
-    uPathColor2: uniform(new Color("#B89A77")),
+    uGrassTerrainColor: uniform(new Color().setRGB(0.431, 0.302, 0.122)),
+    uWaterSandColor: uniform(new Color().setRGB(0.54, 0.39, 0.2)),
+    uPathSandColor: uniform(new Color().setRGB(0.51, 0.38, 0.212)),
   };
 
   constructor() {
@@ -329,18 +322,18 @@ export class Terrain {
   private debugTerrain() {
     const terrainFolder = debugManager.panel.addFolder({ title: "⛰️ Terrain" });
     terrainFolder.expanded = false;
-    terrainFolder.addBinding(this.uniforms.uPathColor1, "value", {
-      label: "Path terrain Color 1",
-      view: "color",
-      color: { type: "float" },
-    });
-    terrainFolder.addBinding(this.uniforms.uPathColor2, "value", {
-      label: "Path terrain Color 2",
+    terrainFolder.addBinding(this.uniforms.uPathSandColor, "value", {
+      label: "Path color",
       view: "color",
       color: { type: "float" },
     });
     terrainFolder.addBinding(this.uniforms.uWaterSandColor, "value", {
-      label: "Water sand Color",
+      label: "Water bed color",
+      view: "color",
+      color: { type: "float" },
+    });
+    terrainFolder.addBinding(this.uniforms.uGrassTerrainColor, "value", {
+      label: "Grass terrain color",
       view: "color",
       color: { type: "float" },
     });

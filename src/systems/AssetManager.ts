@@ -27,7 +27,7 @@ import grassNorTextureUrl from "/textures/realm/grass_nor.webp?url";
 
 // Flowers
 import flowerComposition1TextureUrl from "/textures/realm/flower_composition_1.webp?url";
-import flowerComposition2TextureUrl from "/textures/realm/flower_composition_2.png?url";
+import flowerComposition2TextureUrl from "/textures/realm/flower_composition_2.webp?url";
 
 // Environment
 import pxUrl from "/textures/environment/px.webp?url";
