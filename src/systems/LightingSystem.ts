@@ -57,7 +57,7 @@ class LightingSystem {
     directionalLight.shadow.camera.near = 5;
     directionalLight.shadow.camera.far = 175;
 
-    directionalLight.shadow.normalBias = 0.02;
+    directionalLight.shadow.normalBias = 0.15;
     directionalLight.shadow.bias = 0;
 
     return directionalLight;

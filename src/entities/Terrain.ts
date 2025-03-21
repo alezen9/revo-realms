@@ -315,7 +315,6 @@ export class Terrain {
     this.outerTerrain = new OuterTerrain(terrainMaterial);
     eventsManager.on("update", this.update.bind(this));
 
-    if (!import.meta.env.DEV) return;
     this.debugTerrain();
   }
 

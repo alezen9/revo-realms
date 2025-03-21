@@ -35,10 +35,10 @@ import { State } from "../../Game";
 import { realmConfig } from "../../realms/PortfolioRealm";
 
 const getConfig = () => {
-  const FLOWER_WIDTH = 3;
-  const FLOWER_HEIGHT = 3;
+  const FLOWER_WIDTH = 1;
+  const FLOWER_HEIGHT = 1;
   const TILE_SIZE = 150;
-  const FLOWERS_PER_SIDE = 20;
+  const FLOWERS_PER_SIDE = 30;
   return {
     FLOWER_WIDTH,
     FLOWER_HEIGHT,
@@ -111,8 +111,8 @@ const defaultUniforms: Required<FlowersUniforms> = {
   uPlayerPosition: uniform(new Vector3(0, 0, 0)),
   uCameraMatrix: uniform(new Matrix4()),
   // Scale
-  uFlowersMinScale: uniform(1.25),
-  uFlowersMaxScale: uniform(1.75),
+  uFlowersMinScale: uniform(0.75),
+  uFlowersMaxScale: uniform(1),
   // Updated externally
   uDelta: uniform(new Vector2(0, 0)),
 };
@@ -247,11 +247,11 @@ class FlowerMaterial extends MeshLambertNodeMaterial {
   })().compute(flowersConfig.COUNT);
 
   private computePosition = Fn(([data1 = vec4(0), data2 = float(0)]) => {
+    const rand = hash(instanceIndex);
     const offset = vec3(data1.x, 0, data1.y);
     const yawAngle = data1.z;
-    const scaled = positionLocal.mul(vec3(data2));
+    const scaled = positionLocal.mul(vec3(data2, data2, data2));
 
-    const rand = hash(instanceIndex);
     const swayAmount = sin(this._uniforms.uTime.mul(5.0).mul(rand)).mul(0.015);
     const rotated = rotate(
       scaled,

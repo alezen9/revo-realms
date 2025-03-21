@@ -74,9 +74,6 @@ export default class WaterMaterial extends MeshBasicNodeMaterial {
     this.debugFolder = debugManager.panel.addFolder({ title: "🌊 Water" });
     this.debugFolder.expanded = false;
 
-    const enableDebug = import.meta.env.DEV;
-    this.debugFolder.hidden = !enableDebug;
-    if (!enableDebug) return;
     this.debugWaves();
     this.debugColor();
     this.debugFresnel();

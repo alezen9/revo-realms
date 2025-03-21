@@ -54,7 +54,7 @@ const getConfig = () => {
   const BLADE_WIDTH = 0.065;
   const BLADE_HEIGHT = 1.25;
   const TILE_SIZE = 150;
-  const BLADES_PER_SIDE = 650;
+  const BLADES_PER_SIDE = 600;
   return {
     BLADE_WIDTH,
     BLADE_HEIGHT,
@@ -452,7 +452,6 @@ export default class Grass {
 
     eventsManager.on("update", this.updateAsync.bind(this));
 
-    if (!import.meta.env.DEV) return;
     this.debugGrass();
   }
 
