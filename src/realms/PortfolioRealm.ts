@@ -1,9 +1,7 @@
-import { BoxGeometry, Mesh, MeshLambertMaterial } from "three";
 import Monuments from "../entities/Monuments";
 import { Terrain } from "../entities/Terrain";
 import Vegetation from "../entities/Vegetation/Vegetation";
 import { Water } from "../entities/Water";
-import { sceneManager } from "../systems/SceneManager";
 
 const getConfig = () => {
   const MAP_SIZE = 256;
@@ -25,12 +23,5 @@ export default class PortfolioRealm {
     new Monuments();
     new Water();
     new Vegetation();
-
-    const geom = new BoxGeometry(5, 50, 5);
-    const mat = new MeshLambertMaterial();
-    const box = new Mesh(geom, mat);
-    box.position.set(0, 25, -25);
-    box.castShadow = true;
-    sceneManager.scene.add(box);
   }
 }

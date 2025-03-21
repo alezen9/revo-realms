@@ -24,6 +24,9 @@ class RendererManager {
       canvas,
       antialias: true,
       trackTimestamp: false,
+      powerPreference: "high-performance",
+      stencil: false,
+      depth: true,
     });
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = PCFShadowMap;

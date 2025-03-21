@@ -306,7 +306,7 @@ export class Terrain {
     uTime: uniform(0),
     uGrassTerrainColor: uniform(new Color().setRGB(0.431, 0.302, 0.122)),
     uWaterSandColor: uniform(new Color().setRGB(0.54, 0.39, 0.2)),
-    uPathSandColor: uniform(new Color().setRGB(0.51, 0.38, 0.212)),
+    uPathSandColor: uniform(new Color().setRGB(0.65, 0.49, 0.27)),
   };
 
   constructor() {
