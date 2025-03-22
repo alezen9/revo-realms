@@ -2,6 +2,7 @@ import {
   clamp,
   dot,
   fract,
+  mix,
   normalGeometry,
   texture,
   uniform,
@@ -21,7 +22,7 @@ type StoneMaterialUniforms = {
 };
 
 const defaultUniforms: StoneMaterialUniforms = {
-  uBaseColor: uniform(new Color("#8c8c8c")),
+  uBaseColor: uniform(new Color("#000")),
 };
 
 class StoneMaterial extends MeshLambertNodeMaterial {
@@ -33,24 +34,17 @@ class StoneMaterial extends MeshLambertNodeMaterial {
   }
 
   private createMaterial() {
+    this.precision = "lowp";
     this.flatShading = false;
 
-    const fineNoise = texture(
-      assetManager.noiseTexture,
-      fract(uv().mul(1.5)),
-    ).mul(0.1);
-    const coarseNoise = texture(assetManager.noiseTexture, uv().mul(0.5)).mul(
-      0.05,
-    );
-    const combinedNoise = fineNoise.add(coarseNoise);
+    const baseUV = fract(uv().mul(2));
+    const noise = texture(assetManager.noiseTexture, baseUV);
+    const combinedNoise = mix(noise.r, noise.b, 0.35);
 
-    const roughnessVariation = this._uniforms.uBaseColor.add(combinedNoise.b);
+    const roughnessVariation = this._uniforms.uBaseColor.add(combinedNoise);
 
-    const ambientOcclusion = clamp(
-      dot(normalGeometry, vec3(0.0, 1.0, 0.0)),
-      0.3,
-      1.0,
-    );
+    const up = vec3(0.0, 1.0, 0.0);
+    const ambientOcclusion = clamp(dot(normalGeometry, up), 0.2, 0.6);
     const aoAdjusted = roughnessVariation.mul(ambientOcclusion);
 
     this.colorNode = aoAdjusted;

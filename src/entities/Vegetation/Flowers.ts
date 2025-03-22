@@ -2,11 +2,11 @@ import {
   float,
   floor,
   Fn,
-  fract,
   hash,
   If,
   instancedArray,
   instanceIndex,
+  mix,
   mod,
   positionLocal,
   rotate,
@@ -160,22 +160,17 @@ class FlowerMaterial extends MeshLambertNodeMaterial {
       .div(flowersConfig.TILE_SIZE)
       .abs();
 
-    const noiseX = texture(assetManager.noiseTexture, _uv).r.sub(0.5).mul(100);
-    const noiseZ = texture(assetManager.noiseTexture, _uv).b.sub(0.5).mul(50);
+    const noise = texture(assetManager.noiseTexture, _uv);
+    const mixedNoise = mix(noise.r, noise.b, 0.75);
+
+    const noiseX = mixedNoise.sub(0.5).mul(100);
+    const noiseZ = mixedNoise.sub(0.5).mul(50);
 
     data1.x = offsetX.add(noiseX);
     data1.y = offsetZ.add(noiseZ);
 
-    const worldPos = vec3(data1.x, 0, data1.y);
-
     // Yaw
-    const noiseUV = worldPos.xz
-      .add(flowersConfig.TILE_HALF_SIZE)
-      .div(flowersConfig.TILE_SIZE);
-    const noiseScale = float(20);
-    const uv = fract(noiseUV.mul(noiseScale));
-    const noiseValue = texture(assetManager.noiseTexture, uv, 1).b;
-    const yawVariation = noiseValue.sub(0.5).mul(float(Math.PI * 2)); // Map noise to [-PI, PI]
+    const yawVariation = noise.b.sub(0.5).mul(float(Math.PI * 2)); // Map noise to [-PI, PI]
     data1.z = yawVariation;
 
     // Scale
@@ -250,7 +245,7 @@ class FlowerMaterial extends MeshLambertNodeMaterial {
     const rand = hash(instanceIndex);
     const offset = vec3(data1.x, 0, data1.y);
     const yawAngle = data1.z;
-    const scaled = positionLocal.mul(vec3(data2, data2, data2));
+    const scaled = positionLocal.mul(vec3(data2, data2.add(0.25), data2));
 
     const swayAmount = sin(this._uniforms.uTime.mul(5.0).mul(rand)).mul(0.015);
     const rotated = rotate(

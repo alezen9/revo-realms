@@ -6,7 +6,7 @@ export default class MonitoringManager {
   private lastSecond = performance.now();
 
   private drawCallsPanel: Stats.Panel;
-  private geometriesPanel: Stats.Panel;
+  private trianglesPanel: Stats.Panel;
   constructor(enabled: boolean) {
     const stats = new Stats({
       trackGPU: true,
@@ -26,8 +26,8 @@ export default class MonitoringManager {
       "#333",
     );
     // @ts-ignore
-    this.geometriesPanel = this.createNumberPanel(
-      "# GEOMETRIES",
+    this.trianglesPanel = this.createNumberPanel(
+      "# TRIANGLES",
       "#ffdab9",
       "#163843",
     );
@@ -60,7 +60,8 @@ export default class MonitoringManager {
       ctx.font = "bold 20px Arial"; // Bigger font for the value
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.fillText(`${Math.round(value)}`, width / 2, height / 1.65);
+      const v = formatter.format(value);
+      ctx.fillText(`${v}`, width / 2, height / 1.65);
 
       // Restore original font for consistency
       ctx.font = originalFont;
@@ -72,9 +73,11 @@ export default class MonitoringManager {
   updateCustomPanels() {
     const now = performance.now();
     if (now - this.lastSecond < 1000) return;
-    const { render, memory } = rendererManager.renderer.info;
+    const { render } = rendererManager.renderer.info;
     this.drawCallsPanel.update(render.drawCalls, 0);
-    this.geometriesPanel.update(memory.geometries, 0);
+    this.trianglesPanel.update(render.triangles, 0);
     this.lastSecond = now;
   }
 }
+
+const formatter = new Intl.NumberFormat("en-US", { notation: "compact" });

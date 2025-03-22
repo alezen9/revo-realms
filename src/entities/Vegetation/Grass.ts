@@ -165,8 +165,9 @@ class GrassMaterial extends MeshBasicNodeMaterial {
       .div(grassConfig.TILE_SIZE)
       .abs();
 
-    const noiseX = texture(assetManager.noiseTexture, _uv).b.sub(0.5).mul(30);
-    const noiseZ = texture(assetManager.noiseTexture, _uv).g.sub(0.5).mul(10);
+    const noise = texture(assetManager.noiseTexture, _uv);
+    const noiseX = noise.b.sub(0.5).mul(30);
+    const noiseZ = noise.g.sub(0.5).mul(10);
 
     data1.x = offsetX.add(noiseX);
     data1.y = offsetZ.add(noiseZ);

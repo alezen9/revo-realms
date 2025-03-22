@@ -1,6 +1,10 @@
 import {
   clamp,
   dot,
+  fract,
+  hash,
+  instanceIndex,
+  mix,
   normalGeometry,
   texture,
   uniform,
@@ -38,12 +42,15 @@ class RockMaterial extends MeshLambertNodeMaterial {
   }
 
   private createMaterial() {
+    this.precision = "lowp";
     this.flatShading = false;
-
-    const noise = texture(assetManager.noiseTexture, uv());
-    const roughnessVariation = this._uniforms.uBaseColor.add(
-      noise.b.mul(noise.b),
+    const rand = hash(instanceIndex);
+    const noise = texture(
+      assetManager.noiseTexture,
+      fract(uv().add(rand).mul(5)),
     );
+    const mixedNoise = mix(noise.b, noise.r, 0.15);
+    const roughnessVariation = this._uniforms.uBaseColor.add(mixedNoise);
 
     const ambientOcclusion = clamp(
       dot(normalGeometry, vec3(0.0, 1.0, 0.0)),

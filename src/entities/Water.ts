@@ -8,6 +8,7 @@ import {
   exp2,
   float,
   Fn,
+  fract,
   log2,
   mix,
   mod,
@@ -51,16 +52,16 @@ type WaterUniforms = {
 
 const defaultUniforms: Required<WaterUniforms> = {
   uTime: uniform(0),
-  uWavesSpeed: uniform(0.02),
-  uWavesAmplitude: uniform(0.02),
-  uWavesFrequency: uniform(0.64),
-  uTroughColor: uniform(new Color("#186691")),
-  uSurfaceColor: uniform(new Color("#9bd8c0")),
-  uPeakColor: uniform(new Color("#bbd8e0")),
-  uPeakThreshold: uniform(0.5),
-  uPeakTransition: uniform(0),
-  uTroughThreshold: uniform(-0.23),
-  uTroughTransition: uniform(0.15),
+  uWavesSpeed: uniform(0.005),
+  uWavesAmplitude: uniform(0.05),
+  uWavesFrequency: uniform(2.68),
+  uTroughColor: uniform(new Color().setRGB(0.72, 0.72, 0.72)),
+  uSurfaceColor: uniform(new Color().setRGB(0.72, 0.6, 0.6)),
+  uPeakColor: uniform(new Color().setRGB(0.46, 0.46, 0.46)),
+  uPeakThreshold: uniform(0.37),
+  uPeakTransition: uniform(0.08),
+  uTroughThreshold: uniform(-0.37),
+  uTroughTransition: uniform(0.22),
   uFresnelScale: uniform(0.8),
 };
 
@@ -83,10 +84,10 @@ export default class WaterMaterial extends MeshBasicNodeMaterial {
     const timer = this._uniforms.uTime.mul(this._uniforms.uWavesSpeed).mul(0.1);
 
     const baseUV = mod(pos.mul(this._uniforms.uWavesFrequency).add(timer), 1);
-    const noiseValue = texture(assetManager.noiseTexture, baseUV, 0.5).b; // Base layer
-    const noiseDetail = texture(assetManager.noiseTexture, baseUV, 1.5).b; // Higher-frequency noise
 
-    const mixedNoise = mix(noiseValue, noiseDetail, 0.5);
+    const noise = texture(assetManager.noiseTexture, fract(baseUV.mul(10)), 2);
+    const mixedNoiseIntermediate = mix(noise.r, noise.g, 0.5);
+    const mixedNoise = mix(mixedNoiseIntermediate, noise.b, 0.75);
 
     const elevation = mixedNoise.mul(this._uniforms.uWavesAmplitude).mul(0.001);
 
