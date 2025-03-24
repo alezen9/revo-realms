@@ -55,14 +55,14 @@ const defaultUniforms: Required<WaterUniforms> = {
   uWavesSpeed: uniform(0.01),
   uWavesAmplitude: uniform(0.05),
   uWavesFrequency: uniform(2.68),
-  uTroughColor: uniform(new Color().setRGB(0.72, 0.72, 0.72)),
-  uSurfaceColor: uniform(new Color().setRGB(0.72, 0.6, 0.6)),
-  uPeakColor: uniform(new Color().setRGB(0.46, 0.46, 0.46)),
-  uPeakThreshold: uniform(0.37),
-  uPeakTransition: uniform(0.08),
-  uTroughThreshold: uniform(-0.37),
-  uTroughTransition: uniform(0.22),
-  uFresnelScale: uniform(0.8),
+  uTroughColor: uniform(new Color().setRGB(0.58, 0.93, 0.88)),
+  uSurfaceColor: uniform(new Color().setRGB(0.59, 0.46, 0.36)),
+  uPeakColor: uniform(new Color().setRGB(0.27, 0.4, 0.38)),
+  uPeakThreshold: uniform(0),
+  uPeakTransition: uniform(0.5),
+  uTroughThreshold: uniform(-0.2),
+  uTroughTransition: uniform(0.35),
+  uFresnelScale: uniform(0.65),
 };
 
 export default class WaterMaterial extends MeshBasicNodeMaterial {
@@ -131,7 +131,6 @@ export default class WaterMaterial extends MeshBasicNodeMaterial {
     ([vNormal = varying(vec3(0, 0, 0)), viewDirection = vec3(0, 0, 0)]) => {
       let reflectedDirection = reflect(viewDirection, vNormal);
       reflectedDirection.x = reflectedDirection.x.negate();
-
       return cubeTexture(assetManager.envMapTexture, reflectedDirection);
     },
   );
@@ -143,7 +142,7 @@ export default class WaterMaterial extends MeshBasicNodeMaterial {
       vWorldPosition = varying(vec3(0, 0, 0)),
     ]) => {
       // Calculate vector from camera to the vertex
-      const viewDirection = normalize(vPosition.sub(cameraPosition));
+      const viewDirection = normalize(vWorldPosition.sub(cameraPosition));
 
       // Sample environment map to get the reflected color
       const reflectionColor = this.computeReflectionColor(
@@ -190,10 +189,9 @@ export default class WaterMaterial extends MeshBasicNodeMaterial {
       const minDist = 10; // Minimum distance (fully transparent at this distance)
       const maxDist = 55; // Maximum distance (fully opaque at this distance)
 
-      // const opacity = mix(0, 1, smoothstep(minDist, maxDist, distanceXZ));
       const opacity = mix(
         0,
-        1,
+        0.5,
         smoothstep(minDist * minDist, maxDist * maxDist, distanceXZSquared),
       );
 
