@@ -52,7 +52,7 @@ type WaterUniforms = {
 
 const defaultUniforms: Required<WaterUniforms> = {
   uTime: uniform(0),
-  uWavesSpeed: uniform(0.005),
+  uWavesSpeed: uniform(0.01),
   uWavesAmplitude: uniform(0.05),
   uWavesFrequency: uniform(2.68),
   uTroughColor: uniform(new Color().setRGB(0.72, 0.72, 0.72)),

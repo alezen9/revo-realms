@@ -32,7 +32,7 @@ import { sceneManager } from "../../systems/SceneManager";
 import { eventsManager } from "../../systems/EventsManager";
 import { UniformType } from "../../types";
 import { State } from "../../Game";
-import { realmConfig } from "../../realms/PortfolioRealm";
+import { tslUtils } from "../../systems/TSLUtils";
 
 const getConfig = () => {
   const FLOWER_WIDTH = 1;
@@ -208,9 +208,7 @@ class FlowerMaterial extends MeshLambertNodeMaterial {
   });
 
   private computeAlpha = Fn(([worldPos = vec3(0)]) => {
-    const alphaUv = worldPos.xz
-      .add(realmConfig.HALF_MAP_SIZE)
-      .div(realmConfig.MAP_SIZE);
+    const alphaUv = tslUtils.computeMapUvByPosition(worldPos.xz);
     return floor(texture(assetManager.floorGrassWaterMap, alphaUv).g);
   });
 

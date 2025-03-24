@@ -29,6 +29,9 @@ import grassNorTextureUrl from "/textures/realm/grass_nor.webp?url";
 import flowerComposition1TextureUrl from "/textures/realm/flower_composition_1.webp?url";
 import flowerComposition2TextureUrl from "/textures/realm/flower_composition_2.webp?url";
 
+// Lightmap
+import lightmapTextureUrl from "/textures/realm/lightmap.webp?url";
+
 // Environment
 import pxUrl from "/textures/environment/px.webp?url";
 import nxUrl from "/textures/environment/nx.webp?url";
@@ -57,8 +60,9 @@ class AssetManager {
   flowerCompositionTexture_1!: Texture;
   flowerCompositionTexture_2!: Texture;
 
+  lightmapTexture!: Texture;
+
   // Models
-  npcsModel!: GLTF;
   realmModel!: GLTF;
 
   constructor() {
@@ -141,6 +145,8 @@ class AssetManager {
 
       this.textureLoader.loadAsync(flowerComposition1TextureUrl), // Flowers diffuse 1
       this.textureLoader.loadAsync(flowerComposition2TextureUrl), // Flowers diffuse 2
+
+      this.textureLoader.loadAsync(lightmapTextureUrl), // Lightmap
     ]);
     // Environment
     this.envMapTexture = res[0];
@@ -156,8 +162,10 @@ class AssetManager {
 
     this.leafTexture = res[5];
     this.waterLiliesTexture = res[6];
+    this.waterLiliesTexture.flipY = false;
     this.waterLiliesTexture.generateMipmaps = false;
     this.waterLiliesAlphaTexture = res[7];
+    this.waterLiliesAlphaTexture.flipY = false;
     this.waterLiliesAlphaTexture.generateMipmaps = false;
 
     this.grassDiffTexture = res[8];
@@ -167,6 +175,10 @@ class AssetManager {
 
     this.flowerCompositionTexture_1 = res[10];
     this.flowerCompositionTexture_2 = res[11];
+
+    this.lightmapTexture = res[12];
+    this.lightmapTexture.flipY = false;
+    this.lightmapTexture.generateMipmaps = false;
   }
 }
 

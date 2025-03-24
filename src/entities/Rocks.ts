@@ -80,7 +80,6 @@ export default class Rocks {
       colliders.length,
     );
 
-    instances.castShadow = true;
     instances.receiveShadow = true;
 
     colliders.forEach((colliderSphere, i) => {

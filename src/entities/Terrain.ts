@@ -27,6 +27,7 @@ import { State } from "../Game";
 import { sceneManager } from "../systems/SceneManager";
 import { debugManager } from "../systems/DebugManager";
 import { eventsManager } from "../systems/EventsManager";
+import { tslUtils } from "../systems/TSLUtils";
 
 type TerrainUniforms = {
   uTime?: UniformType<number>;
@@ -94,10 +95,10 @@ class TerainMaterial extends MeshLambertNodeMaterial {
 
   private createMaterial() {
     this.flatShading = false;
-    const _uv = positionWorld.xz
-      .add(realmConfig.HALF_MAP_SIZE)
-      .div(realmConfig.MAP_SIZE);
+    const _uv = tslUtils.computeMapUvByPosition(positionWorld.xz);
     const vUv = varying(_uv);
+
+    this.aoMap = assetManager.lightmapTexture;
 
     const factors = texture(assetManager.floorGrassWaterMap, vUv, 2.5);
     const grassFactor = factors.g;
@@ -123,9 +124,9 @@ class TerainMaterial extends MeshLambertNodeMaterial {
       .mul(sandAlpha)
       .add(grassColorSample)
       .mul(grassFactor)
-      .mul(0.5);
+      .mul(0.85);
 
-    const pathColor = this._uniforms.uPathSandColor.mul(0.8).mul(pathFactor);
+    const pathColor = this._uniforms.uPathSandColor.mul(1.2).mul(pathFactor);
 
     // Water
     const vDepth = varying(positionWorld.y.negate());
@@ -133,9 +134,11 @@ class TerainMaterial extends MeshLambertNodeMaterial {
     const waterColor = waterBaseColor.mul(waterFactor);
 
     // Final diffuse
-    this.colorNode = grassColor
+    const finalColor = grassColor
       .add(pathColor.mul(terrainNoise))
       .add(waterColor.mul(terrainNoise).mul(0.5));
+
+    this.colorNode = finalColor;
   }
 }
 

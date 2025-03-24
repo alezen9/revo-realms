@@ -43,12 +43,12 @@ import {
   // IndirectStorageBufferAttribute,
 } from "three/webgpu";
 import { assetManager } from "../../systems/AssetManager";
-import { realmConfig } from "../../realms/PortfolioRealm";
 import { debugManager } from "../../systems/DebugManager";
 import { rendererManager } from "../../systems/RendererManager";
 import { sceneManager } from "../../systems/SceneManager";
 import { eventsManager } from "../../systems/EventsManager";
 import { UniformType } from "../../types";
+import { tslUtils } from "../../systems/TSLUtils";
 
 const getConfig = () => {
   const BLADE_WIDTH = 0.065;
@@ -234,9 +234,7 @@ class GrassMaterial extends MeshBasicNodeMaterial {
   );
 
   private computeAlpha = Fn(([worldPos = vec3(0)]) => {
-    const alphaUv = worldPos.xz
-      .add(realmConfig.HALF_MAP_SIZE)
-      .div(realmConfig.MAP_SIZE);
+    const alphaUv = tslUtils.computeMapUvByPosition(worldPos.xz);
     return texture(assetManager.floorGrassWaterMap, alphaUv).g;
   });
 

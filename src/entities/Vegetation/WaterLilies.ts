@@ -21,7 +21,6 @@ export class WaterLilies {
       "water_lilies",
     ) as Mesh;
     mesh.material = this.createMaterial();
-    mesh.castShadow = true;
     sceneManager.scene.add(mesh);
     eventsManager.on("update", this.update.bind(this));
   }

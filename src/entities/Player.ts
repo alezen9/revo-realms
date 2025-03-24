@@ -17,14 +17,16 @@ import {
   step,
   texture,
   uniform,
+  varying,
 } from "three/tsl";
-import { MeshStandardNodeMaterial } from "three/webgpu";
+import { MeshLambertNodeMaterial } from "three/webgpu";
 import { assetManager } from "../systems/AssetManager";
 import { UniformType } from "../types";
 import { physics } from "../systems/Physics";
 import { sceneManager } from "../systems/SceneManager";
 import { lighting } from "../systems/LightingSystem";
 import { eventsManager } from "../systems/EventsManager";
+import { tslUtils } from "../systems/TSLUtils";
 
 export default class Player {
   private mesh: Mesh;
@@ -78,6 +80,7 @@ export default class Player {
   private ray = new Ray(this.rayOrigin, this.DOWN);
 
   private uTime = uniform(0);
+  private uOffsetShadow = uniform(0);
 
   constructor() {
     this.mesh = this.createCharacterMesh();
@@ -92,10 +95,12 @@ export default class Player {
   }
 
   private createCharacterMesh() {
-    const geometry = new IcosahedronGeometry(this.RADIUS, 3);
-    const material = new PlayerMaterial({ uTime: this.uTime });
+    const geometry = new IcosahedronGeometry(this.RADIUS, 2);
+    const material = new PlayerMaterial({
+      uTime: this.uTime,
+      uOffsetShadow: this.uOffsetShadow,
+    });
     const mesh = new Mesh(geometry, material);
-    mesh.receiveShadow = true;
     mesh.castShadow = true;
     mesh.position.copy(this.PLAYER_INITIAL_POSITION);
     return mesh;
@@ -279,9 +284,15 @@ export default class Player {
   }
 }
 
-class PlayerMaterial extends MeshStandardNodeMaterial {
-  private _uniforms: { uTime: UniformType<number> };
-  constructor(uniforms: { uTime: UniformType<number> }) {
+class PlayerMaterial extends MeshLambertNodeMaterial {
+  private _uniforms: {
+    uTime: UniformType<number>;
+    uOffsetShadow: UniformType<number>;
+  };
+  constructor(uniforms: {
+    uTime: UniformType<number>;
+    uOffsetShadow: UniformType<number>;
+  }) {
     super();
     this._uniforms = { ...uniforms };
     this.createMaterial();
@@ -290,7 +301,9 @@ class PlayerMaterial extends MeshStandardNodeMaterial {
   private createMaterial() {
     this.flatShading = true;
 
-    this.roughness = 0.5;
+    const mapUv = tslUtils.computeMapUvByPosition(positionWorld.xz);
+    const vMapUv = varying(mapUv);
+    const bakedShadowColor = lighting.getBakedMapShadowColor(vMapUv);
 
     const noiseValue = texture(
       assetManager.noiseTexture,
@@ -307,16 +320,14 @@ class PlayerMaterial extends MeshStandardNodeMaterial {
     const underwaterFactor = float(1).sub(step(waterLevel, positionWorld.y));
     const abovewaterFactor = float(1).sub(underwaterFactor);
 
-    const baseColor = color("silver");
+    const baseColor = color("#CE8946");
     const aboveWater = baseColor.mul(abovewaterFactor);
-    const underwaterTint = baseColor.mul(1.5).mul(underwaterFactor);
+    const underwaterTint = baseColor.mul(1.25).mul(underwaterFactor);
 
     const tintedColor = aboveWater.add(underwaterTint);
 
-    this.colorNode = tintedColor;
+    const softerBakedShadow = bakedShadowColor.add(0.25);
 
-    const aboveWaterMetalness = float(0.9).mul(abovewaterFactor);
-    const underwaterMetalness = float(0.65).mul(underwaterFactor);
-    this.metalnessNode = aboveWaterMetalness.add(underwaterMetalness);
+    this.colorNode = tintedColor.mul(softerBakedShadow);
   }
 }
