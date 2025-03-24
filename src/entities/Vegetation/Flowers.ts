@@ -275,7 +275,7 @@ class FlowerMaterial extends MeshLambertNodeMaterial {
 
     const composition = composition1.add(composition2);
 
-    this.colorNode = composition;
+    this.colorNode = composition.mul(1.5);
   }
 
   async updateAsync() {

@@ -326,7 +326,7 @@ class PlayerMaterial extends MeshLambertNodeMaterial {
 
     const tintedColor = aboveWater.add(underwaterTint);
 
-    const softerBakedShadow = bakedShadowColor.add(0.25);
+    const softerBakedShadow = bakedShadowColor;
 
     this.colorNode = tintedColor.mul(softerBakedShadow);
   }

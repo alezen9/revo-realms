@@ -64,8 +64,14 @@ class LightingSystem {
   }
 
   getBakedMapShadowColor = Fn(([mapUv = vec2(0)]) => {
-    return texture(assetManager.lightmapTexture, mapUv);
+    return texture(assetManager.lightmapTexture, mapUv).add(
+      this.directionalLight.intensity,
+    );
   });
+
+  get shadowIntensity() {
+    return this.directionalLight.shadow.intensity;
+  }
 
   private debugLight() {
     const lightFolder = debugManager.panel.addFolder({ title: "💡 Light" });

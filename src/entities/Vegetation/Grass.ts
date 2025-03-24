@@ -51,10 +51,10 @@ import { UniformType } from "../../types";
 import { tslUtils } from "../../systems/TSLUtils";
 
 const getConfig = () => {
-  const BLADE_WIDTH = 0.065;
+  const BLADE_WIDTH = 0.085;
   const BLADE_HEIGHT = 1.25;
   const TILE_SIZE = 150;
-  const BLADES_PER_SIDE = 600;
+  const BLADES_PER_SIDE = 500;
   return {
     BLADE_WIDTH,
     BLADE_HEIGHT,

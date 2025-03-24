@@ -28,6 +28,7 @@ import { sceneManager } from "../systems/SceneManager";
 import { debugManager } from "../systems/DebugManager";
 import { eventsManager } from "../systems/EventsManager";
 import { tslUtils } from "../systems/TSLUtils";
+import { lighting } from "../systems/LightingSystem";
 
 type TerrainUniforms = {
   uTime?: UniformType<number>;
@@ -99,6 +100,7 @@ class TerainMaterial extends MeshLambertNodeMaterial {
     const vUv = varying(_uv);
 
     this.aoMap = assetManager.lightmapTexture;
+    this.aoMapIntensity = lighting.shadowIntensity;
 
     const factors = texture(assetManager.floorGrassWaterMap, vUv, 2.5);
     const grassFactor = factors.g;
