@@ -1,28 +1,17 @@
-import {
-  clamp,
-  dot,
-  fract,
-  mix,
-  normalGeometry,
-  texture,
-  uniform,
-  uv,
-  vec3,
-} from "three/tsl";
-import { Color, Mesh, MeshLambertNodeMaterial } from "three/webgpu";
+import { fract, texture, uniform, uv } from "three/tsl";
+import { MathUtils, Mesh, MeshLambertNodeMaterial } from "three/webgpu";
 import { UniformType } from "../types";
 import { assetManager } from "../systems/AssetManager";
 import { ColliderDesc, RigidBodyDesc } from "@dimforge/rapier3d";
-import { debugManager } from "../systems/DebugManager";
 import { physics } from "../systems/Physics";
 import { sceneManager } from "../systems/SceneManager";
 
 type StoneMaterialUniforms = {
-  uBaseColor: UniformType<Color>;
+  uRandom: UniformType<number>;
 };
 
 const defaultUniforms: StoneMaterialUniforms = {
-  uBaseColor: uniform(new Color("#000")),
+  uRandom: uniform(0),
 };
 
 class StoneMaterial extends MeshLambertNodeMaterial {
@@ -33,21 +22,17 @@ class StoneMaterial extends MeshLambertNodeMaterial {
     this.createMaterial();
   }
 
+  setRandomSeed(n: number) {
+    this._uniforms.uRandom.value = n;
+  }
+
   private createMaterial() {
     this.precision = "lowp";
     this.flatShading = false;
 
-    const baseUV = fract(uv().mul(2));
-    const noise = texture(assetManager.noiseTexture, baseUV);
-    const combinedNoise = mix(noise.r, noise.b, 0.35);
-
-    const roughnessVariation = this._uniforms.uBaseColor.add(combinedNoise);
-
-    const up = vec3(0.0, 1.0, 0.0);
-    const ambientOcclusion = clamp(dot(normalGeometry, up), 0.2, 0.6);
-    const aoAdjusted = roughnessVariation.mul(ambientOcclusion);
-
-    this.colorNode = aoAdjusted;
+    const _uv = fract(uv().add(this._uniforms.uRandom).mul(5));
+    const diff = texture(assetManager.stoneDifflTexture, _uv);
+    this.colorNode = diff.mul(0.85);
   }
 }
 
@@ -60,9 +45,13 @@ export default class Monuments {
     const monuments = assetManager.realmModel.scene.children.filter(
       ({ name }) => name.endsWith("_monument"),
     ) as Mesh[];
-    monuments.forEach((monument) => {
+    monuments.forEach((monument, idx) => {
+      const rand = MathUtils.seededRandom(idx);
       monument.material = material;
       monument.receiveShadow = true;
+      monument.onBeforeRender = (_, __, ___, ____, m: StoneMaterial) => {
+        m.setRandomSeed(rand);
+      };
     });
     sceneManager.scene.add(...monuments);
 
@@ -80,20 +69,6 @@ export default class Monuments {
       const hz = 0.5 * colliderBox.scale.z;
       const colliderDesc = ColliderDesc.cuboid(hx, hy, hz).setRestitution(0.25);
       physics.world.createCollider(colliderDesc, rigidBody);
-    });
-
-    this.debugMonument();
-  }
-
-  private debugMonument() {
-    const monumentsFolder = debugManager.panel.addFolder({
-      title: "🗽 Monuments",
-    });
-    monumentsFolder.expanded = false;
-    monumentsFolder.addBinding(this.uniforms.uBaseColor, "value", {
-      label: "Color",
-      view: "color",
-      color: { type: "float" },
     });
   }
 }

@@ -32,6 +32,9 @@ import flowerComposition2TextureUrl from "/textures/realm/flower_composition_2.w
 // Lightmap
 import lightmapTextureUrl from "/textures/realm/lightmap.webp?url";
 
+import rockDiffTextureUrl from "/textures/realm/rock_diff.webp?url";
+import stoneDifflTextureUrl from "/textures/realm/stone_diff.webp?url";
+
 // Environment
 import pxUrl from "/textures/environment/px.webp?url";
 import nxUrl from "/textures/environment/nx.webp?url";
@@ -61,6 +64,9 @@ class AssetManager {
   flowerCompositionTexture_2!: Texture;
 
   lightmapTexture!: Texture;
+
+  rockDiffTexture!: Texture;
+  stoneDifflTexture!: Texture;
 
   // Models
   realmModel!: GLTF;
@@ -147,6 +153,9 @@ class AssetManager {
       this.textureLoader.loadAsync(flowerComposition2TextureUrl), // Flowers diffuse 2
 
       this.textureLoader.loadAsync(lightmapTextureUrl), // Lightmap
+
+      this.textureLoader.loadAsync(rockDiffTextureUrl),
+      this.textureLoader.loadAsync(stoneDifflTextureUrl),
     ]);
     // Environment
     this.envMapTexture = res[0];
@@ -179,6 +188,9 @@ class AssetManager {
     this.lightmapTexture = res[12];
     this.lightmapTexture.flipY = false;
     this.lightmapTexture.generateMipmaps = false;
+
+    this.rockDiffTexture = res[13];
+    this.stoneDifflTexture = res[14];
   }
 }
 
