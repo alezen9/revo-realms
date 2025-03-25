@@ -9,15 +9,17 @@ import {
 import { inputManager } from "../systems/InputManager";
 import { type State } from "../Game";
 import {
-  color,
   float,
   fract,
+  mix,
   positionWorld,
   sin,
+  smoothstep,
   step,
   texture,
   uniform,
   varying,
+  vec3,
 } from "three/tsl";
 import { MeshLambertNodeMaterial } from "three/webgpu";
 import { assetManager } from "../systems/AssetManager";
@@ -301,6 +303,8 @@ class PlayerMaterial extends MeshLambertNodeMaterial {
   private createMaterial() {
     this.flatShading = true;
 
+    this.castShadowNode = vec3(0.6);
+
     const mapUv = tslUtils.computeMapUvByPosition(positionWorld.xz);
     const vMapUv = varying(mapUv);
     const bakedShadowColor = lighting.getBakedMapShadowColor(vMapUv);
@@ -320,14 +324,26 @@ class PlayerMaterial extends MeshLambertNodeMaterial {
     const underwaterFactor = float(1).sub(step(waterLevel, positionWorld.y));
     const abovewaterFactor = float(1).sub(underwaterFactor);
 
-    const baseColor = color("#CE8946");
-    const aboveWater = baseColor.mul(abovewaterFactor);
-    const underwaterTint = baseColor.mul(1.25).mul(underwaterFactor);
+    const baseColor = vec3(1);
 
-    const tintedColor = aboveWater.add(underwaterTint);
+    const tintStrength = float(1).sub(
+      smoothstep(-1.5, 1, positionWorld.y).mul(underwaterFactor),
+    );
 
-    const softerBakedShadow = bakedShadowColor;
+    // Underwater tint (soft blue-green, slightly darker)
+    const underwaterTint = mix(
+      vec3(1),
+      vec3(0.6, 0.8, 1.0).mul(0.75),
+      tintStrength,
+    );
 
-    this.colorNode = tintedColor.mul(softerBakedShadow);
+    // Blend base color with tint based on depth
+    const underwaterColor = baseColor.mul(underwaterTint).mul(underwaterFactor);
+    const aboveWaterColor = baseColor.mul(abovewaterFactor);
+
+    const tintedColor = aboveWaterColor.add(underwaterColor);
+
+    // Apply baked shadows
+    this.colorNode = tintedColor.mul(bakedShadowColor);
   }
 }

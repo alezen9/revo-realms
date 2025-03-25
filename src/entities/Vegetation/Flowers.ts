@@ -209,7 +209,7 @@ class FlowerMaterial extends MeshLambertNodeMaterial {
 
   private computeAlpha = Fn(([worldPos = vec3(0)]) => {
     const alphaUv = tslUtils.computeMapUvByPosition(worldPos.xz);
-    return floor(texture(assetManager.floorGrassWaterMap, alphaUv).g);
+    return floor(texture(assetManager.terrainTypeMap, alphaUv).g);
   });
 
   private computeUpdate = Fn(() => {

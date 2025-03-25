@@ -1,15 +1,11 @@
 import {
-  clamp,
-  dot,
   fract,
   hash,
   instanceIndex,
   mix,
-  normalGeometry,
   texture,
   uniform,
   uv,
-  vec3,
 } from "three/tsl";
 import {
   Color,
@@ -45,21 +41,11 @@ class RockMaterial extends MeshLambertNodeMaterial {
     this.precision = "lowp";
     this.flatShading = false;
     const rand = hash(instanceIndex);
-    const noise = texture(
-      assetManager.noiseTexture,
-      fract(uv().add(rand).mul(5)),
-    );
-    const mixedNoise = mix(noise.b, noise.r, 0.15);
-    const roughnessVariation = this._uniforms.uBaseColor.add(mixedNoise);
-
-    const ambientOcclusion = clamp(
-      dot(normalGeometry, vec3(0.0, 1.0, 0.0)),
-      0.4,
-      0.5,
-    );
-    const aoAdjusted = roughnessVariation.mul(ambientOcclusion);
-
-    this.colorNode = aoAdjusted;
+    const _uv = fract(uv().add(rand).mul(2.5));
+    const noise = texture(assetManager.noiseTexture, _uv);
+    const mixedNoise = noise.b.mul(noise.r);
+    const diff = texture(assetManager.stoneDiffTexture, _uv);
+    this.colorNode = mix(diff, this._uniforms.uBaseColor, mixedNoise);
   }
 }
 
@@ -83,9 +69,6 @@ export default class Rocks {
     instances.receiveShadow = true;
 
     colliders.forEach((colliderSphere, i) => {
-      const randomYaw = Math.random() * Math.PI * 2;
-      colliderSphere.rotateY(randomYaw);
-      colliderSphere.updateMatrix();
       instances.setMatrixAt(i, colliderSphere.matrix);
       // Physics
       const rigidBodyDesc = RigidBodyDesc.fixed()
@@ -98,16 +81,16 @@ export default class Rocks {
     });
     sceneManager.scene.add(instances);
 
-    this.debugMonument();
+    this.debugRocks();
   }
 
-  private debugMonument() {
-    const monumentsFolder = debugManager.panel.addFolder({
+  private debugRocks() {
+    const rocksFolder = debugManager.panel.addFolder({
       title: "🪨 Rocks",
     });
-    monumentsFolder.expanded = false;
-    monumentsFolder.addBinding(this.uniforms.uBaseColor, "value", {
-      label: "Color",
+    rocksFolder.expanded = false;
+    rocksFolder.addBinding(this.uniforms.uBaseColor, "value", {
+      label: "Base color",
       view: "color",
       color: { type: "float" },
     });

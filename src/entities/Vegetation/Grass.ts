@@ -113,13 +113,13 @@ const defaultUniforms: Required<GrassUniforms> = {
   uGlowRadiusSquared: uniform(4),
   uGlowFadeIn: uniform(0.05),
   uGlowFadeOut: uniform(0.01),
-  uGlowColor: uniform(new Color().setRGB(1.0, 0.6, 0.1)),
+  uGlowColor: uniform(new Color().setRGB(0.49, 0.3, 0.07)),
   // Bending
   uBladeMaxBendAngle: uniform(Math.PI * 0.15),
   uWindStrength: uniform(0.45),
   // Color
-  uBaseColor: uniform(new Color().setRGB(0.15, 0.2, 0.05)),
-  uTipColor: uniform(new Color().setRGB(0.35, 0.35, 0.05)),
+  uBaseColor: uniform(new Color().setRGB(0.1, 0.1, 0.02)),
+  uTipColor: uniform(new Color().setRGB(0.17, 0.16, 0.05)),
   // Updated externally
   uDelta: uniform(new Vector2(0, 0)),
 };
@@ -235,7 +235,7 @@ class GrassMaterial extends MeshBasicNodeMaterial {
 
   private computeAlpha = Fn(([worldPos = vec3(0)]) => {
     const alphaUv = tslUtils.computeMapUvByPosition(worldPos.xz);
-    return texture(assetManager.floorGrassWaterMap, alphaUv).g;
+    return texture(assetManager.terrainTypeMap, alphaUv).g;
   });
 
   private computeTrailScale = Fn(
@@ -400,7 +400,7 @@ class GrassMaterial extends MeshBasicNodeMaterial {
 
   private computeAO = Fn(([data1 = vec4(0)]) => {
     const sideAO = abs(sin(data1.z)).mul(0.5);
-    const verticalAO = smoothstep(-0.75, 1.25, uv().y);
+    const verticalAO = smoothstep(-2.5, 1.25, uv().y);
     return verticalAO.mul(float(1.0).sub(sideAO));
   });
 

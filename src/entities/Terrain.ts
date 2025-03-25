@@ -54,7 +54,11 @@ class TerainMaterial extends MeshLambertNodeMaterial {
   }
 
   private computeCausticsDiffuse = Fn(
-    ([vUv = vec2(0, 0), causticsShadowColor = vec3(0, 0, 0)]) => {
+    ([
+      vUv = vec2(0, 0),
+      vDepth = float(0),
+      causticsShadowColor = vec3(0, 0, 0),
+    ]) => {
       const timer = this._uniforms.uTime.mul(0.1);
       const scaleFactor = float(15);
       const scaledUv = vUv.mul(scaleFactor);
@@ -63,9 +67,11 @@ class TerainMaterial extends MeshLambertNodeMaterial {
       const noiseA = texture(assetManager.noiseTexture, scaledCausticsUvA, 1).g;
       const noiseB = texture(assetManager.noiseTexture, scaledCausticsUvB, 2).g;
       const caustics = noiseA.add(noiseB);
-      const adjustedCaustics = pow(caustics, 3);
+      const depthFalloff = smoothstep(-1, 10, vDepth);
+      const adjustedCaustics = pow(caustics, 3).mul(float(1).sub(depthFalloff));
 
-      const causticsHighlightColor = vec3(1.2, 1.2, 0.8).mul(0.15);
+      const causticsHighlightColor = vec3(0.6, 0.8, 1.0).mul(0.3);
+
       const causticsColor = mix(
         causticsShadowColor,
         causticsHighlightColor,
@@ -77,19 +83,23 @@ class TerainMaterial extends MeshLambertNodeMaterial {
   );
 
   private computeWaterDiffuse = Fn(([vDepth = float(0), vUv = vec2(0, 0)]) => {
-    const depth1 = float(5.0); // Transition depth
+    const depth1 = float(8.0); // Transition depth
     const epsilon = float(0.001); // Prevents precision issues
 
     const blendFactor = smoothstep(0.0, depth1.add(epsilon), vDepth); // How much tint is applied
 
     const sandColor = this._uniforms.uWaterSandColor; // Sand color
-    const waterTint = sandColor.mul(0.5); // Blue-green tint in deeper water
 
-    const waterBaseColor = sandColor.add(
-      waterTint.sub(sandColor).mul(blendFactor),
+    // const waterTint = vec3(0.4, 0.5, 0.45); // use in when plenty of vegetation and/or algae in lake
+    const waterTint = vec3(0.35, 0.45, 0.55).mul(0.65); // bit desaturated blue
+
+    const causticsColor = this.computeCausticsDiffuse(vUv, vDepth);
+
+    const shallowBoost = smoothstep(0.0, 1.5, vDepth);
+    const sandHighlight = vec3(1.0, 0.9, 0.7).mul(0.1).mul(shallowBoost);
+    const waterBaseColor = mix(sandColor, waterTint, blendFactor).add(
+      sandHighlight,
     );
-
-    const causticsColor = this.computeCausticsDiffuse(vUv);
 
     return waterBaseColor.add(causticsColor);
   });
@@ -102,7 +112,7 @@ class TerainMaterial extends MeshLambertNodeMaterial {
     this.aoMap = assetManager.lightmapTexture;
     this.aoMapIntensity = lighting.shadowIntensity;
 
-    const factors = texture(assetManager.floorGrassWaterMap, vUv, 2.5);
+    const factors = texture(assetManager.terrainTypeMap, vUv, 2.5);
     const grassFactor = factors.g;
     const waterFactor = factors.b;
     const sandFactor = float(1).sub(grassFactor);

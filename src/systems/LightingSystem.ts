@@ -1,4 +1,4 @@
-import { AmbientLight, DirectionalLight, Object3D, Vector3 } from "three";
+import { DirectionalLight, HemisphereLight, Object3D, Vector3 } from "three";
 import { Fn, texture, vec2, vec3 } from "three/tsl";
 import { State } from "../Game";
 import { debugManager } from "./DebugManager";
@@ -7,11 +7,12 @@ import { eventsManager } from "./EventsManager";
 import { assetManager } from "./AssetManager";
 
 const config = {
-  LIGHT_POSITION_OFFSET: new Vector3(1, 1, 1),
+  LIGHT_POSITION_OFFSET: new Vector3(10, 10, 10),
 };
 class LightingSystem {
   private directionalLight: DirectionalLight;
-  private ambientLight: AmbientLight;
+  // private ambientLight: AmbientLight;
+  private hemisphereLight: HemisphereLight;
   // emissive = new EmissiveIllumination();
 
   constructor() {
@@ -20,25 +21,37 @@ class LightingSystem {
     this.directionalLight = this.setupDirectionalLighting();
     sceneManager.scene.add(this.directionalLight);
 
-    this.ambientLight = this.setupAmbientLighting();
-    sceneManager.scene.add(this.ambientLight);
+    // this.ambientLight = this.setupAmbientLighting();
+    // sceneManager.scene.add(this.ambientLight);
+
+    this.hemisphereLight = this.setupHemisphereLight();
+    sceneManager.scene.add(this.hemisphereLight);
 
     eventsManager.on("update", this.update.bind(this));
 
     this.debugLight();
   }
 
-  private setupAmbientLighting() {
-    const ambientLight = new AmbientLight();
-    ambientLight.intensity = 0.4;
-    ambientLight.color.setRGB(1.0, 0.95, 0.6);
-    return ambientLight;
+  // private setupAmbientLighting() {
+  //   const ambientLight = new AmbientLight();
+  //   ambientLight.intensity = 0.27;
+  //   ambientLight.color.setRGB(1.0, 0.95, 0.6);
+  //   return ambientLight;
+  // }
+
+  private setupHemisphereLight() {
+    const hemiLight = new HemisphereLight();
+    hemiLight.color.setRGB(0.5, 0.4, 0.6);
+    hemiLight.groundColor.setRGB(0.3, 0.2, 0.2);
+    hemiLight.intensity = 0.3;
+    hemiLight.position.copy(config.LIGHT_POSITION_OFFSET);
+    return hemiLight;
   }
 
   private setupDirectionalLighting() {
     const directionalLight = new DirectionalLight();
     directionalLight.intensity = 0.7;
-    directionalLight.color.setRGB(1.0, 0.66, 0.47);
+    directionalLight.color.setRGB(1.0, 0.85, 0.77);
     directionalLight.position.copy(config.LIGHT_POSITION_OFFSET);
 
     directionalLight.target = new Object3D();
@@ -49,13 +62,12 @@ class LightingSystem {
 
     const frustumSize = 1;
     directionalLight.shadow.intensity = 0.85;
-    directionalLight.shadow.radius = 3;
     directionalLight.shadow.camera.left = -frustumSize;
     directionalLight.shadow.camera.right = frustumSize;
     directionalLight.shadow.camera.top = frustumSize;
     directionalLight.shadow.camera.bottom = -frustumSize;
     directionalLight.shadow.camera.near = 0.01;
-    directionalLight.shadow.camera.far = 15;
+    directionalLight.shadow.camera.far = 30;
 
     directionalLight.shadow.normalBias = 0.1;
     directionalLight.shadow.bias = -0.001;
@@ -65,7 +77,7 @@ class LightingSystem {
 
   getBakedMapShadowColor = Fn(([mapUv = vec2(0)]) => {
     return texture(assetManager.lightmapTexture, mapUv).add(
-      this.directionalLight.intensity,
+      this.directionalLight.shadow.intensity,
     );
   });
 
@@ -96,15 +108,31 @@ class LightingSystem {
       label: "Directional intensity",
     });
 
-    lightFolder.addBinding(this.ambientLight, "color", {
-      label: "Ambient Color",
+    // lightFolder.addBinding(this.ambientLight, "color", {
+    //   label: "Ambient Color",
+    //   view: "color",
+    //   color: { type: "float" },
+    // });
+    // lightFolder.addBinding(this.ambientLight, "intensity", {
+    //   min: 0,
+    //   max: 1,
+    //   label: "Ambient intensity",
+    // });
+
+    lightFolder.addBinding(this.hemisphereLight, "color", {
+      label: "Hemisphere sky color",
       view: "color",
       color: { type: "float" },
     });
-    lightFolder.addBinding(this.ambientLight, "intensity", {
+    lightFolder.addBinding(this.hemisphereLight, "groundColor", {
+      label: "Hemisphere ground color",
+      view: "color",
+      color: { type: "float" },
+    });
+    lightFolder.addBinding(this.hemisphereLight, "intensity", {
       min: 0,
       max: 1,
-      label: "Ambient intensity",
+      label: "Hemisphere intensity",
     });
   }
 

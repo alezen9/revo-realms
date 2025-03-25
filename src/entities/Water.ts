@@ -52,17 +52,17 @@ type WaterUniforms = {
 
 const defaultUniforms: Required<WaterUniforms> = {
   uTime: uniform(0),
-  uWavesSpeed: uniform(0.01),
+  uWavesSpeed: uniform(0.02),
   uWavesAmplitude: uniform(0.05),
   uWavesFrequency: uniform(2.68),
-  uTroughColor: uniform(new Color().setRGB(0.58, 0.93, 0.88)),
-  uSurfaceColor: uniform(new Color().setRGB(0.59, 0.46, 0.36)),
-  uPeakColor: uniform(new Color().setRGB(0.27, 0.4, 0.38)),
-  uPeakThreshold: uniform(0),
+  uTroughColor: uniform(new Color().setRGB(0.16, 0.16, 0.16)),
+  uSurfaceColor: uniform(new Color().setRGB(0.07, 0.08, 0.09)),
+  uPeakColor: uniform(new Color().setRGB(0.52, 0.53, 0.52)),
+  uPeakThreshold: uniform(0.5),
   uPeakTransition: uniform(0.5),
-  uTroughThreshold: uniform(-0.2),
+  uTroughThreshold: uniform(-0.1),
   uTroughTransition: uniform(0.35),
-  uFresnelScale: uniform(0.65),
+  uFresnelScale: uniform(0.4),
 };
 
 export default class WaterMaterial extends MeshBasicNodeMaterial {
@@ -129,8 +129,7 @@ export default class WaterMaterial extends MeshBasicNodeMaterial {
 
   private computeReflectionColor = Fn(
     ([vNormal = varying(vec3(0, 0, 0)), viewDirection = vec3(0, 0, 0)]) => {
-      let reflectedDirection = reflect(viewDirection, vNormal);
-      reflectedDirection.x = reflectedDirection.x.negate();
+      const reflectedDirection = reflect(viewDirection, vNormal);
       return cubeTexture(assetManager.envMapTexture, reflectedDirection);
     },
   );
@@ -151,7 +150,7 @@ export default class WaterMaterial extends MeshBasicNodeMaterial {
       );
 
       // Calculate fresnel effect
-      const fresnel = this.computeFresnel(vNormal, viewDirection);
+      const fresnelFactor = this.computeFresnel(vNormal, viewDirection);
 
       // Mix between trough and surface colors based on trough transition
       const troughFactor = saturate(
@@ -178,7 +177,7 @@ export default class WaterMaterial extends MeshBasicNodeMaterial {
       );
 
       // Mix the final color with the reflection color
-      const finalColor = mix(mixedColor2, reflectionColor.rgb, fresnel);
+      const finalColor = mix(mixedColor2, reflectionColor.rgb, fresnelFactor);
 
       // const distanceXZ = length(vWorldPosition.xz.sub(cameraPosition.xz));
       const distanceXZSquared = dot(
