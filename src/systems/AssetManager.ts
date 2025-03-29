@@ -1,7 +1,11 @@
 import {
   CubeTexture,
   CubeTextureLoader,
+  LinearFilter,
+  LinearMipmapLinearFilter,
+  LinearSRGBColorSpace,
   LoadingManager,
+  SRGBColorSpace,
   Texture,
   TextureLoader,
 } from "three";
@@ -23,8 +27,8 @@ import terrainTypeTextureUrl from "/textures/realm/terrain_type.webp?url";
 import sandNormalTextureUrl from "/textures/realm/sand_nor.webp?url";
 import grassDiffTextureUrl from "/textures/realm/grass_diff.webp?url";
 import grassNorTextureUrl from "/textures/realm/grass_nor.webp?url";
-// Lightmap
-import lightmapTextureUrl from "/textures/realm/lightmap.webp?url";
+// Shadow map
+import shadowMapTextureUrl from "/textures/realm/shadowMap.webp?url";
 // Water lilies
 import waterLiliesTextureUrl from "/textures/realm/water_lilies.webp?url";
 import waterLiliesAlphaTextureUrl from "/textures/realm/water_lilies_alpha.webp?url";
@@ -36,10 +40,12 @@ import flowerComposition2TextureUrl from "/textures/realm/flower_composition_2.w
 // Stone
 import stoneDifflTextureUrl from "/textures/realm/stone_diff.webp?url";
 
-// Trees
-import barkDiffTextureUrl from "/textures/realm/bark_diff.webp?url";
-import canopyDiffTextureUrl from "/textures/realm/canopy_diff.webp?url";
-import canopyNorTextureUrl from "/textures/realm/canopy_nor.webp?url";
+// Atlases
+import srgbAtlasTextureUrl from "/textures/realm/srgb_atlas.webp?url";
+import linearAtlasTextureUrl from "/textures/realm/linear_atlas.webp?url";
+
+import atlasesCoords from "../atlases/atlases.json";
+import { Atlases } from "../atlases/types";
 
 class AssetManager {
   // Loaders
@@ -58,7 +64,7 @@ class AssetManager {
   grassDiffTexture!: Texture;
   grassNorTexture!: Texture;
   sandNormalTexture!: Texture;
-  lightmapTexture!: Texture;
+  shadowMapTexture!: Texture;
 
   waterLiliesTexture!: Texture;
   waterLiliesAlphaTexture!: Texture;
@@ -68,9 +74,9 @@ class AssetManager {
 
   stoneDiffTexture!: Texture;
 
-  canopyDiffTexture!: Texture;
-  canopyNorTexture!: Texture;
-  barkDiffTexture!: Texture;
+  readonly atlasesCoords = atlasesCoords as Atlases;
+  srgbAtlas!: Texture;
+  linearAtlas!: Texture;
 
   constructor() {
     const manager = this.createLoadingManager();
@@ -145,8 +151,8 @@ class AssetManager {
       this.textureLoader.loadAsync(grassDiffTextureUrl), // Grass diffuse
       this.textureLoader.loadAsync(grassNorTextureUrl), // Grass normal
       this.textureLoader.loadAsync(sandNormalTextureUrl), // Sand normal
-      // Lightmap
-      this.textureLoader.loadAsync(lightmapTextureUrl),
+      // Shadow map
+      this.textureLoader.loadAsync(shadowMapTextureUrl),
       // Water lilies
       this.textureLoader.loadAsync(waterLiliesTextureUrl), // Water lilies diffuse
       this.textureLoader.loadAsync(waterLiliesAlphaTextureUrl), // Water lilies alpha
@@ -159,9 +165,8 @@ class AssetManager {
 
       this.textureLoader.loadAsync(stoneDifflTextureUrl),
 
-      this.textureLoader.loadAsync(canopyDiffTextureUrl),
-      this.textureLoader.loadAsync(canopyNorTextureUrl),
-      this.textureLoader.loadAsync(barkDiffTextureUrl),
+      this.textureLoader.loadAsync(srgbAtlasTextureUrl),
+      this.textureLoader.loadAsync(linearAtlasTextureUrl),
     ]);
 
     // Models
@@ -180,9 +185,11 @@ class AssetManager {
     this.sandNormalTexture.generateMipmaps = false;
     this.grassNorTexture = res[6];
     this.grassNorTexture.generateMipmaps = false;
-    this.lightmapTexture = res[7];
-    this.lightmapTexture.flipY = false;
-    this.lightmapTexture.generateMipmaps = false;
+
+    this.shadowMapTexture = res[7];
+    this.shadowMapTexture.flipY = false;
+    this.shadowMapTexture.generateMipmaps = false;
+    this.shadowMapTexture.colorSpace = LinearSRGBColorSpace;
 
     this.waterLiliesTexture = res[8];
     this.waterLiliesTexture.flipY = false;
@@ -196,12 +203,19 @@ class AssetManager {
 
     this.stoneDiffTexture = res[12];
 
-    this.canopyDiffTexture = res[13];
-    this.canopyDiffTexture.flipY = false;
-    this.canopyNorTexture = res[14];
-    this.canopyNorTexture.flipY = false;
-    this.barkDiffTexture = res[15];
-    this.barkDiffTexture.flipY = false;
+    this.srgbAtlas = res[13];
+    this.srgbAtlas.anisotropy = 8;
+    this.srgbAtlas.flipY = false;
+    this.srgbAtlas.colorSpace = SRGBColorSpace;
+    this.srgbAtlas.minFilter = LinearMipmapLinearFilter;
+    this.srgbAtlas.magFilter = LinearFilter;
+
+    this.linearAtlas = res[14];
+    this.linearAtlas.anisotropy = 8;
+    this.linearAtlas.flipY = false;
+    this.linearAtlas.colorSpace = LinearSRGBColorSpace;
+    this.linearAtlas.minFilter = LinearMipmapLinearFilter;
+    this.linearAtlas.magFilter = LinearFilter;
   }
 }
 

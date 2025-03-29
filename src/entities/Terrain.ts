@@ -13,7 +13,13 @@ import {
   vec3,
 } from "three/tsl";
 import { UniformType } from "../types";
-import { Color, Mesh, MeshLambertNodeMaterial, Vector3 } from "three/webgpu";
+import {
+  Color,
+  Mesh,
+  MeshLambertNodeMaterial,
+  NormalMapNode,
+  Vector3,
+} from "three/webgpu";
 import { assetManager } from "../systems/AssetManager";
 import { realmConfig } from "../realms/PortfolioRealm";
 import {
@@ -28,7 +34,6 @@ import { sceneManager } from "../systems/SceneManager";
 import { debugManager } from "../systems/DebugManager";
 import { eventsManager } from "../systems/EventsManager";
 import { tslUtils } from "../systems/TSLUtils";
-import { lighting } from "../systems/LightingSystem";
 
 type TerrainUniforms = {
   uTime?: UniformType<number>;
@@ -64,8 +69,23 @@ class TerainMaterial extends MeshLambertNodeMaterial {
       const scaledUv = vUv.mul(scaleFactor);
       const scaledCausticsUvA = fract(scaledUv.add(vec2(timer, 0)));
       const scaledCausticsUvB = fract(scaledUv.add(vec2(0, timer.negate())));
-      const noiseA = texture(assetManager.noiseTexture, scaledCausticsUvA, 1).g;
-      const noiseB = texture(assetManager.noiseTexture, scaledCausticsUvB, 2).g;
+
+      const { noise } = assetManager.atlasesCoords.linear_atlas;
+      const noiseAtlasUvA = tslUtils.computeAtlasUv(
+        vec2(...noise.scale),
+        vec2(...noise.offset),
+        scaledCausticsUvA,
+      );
+      const noiseAtlasUvB = tslUtils.computeAtlasUv(
+        vec2(...noise.scale),
+        vec2(...noise.offset),
+        scaledCausticsUvB,
+      );
+      const noiseA = texture(assetManager.linearAtlas, noiseAtlasUvA, 1).g;
+      const noiseB = texture(assetManager.linearAtlas, noiseAtlasUvB, 2).g;
+
+      // const noiseA = texture(assetManager.noiseTexture, scaledCausticsUvA, 1).g;
+      // const noiseB = texture(assetManager.noiseTexture, scaledCausticsUvB, 2).g;
       const caustics = noiseA.add(noiseB);
       const depthFalloff = smoothstep(-1, 10, vDepth);
       const adjustedCaustics = pow(caustics, 3).mul(float(1).sub(depthFalloff));
@@ -109,34 +129,80 @@ class TerainMaterial extends MeshLambertNodeMaterial {
     const _uv = tslUtils.computeMapUvByPosition(positionWorld.xz);
     const vUv = varying(_uv);
 
-    this.aoMap = assetManager.lightmapTexture;
-    this.aoMapIntensity = lighting.shadowIntensity;
-
     const factors = texture(assetManager.terrainTypeMap, vUv, 2.5);
     const grassFactor = factors.g;
     const waterFactor = factors.b;
     const sandFactor = float(1).sub(grassFactor);
     const pathFactor = sandFactor.sub(waterFactor);
 
+    // Ao / ShadowMap
+    const shadowAo = texture(assetManager.shadowMapTexture, vUv.clamp());
+    // this.aoNode = shadowAo.g;
+
+    const shadowFactor = shadowAo.r.add(0.3).clamp();
+
     // Normal
-    const sandNormal = texture(
-      assetManager.sandNormalTexture,
-      fract(vUv.mul(30)),
+    const { sandNormalAo } = assetManager.atlasesCoords.linear_atlas;
+    // const noiseUv = fract(vUv.mul(30));
+    // const noiseAtlasUv = tslUtils.computeAtlasUv(
+    //   vec2(...noise.scale),
+    //   vec2(...noise.offset),
+    //   noiseUv,
+    // );
+    // const noiseValue = texture(assetManager.linearAtlas, noiseAtlasUv);
+
+    // const sandUv = fract(vUv.mul(30));
+    // const sandAtlasUv = tslUtils.computeAtlasUv(
+    //   vec2(...sandNormalAo.scale),
+    //   vec2(...sandNormalAo.offset),
+    //   sandUv,
+    // );
+
+    // const sandNorAo = texture(assetManager.linearAtlas, sandAtlasUv, -1);
+    // const nor = sandNorAo.rgb.mul(noiseValue.r).normalize();
+    // this.normalNode = new NormalMapNode(nor);
+
+    const uvA = fract(vUv.mul(27.3));
+    const uvB = fract(vUv.mul(14.1).add(vec2(0.2, 0.3)));
+
+    const texA = texture(
+      assetManager.linearAtlas,
+      tslUtils.computeAtlasUv(
+        vec2(...sandNormalAo.scale),
+        vec2(...sandNormalAo.offset),
+        uvA,
+      ),
     );
 
-    const grassUv = fract(vUv.mul(20));
-    const grassNormal = texture(assetManager.grassNorTexture, grassUv);
-    const terrainNoise = grassNormal.dot(sandNormal).mul(0.65);
+    const texB = texture(
+      assetManager.linearAtlas,
+      tslUtils.computeAtlasUv(
+        vec2(...sandNormalAo.scale),
+        vec2(...sandNormalAo.offset),
+        uvB,
+      ),
+    );
+
+    const detailNormal = mix(texA.rgb, texB.rgb, 0.5); // or modulate with noise
+
+    this.normalNode = new NormalMapNode(detailNormal, float(0.75));
 
     // Diffuse
+    const { grassTerrainDiffuse } = assetManager.atlasesCoords.srgb_atlas;
     // Grass
-    const grassColorSample = texture(assetManager.grassDiffTexture, grassUv);
+    const grassUv = fract(vUv.mul(20));
+    const grassAtlasUv = tslUtils.computeAtlasUv(
+      vec2(...grassTerrainDiffuse.scale),
+      vec2(...grassTerrainDiffuse.offset),
+      grassUv,
+    );
+    const grassColorSample = texture(assetManager.srgbAtlas, grassAtlasUv);
+
     const sandAlpha = float(1).sub(grassColorSample.a);
     const grassColor = this._uniforms.uGrassTerrainColor
       .mul(sandAlpha)
       .add(grassColorSample)
-      .mul(grassFactor)
-      .mul(0.85);
+      .mul(grassFactor);
 
     const pathColor = this._uniforms.uPathSandColor.mul(1.2).mul(pathFactor);
 
@@ -146,11 +212,9 @@ class TerainMaterial extends MeshLambertNodeMaterial {
     const waterColor = waterBaseColor.mul(waterFactor);
 
     // Final diffuse
-    const finalColor = grassColor
-      .add(pathColor.mul(terrainNoise))
-      .add(waterColor.mul(terrainNoise).mul(0.5));
+    const finalColor = grassColor.add(pathColor).add(waterColor.mul(0.5));
 
-    this.colorNode = finalColor;
+    this.colorNode = finalColor.mul(shadowFactor);
   }
 }
 
@@ -158,6 +222,7 @@ class InnerTerrain {
   constructor(material: TerainMaterial) {
     const floor = this.createFloor();
     floor.material = material;
+    material.needsUpdate = true;
     sceneManager.scene.add(floor);
   }
 
@@ -248,6 +313,7 @@ class OuterTerrain {
   constructor(material: TerainMaterial) {
     this.outerFloor = this.createOuterFloorVisual();
     this.outerFloor.material = material;
+    material.needsUpdate = true;
     this.kintoun = this.createKintoun();
     sceneManager.scene.add(this.outerFloor);
   }

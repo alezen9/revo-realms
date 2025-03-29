@@ -307,7 +307,7 @@ class PlayerMaterial extends MeshLambertNodeMaterial {
 
     const mapUv = tslUtils.computeMapUvByPosition(positionWorld.xz);
     const vMapUv = varying(mapUv);
-    const bakedShadowColor = lighting.getBakedMapShadowColor(vMapUv);
+    const shadowFactor = lighting.getTerrainShadowFactor(vMapUv);
 
     const noiseValue = texture(
       assetManager.noiseTexture,
@@ -344,6 +344,6 @@ class PlayerMaterial extends MeshLambertNodeMaterial {
     const tintedColor = aboveWaterColor.add(underwaterColor);
 
     // Apply baked shadows
-    this.colorNode = tintedColor.mul(bakedShadowColor);
+    this.colorNode = tintedColor.mul(shadowFactor);
   }
 }

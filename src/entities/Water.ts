@@ -55,7 +55,7 @@ const defaultUniforms: Required<WaterUniforms> = {
   uWavesSpeed: uniform(0.02),
   uWavesAmplitude: uniform(0.05),
   uWavesFrequency: uniform(2.68),
-  uTroughColor: uniform(new Color().setRGB(0.16, 0.16, 0.16)),
+  uTroughColor: uniform(new Color().setRGB(0.21, 0.08, 0.0)),
   uSurfaceColor: uniform(new Color().setRGB(0.07, 0.08, 0.09)),
   uPeakColor: uniform(new Color().setRGB(0.52, 0.53, 0.52)),
   uPeakThreshold: uniform(0.5),
@@ -186,7 +186,7 @@ export default class WaterMaterial extends MeshBasicNodeMaterial {
       );
 
       const minDist = 10; // Minimum distance (fully transparent at this distance)
-      const maxDist = 55; // Maximum distance (fully opaque at this distance)
+      const maxDist = 35; // Maximum distance (fully opaque at this distance)
 
       const opacity = mix(
         0,
@@ -303,7 +303,6 @@ export class Water {
     const water = assetManager.realmModel.scene.getObjectByName(
       "water",
     ) as Mesh;
-    delete water.geometry.attributes.normal;
     const waterMaterial = new WaterMaterial({
       uTime: this.uTime,
     });

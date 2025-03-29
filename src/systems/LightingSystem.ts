@@ -43,15 +43,15 @@ class LightingSystem {
     const hemiLight = new HemisphereLight();
     hemiLight.color.setRGB(0.5, 0.4, 0.6);
     hemiLight.groundColor.setRGB(0.3, 0.2, 0.2);
-    hemiLight.intensity = 0.3;
+    hemiLight.intensity = 0.6;
     hemiLight.position.copy(config.LIGHT_POSITION_OFFSET);
     return hemiLight;
   }
 
   private setupDirectionalLighting() {
     const directionalLight = new DirectionalLight();
-    directionalLight.intensity = 0.7;
-    directionalLight.color.setRGB(1.0, 0.85, 0.77);
+    directionalLight.intensity = 1;
+    directionalLight.color.setRGB(0.85, 0.75, 0.7);
     directionalLight.position.copy(config.LIGHT_POSITION_OFFSET);
 
     directionalLight.target = new Object3D();
@@ -75,10 +75,9 @@ class LightingSystem {
     return directionalLight;
   }
 
-  getBakedMapShadowColor = Fn(([mapUv = vec2(0)]) => {
-    return texture(assetManager.lightmapTexture, mapUv).add(
-      this.directionalLight.shadow.intensity,
-    );
+  getTerrainShadowFactor = Fn(([mapUv = vec2(0)]) => {
+    const shadowAo = texture(assetManager.shadowMapTexture, mapUv);
+    return shadowAo.r.add(0.15).clamp();
   });
 
   get shadowIntensity() {
@@ -104,7 +103,7 @@ class LightingSystem {
     });
     lightFolder.addBinding(this.directionalLight, "intensity", {
       min: 0,
-      max: 1,
+      max: 5,
       label: "Directional intensity",
     });
 
