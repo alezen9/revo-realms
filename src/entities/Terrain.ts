@@ -28,7 +28,6 @@ import { sceneManager } from "../systems/SceneManager";
 import { debugManager } from "../systems/DebugManager";
 import { eventsManager } from "../systems/EventsManager";
 import { tslUtils } from "../systems/TSLUtils";
-import { lighting } from "../systems/LightingSystem";
 
 type TerrainUniforms = {
   uTime?: UniformType<number>;
@@ -109,8 +108,8 @@ class TerainMaterial extends MeshLambertNodeMaterial {
     const _uv = tslUtils.computeMapUvByPosition(positionWorld.xz);
     const vUv = varying(_uv);
 
-    this.aoMap = assetManager.lightmapTexture;
-    this.aoMapIntensity = lighting.shadowIntensity;
+    const shadowAo = texture(assetManager.terrainShadowAo, vUv.clamp());
+    this.aoNode = shadowAo.g;
 
     const factors = texture(assetManager.terrainTypeMap, vUv, 2.5);
     const grassFactor = factors.g;
@@ -119,18 +118,15 @@ class TerainMaterial extends MeshLambertNodeMaterial {
     const pathFactor = sandFactor.sub(waterFactor);
 
     // Normal
-    const sandNormal = texture(
-      assetManager.sandNormalTexture,
-      fract(vUv.mul(30)),
-    );
+    const sandNormal = texture(assetManager.sandNormal, fract(vUv.mul(30)));
 
-    const grassUv = fract(vUv.mul(20));
-    const grassNormal = texture(assetManager.grassNorTexture, grassUv);
+    const grassUv = fract(vUv.mul(30));
+    const grassNormal = texture(assetManager.grassNormal, grassUv);
     const terrainNoise = grassNormal.dot(sandNormal).mul(0.65);
 
     // Diffuse
     // Grass
-    const grassColorSample = texture(assetManager.grassDiffTexture, grassUv);
+    const grassColorSample = texture(assetManager.grassDiffuse, grassUv);
     const sandAlpha = float(1).sub(grassColorSample.a);
     const grassColor = this._uniforms.uGrassTerrainColor
       .mul(sandAlpha)
@@ -150,7 +146,7 @@ class TerainMaterial extends MeshLambertNodeMaterial {
       .add(pathColor.mul(terrainNoise))
       .add(waterColor.mul(terrainNoise).mul(0.5));
 
-    this.colorNode = finalColor;
+    this.colorNode = finalColor.mul(shadowAo.r);
   }
 }
 

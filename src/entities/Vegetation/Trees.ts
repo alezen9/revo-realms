@@ -1,35 +1,32 @@
-import { fract, texture, uniform, uv } from "three/tsl";
+import { float, fract, mix, texture, uv, vec3 } from "three/tsl";
 import {
-  Color,
   DoubleSide,
   Group,
   InstancedMesh,
   Mesh,
   MeshLambertNodeMaterial,
+  NormalMapNode,
 } from "three/webgpu";
-import { UniformType } from "../../types";
 import { assetManager } from "../../systems/AssetManager";
 import { ColliderDesc, RigidBodyDesc } from "@dimforge/rapier3d";
-import { debugManager } from "../../systems/DebugManager";
 import { physics } from "../../systems/Physics";
 import { sceneManager } from "../../systems/SceneManager";
-
-type TreeMaterialUniforms = {
-  uBaseColor: UniformType<Color>;
-};
-
-const uniforms: TreeMaterialUniforms = {
-  uBaseColor: uniform(new Color()),
-};
 
 class BarkMaterial extends MeshLambertNodeMaterial {
   constructor() {
     super();
     this.precision = "lowp";
     this.flatShading = false;
-    const _uv = fract(uv());
-    const diff = texture(assetManager.barkDiffTexture, _uv);
+
+    const _uv = fract(uv().mul(7));
+
+    // Diffuse
+    const diff = texture(assetManager.barkDiffuse, _uv);
     this.colorNode = diff;
+
+    // Normal
+    const nor = texture(assetManager.barkNormal, _uv);
+    this.normalNode = new NormalMapNode(nor);
   }
 }
 
@@ -39,11 +36,28 @@ class CanopyMaterial extends MeshLambertNodeMaterial {
     this.precision = "lowp";
     this.flatShading = false;
     this.transparent = true;
-    this.depthTest = false;
     this.side = DoubleSide;
-    this.normalMap = assetManager.canopyNorTexture;
-    const diff = texture(assetManager.canopyDiffTexture, uv());
-    this.colorNode = diff.mul(uniforms.uBaseColor);
+
+    // Diffuse
+    const diff = texture(assetManager.canopyDiffuse, uv());
+    const summerAmbiance = mix(
+      vec3(0.384, 0.511, 0.011),
+      vec3(0.268, 0.162, 0.009),
+      0.5,
+    );
+
+    // const autumnAmbiance = mix(
+    //   vec3(1, 0.254, 0.052),
+    //   vec3(1, 0.135, 0.092),
+    //   0.5,
+    // );
+    this.colorNode = mix(diff, summerAmbiance, 0.5);
+
+    // Normal
+    const nor = texture(assetManager.canopyNormal, uv());
+    this.normalNode = new NormalMapNode(nor, float(2));
+
+    this.alphaTest = 0.9;
   }
 }
 export default class Trees {
@@ -97,19 +111,5 @@ export default class Trees {
       physics.world.createCollider(colliderDesc, rigidBody);
     });
     sceneManager.scene.add(barkInstances, canopyInstances);
-
-    this.debugMonument();
-  }
-
-  private debugMonument() {
-    const treesFolder = debugManager.panel.addFolder({
-      title: "🌳 Trees",
-    });
-    treesFolder.expanded = false;
-    treesFolder.addBinding(uniforms.uBaseColor, "value", {
-      label: "Canopy color",
-      view: "color",
-      color: { type: "float" },
-    });
   }
 }

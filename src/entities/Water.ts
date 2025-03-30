@@ -189,8 +189,8 @@ export default class WaterMaterial extends MeshBasicNodeMaterial {
       const maxDist = 55; // Maximum distance (fully opaque at this distance)
 
       const opacity = mix(
-        0,
-        0.5,
+        0.1,
+        0.75,
         smoothstep(minDist * minDist, maxDist * maxDist, distanceXZSquared),
       );
 
@@ -303,7 +303,6 @@ export class Water {
     const water = assetManager.realmModel.scene.getObjectByName(
       "water",
     ) as Mesh;
-    delete water.geometry.attributes.normal;
     const waterMaterial = new WaterMaterial({
       uTime: this.uTime,
     });

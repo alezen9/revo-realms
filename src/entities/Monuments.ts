@@ -1,5 +1,11 @@
-import { fract, texture, uniform, uv } from "three/tsl";
-import { Color, MathUtils, Mesh, MeshLambertNodeMaterial } from "three/webgpu";
+import { float, fract, texture, uniform, uv } from "three/tsl";
+import {
+  Color,
+  MathUtils,
+  Mesh,
+  MeshLambertNodeMaterial,
+  NormalMapNode,
+} from "three/webgpu";
 import { UniformType } from "../types";
 import { assetManager } from "../systems/AssetManager";
 import { ColliderDesc, RigidBodyDesc } from "@dimforge/rapier3d";
@@ -33,9 +39,18 @@ class StoneMaterial extends MeshLambertNodeMaterial {
     this.precision = "lowp";
     this.flatShading = false;
 
-    const _uv = fract(uv().add(this._uniforms.uRandom).mul(5));
-    const diff = texture(assetManager.stoneDiffTexture, _uv);
-    this.colorNode = diff.mul(this._uniforms.uBaseColor);
+    const _uv = fract(uv().mul(2).add(this._uniforms.uRandom));
+
+    // Diffuse
+    const diff = texture(assetManager.stoneDiffuse, _uv);
+    this.colorNode = diff.mul(1.5);
+
+    // Normal
+    const norAo = texture(assetManager.stoneNormalAo, _uv);
+    this.normalNode = new NormalMapNode(norAo.rgb, float(0.5));
+
+    // AO
+    this.aoNode = norAo.a;
   }
 }
 

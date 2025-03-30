@@ -1,65 +1,71 @@
 import {
+  float,
   fract,
   hash,
   instanceIndex,
-  mix,
+  step,
   texture,
-  uniform,
   uv,
 } from "three/tsl";
 import {
-  Color,
   InstancedMesh,
   Mesh,
   MeshLambertNodeMaterial,
+  NormalMapNode,
 } from "three/webgpu";
-import { UniformType } from "../types";
 import { assetManager } from "../systems/AssetManager";
-import { ColliderDesc, RigidBodyDesc } from "@dimforge/rapier3d";
-import { debugManager } from "../systems/DebugManager";
-import { physics } from "../systems/Physics";
+// import { ColliderDesc, RigidBodyDesc } from "@dimforge/rapier3d";
+// import { physics } from "../systems/Physics";
 import { sceneManager } from "../systems/SceneManager";
 
-type RockMaterialUniforms = {
-  uBaseColor: UniformType<Color>;
-};
-
-const defaultUniforms: RockMaterialUniforms = {
-  uBaseColor: uniform(new Color().setRGB(0.57, 0.57, 0.57)),
-};
-
 class RockMaterial extends MeshLambertNodeMaterial {
-  _uniforms: RockMaterialUniforms;
-
-  constructor(uniforms?: RockMaterialUniforms) {
+  constructor() {
     super();
-    this._uniforms = { ...defaultUniforms, ...uniforms };
-    this.createMaterial();
-  }
 
-  private createMaterial() {
     this.precision = "lowp";
     this.flatShading = false;
     const rand = hash(instanceIndex);
-    const _uv = fract(uv().add(rand).mul(2.5));
-    const noise = texture(assetManager.noiseTexture, _uv);
-    const mixedNoise = noise.b.mul(noise.r);
-    const diff = texture(assetManager.stoneDiffTexture, _uv);
-    this.colorNode = mix(diff, this._uniforms.uBaseColor, mixedNoise);
+    const discriminantA = step(0.5, rand);
+    const discriminantB = float(1).sub(discriminantA);
+    const basicUv = fract(uv().mul(3.6).add(rand));
+    const mossyUv = fract(uv().mul(1.5).add(rand));
+
+    // Diffuse
+
+    const diffBasic = texture(assetManager.stoneDiffuse, basicUv).mul(
+      discriminantA,
+    );
+
+    const diffMossy = texture(assetManager.stoneMossyDiffuse, mossyUv).mul(
+      discriminantB,
+    );
+    const finalColor = diffBasic.add(diffMossy);
+    this.colorNode = finalColor.rgb;
+
+    // Normal
+    const norAoBasic = texture(assetManager.stoneNormalAo, basicUv).mul(
+      discriminantA,
+    );
+    const norMossyAo = texture(assetManager.stoneMossyNormalAo, mossyUv).mul(
+      discriminantB,
+    );
+    const norAo = norAoBasic.add(norMossyAo);
+    this.normalNode = new NormalMapNode(norAo.rgb, float(3));
+
+    // AO
+    this.aoNode = norAo.a;
   }
 }
 
 export default class Rocks {
-  private uniforms = defaultUniforms;
-
   constructor() {
     // Visual
-    const rock = assetManager.realmModel.scene.getObjectByName("rock") as Mesh;
+    const rock = assetManager.realmModel.scene.getObjectByName("stone") as Mesh;
     const colliders = assetManager.realmModel.scene.children.filter(
-      ({ name }) => name.startsWith("rock_collider"),
+      ({ name }) => name.startsWith("stone_collider"),
     ) as Mesh[];
 
-    const material = new RockMaterial(this.uniforms);
+    const material = new RockMaterial();
     const instances = new InstancedMesh(
       rock.geometry,
       material,
@@ -68,31 +74,23 @@ export default class Rocks {
 
     instances.receiveShadow = true;
 
+    // const baseCollider = assetManager.realmModel.scene.getObjectByName(
+    //   "base_stone_collider",
+    // ) as Mesh;
+    // const boundingSphere = baseCollider.geometry.boundingSphere!;
+    // const baseRadius = boundingSphere.radius;
+
     colliders.forEach((colliderSphere, i) => {
       instances.setMatrixAt(i, colliderSphere.matrix);
-      // Physics
-      const rigidBodyDesc = RigidBodyDesc.fixed()
-        .setTranslation(...colliderSphere.position.toArray())
-        .setRotation(colliderSphere.quaternion);
-      const rigidBody = physics.world.createRigidBody(rigidBodyDesc);
-      const radius = 0.5 * colliderSphere.scale.y;
-      const colliderDesc = ColliderDesc.ball(radius).setRestitution(0.15);
-      physics.world.createCollider(colliderDesc, rigidBody);
+      // // Physics
+      // const rigidBodyDesc = RigidBodyDesc.fixed()
+      //   .setTranslation(...colliderSphere.position.toArray())
+      //   .setRotation(colliderSphere.quaternion);
+      // const rigidBody = physics.world.createRigidBody(rigidBodyDesc);
+      // const radius = baseRadius * colliderSphere.scale.y;
+      // const colliderDesc = ColliderDesc.ball(radius).setRestitution(0.15);
+      // physics.world.createCollider(colliderDesc, rigidBody);
     });
     sceneManager.scene.add(instances);
-
-    this.debugRocks();
-  }
-
-  private debugRocks() {
-    const rocksFolder = debugManager.panel.addFolder({
-      title: "🪨 Rocks",
-    });
-    rocksFolder.expanded = false;
-    rocksFolder.addBinding(this.uniforms.uBaseColor, "value", {
-      label: "Base color",
-      view: "color",
-      color: { type: "float" },
-    });
   }
 }

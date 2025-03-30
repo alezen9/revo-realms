@@ -29,35 +29,46 @@ import { sceneManager } from "../systems/SceneManager";
 import { lighting } from "../systems/LightingSystem";
 import { eventsManager } from "../systems/EventsManager";
 import { tslUtils } from "../systems/TSLUtils";
+import { debugManager } from "../systems/DebugManager";
+
+const getConfig = () => {
+  const jumpImpulse = 75;
+  return {
+    JUMP_BUFFER_DURATION_IN_SECONDS: 0.2,
+    MAX_CONSECUTIVE_JUMPS: 2,
+    JUMP_CUT_MULTIPLIER: 0.25,
+    FALL_MULTIPLIER: 2.75,
+    MAX_UPWARD_VELOCITY: 6,
+    LINEAR_DAMPING: 0.35,
+    ANGULAR_DAMPING: 0.6,
+    JUMP_IMPULSE: new Vector3(0, jumpImpulse, 0),
+    LIN_VEL_STRENGTH: 35,
+    ANG_VEL_STRENGTH: 25,
+    RADIUS: 0.5,
+    PLAYER_INITIAL_POSITION: new Vector3(0, 5, 0),
+    CAMERA_OFFSET: new Vector3(0, 11, 17),
+    CAMERA_LERP_FACTOR: 7.5,
+    UP: new Vector3(0, 1, 0),
+    DOWN: new Vector3(0, -1, 0),
+    FORWARD: new Vector3(0, 0, -1),
+  };
+};
+
+const config = getConfig();
 
 export default class Player {
   private mesh: Mesh;
   private rigidBody: RigidBody;
 
-  // Camera smoothing
   private smoothedCameraPosition = new Vector3();
   private desiredCameraPosition = new Vector3();
   private smoothedCameraTarget = new Vector3();
   private desiredTargetPosition = new Vector3();
 
-  // Yaw (rotation around Y-axis)
   private yawInRadians = 0;
   private prevYawInRadians = -1;
   private yawQuaternion = new Quaternion();
 
-  // Jump & Movement Configuration
-  private readonly JUMP_IMPULSE = 75;
-  private readonly JUMP_BUFFER_DURATION_IN_SECONDS = 0.2;
-  private readonly MAX_CONSECUTIVE_JUMPS = 2;
-  private readonly JUMP_CUT_MULTIPLIER = 0.25;
-  private readonly FALL_MULTIPLIER = 2.75;
-  private readonly MAX_UPWARD_VELOCITY = 6;
-  private readonly LINEAR_DAMPING = 0.35;
-  private readonly ANGULAR_DAMPING = 0.6;
-  private jumpImpulse = new Vector3(0, this.JUMP_IMPULSE, 0);
-
-  private readonly LIN_VEL_STRENGTH = 35;
-  private readonly ANG_VEL_STRENGTH = 25;
   private newLinVel = new Vector3();
   private newAngVel = new Vector3();
   private torqueAxis = new Vector3();
@@ -69,17 +80,8 @@ export default class Player {
   private wasJumpHeld = false;
   private jumpBufferTimer = 0;
 
-  // Constants for geometry/camera offset
-  private readonly RADIUS = 0.5;
-  private readonly PLAYER_INITIAL_POSITION = new Vector3(0, 5, 0);
-  private readonly CAMERA_OFFSET = new Vector3(0, 11, 17);
-  private readonly CAMERA_LERP_FACTOR = 7.5;
-  private readonly UP = new Vector3(0, 1, 0);
-  private readonly DOWN = new Vector3(0, -1, 0);
-  private readonly FORWARD = new Vector3(0, 0, -1);
-
   private rayOrigin = new Vector3();
-  private ray = new Ray(this.rayOrigin, this.DOWN);
+  private ray = new Ray(this.rayOrigin, config.DOWN);
 
   private uTime = uniform(0);
   private uOffsetShadow = uniform(0);
@@ -94,30 +96,37 @@ export default class Player {
     physics.world.createCollider(this.createColliderDesc(), this.rigidBody);
 
     eventsManager.on("update", this.update.bind(this));
+
+    debugManager.panel.addBinding(config.CAMERA_OFFSET, "y", {
+      label: "Main camera height",
+    });
+    debugManager.panel.addBinding(config.CAMERA_OFFSET, "z", {
+      label: "Main camera distance",
+    });
   }
 
   private createCharacterMesh() {
-    const geometry = new IcosahedronGeometry(this.RADIUS, 2);
+    const geometry = new IcosahedronGeometry(config.RADIUS, 2);
     const material = new PlayerMaterial({
       uTime: this.uTime,
       uOffsetShadow: this.uOffsetShadow,
     });
     const mesh = new Mesh(geometry, material);
     mesh.castShadow = true;
-    mesh.position.copy(this.PLAYER_INITIAL_POSITION);
+    mesh.position.copy(config.PLAYER_INITIAL_POSITION);
     return mesh;
   }
 
   private createRigidBodyDesc() {
-    const { x, y, z } = this.PLAYER_INITIAL_POSITION;
+    const { x, y, z } = config.PLAYER_INITIAL_POSITION;
     return RigidBodyDesc.dynamic()
       .setTranslation(x, y, z)
-      .setLinearDamping(this.LINEAR_DAMPING)
-      .setAngularDamping(this.ANGULAR_DAMPING);
+      .setLinearDamping(config.LINEAR_DAMPING)
+      .setAngularDamping(config.ANGULAR_DAMPING);
   }
 
   private createColliderDesc() {
-    return ColliderDesc.ball(this.RADIUS)
+    return ColliderDesc.ball(config.RADIUS)
       .setRestitution(0.2)
       .setFriction(1)
       .setMass(3);
@@ -131,7 +140,7 @@ export default class Player {
     this.uTime.value = clock.getElapsedTime();
 
     if (this.prevYawInRadians !== this.yawInRadians) {
-      this.yawQuaternion.setFromAxisAngle(this.UP, this.yawInRadians);
+      this.yawQuaternion.setFromAxisAngle(config.UP, this.yawInRadians);
       this.prevYawInRadians = this.yawInRadians;
     }
 
@@ -152,7 +161,7 @@ export default class Player {
     // 2) Jump buffer
     const justPressedThisFrame = isJumpKeyPressed && !this.wasJumpHeld;
     if (justPressedThisFrame) {
-      this.jumpBufferTimer = this.JUMP_BUFFER_DURATION_IN_SECONDS;
+      this.jumpBufferTimer = config.JUMP_BUFFER_DURATION_IN_SECONDS;
     } else {
       this.jumpBufferTimer = Math.max(0, this.jumpBufferTimer - delta);
     }
@@ -177,7 +186,7 @@ export default class Player {
   private checkIfGrounded(): boolean {
     // Cast a ray downward from just below the sphere’s center
     this.rayOrigin.copy(this.rigidBody.translation());
-    this.rayOrigin.y -= this.RADIUS + 0.01;
+    this.rayOrigin.y -= config.RADIUS + 0.01;
     const maxDistance = 0.2;
     const hit = physics.world.castRay(this.ray, maxDistance, true);
     if (!hit) return false;
@@ -187,29 +196,29 @@ export default class Player {
 
   private canJump(): boolean {
     if (this.isOnGround) return true;
-    return this.jumpCount < this.MAX_CONSECUTIVE_JUMPS;
+    return this.jumpCount < config.MAX_CONSECUTIVE_JUMPS;
   }
 
   private performJump() {
-    this.rigidBody.applyImpulse(this.jumpImpulse, true);
+    this.rigidBody.applyImpulse(config.JUMP_IMPULSE, true);
     this.jumpCount += 1;
   }
 
   private handleJumpCut(isJumpKeyPressed: boolean, velocity: Vector) {
     const justReleasedJump = !isJumpKeyPressed && this.wasJumpHeld;
     if (!justReleasedJump || velocity.y <= 0) return;
-    velocity.y *= this.JUMP_CUT_MULTIPLIER;
+    velocity.y *= config.JUMP_CUT_MULTIPLIER;
   }
 
   private handleFastFall(delta: number, velocity: Vector, gravityY: number) {
     if (velocity.y >= 0) return;
-    const extraDown = this.FALL_MULTIPLIER * Math.abs(gravityY) * delta;
+    const extraDown = config.FALL_MULTIPLIER * Math.abs(gravityY) * delta;
     velocity.y -= extraDown;
   }
 
   private clampUpwardVelocity(velocity: Vector) {
-    if (velocity.y <= this.MAX_UPWARD_VELOCITY) return;
-    velocity.y = this.MAX_UPWARD_VELOCITY;
+    if (velocity.y <= config.MAX_UPWARD_VELOCITY) return;
+    velocity.y = config.MAX_UPWARD_VELOCITY;
   }
 
   private updateHorizontalMovement(delta: number) {
@@ -226,15 +235,15 @@ export default class Player {
     if (isLeftward) this.yawInRadians += turnSpeed * delta;
     if (isRightward) this.yawInRadians -= turnSpeed * delta;
 
-    this.forwardVec.copy(this.FORWARD).applyQuaternion(this.yawQuaternion);
+    this.forwardVec.copy(config.FORWARD).applyQuaternion(this.yawQuaternion);
 
-    this.torqueAxis.crossVectors(this.UP, this.forwardVec).normalize();
+    this.torqueAxis.crossVectors(config.UP, this.forwardVec).normalize();
 
     this.newLinVel.copy(this.rigidBody.linvel());
     this.newAngVel.copy(this.rigidBody.angvel());
 
-    const linVelScale = this.LIN_VEL_STRENGTH * delta;
-    const angVelScale = this.ANG_VEL_STRENGTH * delta;
+    const linVelScale = config.LIN_VEL_STRENGTH * delta;
+    const angVelScale = config.ANG_VEL_STRENGTH * delta;
 
     if (isForward) {
       this.newLinVel.addScaledVector(this.forwardVec, linVelScale);
@@ -259,12 +268,12 @@ export default class Player {
   private updateCameraPosition(delta: number) {
     // Rotate desired camera pos
     this.desiredCameraPosition
-      .copy(this.CAMERA_OFFSET)
+      .copy(config.CAMERA_OFFSET)
       .applyQuaternion(this.yawQuaternion)
       .add(this.mesh.position);
 
     // Lerp
-    const lerpFactor = this.CAMERA_LERP_FACTOR * delta;
+    const lerpFactor = config.CAMERA_LERP_FACTOR * delta;
     this.smoothedCameraPosition.lerp(this.desiredCameraPosition, lerpFactor);
 
     // Lerp target as well
@@ -307,7 +316,7 @@ class PlayerMaterial extends MeshLambertNodeMaterial {
 
     const mapUv = tslUtils.computeMapUvByPosition(positionWorld.xz);
     const vMapUv = varying(mapUv);
-    const bakedShadowColor = lighting.getBakedMapShadowColor(vMapUv);
+    const shadowFactor = lighting.getTerrainShadowFactor(vMapUv);
 
     const noiseValue = texture(
       assetManager.noiseTexture,
@@ -344,6 +353,6 @@ class PlayerMaterial extends MeshLambertNodeMaterial {
     const tintedColor = aboveWaterColor.add(underwaterColor);
 
     // Apply baked shadows
-    this.colorNode = tintedColor.mul(bakedShadowColor);
+    this.colorNode = tintedColor.mul(shadowFactor);
   }
 }

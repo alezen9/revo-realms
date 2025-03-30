@@ -1,6 +1,7 @@
 import {
   CubeTexture,
   CubeTextureLoader,
+  LinearSRGBColorSpace,
   LoadingManager,
   Texture,
   TextureLoader,
@@ -19,27 +20,29 @@ import nzUrl from "/textures/environment/nz.webp?url";
 // Noise
 import noiseTextureUrl from "/textures/noise/noise.webp?url";
 // Terrain
-import terrainTypeTextureUrl from "/textures/realm/terrain_type.webp?url";
-import sandNormalTextureUrl from "/textures/realm/sand_nor.webp?url";
-import grassDiffTextureUrl from "/textures/realm/grass_diff.webp?url";
-import grassNorTextureUrl from "/textures/realm/grass_nor.webp?url";
-// Lightmap
-import lightmapTextureUrl from "/textures/realm/lightmap.webp?url";
+import terrainTypeTextureUrl from "/textures/realm/terrainType.webp?url";
+import sandNorTextureUrl from "/textures/realm/sandNormal.webp?url";
+import grassNorTextureUrl from "/textures/realm/grassNormal.webp?url";
+import grassDiffTextureUrl from "/textures/realm/grassDiffuse.webp?url";
+// Shadowmap
+import lightmapTextureUrl from "/textures/realm/terrainShadowAo.webp?url";
 // Water lilies
-import waterLiliesTextureUrl from "/textures/realm/water_lilies.webp?url";
-import waterLiliesAlphaTextureUrl from "/textures/realm/water_lilies_alpha.webp?url";
-
-// Flowers
-import flowerComposition1TextureUrl from "/textures/realm/flower_composition_1.webp?url";
-import flowerComposition2TextureUrl from "/textures/realm/flower_composition_2.webp?url";
-
-// Stone
-import stoneDifflTextureUrl from "/textures/realm/stone_diff.webp?url";
-
+import waterLiliesTextureUrl from "/textures/realm/waterLiliesDiffuse.webp?url";
+import waterLiliesAlphaTextureUrl from "/textures/realm/waterLiliesAlpha.webp?url";
+// Stones
+import stoneDiffTextureUrl from "/textures/realm/stoneDiffuse.webp?url";
+import stoneMossyDiffTextureUrl from "/textures/realm/stoneMossyDiffuse.webp?url";
+import stoneNorAoTextureUrl from "/textures/realm/stoneNormalAo.webp?url";
+import stoneMossyNorAoTextureUrl from "/textures/realm/stoneMossyNormalAo.webp?url";
 // Trees
-import barkDiffTextureUrl from "/textures/realm/bark_diff.webp?url";
-import canopyDiffTextureUrl from "/textures/realm/canopy_diff.webp?url";
-import canopyNorTextureUrl from "/textures/realm/canopy_nor.webp?url";
+import barkDiffTextureUrl from "/textures/realm/barkDiffuse.webp?url";
+import barkNorTextureUrl from "/textures/realm/barkNormal.webp?url";
+import canopyDiffTextureUrl from "/textures/realm/canopyDiffuse.webp?url";
+import canopyNorTextureUrl from "/textures/realm/canopyNormal.webp?url";
+
+// // Flowers
+// import flowerComposition1TextureUrl from "/textures/realm/flower_composition_1.webp?url";
+// import flowerComposition2TextureUrl from "/textures/realm/flower_composition_2.webp?url";
 
 class AssetManager {
   // Loaders
@@ -55,22 +58,23 @@ class AssetManager {
   envMapTexture!: CubeTexture;
 
   terrainTypeMap!: Texture;
-  grassDiffTexture!: Texture;
-  grassNorTexture!: Texture;
-  sandNormalTexture!: Texture;
-  lightmapTexture!: Texture;
+  terrainShadowAo!: Texture;
+  grassDiffuse!: Texture;
+  sandNormal!: Texture;
+  grassNormal!: Texture;
+
+  canopyDiffuse!: Texture;
+  canopyNormal!: Texture;
+  barkDiffuse!: Texture;
+  barkNormal!: Texture;
+
+  stoneDiffuse!: Texture;
+  stoneMossyDiffuse!: Texture;
+  stoneNormalAo!: Texture;
+  stoneMossyNormalAo!: Texture;
 
   waterLiliesTexture!: Texture;
   waterLiliesAlphaTexture!: Texture;
-
-  flowerCompositionTexture_1!: Texture;
-  flowerCompositionTexture_2!: Texture;
-
-  stoneDiffTexture!: Texture;
-
-  canopyDiffTexture!: Texture;
-  canopyNorTexture!: Texture;
-  barkDiffTexture!: Texture;
 
   constructor() {
     const manager = this.createLoadingManager();
@@ -127,9 +131,9 @@ class AssetManager {
 
   async initAsync() {
     const res = await Promise.all([
-      // Model
+      // Model [0]
       this.gltfLoader.loadAsync(realmModelUrl),
-      // Environment
+      // Environment [1]
       assetManager.cubeTextureLoader.loadAsync([
         pxUrl, // positive x
         nxUrl, // negative x
@@ -138,30 +142,29 @@ class AssetManager {
         pzUrl, // positive z
         nzUrl, // negative z
       ]),
-      // Noise
+      // Noise [2]
       this.textureLoader.loadAsync(noiseTextureUrl), // R = Perlin, G = Voronoi, B = Random
-      // Terrain
+      // Terrain [3, 4, 5, 6]
       this.textureLoader.loadAsync(terrainTypeTextureUrl), // R = /, G = Grass, B = Water
       this.textureLoader.loadAsync(grassDiffTextureUrl), // Grass diffuse
       this.textureLoader.loadAsync(grassNorTextureUrl), // Grass normal
-      this.textureLoader.loadAsync(sandNormalTextureUrl), // Sand normal
-      // Lightmap
+      this.textureLoader.loadAsync(sandNorTextureUrl), // Sand normal
+      // Shadowmap + AO [7]
       this.textureLoader.loadAsync(lightmapTextureUrl),
-      // Water lilies
+      // Water lilies [8, 9]
       this.textureLoader.loadAsync(waterLiliesTextureUrl), // Water lilies diffuse
       this.textureLoader.loadAsync(waterLiliesAlphaTextureUrl), // Water lilies alpha
-
-      // ------ Still testing the ones below ------
-
-      // Flowers
-      this.textureLoader.loadAsync(flowerComposition1TextureUrl), // Flowers diffuse 1
-      this.textureLoader.loadAsync(flowerComposition2TextureUrl), // Flowers diffuse 2
-
-      this.textureLoader.loadAsync(stoneDifflTextureUrl),
-
+      // Stones [10, 11, 12, 13]
+      this.textureLoader.loadAsync(stoneDiffTextureUrl),
+      this.textureLoader.loadAsync(stoneMossyDiffTextureUrl),
+      this.textureLoader.loadAsync(stoneNorAoTextureUrl),
+      this.textureLoader.loadAsync(stoneMossyNorAoTextureUrl),
+      // Trees [14, 15, 16, 17]
       this.textureLoader.loadAsync(canopyDiffTextureUrl),
       this.textureLoader.loadAsync(canopyNorTextureUrl),
       this.textureLoader.loadAsync(barkDiffTextureUrl),
+      this.textureLoader.loadAsync(barkNorTextureUrl),
+      // ------ Still testing the ones below ------
     ]);
 
     // Models
@@ -174,34 +177,35 @@ class AssetManager {
     // Terain
     this.terrainTypeMap = res[3];
     this.terrainTypeMap.flipY = false;
-    this.grassDiffTexture = res[4];
-    this.grassDiffTexture.generateMipmaps = false;
-    this.sandNormalTexture = res[5];
-    this.sandNormalTexture.generateMipmaps = false;
-    this.grassNorTexture = res[6];
-    this.grassNorTexture.generateMipmaps = false;
-    this.lightmapTexture = res[7];
-    this.lightmapTexture.flipY = false;
-    this.lightmapTexture.generateMipmaps = false;
+    this.grassDiffuse = res[4];
+    this.grassNormal = res[5];
+    this.sandNormal = res[6];
+    this.terrainShadowAo = res[7];
+    this.terrainShadowAo.colorSpace = LinearSRGBColorSpace;
+    this.terrainShadowAo.flipY = false;
 
+    // Water lilies
     this.waterLiliesTexture = res[8];
     this.waterLiliesTexture.flipY = false;
-    this.waterLiliesTexture.generateMipmaps = false;
     this.waterLiliesAlphaTexture = res[9];
     this.waterLiliesAlphaTexture.flipY = false;
-    this.waterLiliesAlphaTexture.generateMipmaps = false;
+    this.waterLiliesAlphaTexture.colorSpace = LinearSRGBColorSpace;
 
-    this.flowerCompositionTexture_1 = res[10];
-    this.flowerCompositionTexture_2 = res[11];
+    // Rocks
+    this.stoneDiffuse = res[10];
+    this.stoneMossyDiffuse = res[11];
+    this.stoneNormalAo = res[12];
+    this.stoneMossyNormalAo = res[13];
 
-    this.stoneDiffTexture = res[12];
-
-    this.canopyDiffTexture = res[13];
-    this.canopyDiffTexture.flipY = false;
-    this.canopyNorTexture = res[14];
-    this.canopyNorTexture.flipY = false;
-    this.barkDiffTexture = res[15];
-    this.barkDiffTexture.flipY = false;
+    // Trees
+    this.canopyDiffuse = res[14];
+    this.canopyDiffuse.flipY = false;
+    this.canopyNormal = res[15];
+    this.canopyNormal.flipY = false;
+    this.barkDiffuse = res[16];
+    this.barkDiffuse.flipY = false;
+    this.barkNormal = res[17];
+    this.barkNormal.flipY = false;
   }
 }
 
