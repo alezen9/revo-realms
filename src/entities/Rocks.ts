@@ -1,11 +1,15 @@
 import {
   float,
+  // Fn,
   fract,
   hash,
+  instancedArray,
   instanceIndex,
+  positionWorld,
   step,
   texture,
   uv,
+  varying,
 } from "three/tsl";
 import {
   InstancedMesh,
@@ -14,18 +18,38 @@ import {
   NormalMapNode,
 } from "three/webgpu";
 import { assetManager } from "../systems/AssetManager";
-// import { ColliderDesc, RigidBodyDesc } from "@dimforge/rapier3d";
-// import { physics } from "../systems/Physics";
+import { ColliderDesc, RigidBodyDesc } from "@dimforge/rapier3d";
+import { physics } from "../systems/Physics";
 import { sceneManager } from "../systems/SceneManager";
+import { tslUtils } from "../systems/TSLUtils";
+// import { rendererManager } from "../systems/RendererManager";
+// import { eventsManager } from "../systems/EventsManager";
+
+const COUNT = 20;
 
 class RockMaterial extends MeshLambertNodeMaterial {
+  private _noiseBuffer: ReturnType<typeof instancedArray>; // holds: float = (noise)
+
   constructor() {
     super();
+    this._noiseBuffer = instancedArray(COUNT, "float");
+    this._noiseBuffer.setPBO(true);
+
+    // this.computeUpdate.onInit(({ renderer }) => {
+    //   renderer.computeAsync(this.computeInit);
+    // });
+
+    // eventsManager.on("update", this.updateAsync.bind(this));
 
     this.precision = "lowp";
     this.flatShading = false;
+
+    const mapUv = tslUtils.computeMapUvByPosition(positionWorld.xz);
+    const vMapUv = varying(mapUv);
+
     const rand = hash(instanceIndex);
-    const discriminantA = step(0.5, rand);
+    const noiseValue = texture(assetManager.noiseTexture, vMapUv);
+    const discriminantA = step(0.5, noiseValue.r);
     const discriminantB = float(1).sub(discriminantA);
     const basicUv = fract(uv().mul(3.6).add(rand));
     const mossyUv = fract(uv().mul(1.5).add(rand));
@@ -55,6 +79,14 @@ class RockMaterial extends MeshLambertNodeMaterial {
     // AO
     this.aoNode = norAo.a;
   }
+
+  // private computeInit = Fn(() => {})().compute(COUNT);
+
+  // private computeUpdate = Fn(() => {})().compute(COUNT);
+
+  // private async updateAsync() {
+  //   await rendererManager.renderer.computeAsync(this.computeUpdate);
+  // }
 }
 
 export default class Rocks {
@@ -74,22 +106,18 @@ export default class Rocks {
 
     instances.receiveShadow = true;
 
-    // const baseCollider = assetManager.realmModel.scene.getObjectByName(
-    //   "base_stone_collider",
-    // ) as Mesh;
-    // const boundingSphere = baseCollider.geometry.boundingSphere!;
-    // const baseRadius = boundingSphere.radius;
-
     colliders.forEach((colliderSphere, i) => {
       instances.setMatrixAt(i, colliderSphere.matrix);
-      // // Physics
-      // const rigidBodyDesc = RigidBodyDesc.fixed()
-      //   .setTranslation(...colliderSphere.position.toArray())
-      //   .setRotation(colliderSphere.quaternion);
-      // const rigidBody = physics.world.createRigidBody(rigidBodyDesc);
-      // const radius = baseRadius * colliderSphere.scale.y;
-      // const colliderDesc = ColliderDesc.ball(radius).setRestitution(0.15);
-      // physics.world.createCollider(colliderDesc, rigidBody);
+      // Physics
+      const rigidBodyDesc = RigidBodyDesc.fixed()
+        .setTranslation(...colliderSphere.position.toArray())
+        .setRotation(colliderSphere.quaternion);
+      const rigidBody = physics.world.createRigidBody(rigidBodyDesc);
+      colliderSphere.geometry.computeBoundingBox();
+      const radius =
+        colliderSphere.geometry.boundingBox!.max.x * colliderSphere.scale.x;
+      const colliderDesc = ColliderDesc.ball(radius).setRestitution(0.15);
+      physics.world.createCollider(colliderDesc, rigidBody);
     });
     sceneManager.scene.add(instances);
   }

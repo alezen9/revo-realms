@@ -1,5 +1,5 @@
 import { DirectionalLight, HemisphereLight, Object3D, Vector3 } from "three";
-import { float, Fn, step, texture, vec2, vec3 } from "three/tsl";
+import { Fn, texture, vec2, vec3 } from "three/tsl";
 import { State } from "../Game";
 import { debugManager } from "./DebugManager";
 import { sceneManager } from "./SceneManager";
