@@ -57,7 +57,7 @@ export default class Game {
       physics.update();
       eventsManager.emit("update", state);
 
-      await rendererManager.renderAsync();
+      rendererManager.renderAsync();
     };
 
     // On resize

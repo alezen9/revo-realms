@@ -51,10 +51,10 @@ import { UniformType } from "../../types";
 import { tslUtils } from "../../systems/TSLUtils";
 
 const getConfig = () => {
-  const BLADE_WIDTH = 0.1;
+  const BLADE_WIDTH = 0.065;
   const BLADE_HEIGHT = 1.25;
   const TILE_SIZE = 150;
-  const BLADES_PER_SIDE = 500;
+  const BLADES_PER_SIDE = 650;
   return {
     BLADE_WIDTH,
     BLADE_HEIGHT,
@@ -116,7 +116,7 @@ const defaultUniforms: Required<GrassUniforms> = {
   uGlowColor: uniform(new Color().setRGB(0.49, 0.3, 0.07)),
   // Bending
   uBladeMaxBendAngle: uniform(Math.PI * 0.15),
-  uWindStrength: uniform(0.45),
+  uWindStrength: uniform(0.6),
   // Color
   uBaseColor: uniform(new Color().setRGB(0.1, 0.1, 0.02)),
   uTipColor: uniform(new Color().setRGB(0.17, 0.16, 0.05)),

@@ -25,7 +25,7 @@ import sandNorTextureUrl from "/textures/realm/sandNormal.webp?url";
 import grassNorTextureUrl from "/textures/realm/grassNormal.webp?url";
 import grassDiffTextureUrl from "/textures/realm/grassDiffuse.webp?url";
 // Shadowmap
-import lightmapTextureUrl from "/textures/realm/terrainShadowAo.webp?url";
+import shadowAoTextureUrl from "/textures/realm/terrainShadowAo.webp?url";
 // Water lilies
 import waterLiliesTextureUrl from "/textures/realm/waterLiliesDiffuse.webp?url";
 import waterLiliesAlphaTextureUrl from "/textures/realm/waterLiliesAlpha.webp?url";
@@ -150,7 +150,7 @@ class AssetManager {
       this.textureLoader.loadAsync(grassNorTextureUrl), // Grass normal
       this.textureLoader.loadAsync(sandNorTextureUrl), // Sand normal
       // Shadowmap + AO [7]
-      this.textureLoader.loadAsync(lightmapTextureUrl),
+      this.textureLoader.loadAsync(shadowAoTextureUrl),
       // Water lilies [8, 9]
       this.textureLoader.loadAsync(waterLiliesTextureUrl), // Water lilies diffuse
       this.textureLoader.loadAsync(waterLiliesAlphaTextureUrl), // Water lilies alpha
