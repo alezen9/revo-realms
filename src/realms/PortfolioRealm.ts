@@ -1,3 +1,4 @@
+import CoolStuff from "../entities/CoolStuff/CoolStuff";
 import Monuments from "../entities/Monuments";
 import Rocks from "../entities/Rocks";
 import { Terrain } from "../entities/Terrain";
@@ -25,5 +26,6 @@ export default class PortfolioRealm {
     new Water();
     new Vegetation();
     new Rocks();
+    new CoolStuff();
   }
 }

@@ -39,6 +39,11 @@ import barkDiffTextureUrl from "/textures/realm/barkDiffuse.webp?url";
 import barkNorTextureUrl from "/textures/realm/barkNormal.webp?url";
 import canopyDiffTextureUrl from "/textures/realm/canopyDiffuse.webp?url";
 import canopyNorTextureUrl from "/textures/realm/canopyNormal.webp?url";
+// God of War
+import axeDiffuseUrl from "/textures/realm/axeDiffuse.webp?url";
+import axeEmissiveUrl from "/textures/realm/axeEmissive.webp?url";
+import trunkDiffuseUrl from "/textures/realm/trunkDiffuse.webp?url";
+import trunkNormalUrl from "/textures/realm/trunkNormal.webp?url";
 
 // // Flowers
 // import flowerComposition1TextureUrl from "/textures/realm/flower_composition_1.webp?url";
@@ -75,6 +80,11 @@ class AssetManager {
 
   waterLiliesTexture!: Texture;
   waterLiliesAlphaTexture!: Texture;
+
+  axeDiffuse!: Texture;
+  axeEmissive!: Texture;
+  trunkDiffuse!: Texture;
+  trunkNormal!: Texture;
 
   constructor() {
     const manager = this.createLoadingManager();
@@ -165,6 +175,10 @@ class AssetManager {
       this.textureLoader.loadAsync(barkDiffTextureUrl),
       this.textureLoader.loadAsync(barkNorTextureUrl),
       // ------ Still testing the ones below ------
+      this.textureLoader.loadAsync(axeDiffuseUrl),
+      this.textureLoader.loadAsync(axeEmissiveUrl),
+      this.textureLoader.loadAsync(trunkDiffuseUrl),
+      this.textureLoader.loadAsync(trunkNormalUrl),
     ]);
 
     // Models
@@ -206,6 +220,16 @@ class AssetManager {
     this.barkDiffuse.flipY = false;
     this.barkNormal = res[17];
     this.barkNormal.flipY = false;
+
+    // God of War
+    this.axeDiffuse = res[18];
+    this.axeDiffuse.flipY = false;
+    this.axeEmissive = res[19];
+    this.axeEmissive.flipY = false;
+    this.trunkDiffuse = res[20];
+    this.trunkDiffuse.flipY = false;
+    this.trunkNormal = res[21];
+    this.trunkNormal.flipY = false;
   }
 }
 
