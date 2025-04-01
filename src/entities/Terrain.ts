@@ -117,7 +117,7 @@ class TerainMaterial extends MeshLambertNodeMaterial {
     const sandFactor = float(1).sub(grassFactor);
     const pathFactor = sandFactor.sub(waterFactor);
 
-    // Normal
+    // Fake Normal
     const sandNormal = texture(assetManager.sandNormal, fract(vUv.mul(30)));
 
     const grassUv = fract(vUv.mul(30));
