@@ -4,10 +4,14 @@ import {
   hash,
   instanceIndex,
   mix,
+  positionLocal,
   positionWorld,
+  sin,
   texture,
+  uniform,
   uv,
   vec3,
+  vertexIndex,
 } from "three/tsl";
 import {
   DoubleSide,
@@ -22,6 +26,8 @@ import { ColliderDesc, RigidBodyDesc } from "@dimforge/rapier3d";
 import { physics } from "../../systems/Physics";
 import { sceneManager } from "../../systems/SceneManager";
 import { tslUtils } from "../../systems/TSLUtils";
+import { eventsManager } from "../../systems/EventsManager";
+import { State } from "../../Game";
 
 class BarkMaterial extends MeshLambertNodeMaterial {
   constructor() {
@@ -42,6 +48,7 @@ class BarkMaterial extends MeshLambertNodeMaterial {
 }
 
 class CanopyMaterial extends MeshLambertNodeMaterial {
+  private uTime = uniform(0);
   constructor() {
     super();
     this.precision = "lowp";
@@ -79,7 +86,20 @@ class CanopyMaterial extends MeshLambertNodeMaterial {
     const nor = texture(assetManager.canopyNormal, uv());
     this.normalNode = new NormalMapNode(nor, float(2));
 
+    // Alpha
     this.alphaTest = 0.9;
+
+    // Position
+    const timer = this.uTime.mul(noise.r).add(vertexIndex).mul(7.5);
+    const wavering = sin(timer).mul(0.015);
+    this.positionNode = positionLocal.add(wavering);
+
+    eventsManager.on("update", this.update.bind(this));
+  }
+
+  private update(state: State) {
+    const { clock } = state;
+    this.uTime.value = clock.elapsedTime;
   }
 }
 export default class Trees {
