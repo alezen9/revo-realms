@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite --host",
     "build": "tsc && vite build",
-    "preview": "vite preview --host"
+    "preview": "vite preview --host",
+    "textures:atlases:process": "node src/atlases/combine-atlases.mjs"
   },
   "devDependencies": {
     "@tweakpane/core": "^2.0.5",

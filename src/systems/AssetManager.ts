@@ -44,12 +44,16 @@ import axeDiffuseUrl from "/textures/realm/axeDiffuse.webp?url";
 import axeEmissiveUrl from "/textures/realm/axeEmissive.webp?url";
 import trunkDiffuseUrl from "/textures/realm/trunkDiffuse.webp?url";
 import trunkNormalUrl from "/textures/realm/trunkNormal.webp?url";
+// One Piece
+import onePieceAtlasUrl from "/textures/realm/onePieceAtlas.webp?url";
 
-// // Flowers
-// import flowerComposition1TextureUrl from "/textures/realm/flower_composition_1.webp?url";
-// import flowerComposition2TextureUrl from "/textures/realm/flower_composition_2.webp?url";
+import atlasesCoords from "../atlases/atlases.json";
+import { Atlases } from "../atlases/types";
 
 class AssetManager {
+  // Atlas coords
+  readonly atlasesCoords = atlasesCoords as Atlases;
+
   // Loaders
   textureLoader: TextureLoader;
   gltfLoader: GLTFLoader;
@@ -85,6 +89,8 @@ class AssetManager {
   axeEmissive!: Texture;
   trunkDiffuse!: Texture;
   trunkNormal!: Texture;
+
+  onePieceAtlas!: Texture;
 
   constructor() {
     const manager = this.createLoadingManager();
@@ -174,11 +180,13 @@ class AssetManager {
       this.textureLoader.loadAsync(canopyNorTextureUrl),
       this.textureLoader.loadAsync(barkDiffTextureUrl),
       this.textureLoader.loadAsync(barkNorTextureUrl),
-      // ------ Still testing the ones below ------
+      // God of War [18, 19, 20, 21]
       this.textureLoader.loadAsync(axeDiffuseUrl),
       this.textureLoader.loadAsync(axeEmissiveUrl),
       this.textureLoader.loadAsync(trunkDiffuseUrl),
       this.textureLoader.loadAsync(trunkNormalUrl),
+      // ------ Still testing the ones below ------
+      this.textureLoader.loadAsync(onePieceAtlasUrl),
     ]);
 
     // Models
@@ -230,6 +238,10 @@ class AssetManager {
     this.trunkDiffuse.flipY = false;
     this.trunkNormal = res[21];
     this.trunkNormal.flipY = false;
+
+    // One Piece
+    this.onePieceAtlas = res[22];
+    this.onePieceAtlas.flipY = false;
   }
 }
 
