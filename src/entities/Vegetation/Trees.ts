@@ -1,4 +1,14 @@
-import { float, fract, mix, texture, uv, vec3 } from "three/tsl";
+import {
+  float,
+  fract,
+  hash,
+  instanceIndex,
+  mix,
+  positionWorld,
+  texture,
+  uv,
+  vec3,
+} from "three/tsl";
 import {
   DoubleSide,
   Group,
@@ -11,6 +21,7 @@ import { assetManager } from "../../systems/AssetManager";
 import { ColliderDesc, RigidBodyDesc } from "@dimforge/rapier3d";
 import { physics } from "../../systems/Physics";
 import { sceneManager } from "../../systems/SceneManager";
+import { tslUtils } from "../../systems/TSLUtils";
 
 class BarkMaterial extends MeshLambertNodeMaterial {
   constructor() {
@@ -38,20 +49,31 @@ class CanopyMaterial extends MeshLambertNodeMaterial {
     this.transparent = true;
     this.side = DoubleSide;
 
+    const worlUv = tslUtils.computeMapUvByPosition(positionWorld.xz);
+    const noise = texture(assetManager.noiseTexture, worlUv);
+    const factor = hash(instanceIndex.add(noise.b));
+
     // Diffuse
     const diff = texture(assetManager.canopyDiffuse, uv());
-    const summerAmbiance = mix(
-      vec3(0.384, 0.511, 0.011),
-      vec3(0.268, 0.162, 0.009),
+    // const summerAmbiance = mix(
+    //   vec3(0.384, 0.511, 0.011),
+    //   vec3(0.268, 0.162, 0.009),
+    //   0.5,
+    // );
+
+    const autumnAmbiance1 = mix(
+      vec3(0.889, 0.095, 0),
+      vec3(1, 0.162, 0.009),
       0.5,
     );
 
-    // const autumnAmbiance = mix(
-    //   vec3(1, 0.254, 0.052),
-    //   vec3(1, 0.135, 0.092),
-    //   0.5,
-    // );
-    this.colorNode = mix(diff, summerAmbiance, 0.5);
+    const autumnAmbiance2 = mix(
+      vec3(1, 0.254, 0.052),
+      vec3(1, 0.767, 0.004),
+      0.5,
+    );
+    const mixed = mix(autumnAmbiance1, autumnAmbiance2, factor);
+    this.colorNode = mix(diff.mul(1.25), mixed, noise.b);
 
     // Normal
     const nor = texture(assetManager.canopyNormal, uv());

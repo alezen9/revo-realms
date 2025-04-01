@@ -315,7 +315,7 @@ export class Terrain {
 
   private uniforms: TerrainUniforms = {
     uTime: uniform(0),
-    uGrassTerrainColor: uniform(new Color().setRGB(0.431, 0.302, 0.122)),
+    uGrassTerrainColor: uniform(new Color().setRGB(0.21, 0.26, 0.05)),
     uWaterSandColor: uniform(new Color().setRGB(0.54, 0.39, 0.2)),
     uPathSandColor: uniform(new Color().setRGB(0.65, 0.49, 0.27)),
   };

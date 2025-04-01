@@ -57,12 +57,12 @@ const defaultUniforms: Required<WaterUniforms> = {
   uWavesFrequency: uniform(2.68),
   uTroughColor: uniform(new Color().setRGB(0.16, 0.16, 0.16)),
   uSurfaceColor: uniform(new Color().setRGB(0.07, 0.08, 0.09)),
-  uPeakColor: uniform(new Color().setRGB(0.52, 0.53, 0.52)),
+  uPeakColor: uniform(new Color().setRGB(0.46, 0.27, 0.18)),
   uPeakThreshold: uniform(0.5),
   uPeakTransition: uniform(0.5),
   uTroughThreshold: uniform(-0.1),
   uTroughTransition: uniform(0.35),
-  uFresnelScale: uniform(0.4),
+  uFresnelScale: uniform(0.35),
 };
 
 export default class WaterMaterial extends MeshBasicNodeMaterial {
@@ -87,7 +87,7 @@ export default class WaterMaterial extends MeshBasicNodeMaterial {
 
     const noise = texture(assetManager.noiseTexture, fract(baseUV.mul(10)), 2);
     const mixedNoiseIntermediate = mix(noise.r, noise.g, 0.5);
-    const mixedNoise = mix(mixedNoiseIntermediate, noise.b, 0.75);
+    const mixedNoise = mix(mixedNoiseIntermediate, noise.b, 0.5);
 
     const elevation = mixedNoise.mul(this._uniforms.uWavesAmplitude).mul(0.001);
 
