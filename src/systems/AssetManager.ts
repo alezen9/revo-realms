@@ -47,6 +47,10 @@ import trunkNormalUrl from "/textures/realm/trunkNormal.webp?url";
 // One Piece
 import onePieceAtlasUrl from "/textures/realm/onePieceAtlas.webp?url";
 
+// Ripples
+import ripplesMaskUrl from "/textures/realm/ripplesMask.webp?url";
+import waterNormalUrl from "/textures/realm/waterNormal.jpg?url";
+
 import atlasesCoords from "../atlases/atlases.json";
 import { Atlases } from "../atlases/types";
 
@@ -91,6 +95,10 @@ class AssetManager {
   trunkNormal!: Texture;
 
   onePieceAtlas!: Texture;
+
+  ripplesMask!: Texture;
+
+  waterNormal!: Texture;
 
   constructor() {
     const manager = this.createLoadingManager();
@@ -185,8 +193,12 @@ class AssetManager {
       this.textureLoader.loadAsync(axeEmissiveUrl),
       this.textureLoader.loadAsync(trunkDiffuseUrl),
       this.textureLoader.loadAsync(trunkNormalUrl),
-      // ------ Still testing the ones below ------
+      // One Piece [22]
       this.textureLoader.loadAsync(onePieceAtlasUrl),
+      // ------ Still testing the ones below ------
+      this.textureLoader.loadAsync(ripplesMaskUrl),
+
+      this.textureLoader.loadAsync(waterNormalUrl),
     ]);
 
     // Models
@@ -242,6 +254,12 @@ class AssetManager {
     // One Piece
     this.onePieceAtlas = res[22];
     this.onePieceAtlas.flipY = false;
+
+    // Ripples
+    this.ripplesMask = res[23];
+    // this.ripplesMask.flipY = false;
+
+    this.waterNormal = res[24];
   }
 }
 
