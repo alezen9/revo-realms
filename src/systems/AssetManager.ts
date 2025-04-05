@@ -47,8 +47,9 @@ import trunkDiffuseUrl from "/textures/realm/trunkDiffuse.webp?url";
 import trunkNormalUrl from "/textures/realm/trunkNormal.webp?url";
 // One Piece
 import onePieceAtlasUrl from "/textures/realm/onePieceAtlas.webp?url";
-
-// Water
+// Flowers
+import flowers1Url from "/textures/realm/flowers1.webp?url";
+import flowers2Url from "/textures/realm/flowers2.webp?url";
 
 import atlasesCoords from "../atlases/atlases.json";
 import { Atlases } from "../atlases/types";
@@ -95,6 +96,9 @@ class AssetManager {
   trunkNormal!: Texture;
 
   onePieceAtlas!: Texture;
+
+  flowers1!: Texture;
+  flowers2!: Texture;
 
   constructor() {
     const manager = this.createLoadingManager();
@@ -193,6 +197,8 @@ class AssetManager {
       // One Piece [23]
       this.textureLoader.loadAsync(onePieceAtlasUrl),
       // ------ Still testing the ones below ------
+      this.textureLoader.loadAsync(flowers1Url),
+      this.textureLoader.loadAsync(flowers2Url),
     ]);
 
     // Models
@@ -249,6 +255,12 @@ class AssetManager {
     // One Piece
     this.onePieceAtlas = res[23];
     this.onePieceAtlas.flipY = false;
+
+    // Flowers
+    this.flowers1 = res[24];
+    this.flowers1.flipY = false;
+    this.flowers2 = res[25];
+    this.flowers2.flipY = false;
   }
 }
 

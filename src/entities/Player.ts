@@ -96,11 +96,18 @@ export default class Player {
     physics.world.createCollider(this.createColliderDesc(), this.rigidBody);
 
     eventsManager.on("update", this.update.bind(this));
+    this.debugPlayer();
+  }
 
-    debugManager.panel.addBinding(config.CAMERA_OFFSET, "y", {
+  private debugPlayer() {
+    const playerFolder = debugManager.panel.addFolder({
+      title: "🪩 Player",
+      expanded: false,
+    });
+    playerFolder.addBinding(config.CAMERA_OFFSET, "y", {
       label: "Main camera height",
     });
-    debugManager.panel.addBinding(config.CAMERA_OFFSET, "z", {
+    playerFolder.addBinding(config.CAMERA_OFFSET, "z", {
       label: "Main camera distance",
     });
   }

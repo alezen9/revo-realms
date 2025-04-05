@@ -82,7 +82,10 @@ class WaterMaterial extends MeshBasicNodeMaterial {
   }
 
   private debugWater() {
-    const waterFolder = debugManager.panel.addFolder({ title: "🌊 Water" });
+    const waterFolder = debugManager.panel.addFolder({
+      title: "🌊 Water",
+      expanded: false,
+    });
     waterFolder.addBinding(this.uScale1, "value", {
       label: "UV Scale 1",
     });

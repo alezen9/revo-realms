@@ -4,6 +4,7 @@ import Water from "../entities/Water";
 import Rocks from "../entities/Rocks";
 import Terrain from "../entities/Terrain";
 import Vegetation from "../entities/Vegetation/Vegetation";
+import Flowers from "../entities/Vegetation/Flowers";
 
 const getConfig = () => {
   const MAP_SIZE = 256;
@@ -26,6 +27,7 @@ export default class PortfolioRealm {
     new Water();
     new Vegetation();
     new Rocks();
+    new Flowers();
     new CoolStuff();
   }
 }
