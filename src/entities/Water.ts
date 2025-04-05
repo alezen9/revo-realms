@@ -54,11 +54,11 @@ class WaterMaterial extends MeshBasicNodeMaterial {
   private uScale2 = uniform(1.5);
   private uScaleOffset = uniform(0.05);
 
-  private uFresnelScale = uniform(0.65);
+  private uFresnelScale = uniform(0.4);
   private uMinDist = uniform(15);
   private uMaxDist = uniform(55);
 
-  private uBaseColor = uniform(new Color().setRGB(0.16, 0.28, 0.26));
+  private uBaseColor = uniform(new Color().setRGB(0.06, 0.11, 0.1));
 
   uPlayerPosition = uniform(new Vector3(0, 0, 0));
   uPlayerDirection = uniform(new Vector2(0, 0));
