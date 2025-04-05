@@ -50,8 +50,8 @@ class WaterMaterial extends MeshBasicNodeMaterial {
   private playerDir = new Vector2(0, 0);
 
   private uTime = uniform(0);
-  private uScale1 = uniform(0.5);
-  private uScale2 = uniform(1.5);
+  private uScale1 = uniform(0.25);
+  private uScale2 = uniform(5);
   private uScaleOffset = uniform(0.05);
 
   private uFresnelScale = uniform(0.4);
