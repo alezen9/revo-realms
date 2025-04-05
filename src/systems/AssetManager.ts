@@ -243,7 +243,7 @@ class AssetManager {
     this.barkNormal.flipY = false;
 
     // God of War
-    this.axeDiffuse = res[10];
+    this.axeDiffuse = res[19];
     this.axeDiffuse.flipY = false;
     this.axeEmissive = res[20];
     this.axeEmissive.flipY = false;
