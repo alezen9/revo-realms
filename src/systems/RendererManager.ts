@@ -11,7 +11,7 @@ class RendererManager {
   private monitoringManager: MonitoringManager;
   private postprocessingManager!: PostprocessingManager;
   private readonly POSTPROCESSING_ENABLED = false;
-  private readonly MONITORING_ENABLED = true;
+  private readonly MONITORING_ENABLED = import.meta.env.DEV;
   private readonly DEBUGGING_ENABLED = import.meta.env.DEV;
 
   constructor() {

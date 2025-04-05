@@ -59,7 +59,7 @@ class TerainMaterial extends MeshLambertNodeMaterial {
       causticsShadowColor = vec3(0, 0, 0),
     ]) => {
       const timer = this._uniforms.uTime.mul(0.1);
-      const scaleFactor = float(15);
+      const scaleFactor = float(20);
       const scaledUv = vUv.mul(scaleFactor);
       const scaledCausticsUvA = fract(scaledUv.add(vec2(timer, 0)));
       const scaledCausticsUvB = fract(scaledUv.add(vec2(0, timer.negate())));
@@ -310,7 +310,7 @@ class OuterTerrain {
   }
 }
 
-export class Terrain {
+export default class Terrain {
   private outerTerrain: OuterTerrain;
 
   private uniforms: TerrainUniforms = {
