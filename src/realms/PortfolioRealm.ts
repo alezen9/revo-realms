@@ -1,10 +1,10 @@
 import CoolStuff from "../entities/CoolStuff/CoolStuff";
 import Monuments from "../entities/Monuments";
-import Ripples from "../entities/Ripples";
+import Water2 from "../entities/Water2";
 import Rocks from "../entities/Rocks";
 import { Terrain } from "../entities/Terrain";
 import Vegetation from "../entities/Vegetation/Vegetation";
-import { Water } from "../entities/Water";
+// import { Water } from "../entities/Water";
 
 const getConfig = () => {
   const MAP_SIZE = 256;
@@ -24,11 +24,11 @@ export default class PortfolioRealm {
   constructor() {
     new Terrain();
     new Monuments();
-    new Water();
+    // new Water();
     new Vegetation();
     new Rocks();
     new CoolStuff();
 
-    // new Ripples();
+    new Water2();
   }
 }
