@@ -10,9 +10,9 @@ class RendererManager {
   canvas: HTMLCanvasElement;
   private monitoringManager: MonitoringManager;
   private postprocessingManager!: PostprocessingManager;
-  private readonly POSTPROCESSING_ENABLED = false;
-  private readonly MONITORING_ENABLED = import.meta.env.DEV;
-  private readonly DEBUGGING_ENABLED = import.meta.env.DEV;
+  private readonly IS_POSTPROCESSING_ENABLED = false;
+  private readonly IS_MONITORING_ENABLED = import.meta.env.DEV;
+  private readonly IS_DEBUGGING_ENABLED = import.meta.env.DEV;
 
   constructor() {
     const canvas = document.createElement("canvas");
@@ -36,31 +36,37 @@ class RendererManager {
 
     renderer.toneMappingExposure = 1.5;
     this.renderer = renderer;
-    this.monitoringManager = new MonitoringManager(this.MONITORING_ENABLED);
-    debugManager.setVisibility(this.DEBUGGING_ENABLED);
+    this.monitoringManager = new MonitoringManager(this.IS_MONITORING_ENABLED);
+    debugManager.setVisibility(this.IS_DEBUGGING_ENABLED);
   }
 
   async init() {
-    this.postprocessingManager = new PostprocessingManager();
-    if (this.MONITORING_ENABLED)
+    this.postprocessingManager = new PostprocessingManager(this.renderer);
+    if (this.IS_MONITORING_ENABLED)
       await this.monitoringManager.stats.init(this.renderer);
   }
 
-  async renderAsync() {
-    if (this.MONITORING_ENABLED)
-      await this.renderer.resolveTimestampsAsync("compute");
-    if (this.POSTPROCESSING_ENABLED)
-      await this.postprocessingManager.composer.renderAsync();
+  private async renderSceneAsync() {
+    if (this.IS_POSTPROCESSING_ENABLED)
+      return this.postprocessingManager.renderAsync();
     else
-      await this.renderer.renderAsync(
+      return this.renderer.renderAsync(
         sceneManager.scene,
         sceneManager.renderCamera,
       );
-    if (this.MONITORING_ENABLED) {
-      this.monitoringManager.updateCustomPanels();
-      await this.renderer.resolveTimestampsAsync("render");
-      this.monitoringManager.stats.update();
-    }
+  }
+
+  private async renderWithMonitoring() {
+    await this.renderer.resolveTimestampsAsync("compute");
+    await this.renderSceneAsync();
+    this.monitoringManager.updateCustomPanels();
+    await this.renderer.resolveTimestampsAsync("render");
+    this.monitoringManager.stats.update();
+  }
+
+  async renderAsync() {
+    if (this.IS_MONITORING_ENABLED) this.renderWithMonitoring();
+    else this.renderSceneAsync();
   }
 }
 

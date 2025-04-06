@@ -1,20 +1,16 @@
-import { PostProcessing } from "three/webgpu";
+import { PostProcessing, WebGPURenderer } from "three/webgpu";
 import { emissive, Fn, mrt, output, pass } from "three/tsl";
-import { bloom } from "three/examples/jsm/tsl/display/BloomNode.js";
-import { rendererManager } from "./RendererManager";
 import { sceneManager } from "./SceneManager";
+import { bloom } from "three/examples/jsm/tsl/display/BloomNode.js";
 
-export default class PostprocessingManager {
-  composer: PostProcessing;
-
-  constructor() {
-    this.composer = new PostProcessing(rendererManager.renderer);
-    this.composer.outputNode = this.getPasses();
+export default class PostprocessingManager extends PostProcessing {
+  constructor(renderer: WebGPURenderer) {
+    super(renderer);
+    this.outputNode = this.getPasses();
   }
 
   private getPasses = Fn(() => {
     const scenePass = pass(sceneManager.scene, sceneManager.renderCamera);
-
     scenePass.setMRT(
       mrt({
         output,
@@ -22,11 +18,11 @@ export default class PostprocessingManager {
       }),
     );
 
-    const outputPass = scenePass.getTextureNode();
-    const emissivePass = scenePass.getTextureNode("emissive");
+    const outputColor = scenePass.getTextureNode();
+    const emissiveColor = scenePass.getTextureNode("emissive");
 
-    const bloomPass = bloom(emissivePass, 0.25, 0.1, 0.5);
+    const bloomPass = bloom(emissiveColor);
 
-    return outputPass.add(bloomPass);
+    return outputColor.add(bloomPass);
   });
 }
