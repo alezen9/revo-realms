@@ -172,16 +172,8 @@ class GrassMaterial extends MeshBasicNodeMaterial {
     data1.x = offsetX.add(noiseX);
     data1.y = offsetZ.add(noiseZ);
 
-    const worldPos = vec3(data1.x, 0, data1.y);
-
     // Yaw
-    const noiseUV = worldPos.xz
-      .add(grassConfig.TILE_HALF_SIZE)
-      .div(grassConfig.TILE_SIZE);
-    const noiseScale = float(20);
-    const uv = fract(noiseUV.mul(noiseScale));
-    const noiseValue = texture(assetManager.noiseTexture, uv, 1).b;
-    const yawVariation = noiseValue.sub(0.5).mul(float(Math.PI * 2)); // Map noise to [-PI, PI]
+    const yawVariation = noise.b.sub(0.5).mul(float(Math.PI * 2)); // Map noise to [-PI, PI]
     data1.z = yawVariation;
 
     // Scale

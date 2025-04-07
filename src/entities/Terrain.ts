@@ -8,6 +8,7 @@ import {
   smoothstep,
   texture,
   uniform,
+  uv,
   varying,
   vec2,
   vec3,
@@ -108,7 +109,7 @@ class TerainMaterial extends MeshLambertNodeMaterial {
     const _uv = tslUtils.computeMapUvByPosition(positionWorld.xz);
     const vUv = varying(_uv);
 
-    const shadowAo = texture(assetManager.terrainShadowAo, vUv.clamp());
+    const shadowAo = texture(assetManager.terrainShadowAo, uv().clamp());
     this.aoNode = shadowAo.g;
 
     const factors = texture(assetManager.terrainTypeMap, vUv, 2.5);
