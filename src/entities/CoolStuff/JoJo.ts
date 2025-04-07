@@ -71,7 +71,7 @@ class SymbolMaterial extends MeshLambertNodeMaterial {
     // Diffuse
     const purple = color("#eb5694");
     const darkPurple = color("#9642D3");
-    this.colorNode = mix(purple, darkPurple, uv().y).mul(0.6);
+    this.colorNode = mix(darkPurple, purple, uv().y.mul(0.5)).mul(0.45);
 
     // Position
     const timer = this.uTime.mul(20);
