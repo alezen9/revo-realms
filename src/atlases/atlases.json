@@ -1,4 +1,46 @@
 {
+  "flowers": {
+    "2": {
+      "scale": [
+        0.4375,
+        0.4375
+      ],
+      "offset": [
+        0.03125,
+        0.03125
+      ]
+    },
+    "chatGPTImageApr92025010111AM": {
+      "scale": [
+        0.4375,
+        0.4375
+      ],
+      "offset": [
+        0.03125,
+        0.53125
+      ]
+    },
+    "chatGPTImageApr92025125808AM": {
+      "scale": [
+        0.4375,
+        0.4375
+      ],
+      "offset": [
+        0.53125,
+        0.03125
+      ]
+    },
+    "dandelionDiffusecopy": {
+      "scale": [
+        0.4375,
+        0.4375
+      ],
+      "offset": [
+        0.53125,
+        0.53125
+      ]
+    }
+  },
   "onePiece": {
     "luffyDifuse": {
       "scale": [

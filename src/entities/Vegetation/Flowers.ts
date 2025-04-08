@@ -6,23 +6,21 @@ import {
   If,
   instancedArray,
   instanceIndex,
-  mix,
   mod,
-  positionLocal,
-  rotate,
   sin,
   step,
   texture,
   uniform,
   uv,
+  vec2,
   vec3,
   vec4,
 } from "three/tsl";
 import {
   InstancedMesh,
   Matrix4,
-  Mesh,
-  MeshLambertNodeMaterial,
+  PlaneGeometry,
+  SpriteNodeMaterial,
   Vector2,
   Vector3,
 } from "three/webgpu";
@@ -35,10 +33,10 @@ import { State } from "../../Game";
 import { tslUtils } from "../../systems/TSLUtils";
 
 const getConfig = () => {
-  const FLOWER_WIDTH = 1;
+  const FLOWER_WIDTH = 0.5;
   const FLOWER_HEIGHT = 1;
   const TILE_SIZE = 150;
-  const FLOWERS_PER_SIDE = 10;
+  const FLOWERS_PER_SIDE = 25;
   return {
     FLOWER_WIDTH,
     FLOWER_HEIGHT,
@@ -64,13 +62,9 @@ export default class Flowers {
   };
 
   constructor() {
-    const flowerPlane = assetManager.realmModel.scene.getObjectByName(
-      "flowers_plane",
-    ) as Mesh;
-    flowerPlane.geometry.translate(0, 0.35, 0);
     this.material = new FlowerMaterial(this.uniforms);
     this.flowerField = new InstancedMesh(
-      flowerPlane.geometry,
+      new PlaneGeometry(1, 1),
       this.material,
       flowersConfig.COUNT,
     );
@@ -99,10 +93,6 @@ type FlowersUniforms = {
   uTime?: UniformType<number>;
   uPlayerPosition?: UniformType<Vector3>;
   uCameraMatrix?: UniformType<Matrix4>;
-  // Scale
-  uFlowersMinScale?: UniformType<number>;
-  uFlowersMaxScale?: UniformType<number>;
-  // Updated externally
   uDelta: UniformType<Vector2>;
 };
 
@@ -110,17 +100,12 @@ const defaultUniforms: Required<FlowersUniforms> = {
   uTime: uniform(0),
   uPlayerPosition: uniform(new Vector3(0, 0, 0)),
   uCameraMatrix: uniform(new Matrix4()),
-  // Scale
-  uFlowersMinScale: uniform(1),
-  uFlowersMaxScale: uniform(1.25),
-  // Updated externally
   uDelta: uniform(new Vector2(0, 0)),
 };
 
-class FlowerMaterial extends MeshLambertNodeMaterial {
+class FlowerMaterial extends SpriteNodeMaterial {
   private _uniforms: FlowersUniforms;
-  private _buffer1: ReturnType<typeof instancedArray>; // holds: vec4 = (localOffset.x, localOffset.y, yaw, alpha)
-  private _buffer2: ReturnType<typeof instancedArray>; // holds: float = (scale)
+  private _buffer1: ReturnType<typeof instancedArray>; // holds: vec4 = (localOffset.x, localOffset.y, localOffset.z, alpha)
 
   constructor(uniforms: FlowersUniforms) {
     super();
@@ -128,14 +113,12 @@ class FlowerMaterial extends MeshLambertNodeMaterial {
 
     this._buffer1 = instancedArray(flowersConfig.COUNT, "vec4");
     this._buffer1.setPBO(true);
-    this._buffer2 = instancedArray(flowersConfig.COUNT, "float");
-    this._buffer2.setPBO(true);
 
     this.computeUpdate.onInit(({ renderer }) => {
       renderer.computeAsync(this.computeInit);
     });
 
-    this.createFlowerMaterial();
+    this.createMaterial();
   }
 
   private computeInit = Fn(() => {
@@ -161,28 +144,15 @@ class FlowerMaterial extends MeshLambertNodeMaterial {
       .abs();
 
     const noise = texture(assetManager.noiseTexture, _uv);
-    const mixedNoise = mix(noise.r, noise.b, 0.75);
+    const mixedNoise = noise.r;
 
     const noiseX = mixedNoise.sub(0.5).mul(100);
+    const noiseY = mixedNoise.clamp(0.5, 0.75);
     const noiseZ = mixedNoise.sub(0.5).mul(50);
 
     data1.x = offsetX.add(noiseX);
-    data1.y = offsetZ.add(noiseZ);
-
-    // Yaw
-    const yawVariation = noise.b.sub(0.5).mul(float(Math.PI * 2)); // Map noise to [-PI, PI]
-    data1.z = yawVariation;
-
-    // Scale
-    const data2 = this._buffer2.element(instanceIndex);
-    const scaleRange = this._uniforms.uFlowersMaxScale.sub(
-      this._uniforms.uFlowersMinScale,
-    );
-    const randomScale = hash(instanceIndex.add(100))
-      .mul(scaleRange)
-      .add(this._uniforms.uFlowersMinScale);
-
-    data2.assign(randomScale);
+    data1.y = noiseY;
+    data1.z = offsetZ.add(noiseZ);
   })().compute(flowersConfig.COUNT);
 
   private computeVisibility = Fn(([worldPos = vec3(0)]) => {
@@ -220,13 +190,13 @@ class FlowerMaterial extends MeshLambertNodeMaterial {
       flowersConfig.TILE_SIZE,
     ).sub(flowersConfig.TILE_HALF_SIZE);
     const newOffsetZ = mod(
-      data1.y.sub(this._uniforms.uDelta.y).add(flowersConfig.TILE_HALF_SIZE),
+      data1.z.sub(this._uniforms.uDelta.y).add(flowersConfig.TILE_HALF_SIZE),
       flowersConfig.TILE_SIZE,
     ).sub(flowersConfig.TILE_HALF_SIZE);
     data1.x = newOffsetX;
-    data1.y = newOffsetZ;
+    data1.z = newOffsetZ;
 
-    const pos = vec3(data1.x, 0, data1.y);
+    const pos = vec3(data1.x, 0, data1.z);
     const worldPos = pos.add(this._uniforms.uPlayerPosition);
 
     // Visibility
@@ -239,43 +209,32 @@ class FlowerMaterial extends MeshLambertNodeMaterial {
     });
   })().compute(flowersConfig.COUNT);
 
-  private computePosition = Fn(([data1 = vec4(0), data2 = float(0)]) => {
-    const rand = hash(instanceIndex);
-    const offset = vec3(data1.x, 0, data1.y);
-    const yawAngle = data1.z;
-    const scaled = positionLocal.mul(vec3(data2, 1.5, data2));
-
-    const swayAmount = sin(this._uniforms.uTime.mul(5.0).mul(rand)).mul(0.015);
-    const rotated = rotate(
-      scaled,
-      vec3(swayAmount, yawAngle.mul(2), swayAmount.mul(2)),
-    );
-
-    const worldPosition = rotated.add(offset);
-    return worldPosition;
-  });
-
-  private createFlowerMaterial() {
+  private createMaterial() {
     this.precision = "lowp";
     const data1 = this._buffer1.element(instanceIndex);
-    const data2 = this._buffer2.element(instanceIndex);
-    this.positionNode = this.computePosition(data1, data2);
+    const rand1 = hash(instanceIndex.add(9234));
+    const rand2 = hash(instanceIndex.add(33.87));
+
+    // Position
+    const timer = this._uniforms.uTime.mul(2);
+    const sway = sin(timer.add(rand1.mul(100))).mul(0.05);
+    this.positionNode = data1.xyz.add(vec3(sway, 0, sway));
+
+    // Opacity
     this.opacityNode = data1.w;
-    this.alphaTest = 0.75;
+    this.alphaTest = 0.15;
 
-    const factor1 = mod(float(instanceIndex), 2);
-    const factor2 = float(1).sub(factor1);
+    // Size
+    this.scaleNode = rand1.mul(0.2).add(0.3);
 
-    const composition1 = texture(assetManager.flowers1, uv())
-      .mul(factor1)
-      .mul(1.25);
-    const composition2 = texture(assetManager.flowers2, uv())
-      .mul(factor2)
-      .mul(1.5);
+    // Diffuse
+    const u = step(0.5, rand1).mul(0.5);
+    const v = step(0.5, rand2).mul(0.5);
 
-    const composition = composition1.add(composition2);
-
-    this.colorNode = composition.mul(1.5);
+    const baseUv = uv().mul(0.5);
+    const flowerUv = baseUv.add(vec2(u, v));
+    const flower = texture(assetManager.flowerDiffuseAtlas, flowerUv);
+    this.colorNode = vec4(flower.rgb.mul(0.35), flower.a);
   }
 
   async updateAsync() {
