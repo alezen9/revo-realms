@@ -13,7 +13,7 @@ import {
   vec2,
   vec3,
 } from "three/tsl";
-import { UniformType } from "../types";
+import { RevoColliderType, UniformType } from "../types";
 import { Color, Mesh, MeshLambertNodeMaterial, Vector3 } from "three/webgpu";
 import { assetManager } from "../systems/AssetManager";
 import { realmConfig } from "../realms/PortfolioRealm";
@@ -31,10 +31,10 @@ import { eventsManager } from "../systems/EventsManager";
 import { tslUtils } from "../systems/TSLUtils";
 
 type TerrainUniforms = {
-  uTime?: UniformType<number>;
-  uGrassTerrainColor?: UniformType<Color>;
-  uWaterSandColor?: UniformType<Color>;
-  uPathSandColor?: UniformType<Color>;
+  uTime: UniformType<number>;
+  uGrassTerrainColor: UniformType<Color>;
+  uWaterSandColor: UniformType<Color>;
+  uPathSandColor: UniformType<Color>;
 };
 
 const defaultUniforms: TerrainUniforms = {
@@ -46,7 +46,7 @@ const defaultUniforms: TerrainUniforms = {
 
 class TerainMaterial extends MeshLambertNodeMaterial {
   private _uniforms: TerrainUniforms;
-  constructor(uniforms: TerrainUniforms) {
+  constructor(uniforms: Partial<TerrainUniforms>) {
     super();
 
     this._uniforms = { ...defaultUniforms, ...uniforms };
@@ -212,11 +212,9 @@ class InnerTerrain {
     const displaceMentData = this.getFloorDisplacementData();
     const { rowsCount, heights, displacement } = displaceMentData;
 
-    const rigidBodyDesc = RigidBodyDesc.fixed().setTranslation(
-      0,
-      -displacement,
-      0,
-    );
+    const rigidBodyDesc = RigidBodyDesc.fixed()
+      .setTranslation(0, -displacement, 0)
+      .setUserData({ type: RevoColliderType.Terrain });
     const rigidBody = physics.world.createRigidBody(rigidBodyDesc);
 
     const colliderDesc = ColliderDesc.heightfield(
@@ -258,11 +256,13 @@ class OuterTerrain {
   }
 
   private createKintoun() {
-    const rigidBodyDesc = RigidBodyDesc.kinematicPositionBased().setTranslation(
-      0,
-      -20, // out of the physics world
-      0,
-    );
+    const rigidBodyDesc = RigidBodyDesc.kinematicPositionBased()
+      .setTranslation(
+        0,
+        -20, // out of the physics world
+        0,
+      )
+      .setUserData({ type: RevoColliderType.Terrain });
     const rigidBody = physics.world.createRigidBody(rigidBodyDesc);
 
     const halfSize = 2;

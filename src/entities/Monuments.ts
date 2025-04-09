@@ -6,7 +6,7 @@ import {
   MeshLambertNodeMaterial,
   NormalMapNode,
 } from "three/webgpu";
-import { UniformType } from "../types";
+import { RevoColliderType, UniformType } from "../types";
 import { assetManager } from "../systems/AssetManager";
 import { ColliderDesc, RigidBodyDesc } from "@dimforge/rapier3d";
 import { physics } from "../systems/Physics";
@@ -93,12 +93,14 @@ export default class Monuments {
     colliders.forEach((colliderBox) => {
       const rigidBodyDesc = RigidBodyDesc.fixed()
         .setTranslation(...colliderBox.position.toArray())
-        .setRotation(colliderBox.quaternion);
+        .setRotation(colliderBox.quaternion)
+        .setUserData({ type: RevoColliderType.Stone });
+
       const rigidBody = physics.world.createRigidBody(rigidBodyDesc);
       const hx = 0.5 * colliderBox.scale.x;
       const hy = 0.5 * colliderBox.scale.y;
       const hz = 0.5 * colliderBox.scale.z;
-      const colliderDesc = ColliderDesc.cuboid(hx, hy, hz).setRestitution(0.25);
+      const colliderDesc = ColliderDesc.cuboid(hx, hy, hz).setRestitution(0.75);
       physics.world.createCollider(colliderDesc, rigidBody);
     });
 

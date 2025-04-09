@@ -8,8 +8,10 @@ import {
 import { sceneManager } from "./SceneManager";
 import loadingManager from "./LoadingManager";
 
-import ambientUrl from "/audio/ambient.mp3?url";
-import lakeUrl from "/audio/lake.mp3?url";
+import ambientUrl from "/audio/ambient/ambient.mp3?url";
+import lakeUrl from "/audio/ambient/lake.mp3?url";
+import hitWoodUrl from "/audio/collisions/hitWood.mp3?url";
+import hitStoneUrl from "/audio/collisions/hitStone.mp3?url";
 
 class AudioManager {
   // Loaders
@@ -22,6 +24,8 @@ class AudioManager {
 
   ambient!: Audio;
   lake!: PositionalAudio;
+  hitWood!: Audio;
+  hitStone!: Audio;
 
   constructor(manager: LoadingManager) {
     this.audioLoader = new AudioLoader(manager);
@@ -36,7 +40,7 @@ class AudioManager {
     this.files.forEach((file) => {
       const volume = this.isMute ? 0 : file.userData.originalVolume;
       file.setVolume(volume);
-      if (!file.isPlaying) file.play();
+      if (file.loop && !file.isPlaying) file.play();
     });
   }
 
@@ -70,10 +74,14 @@ class AudioManager {
     const res = await Promise.all([
       this.audioLoader.loadAsync(ambientUrl),
       this.audioLoader.loadAsync(lakeUrl),
+      this.audioLoader.loadAsync(hitWoodUrl),
+      this.audioLoader.loadAsync(hitStoneUrl),
     ]);
 
     this.ambient = this.newAudio(res[0], 0.01, true);
     this.lake = this.newPositionalAudio(res[1], 0.75, true);
+    this.hitWood = this.newAudio(res[2], 1, false);
+    this.hitStone = this.newAudio(res[3], 1, false);
   }
 }
 

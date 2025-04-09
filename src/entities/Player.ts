@@ -5,6 +5,7 @@ import {
   RigidBodyDesc,
   Ray,
   Vector,
+  ActiveEvents,
 } from "@dimforge/rapier3d";
 import { inputManager } from "../systems/InputManager";
 import { type State } from "../Game";
@@ -23,7 +24,7 @@ import {
 } from "three/tsl";
 import { MeshLambertNodeMaterial } from "three/webgpu";
 import { assetManager } from "../systems/AssetManager";
-import { UniformType } from "../types";
+import { RevoColliderType, UniformType } from "../types";
 import { physics } from "../systems/Physics";
 import { sceneManager } from "../systems/SceneManager";
 import { lighting } from "../systems/LightingSystem";
@@ -129,14 +130,16 @@ export default class Player {
     return RigidBodyDesc.dynamic()
       .setTranslation(x, y, z)
       .setLinearDamping(config.LINEAR_DAMPING)
-      .setAngularDamping(config.ANGULAR_DAMPING);
+      .setAngularDamping(config.ANGULAR_DAMPING)
+      .setUserData({ type: RevoColliderType.Player });
   }
 
   private createColliderDesc() {
     return ColliderDesc.ball(config.RADIUS)
-      .setRestitution(0.2)
+      .setRestitution(0.25)
       .setFriction(1)
-      .setMass(3);
+      .setMass(3)
+      .setActiveEvents(ActiveEvents.COLLISION_EVENTS);
   }
 
   private update(state: State) {

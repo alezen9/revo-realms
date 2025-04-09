@@ -28,6 +28,7 @@ import { sceneManager } from "../../systems/SceneManager";
 import { tslUtils } from "../../systems/TSLUtils";
 import { eventsManager } from "../../systems/EventsManager";
 import { State } from "../../Game";
+import { RevoColliderType } from "../../types";
 
 class BarkMaterial extends MeshLambertNodeMaterial {
   constructor() {
@@ -141,7 +142,8 @@ export default class Trees {
       // Physics
       const rigidBodyDesc = RigidBodyDesc.fixed()
         .setTranslation(...colliderCylinder.position.toArray())
-        .setRotation(colliderCylinder.quaternion);
+        .setRotation(colliderCylinder.quaternion)
+        .setUserData({ type: RevoColliderType.Wood });
 
       const rigidBody = physics.world.createRigidBody(rigidBodyDesc);
       const radius = baseRadius * colliderCylinder.scale.x;
@@ -149,7 +151,7 @@ export default class Trees {
       const colliderDesc = ColliderDesc.capsule(
         halfHeight,
         radius,
-      ).setRestitution(0.15);
+      ).setRestitution(0.75);
       physics.world.createCollider(colliderDesc, rigidBody);
     });
     sceneManager.scene.add(barkInstances, canopyInstances);

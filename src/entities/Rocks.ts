@@ -22,6 +22,7 @@ import { physics } from "../systems/Physics";
 import { sceneManager } from "../systems/SceneManager";
 import { rendererManager } from "../systems/RendererManager";
 import { tslUtils } from "../systems/TSLUtils";
+import { RevoColliderType } from "../types";
 
 const COUNT = 20; // Hardcoded, rocks are placed in blender and are less than 20
 
@@ -126,12 +127,14 @@ export default class Rocks {
       // Physics
       const rigidBodyDesc = RigidBodyDesc.fixed()
         .setTranslation(...colliderSphere.position.toArray())
-        .setRotation(colliderSphere.quaternion);
+        .setRotation(colliderSphere.quaternion)
+        .setUserData({ type: RevoColliderType.Stone });
+
       const rigidBody = physics.world.createRigidBody(rigidBodyDesc);
       colliderSphere.geometry.computeBoundingBox();
       const radius =
         colliderSphere.geometry.boundingBox!.max.x * colliderSphere.scale.x;
-      const colliderDesc = ColliderDesc.ball(radius).setRestitution(0.15);
+      const colliderDesc = ColliderDesc.ball(radius).setRestitution(0.75);
       physics.world.createCollider(colliderDesc, rigidBody);
     });
     sceneManager.scene.add(instances);

@@ -90,9 +90,9 @@ export default class Flowers {
 }
 
 type FlowersUniforms = {
-  uTime?: UniformType<number>;
-  uPlayerPosition?: UniformType<Vector3>;
-  uCameraMatrix?: UniformType<Matrix4>;
+  uTime: UniformType<number>;
+  uPlayerPosition: UniformType<Vector3>;
+  uCameraMatrix: UniformType<Matrix4>;
   uDelta: UniformType<Vector2>;
 };
 
@@ -107,7 +107,7 @@ class FlowerMaterial extends SpriteNodeMaterial {
   private _uniforms: FlowersUniforms;
   private _buffer1: ReturnType<typeof instancedArray>; // holds: vec4 = (localOffset.x, localOffset.y, localOffset.z, alpha)
 
-  constructor(uniforms: FlowersUniforms) {
+  constructor(uniforms: Partial<FlowersUniforms>) {
     super();
     this._uniforms = { ...defaultUniforms, ...uniforms };
 
