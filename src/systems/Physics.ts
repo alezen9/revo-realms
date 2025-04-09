@@ -4,7 +4,7 @@ class Physics {
   world!: World;
   constructor() {}
 
-  async init() {
+  async initAsync() {
     return import("@dimforge/rapier3d").then(() => {
       this.world = new World({ x: 0, y: -9.81, z: 0 });
     });

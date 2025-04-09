@@ -17,6 +17,7 @@ export default class MonitoringManager {
       horizontal: false,
       precision: 2,
     });
+    stats.dom.classList.add("monitoring-panel");
     if (enabled) document.body.appendChild(stats.dom);
     this.stats = stats;
     // @ts-ignore

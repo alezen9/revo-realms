@@ -49,6 +49,7 @@ import onePieceAtlasUrl from "/textures/realm/onePieceAtlas.webp?url";
 
 import atlasesCoords from "../atlases/atlases.json";
 import { Atlases } from "../atlases/types";
+import loadingManager from "./LoadingManager";
 
 class AssetManager {
   // Atlas coords
@@ -92,57 +93,18 @@ class AssetManager {
 
   onePieceAtlas!: Texture;
 
-  constructor() {
-    const manager = this.createLoadingManager();
-
+  constructor(manager: LoadingManager) {
     // Texture
     this.textureLoader = new TextureLoader(manager);
 
     // GLTF
-    const dracoLoader = new DRACOLoader(manager);
+    const dracoLoader = new DRACOLoader();
     dracoLoader.setDecoderPath("/revo-realms/draco/");
     this.gltfLoader = new GLTFLoader(manager);
     this.gltfLoader.setDRACOLoader(dracoLoader);
 
     // Env maps
     this.cubeTextureLoader = new CubeTextureLoader(manager);
-  }
-
-  private createLoadingManager() {
-    const manager = new LoadingManager();
-    manager.onStart = function (url, itemsLoaded, itemsTotal) {
-      console.log(
-        "Started loading file: " +
-          url +
-          ".\nLoaded " +
-          itemsLoaded +
-          " of " +
-          itemsTotal +
-          " files.",
-      );
-    };
-
-    manager.onLoad = function () {
-      console.log("Loading complete!");
-    };
-
-    manager.onProgress = function (url, itemsLoaded, itemsTotal) {
-      console.log(
-        "Loading file: " +
-          url +
-          ".\nLoaded " +
-          itemsLoaded +
-          " of " +
-          itemsTotal +
-          " files.",
-      );
-    };
-
-    manager.onError = function (url) {
-      console.log("There was an error loading " + url);
-    };
-    // return manager;
-    return undefined;
   }
 
   async initAsync() {
@@ -249,4 +211,4 @@ class AssetManager {
   }
 }
 
-export const assetManager = new AssetManager();
+export const assetManager = new AssetManager(loadingManager.manager);

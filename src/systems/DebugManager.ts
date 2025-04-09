@@ -6,8 +6,7 @@ class DebugManager {
   constructor() {
     this.panel = new Pane({ title: "Revo Realms" });
     this.panel.hidden = !import.meta.env.DEV;
-    this.panel.element.parentElement!.style.zIndex = "1";
-    this.panel.element.parentElement!.style.width = "340px";
+    this.panel.element.parentElement?.classList.add("debug-panel");
   }
 
   setVisibility(visible: boolean) {
