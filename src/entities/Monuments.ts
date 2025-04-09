@@ -1,4 +1,4 @@
-import { float, fract, texture, uniform, uv } from "three/tsl";
+import { float, fract, texture, uniform, uv, vec2 } from "three/tsl";
 import {
   Color,
   MathUtils,
@@ -12,6 +12,7 @@ import { ColliderDesc, RigidBodyDesc } from "@dimforge/rapier3d";
 import { physics } from "../systems/Physics";
 import { sceneManager } from "../systems/SceneManager";
 import { debugManager } from "../systems/DebugManager";
+import { tslUtils } from "../systems/TSLUtils";
 
 type StoneMaterialUniforms = {
   uBaseColor: UniformType<Color>;
@@ -41,12 +42,24 @@ class StoneMaterial extends MeshLambertNodeMaterial {
 
     const _uv = fract(uv().mul(2).add(this._uniforms.uRandom));
 
+    const { stoneDiffuse, stoneNormalAo } = assetManager.atlasesCoords.stones;
+
     // Diffuse
-    const diff = texture(assetManager.stoneDiffuse, _uv);
+    const _uvDiff = tslUtils.computeAtlasUv(
+      vec2(...stoneDiffuse.scale),
+      vec2(...stoneDiffuse.offset),
+      _uv,
+    );
+    const diff = texture(assetManager.stoneAtlas, _uvDiff);
     this.colorNode = diff.mul(1.5);
 
     // Normal
-    const norAo = texture(assetManager.stoneNormalAo, _uv);
+    const _uvNor = tslUtils.computeAtlasUv(
+      vec2(...stoneNormalAo.scale),
+      vec2(...stoneNormalAo.offset),
+      _uv,
+    );
+    const norAo = texture(assetManager.stoneAtlas, _uvNor);
     this.normalNode = new NormalMapNode(norAo.rgb, float(0.5));
 
     // AO

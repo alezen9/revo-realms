@@ -30,12 +30,10 @@ import shadowAoTextureUrl from "/textures/realm/terrainShadowAo.webp?url";
 // Water lilies
 import waterLiliesTextureUrl from "/textures/realm/waterLiliesDiffuse.webp?url";
 import waterLiliesAlphaTextureUrl from "/textures/realm/waterLiliesAlpha.webp?url";
+// Flowers
+import flowerAtlasUrl from "/textures/realm/flowerAtlas.webp?url";
 // Stones
-import stoneDiffTextureUrl from "/textures/realm/stoneDiffuse.webp?url";
-import stoneMossyDiffTextureUrl from "/textures/realm/stoneMossyDiffuse.webp?url";
-import stoneNorAoTextureUrl from "/textures/realm/stoneNormalAo.webp?url";
-import stoneMossyNorAoTextureUrl from "/textures/realm/stoneMossyNormalAo.webp?url";
-import stonesAtlasUrl from "/textures/realm/stonesAtlas.webp?url";
+import stoneAtlasUrl from "/textures/realm/stoneAtlas.webp?url";
 // Trees
 import barkDiffTextureUrl from "/textures/realm/barkDiffuse.webp?url";
 import barkNorTextureUrl from "/textures/realm/barkNormal.webp?url";
@@ -48,8 +46,6 @@ import trunkDiffuseUrl from "/textures/realm/trunkDiffuse.webp?url";
 import trunkNormalUrl from "/textures/realm/trunkNormal.webp?url";
 // One Piece
 import onePieceAtlasUrl from "/textures/realm/onePieceAtlas.webp?url";
-// Flowers
-import flowerDiffuseAtlasUrl from "/textures/realm/flowerDiffuseAtlas.webp?url";
 
 import atlasesCoords from "../atlases/atlases.json";
 import { Atlases } from "../atlases/types";
@@ -77,18 +73,17 @@ class AssetManager {
   grassNormal!: Texture;
   waterNormal!: Texture;
 
+  waterLiliesTexture!: Texture;
+  waterLiliesAlphaTexture!: Texture;
+
+  flowerAtlas!: Texture;
+
+  stoneAtlas!: Texture;
+
   canopyDiffuse!: Texture;
   canopyNormal!: Texture;
   barkDiffuse!: Texture;
   barkNormal!: Texture;
-
-  stoneDiffuse!: Texture;
-  stoneMossyDiffuse!: Texture;
-  stoneNormalAo!: Texture;
-  stoneMossyNormalAo!: Texture;
-
-  waterLiliesTexture!: Texture;
-  waterLiliesAlphaTexture!: Texture;
 
   axeDiffuse!: Texture;
   axeEmissive!: Texture;
@@ -96,13 +91,6 @@ class AssetManager {
   trunkNormal!: Texture;
 
   onePieceAtlas!: Texture;
-
-  flowers1!: Texture;
-  flowers2!: Texture;
-  dandelionDiffuse!: Texture;
-  flowerDiffuseAtlas!: Texture;
-
-  stonesAtlas!: Texture;
 
   constructor() {
     const manager = this.createLoadingManager();
@@ -183,27 +171,23 @@ class AssetManager {
       // Water lilies [9, 10]
       this.textureLoader.loadAsync(waterLiliesTextureUrl), // Water lilies diffuse
       this.textureLoader.loadAsync(waterLiliesAlphaTextureUrl), // Water lilies alpha
-      // Stones [11, 12, 13, 14]
-      this.textureLoader.loadAsync(stoneDiffTextureUrl),
-      this.textureLoader.loadAsync(stoneMossyDiffTextureUrl),
-      this.textureLoader.loadAsync(stoneNorAoTextureUrl),
-      this.textureLoader.loadAsync(stoneMossyNorAoTextureUrl),
-      // Trees [15, 16, 17, 18]
+      // Flowers [11]
+      this.textureLoader.loadAsync(flowerAtlasUrl),
+      // Stones [12]
+      this.textureLoader.loadAsync(stoneAtlasUrl),
+      // Trees [13, 14, 15, 16]
       this.textureLoader.loadAsync(canopyDiffTextureUrl),
       this.textureLoader.loadAsync(canopyNorTextureUrl),
       this.textureLoader.loadAsync(barkDiffTextureUrl),
       this.textureLoader.loadAsync(barkNorTextureUrl),
-      // God of War [19, 20, 21, 22]
+      // God of War [17, 18, 19, 20]
       this.textureLoader.loadAsync(axeDiffuseUrl),
       this.textureLoader.loadAsync(axeEmissiveUrl),
       this.textureLoader.loadAsync(trunkDiffuseUrl),
       this.textureLoader.loadAsync(trunkNormalUrl),
-      // One Piece [23]
+      // One Piece [21]
       this.textureLoader.loadAsync(onePieceAtlasUrl),
-      // Flowers [24]
-      this.textureLoader.loadAsync(flowerDiffuseAtlasUrl),
       // ------ Still testing the ones below ------
-      this.textureLoader.loadAsync(stonesAtlasUrl),
     ]);
 
     // Models
@@ -231,40 +215,37 @@ class AssetManager {
     this.waterLiliesAlphaTexture.flipY = false;
     this.waterLiliesAlphaTexture.colorSpace = LinearSRGBColorSpace;
 
+    // Flowers
+    this.flowerAtlas = res[11];
+    this.flowerAtlas.flipY = false;
+
     // Rocks
-    this.stoneDiffuse = res[11];
-    this.stoneMossyDiffuse = res[12];
-    this.stoneNormalAo = res[13];
-    this.stoneMossyNormalAo = res[14];
+    this.stoneAtlas = res[12];
+    this.stoneAtlas.flipY = false;
 
     // Trees
-    this.canopyDiffuse = res[15];
+    this.canopyDiffuse = res[13];
     this.canopyDiffuse.flipY = false;
-    this.canopyNormal = res[16];
+    this.canopyNormal = res[14];
     this.canopyNormal.flipY = false;
-    this.barkDiffuse = res[17];
+    this.barkDiffuse = res[15];
     this.barkDiffuse.flipY = false;
-    this.barkNormal = res[18];
+    this.barkNormal = res[16];
     this.barkNormal.flipY = false;
 
     // God of War
-    this.axeDiffuse = res[19];
+    this.axeDiffuse = res[17];
     this.axeDiffuse.flipY = false;
-    this.axeEmissive = res[20];
+    this.axeEmissive = res[18];
     this.axeEmissive.flipY = false;
-    this.trunkDiffuse = res[21];
+    this.trunkDiffuse = res[19];
     this.trunkDiffuse.flipY = false;
-    this.trunkNormal = res[22];
+    this.trunkNormal = res[20];
     this.trunkNormal.flipY = false;
 
     // One Piece
-    this.onePieceAtlas = res[23];
+    this.onePieceAtlas = res[21];
     this.onePieceAtlas.flipY = false;
-
-    // Flowers
-    this.flowerDiffuseAtlas = res[24];
-
-    this.stonesAtlas = res[25];
   }
 }
 

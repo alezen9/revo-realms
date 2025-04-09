@@ -12,8 +12,10 @@ import {
   texture,
   uniform,
   uv,
+  vec2,
 } from "three/tsl";
 import { eventsManager } from "../../systems/EventsManager";
+import { tslUtils } from "../../systems/TSLUtils";
 
 export default class JoJo {
   constructor() {
@@ -47,8 +49,16 @@ class MaskMaterial extends MeshLambertNodeMaterial {
     this.precision = "lowp";
     this.flatShading = true;
 
-    const stoneColor = texture(assetManager.stoneDiffuse, uv());
-    this.colorNode = stoneColor;
+    const { stoneDiffuse } = assetManager.atlasesCoords.stones;
+
+    // Diffuse
+    const _uvDiff = tslUtils.computeAtlasUv(
+      vec2(...stoneDiffuse.scale),
+      vec2(...stoneDiffuse.offset),
+      uv(),
+    );
+    const diff = texture(assetManager.stoneAtlas, _uvDiff);
+    this.colorNode = diff;
   }
 }
 

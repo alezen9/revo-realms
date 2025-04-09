@@ -69,7 +69,7 @@ class RockMaterial extends MeshLambertNodeMaterial {
     const offsetDiffuse = stoneDiffOffset.add(stoneMossyDiffOffset);
 
     const _uvDiff = tslUtils.computeAtlasUv(scaleDiffuse, offsetDiffuse, _uv);
-    this.colorNode = texture(assetManager.stonesAtlas, _uvDiff);
+    this.colorNode = texture(assetManager.stoneAtlas, _uvDiff);
 
     // Normal
     // Scale
@@ -86,7 +86,7 @@ class RockMaterial extends MeshLambertNodeMaterial {
     const offsetNormal = stoneNorOffset.add(stoneMossyNorOffset);
 
     const _uvNor = tslUtils.computeAtlasUv(scaleNormal, offsetNormal, _uv);
-    const norAo = texture(assetManager.stonesAtlas, _uvNor);
+    const norAo = texture(assetManager.stoneAtlas, _uvNor);
     this.normalNode = new NormalMapNode(norAo.rgb, float(3));
 
     // AO

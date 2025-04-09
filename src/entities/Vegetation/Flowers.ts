@@ -233,7 +233,7 @@ class FlowerMaterial extends SpriteNodeMaterial {
 
     const baseUv = uv().mul(0.5);
     const flowerUv = baseUv.add(vec2(u, v));
-    const flower = texture(assetManager.flowerDiffuseAtlas, flowerUv);
+    const flower = texture(assetManager.flowerAtlas, flowerUv);
     this.colorNode = vec4(flower.rgb.mul(0.35), flower.a);
   }
 
