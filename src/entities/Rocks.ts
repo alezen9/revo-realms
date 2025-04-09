@@ -21,8 +21,9 @@ import { ColliderDesc, RigidBodyDesc } from "@dimforge/rapier3d";
 import { physics } from "../systems/Physics";
 import { sceneManager } from "../systems/SceneManager";
 import { rendererManager } from "../systems/RendererManager";
+import { tslUtils } from "../systems/TSLUtils";
 
-const COUNT = 20;
+const COUNT = 20; // Hardcoded, rocks are placed in blender and are less than 20
 
 class RockMaterial extends MeshLambertNodeMaterial {
   private _noiseBuffer: ReturnType<typeof instancedArray>; // holds: float = (noise)
@@ -40,29 +41,52 @@ class RockMaterial extends MeshLambertNodeMaterial {
     const noiseValue = this._noiseBuffer.element(instanceIndex);
     const discriminantA = step(0.5, noiseValue);
     const discriminantB = float(1).sub(discriminantA);
+
     const basicUv = fract(uv().mul(3.6).add(rand));
     const mossyUv = fract(uv().mul(1.5).add(rand));
 
+    const _uv = basicUv.mul(discriminantA).add(mossyUv.mul(discriminantB));
+
+    const {
+      stoneDiffuse,
+      stoneNormalAo,
+      stoneMossyDiffuse,
+      stoneMossyNormalAo,
+    } = assetManager.atlasesCoords.stones;
+
     // Diffuse
-
-    const diffBasic = texture(assetManager.stoneDiffuse, basicUv).mul(
-      discriminantA,
-    );
-
-    const diffMossy = texture(assetManager.stoneMossyDiffuse, mossyUv).mul(
+    // Scale
+    const stoneDiffScale = vec2(...stoneDiffuse.scale).mul(discriminantA);
+    const stoneMossyDiffScale = vec2(...stoneMossyDiffuse.scale).mul(
       discriminantB,
     );
-    const finalColor = diffBasic.add(diffMossy);
-    this.colorNode = finalColor.rgb;
+    const scaleDiffuse = stoneDiffScale.add(stoneMossyDiffScale);
+    // Offset
+    const stoneDiffOffset = vec2(...stoneDiffuse.offset).mul(discriminantA);
+    const stoneMossyDiffOffset = vec2(...stoneMossyDiffuse.offset).mul(
+      discriminantB,
+    );
+    const offsetDiffuse = stoneDiffOffset.add(stoneMossyDiffOffset);
+
+    const _uvDiff = tslUtils.computeAtlasUv(scaleDiffuse, offsetDiffuse, _uv);
+    this.colorNode = texture(assetManager.stonesAtlas, _uvDiff);
 
     // Normal
-    const norAoBasic = texture(assetManager.stoneNormalAo, basicUv).mul(
-      discriminantA,
-    );
-    const norMossyAo = texture(assetManager.stoneMossyNormalAo, mossyUv).mul(
+    // Scale
+    const stoneNorScale = vec2(...stoneNormalAo.scale).mul(discriminantA);
+    const stoneMossyNorScale = vec2(...stoneMossyNormalAo.scale).mul(
       discriminantB,
     );
-    const norAo = norAoBasic.add(norMossyAo);
+    const scaleNormal = stoneNorScale.add(stoneMossyNorScale);
+    // Offset
+    const stoneNorOffset = vec2(...stoneNormalAo.offset).mul(discriminantA);
+    const stoneMossyNorOffset = vec2(...stoneMossyNormalAo.offset).mul(
+      discriminantB,
+    );
+    const offsetNormal = stoneNorOffset.add(stoneMossyNorOffset);
+
+    const _uvNor = tslUtils.computeAtlasUv(scaleNormal, offsetNormal, _uv);
+    const norAo = texture(assetManager.stonesAtlas, _uvNor);
     this.normalNode = new NormalMapNode(norAo.rgb, float(3));
 
     // AO

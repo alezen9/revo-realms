@@ -35,6 +35,7 @@ import stoneDiffTextureUrl from "/textures/realm/stoneDiffuse.webp?url";
 import stoneMossyDiffTextureUrl from "/textures/realm/stoneMossyDiffuse.webp?url";
 import stoneNorAoTextureUrl from "/textures/realm/stoneNormalAo.webp?url";
 import stoneMossyNorAoTextureUrl from "/textures/realm/stoneMossyNormalAo.webp?url";
+import stonesAtlasUrl from "/textures/realm/stonesAtlas.webp?url";
 // Trees
 import barkDiffTextureUrl from "/textures/realm/barkDiffuse.webp?url";
 import barkNorTextureUrl from "/textures/realm/barkNormal.webp?url";
@@ -100,6 +101,8 @@ class AssetManager {
   flowers2!: Texture;
   dandelionDiffuse!: Texture;
   flowerDiffuseAtlas!: Texture;
+
+  stonesAtlas!: Texture;
 
   constructor() {
     const manager = this.createLoadingManager();
@@ -200,6 +203,7 @@ class AssetManager {
       // Flowers [24]
       this.textureLoader.loadAsync(flowerDiffuseAtlasUrl),
       // ------ Still testing the ones below ------
+      this.textureLoader.loadAsync(stonesAtlasUrl),
     ]);
 
     // Models
@@ -259,6 +263,8 @@ class AssetManager {
 
     // Flowers
     this.flowerDiffuseAtlas = res[24];
+
+    this.stonesAtlas = res[25];
   }
 }
 
