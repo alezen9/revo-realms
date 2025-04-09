@@ -1,7 +1,15 @@
-import { Audio, AudioListener, AudioLoader, LoadingManager } from "three";
-import ambientUrl from "/audio/ambient.mp3?url";
+import {
+  Audio,
+  AudioListener,
+  AudioLoader,
+  LoadingManager,
+  PositionalAudio,
+} from "three";
 import { sceneManager } from "./SceneManager";
 import loadingManager from "./LoadingManager";
+
+import ambientUrl from "/audio/ambient.mp3?url";
+import lakeUrl from "/audio/lake.mp3?url";
 
 class AudioManager {
   // Loaders
@@ -10,9 +18,10 @@ class AudioManager {
 
   // State
   isMute = true;
-  private files: Audio[] = [];
+  private files: Array<Audio | PositionalAudio> = [];
 
   ambient!: Audio;
+  lake!: PositionalAudio;
 
   constructor(manager: LoadingManager) {
     this.audioLoader = new AudioLoader(manager);
@@ -41,10 +50,30 @@ class AudioManager {
     return audio;
   }
 
-  async initAsync() {
-    const res = await Promise.all([this.audioLoader.loadAsync(ambientUrl)]);
+  private newPositionalAudio(
+    buffer: AudioBuffer,
+    volume = 1,
+    loop = false,
+    distance = 1,
+  ) {
+    const audio = new PositionalAudio(this.audioListener);
+    audio.setBuffer(buffer);
+    audio.setVolume(0);
+    audio.setLoop(loop);
+    audio.userData.originalVolume = volume;
+    audio.setRefDistance(distance);
+    this.files.push(audio);
+    return audio;
+  }
 
-    this.ambient = this.newAudio(res[0], 0.15, true);
+  async initAsync() {
+    const res = await Promise.all([
+      this.audioLoader.loadAsync(ambientUrl),
+      this.audioLoader.loadAsync(lakeUrl),
+    ]);
+
+    this.ambient = this.newAudio(res[0], 0.01, true);
+    this.lake = this.newPositionalAudio(res[1], 0.75, true);
   }
 }
 

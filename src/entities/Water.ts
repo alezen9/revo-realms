@@ -35,6 +35,7 @@ import {
 import { State } from "../Game";
 import { eventsManager } from "../systems/EventsManager";
 import { debugManager } from "../systems/DebugManager";
+import audioManager from "../systems/AudioManager";
 
 export default class Water {
   constructor() {
@@ -42,6 +43,7 @@ export default class Water {
       "water",
     ) as Mesh;
     water.material = new WaterMaterial();
+    water.add(audioManager.lake);
     sceneManager.scene.add(water);
   }
 }
@@ -50,9 +52,11 @@ class WaterMaterial extends MeshBasicNodeMaterial {
   private playerDir = new Vector2(0, 0);
 
   private uTime = uniform(0);
+  private uSpeed = uniform(0.0025);
   private uScale1 = uniform(0.25);
   private uScale2 = uniform(5);
-  private uScaleOffset = uniform(0.05);
+  private uWaveFrequency = uniform(2);
+  private uWaveAmplitude = uniform(0.1);
 
   private uFresnelScale = uniform(0.4);
   private uMinDist = uniform(15);
@@ -86,14 +90,20 @@ class WaterMaterial extends MeshBasicNodeMaterial {
       title: "🌊 Water",
       expanded: false,
     });
+    waterFolder.addBinding(this.uSpeed, "value", {
+      label: "Speed",
+    });
     waterFolder.addBinding(this.uScale1, "value", {
       label: "UV Scale 1",
     });
     waterFolder.addBinding(this.uScale2, "value", {
       label: "UV Scale 2",
     });
-    waterFolder.addBinding(this.uScaleOffset, "value", {
-      label: "Displacement scale",
+    waterFolder.addBinding(this.uWaveFrequency, "value", {
+      label: "Wave frequency",
+    });
+    waterFolder.addBinding(this.uWaveAmplitude, "value", {
+      label: "Wave amplitude",
     });
     waterFolder.addBinding(this.uFresnelScale, "value", {
       label: "Fresnel strength",
@@ -221,7 +231,7 @@ class WaterMaterial extends MeshBasicNodeMaterial {
   private computeNormal = Fn(() => {
     const ripple = this.computeRipples();
     const rippleOffset = ripple.xz.mul(this.uRipplesScale);
-    const timer = this.uTime.mul(0.0025).add(rippleOffset);
+    const timer = this.uTime.mul(this.uSpeed).add(rippleOffset);
 
     // First sample
     const _uv1 = fract(uv().mul(this.uScale1).add(timer));
@@ -291,7 +301,9 @@ class WaterMaterial extends MeshBasicNodeMaterial {
 
   private computePosition = Fn(() => {
     const random = hash(positionLocal.xz).add(vertexIndex).mul(0.015);
-    const offset = sin(this.uTime.mul(random)).mul(this.uScaleOffset);
+    const offset = sin(this.uTime.mul(random).mul(this.uWaveFrequency)).mul(
+      this.uWaveAmplitude,
+    );
     return positionLocal.add(vec3(0, offset, 0));
   });
 
