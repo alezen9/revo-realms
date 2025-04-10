@@ -69,6 +69,7 @@ class Physics {
   update() {
     this.world.step(this.eventQueue);
     this.eventQueue.drainCollisionEvents((handle1, handle2, started) => {
+      if (audioManager.isMute) return;
       const collider1 = this.world.getCollider(handle1);
       const collider2 = this.world.getCollider(handle2);
 

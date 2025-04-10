@@ -65,7 +65,7 @@ class AudioManager {
     audio.setVolume(0);
     audio.setLoop(loop);
     audio.userData.originalVolume = volume;
-    audio.setRefDistance(distance);
+    audio.setMaxDistance(distance);
     this.files.push(audio);
     return audio;
   }
@@ -79,7 +79,7 @@ class AudioManager {
     ]);
 
     this.ambient = this.newAudio(res[0], 0.01, true);
-    this.lake = this.newPositionalAudio(res[1], 0.75, true);
+    this.lake = this.newPositionalAudio(res[1], 1, true, 10);
     this.hitWood = this.newAudio(res[2], 1, false);
     this.hitStone = this.newAudio(res[3], 1, false);
   }
