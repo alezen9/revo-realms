@@ -1,8 +1,8 @@
 import {
   CubeTexture,
   CubeTextureLoader,
-  LinearSRGBColorSpace,
   LoadingManager,
+  SRGBColorSpace,
   Texture,
   TextureLoader,
 } from "three";
@@ -46,6 +46,8 @@ import trunkDiffuseUrl from "/textures/realm/trunkDiffuse.webp?url";
 import trunkNormalUrl from "/textures/realm/trunkNormal.webp?url";
 // One Piece
 import onePieceAtlasUrl from "/textures/realm/onePieceAtlas.webp?url";
+// Naruto
+import kunaiDiffuseUrl from "/textures/realm/kunaiDiffuse.webp?url";
 
 import atlasesCoords from "../atlases/atlases.json";
 import { Atlases } from "../atlases/types";
@@ -92,6 +94,8 @@ class AssetManager {
   trunkNormal!: Texture;
 
   onePieceAtlas!: Texture;
+
+  kunaiDiffuse!: Texture;
 
   constructor(manager: LoadingManager) {
     // Texture
@@ -149,6 +153,8 @@ class AssetManager {
       this.textureLoader.loadAsync(trunkNormalUrl),
       // One Piece [21]
       this.textureLoader.loadAsync(onePieceAtlasUrl),
+      // Naruto [22]
+      this.textureLoader.loadAsync(kunaiDiffuseUrl),
       // ------ Still testing the ones below ------
     ]);
 
@@ -167,7 +173,6 @@ class AssetManager {
     this.sandNormal = res[6];
     this.waterNormal = res[7];
     this.terrainShadowAo = res[8];
-    this.terrainShadowAo.colorSpace = LinearSRGBColorSpace;
     this.terrainShadowAo.flipY = false;
 
     // Water lilies
@@ -175,7 +180,6 @@ class AssetManager {
     this.waterLiliesTexture.flipY = false;
     this.waterLiliesAlphaTexture = res[10];
     this.waterLiliesAlphaTexture.flipY = false;
-    this.waterLiliesAlphaTexture.colorSpace = LinearSRGBColorSpace;
 
     // Flowers
     this.flowerAtlas = res[11];
@@ -208,6 +212,11 @@ class AssetManager {
     // One Piece
     this.onePieceAtlas = res[21];
     this.onePieceAtlas.flipY = false;
+
+    // Naruto
+    this.kunaiDiffuse = res[22];
+    this.kunaiDiffuse.flipY = false;
+    this.kunaiDiffuse.colorSpace = SRGBColorSpace;
   }
 }
 

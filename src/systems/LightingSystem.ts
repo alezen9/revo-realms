@@ -43,14 +43,14 @@ class LightingSystem {
     const hemiLight = new HemisphereLight();
     hemiLight.color.setRGB(0.6, 0.4, 0.5);
     hemiLight.groundColor.setRGB(0.3, 0.2, 0.2);
-    hemiLight.intensity = 0.5;
+    hemiLight.intensity = 0.3;
     hemiLight.position.copy(config.LIGHT_POSITION_OFFSET);
     return hemiLight;
   }
 
   private setupDirectionalLighting() {
     const directionalLight = new DirectionalLight();
-    directionalLight.intensity = 0.9;
+    directionalLight.intensity = 0.8;
     directionalLight.color.setRGB(0.85, 0.75, 0.7);
     directionalLight.position.copy(config.LIGHT_POSITION_OFFSET);
 

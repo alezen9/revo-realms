@@ -105,6 +105,7 @@ class TerainMaterial extends MeshLambertNodeMaterial {
   });
 
   private createMaterial() {
+    this.precision = "lowp";
     this.flatShading = false;
     const _uv = tslUtils.computeMapUvByPosition(positionWorld.xz);
     const vUv = varying(_uv);
@@ -131,7 +132,7 @@ class TerainMaterial extends MeshLambertNodeMaterial {
     const sandAlpha = float(1).sub(grassColorSample.a);
     const grassColor = this._uniforms.uGrassTerrainColor
       .mul(sandAlpha)
-      .add(grassColorSample)
+      .add(grassColorSample.mul(vec3(1.0, 0.79, 0.79)))
       .mul(grassFactor)
       .mul(0.85);
 
