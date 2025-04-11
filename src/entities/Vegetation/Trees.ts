@@ -1,8 +1,7 @@
 import {
+  cos,
   float,
   fract,
-  hash,
-  instanceIndex,
   mix,
   positionLocal,
   positionWorld,
@@ -59,7 +58,6 @@ class CanopyMaterial extends MeshLambertNodeMaterial {
 
     const worlUv = tslUtils.computeMapUvByPosition(positionWorld.xz);
     const noise = texture(assetManager.noiseTexture, worlUv);
-    const factor = hash(instanceIndex.add(noise.b));
 
     // Diffuse
     const diff = texture(assetManager.canopyDiffuse, uv());
@@ -69,31 +67,31 @@ class CanopyMaterial extends MeshLambertNodeMaterial {
     //   0.5,
     // );
 
-    const autumnAmbiance1 = mix(
+    // const autumnAmbiance2 = mix(
+    //   vec3(1, 0.254, 0.052),
+    //   vec3(1, 0.767, 0.004),
+    //   0.5,
+    // );
+
+    const seasonalAmbience = mix(
       vec3(0.889, 0.095, 0),
       vec3(1, 0.162, 0.009),
       0.5,
     );
-
-    const autumnAmbiance2 = mix(
-      vec3(1, 0.254, 0.052),
-      vec3(1, 0.767, 0.004),
-      0.5,
-    );
-    const mixed = mix(autumnAmbiance1, autumnAmbiance2, factor);
-    this.colorNode = mix(diff.mul(1.25), mixed, noise.b);
+    this.colorNode = mix(diff.mul(1.25), seasonalAmbience, noise.b.mul(0.4));
 
     // Normal
     const nor = texture(assetManager.canopyNormal, uv());
-    this.normalNode = new NormalMapNode(nor, float(2));
+    this.normalNode = new NormalMapNode(nor, float(1.25));
 
     // Alpha
     this.alphaTest = 0.9;
 
     // Position
     const timer = this.uTime.mul(noise.r).add(vertexIndex).mul(7.5);
-    const wavering = sin(timer).mul(0.015);
-    this.positionNode = positionLocal.add(wavering);
+    const sway = sin(timer).mul(0.015);
+    const flutter = cos(timer.mul(0.75)).mul(0.01);
+    this.positionNode = positionLocal.add(vec3(0, flutter, sway));
 
     eventsManager.on("update", this.update.bind(this));
   }
@@ -103,6 +101,7 @@ class CanopyMaterial extends MeshLambertNodeMaterial {
     this.uTime.value = clock.elapsedTime;
   }
 }
+
 export default class Trees {
   constructor() {
     // Visual
