@@ -2,6 +2,7 @@ import Grass from "./Grass";
 import Flowers from "./Flowers";
 import { WaterLilies } from "./WaterLilies";
 import Trees from "./Trees";
+import Plants from "./Plants";
 
 export default class Vegetation {
   constructor() {
@@ -9,5 +10,6 @@ export default class Vegetation {
     new WaterLilies();
     new Flowers();
     new Trees();
+    new Plants();
   }
 }

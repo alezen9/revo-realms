@@ -48,6 +48,8 @@ import trunkNormalUrl from "/textures/realm/trunkNormal.webp?url";
 import onePieceAtlasUrl from "/textures/realm/onePieceAtlas.webp?url";
 // Naruto
 import kunaiDiffuseUrl from "/textures/realm/kunaiDiffuse.webp?url";
+// Plants
+import plantAtlasUrl from "/textures/realm/plantAtlas.webp?url";
 
 import atlasesCoords from "../atlases/atlases.json";
 import { Atlases } from "../atlases/types";
@@ -96,6 +98,8 @@ class AssetManager {
   onePieceAtlas!: Texture;
 
   kunaiDiffuse!: Texture;
+
+  plantAtlas!: Texture;
 
   constructor(manager: LoadingManager) {
     // Texture
@@ -156,6 +160,7 @@ class AssetManager {
       // Naruto [22]
       this.textureLoader.loadAsync(kunaiDiffuseUrl),
       // ------ Still testing the ones below ------
+      this.textureLoader.loadAsync(plantAtlasUrl),
     ]);
 
     // Models
@@ -217,6 +222,10 @@ class AssetManager {
     this.kunaiDiffuse = res[22];
     this.kunaiDiffuse.flipY = false;
     this.kunaiDiffuse.colorSpace = SRGBColorSpace;
+
+    // Plants
+    this.plantAtlas = res[23];
+    this.plantAtlas.flipY = false;
   }
 }
 
