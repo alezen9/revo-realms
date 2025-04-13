@@ -5,10 +5,11 @@ class UIManager {
 
   init() {
     this.initAudioButton();
+    this.initCreditsButton();
   }
 
   private initAudioButton() {
-    const button = document.getElementById("audio");
+    const button = document.getElementById("audio") as HTMLButtonElement;
     const svgPath = button?.querySelector("path");
     if (!button || !svgPath) return;
     const audioOnIconPath =
@@ -16,11 +17,47 @@ class UIManager {
     const audioOffIconPath =
       "M1129.433 113v1694.15H903.547l-451.774-451.773V564.773L903.547 113h225.886ZM338.83 564.773v790.604H169.415c-92.806 0-167.9-74.166-169.392-166.609L0 1185.962V734.188c0-92.805 74.166-167.9 166.608-169.392l2.807-.023H338.83ZM1789.951 635 1920 764.926 1724.988 959.94 1920 1154.95 1789.951 1285l-194.89-195.012L1400.05 1285 1270 1154.951l195.012-195.012L1270 764.926 1400.049 635l195.012 195.012L1789.951 635Z";
 
-    button.onclick = async () => {
+    button.addEventListener("click", async (e) => {
+      e.stopPropagation();
       await audioManager.toggleMute();
       const d = audioManager.isMute ? audioOffIconPath : audioOnIconPath;
       svgPath.setAttribute("d", d);
-    };
+    });
+  }
+
+  private initCreditsButton() {
+    const button = document.getElementById("credits") as HTMLButtonElement;
+    const dialog = document.getElementById(
+      "credits-dialog",
+    ) as HTMLDialogElement;
+    if (!button || !dialog) return;
+
+    dialog.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const el = e.target as HTMLElement | null;
+      switch (el?.id) {
+        case "credits-dialog":
+        case "close-dialog-btn":
+          dialog.close();
+          break;
+        default:
+          break;
+      }
+    });
+
+    button.addEventListener("click", (e) => {
+      e.stopPropagation();
+      dialog.showModal();
+    });
+
+    const user = "aleksandar.d.gjoreski";
+    const domain = "gmail.com";
+    const email = `${user}@${domain}`;
+    const link = document.createElement("a");
+    link.setAttribute("href", `mailto:${email}`);
+    link.innerText = email;
+    const placeholder = document.getElementById("email-placeholder");
+    placeholder?.appendChild(link);
   }
 }
 

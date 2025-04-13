@@ -7,6 +7,8 @@ html,
 body {
   overflow: hidden;
   height: 100%;
+  /* font-family: "Cabin Sketch", sans-serif; */
+  font-family: "Nunito", sans-serif;
 }
 
 .revo-realms {
@@ -33,6 +35,12 @@ body {
 
 body:has(.monitoring-panel) .debug-panel {
   left: 110px;
+}
+
+hr {
+  border: 0.1px solid;
+  border-color: #d4d3d34e;
+  margin: 1rem 0;
 }
 
 /**
@@ -91,4 +99,81 @@ https://codepen.io/t_afif/pen/VwxbdpV
 
 .interface-btn > svg {
   width: 20px;
+}
+
+/**
+Dialog
+**/
+dialog {
+  margin: auto;
+  border-radius: 7px;
+  border: none;
+  color: #d4d3d3;
+  width: 100%;
+  max-width: 70%;
+  background-color: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(25px);
+}
+
+dialog .credits-content {
+  --padding: 3rem;
+  display: flex;
+  flex-direction: column;
+  width: calc(100% - var(--padding) * 2);
+  padding: var(--padding);
+  gap: 1rem;
+}
+
+dialog .credits-content h1 {
+  margin-bottom: 1rem;
+}
+
+dialog .asset h2 span {
+  font-weight: 400;
+  font-size: 1rem;
+  margin-left: 0.25rem;
+}
+
+dialog .credits-content p {
+  color: #ababab;
+}
+
+dialog .credits-content .gratitude {
+  margin-bottom: 1rem;
+  line-height: 1.35rem;
+}
+
+dialog .credits-content .asset {
+  border-radius: 7px;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  background-color: #ffffff11;
+}
+
+dialog a {
+  color: #bb7a01;
+}
+
+dialog a:visited {
+  color: #bb4b01;
+}
+
+@media screen and (max-width: 650px) {
+  dialog {
+    max-width: 85%;
+  }
+
+  dialog .credits-content {
+    --padding: 1rem;
+  }
+
+  dialog .credits-content h1 {
+    font-size: 1.5rem;
+  }
+
+  dialog .credits-content h2 {
+    font-size: 1.1rem;
+  }
 }
