@@ -16,7 +16,7 @@ Originally, I wanted to use it as a sort of interactive portfolio — heavily in
 
 ## 🌅 Preview
 
-[![Preview Image](/public/docs-preview.png)](https://alezen9.github.io/revo-realms/)
+[![Preview Image](/public/docs-preview.webp)](https://alezen9.github.io/revo-realms/)
 Click the image above to view the live experience directly!
 
 <br />
