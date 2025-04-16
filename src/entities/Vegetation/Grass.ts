@@ -118,7 +118,7 @@ const defaultUniforms: Required<GrassUniforms> = {
   uBladeMaxBendAngle: uniform(Math.PI * 0.15),
   uWindStrength: uniform(0.6),
   // Color
-  uBaseColor: uniform(new Color().setRGB(0.1, 0.1, 0.02)),
+  uBaseColor: uniform(new Color().setRGB(0.06, 0.06, 0.01)),
   uTipColor: uniform(new Color().setRGB(0.28, 0.13, 0.06)),
   // Updated externally
   uDelta: uniform(new Vector2(0, 0)),
