@@ -128,7 +128,10 @@ class TerainMaterial extends MeshLambertNodeMaterial {
 
     // Diffuse
     // Grass
-    const grassColorSample = texture(assetManager.grassDiffuse, grassUv);
+    const grassUv2 = fract(vUv.mul(15));
+    const grassColorSample1 = texture(assetManager.grassDiffuse, grassUv);
+    const grassColorSample2 = texture(assetManager.grassDiffuse, grassUv2);
+    const grassColorSample = mix(grassColorSample1, grassColorSample2, 0.5);
     const sandAlpha = float(1).sub(grassColorSample.a);
     const grassColor = this._uniforms.uGrassTerrainColor
       .mul(sandAlpha)
