@@ -8,41 +8,63 @@ class InputManager {
     this.keyDownListeners = new Map();
     this.keyUpListeners = new Map();
 
-    window.addEventListener("keydown", this.handleKeyDown.bind(this));
-    window.addEventListener("keyup", this.handleKeyUp.bind(this));
+    this.handleKeyDown = this.handleKeyDown.bind(this);
+    this.handleKeyUp = this.handleKeyUp.bind(this);
+
+    window.addEventListener("keydown", this.handleKeyDown);
+    window.addEventListener("keyup", this.handleKeyUp);
   }
 
   private handleKeyDown(event: KeyboardEvent) {
-    const key = event.key.toLowerCase();
-    if (!this.keysPressed.has(key)) {
-      this.keysPressed.add(key);
-      this.keyDownListeners.get(key)?.();
+    const code = event.code; // e.g. "KeyW", "ArrowUp", etc.
+    if (!this.keysPressed.has(code)) {
+      this.keysPressed.add(code);
+      this.keyDownListeners.get(code)?.();
     }
   }
 
   private handleKeyUp(event: KeyboardEvent) {
-    // use event.code instead to make it work for different layouts of keyboards
-    const key = event.key.toLowerCase();
-    this.keysPressed.delete(key);
-    this.keyUpListeners.get(key)?.();
+    const code = event.code;
+    this.keysPressed.delete(code);
+    this.keyUpListeners.get(code)?.();
   }
 
-  public isKeyPressed(key: string): boolean {
-    if (key === "*") return this.keysPressed.size > 0;
-    return this.keysPressed.has(key.toLowerCase());
+  public isKeyPressed(code: string): boolean {
+    if (code === "*") return this.keysPressed.size > 0;
+    return this.keysPressed.has(code);
   }
 
-  public onKeyDown(key: string, callback: VoidFunction) {
-    this.keyDownListeners.set(key.toLowerCase(), callback);
+  public onKeyDown(code: string, callback: VoidFunction) {
+    this.keyDownListeners.set(code, callback);
   }
 
-  public onKeyUp(key: string, callback: VoidFunction) {
-    this.keyUpListeners.set(key.toLowerCase(), callback);
+  public onKeyUp(code: string, callback: VoidFunction) {
+    this.keyUpListeners.set(code, callback);
   }
 
   public dispose() {
-    window.removeEventListener("keydown", this.handleKeyDown.bind(this));
-    window.removeEventListener("keyup", this.handleKeyUp.bind(this));
+    window.removeEventListener("keydown", this.handleKeyDown);
+    window.removeEventListener("keyup", this.handleKeyUp);
+  }
+
+  public isForward(): boolean {
+    return this.isKeyPressed("KeyW") || this.isKeyPressed("ArrowUp");
+  }
+
+  public isBackward(): boolean {
+    return this.isKeyPressed("KeyS") || this.isKeyPressed("ArrowDown");
+  }
+
+  public isLeftward(): boolean {
+    return this.isKeyPressed("KeyA") || this.isKeyPressed("ArrowLeft");
+  }
+
+  public isRightward(): boolean {
+    return this.isKeyPressed("KeyD") || this.isKeyPressed("ArrowRight");
+  }
+
+  public isJumpPressed(): boolean {
+    return this.isKeyPressed("Space");
   }
 }
 

@@ -160,7 +160,7 @@ export default class Player {
   }
 
   private updateVerticalMovement(delta: number) {
-    const isJumpKeyPressed = inputManager.isKeyPressed(" ");
+    const isJumpKeyPressed = inputManager.isJumpPressed();
 
     // 1) Ground check
     this.isOnGround = this.checkIfGrounded();
@@ -232,14 +232,10 @@ export default class Player {
   }
 
   private updateHorizontalMovement(delta: number) {
-    const isForward =
-      inputManager.isKeyPressed("w") || inputManager.isKeyPressed("arrowup");
-    const isBackward =
-      inputManager.isKeyPressed("s") || inputManager.isKeyPressed("arrowdown");
-    const isLeftward =
-      inputManager.isKeyPressed("a") || inputManager.isKeyPressed("arrowleft");
-    const isRightward =
-      inputManager.isKeyPressed("d") || inputManager.isKeyPressed("arrowright");
+    const isForward = inputManager.isForward();
+    const isBackward = inputManager.isBackward();
+    const isLeftward = inputManager.isLeftward();
+    const isRightward = inputManager.isRightward();
 
     const turnSpeed = 2; // radians/sec
     if (isLeftward) this.yawInRadians += turnSpeed * delta;
