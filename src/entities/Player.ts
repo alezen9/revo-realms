@@ -97,7 +97,20 @@ export default class Player {
     physics.world.createCollider(this.createColliderDesc(), this.rigidBody);
 
     eventsManager.on("update", this.update.bind(this));
+    eventsManager.on(
+      "update-throttle-60x",
+      this.resetPlayerPosition.bind(this),
+    );
     this.debugPlayer();
+  }
+
+  private resetPlayerPosition(state: State) {
+    const { player } = state;
+    if (player.position.y > -10) return;
+    this.rigidBody.setLinvel({ x: 0, y: 0, z: 0 }, false);
+    this.rigidBody.setAngvel({ x: 0, y: 0, z: 0 }, false);
+    this.rigidBody.setTranslation(config.PLAYER_INITIAL_POSITION, true);
+    this.mesh.position.copy(config.PLAYER_INITIAL_POSITION);
   }
 
   private debugPlayer() {
