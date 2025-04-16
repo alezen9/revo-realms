@@ -238,6 +238,6 @@ class FlowerMaterial extends SpriteNodeMaterial {
   }
 
   async updateAsync() {
-    await rendererManager.renderer.computeAsync(this.computeUpdate);
+    rendererManager.renderer.computeAsync(this.computeUpdate);
   }
 }
