@@ -51,8 +51,8 @@ import { UniformType } from "../../types";
 import { tslUtils } from "../../systems/TSLUtils";
 
 const getConfig = () => {
-  const BLADE_WIDTH = 0.045;
-  const BLADE_HEIGHT = 1.25;
+  const BLADE_WIDTH = 0.1;
+  const BLADE_HEIGHT = 1.5;
   const TILE_SIZE = 150;
   const BLADES_PER_SIDE = 500;
   return {
@@ -396,6 +396,42 @@ class GrassMaterial extends MeshBasicNodeMaterial {
     return verticalAO.mul(float(1.0).sub(sideAO));
   });
 
+  // private computeCurvedNormal = Fn(() => {
+  //   // Fake cylindrical shape by curving normals
+  //   const sideFactor = sin(uv().x.mul(Math.PI)); // Smoother curvature: -1 -> 0 -> 1
+  //   const heightFactor = pow(uv().y, 1.5); // Softer curvature transition toward the tip
+
+  //   // Stronger curvature at the base, softer at the tip
+  //   const curvatureStrength = mix(0.6, 0.15, heightFactor);
+
+  //   // Subtle Twisting for Organic Shape
+  //   const twistStrength = mix(0.0, 0.2, heightFactor); // Slight twist near the tip
+  //   const twistAngle = uv().y.mul(Math.PI).mul(twistStrength); // Vary twist over height
+
+  //   // Apply combined curvature and twist for cylindrical illusion
+  //   let curvedNormal = normalize(
+  //     vec3(
+  //       sideFactor.mul(curvatureStrength).cos().sub(twistAngle.sin().mul(0.1)), // Side curvature with slight twist
+  //       twistAngle.sin().mul(0.05), // Subtle upward twist
+  //       1.0,
+  //     ),
+  //   );
+
+  //   // Transform Normals to World Space
+  //   curvedNormal = normalize(
+  //     transformDirection(curvedNormal, modelNormalMatrix),
+  //   );
+
+  //   // Correct for Backface Rendering
+  //   curvedNormal = mix(
+  //     curvedNormal,
+  //     curvedNormal.negate(),
+  //     float(faceDirection.lessThan(0.0)),
+  //   );
+
+  //   return curvedNormal;
+  // });
+
   private createGrassMaterial() {
     this.precision = "lowp";
     this.side = DoubleSide;
@@ -472,6 +508,131 @@ export default class Grass {
     });
   }
 
+  private createBladeGeometry() {
+    //    G
+    //   / \
+    //  F---F'
+    // /     \
+    // C-------D
+    // |   \   |
+    // A-------B
+
+    const halfWidth = grassConfig.BLADE_WIDTH / 2;
+    const quarterWidth = halfWidth / 2;
+    const segmentHeight = grassConfig.BLADE_HEIGHT / 4;
+
+    const positions = new Float32Array([
+      // A, B
+      -halfWidth,
+      0,
+      0,
+      halfWidth,
+      0,
+      0,
+      // C, D
+      -quarterWidth,
+      segmentHeight * 1,
+      0,
+      quarterWidth,
+      segmentHeight * 1,
+      0,
+      // F, F'
+      -quarterWidth * 0.5,
+      segmentHeight * 2,
+      0,
+      quarterWidth * 0.5,
+      segmentHeight * 2,
+      0,
+      // G (tip)
+      0,
+      segmentHeight * 3,
+      0,
+    ]);
+
+    const uvs = new Float32Array([
+      // A, B
+      0,
+      0,
+      1,
+      0,
+      // C, D
+      0.25,
+      segmentHeight * 1,
+      0.75,
+      segmentHeight * 1,
+      // F, F'
+      0.375,
+      segmentHeight * 2,
+      0.625,
+      segmentHeight * 2,
+      // G
+      0.5,
+      segmentHeight * 3,
+    ]);
+
+    const indices = new Uint16Array([
+      // A-B-D, A-D-C
+      0, 1, 3, 0, 3, 2,
+      // C-D-F', C-F'-F
+      2, 3, 5, 2, 5, 4,
+      // F-F'-G
+      4, 5, 6,
+    ]);
+
+    // Angles per segment
+    const angle1 = (25 * Math.PI) / 180;
+    const angle2 = (15 * Math.PI) / 180;
+    const angle3 = (8 * Math.PI) / 180;
+
+    const cos1 = Math.cos(angle1);
+    const sin1 = Math.sin(angle1);
+
+    const cos2 = Math.cos(angle2);
+    const sin2 = Math.sin(angle2);
+
+    const cos3 = Math.cos(angle3);
+    const sin3 = Math.sin(angle3);
+
+    const normals = new Float32Array([
+      // A
+      -cos1,
+      sin1,
+      0,
+      // B
+      cos1,
+      sin1,
+      0,
+      // C
+      -cos2,
+      sin2,
+      0,
+      // D
+      cos2,
+      sin2,
+      0,
+      // F
+      -cos3,
+      sin3,
+      0,
+      // F'
+      cos3,
+      sin3,
+      0,
+      // G (tip)
+      0.0,
+      1.0,
+      0,
+    ]);
+
+    const geometry = new InstancedBufferGeometry();
+    geometry.setAttribute("position", new BufferAttribute(positions, 3));
+    geometry.setAttribute("uv", new BufferAttribute(uvs, 2));
+    geometry.setIndex(new BufferAttribute(indices, 1));
+    geometry.setAttribute("normal", new BufferAttribute(normals, 3));
+
+    return geometry;
+  }
+
   // private createBladeGeometryLow() {
   //   const halfWidth = grassConfig.BLADE_WIDTH / 2;
   //   const height = grassConfig.BLADE_HEIGHT;
@@ -524,87 +685,87 @@ export default class Grass {
   //   return geometry;
   // }
 
-  private createBladeGeometry() {
-    //    E
-    //   /  \
-    //  C----D
-    // |  \   |
-    // A------B
-    const halfWidth = grassConfig.BLADE_WIDTH / 2;
-    const quarterWidth = halfWidth / 2;
-    const segmentHeight = grassConfig.BLADE_HEIGHT / 2;
-    const positions = new Float32Array([
-      -halfWidth,
-      0,
-      0, // A
-      halfWidth,
-      0,
-      0, // B
-      -quarterWidth,
-      segmentHeight * 1,
-      0, // C
-      quarterWidth,
-      segmentHeight * 1,
-      0, // D
-      0,
-      segmentHeight * 2,
-      0, // E
-    ]);
-    const uvs = new Float32Array([
-      0,
-      0, // A
-      1,
-      0, // B
-      0.25,
-      segmentHeight * 1, // C
-      0.75,
-      segmentHeight * 1, // D
-      0.5,
-      segmentHeight * 2, // E
-    ]);
+  // private createBladeGeometry() {
+  //   //    E
+  //   //   /  \
+  //   //  C----D
+  //   // |  \   |
+  //   // A------B
+  //   const halfWidth = grassConfig.BLADE_WIDTH / 2;
+  //   const quarterWidth = halfWidth / 2;
+  //   const segmentHeight = grassConfig.BLADE_HEIGHT / 2;
+  //   const positions = new Float32Array([
+  //     -halfWidth,
+  //     0,
+  //     0, // A
+  //     halfWidth,
+  //     0,
+  //     0, // B
+  //     -quarterWidth,
+  //     segmentHeight * 1,
+  //     0, // C
+  //     quarterWidth,
+  //     segmentHeight * 1,
+  //     0, // D
+  //     0,
+  //     segmentHeight * 2,
+  //     0, // E
+  //   ]);
+  //   const uvs = new Float32Array([
+  //     0,
+  //     0, // A
+  //     1,
+  //     0, // B
+  //     0.25,
+  //     segmentHeight * 1, // C
+  //     0.75,
+  //     segmentHeight * 1, // D
+  //     0.5,
+  //     segmentHeight * 2, // E
+  //   ]);
 
-    const indices = new Uint16Array([
-      // A-B-D A-D-C
-      0, 1, 3, 0, 3, 2,
-      // C-D-E
-      2, 3, 4,
-    ]);
+  //   const indices = new Uint16Array([
+  //     // A-B-D A-D-C
+  //     0, 1, 3, 0, 3, 2,
+  //     // C-D-E
+  //     2, 3, 4,
+  //   ]);
 
-    const angleDeg1 = 25;
-    const angleRad1 = (angleDeg1 * Math.PI) / 180;
-    const cosTheta1 = Math.cos(angleRad1);
-    const sinTheta1 = Math.sin(angleRad1);
+  //   const angleDeg1 = 25;
+  //   const angleRad1 = (angleDeg1 * Math.PI) / 180;
+  //   const cosTheta1 = Math.cos(angleRad1);
+  //   const sinTheta1 = Math.sin(angleRad1);
 
-    const angleDeg2 = 15;
-    const angleRad2 = (angleDeg2 * Math.PI) / 180;
-    const cosTheta2 = Math.cos(angleRad2);
-    const sinTheta2 = Math.sin(angleRad2);
+  //   const angleDeg2 = 15;
+  //   const angleRad2 = (angleDeg2 * Math.PI) / 180;
+  //   const cosTheta2 = Math.cos(angleRad2);
+  //   const sinTheta2 = Math.sin(angleRad2);
 
-    const normals = new Float32Array([
-      -cosTheta1,
-      sinTheta1,
-      0, // A
-      cosTheta1,
-      sinTheta1,
-      0, // B
-      -cosTheta2,
-      sinTheta2,
-      0, // C
-      cosTheta2,
-      sinTheta2,
-      0, // D
-      0.0,
-      1.0,
-      0, // E (Tip remains straight)
-    ]);
+  //   const normals = new Float32Array([
+  //     -cosTheta1,
+  //     sinTheta1,
+  //     0, // A
+  //     cosTheta1,
+  //     sinTheta1,
+  //     0, // B
+  //     -cosTheta2,
+  //     sinTheta2,
+  //     0, // C
+  //     cosTheta2,
+  //     sinTheta2,
+  //     0, // D
+  //     0.0,
+  //     1.0,
+  //     0, // E (Tip remains straight)
+  //   ]);
 
-    const geometry = new InstancedBufferGeometry();
-    geometry.setAttribute("position", new BufferAttribute(positions, 3));
-    geometry.setAttribute("uv", new BufferAttribute(uvs, 2));
-    geometry.setIndex(new BufferAttribute(indices, 1));
-    geometry.setAttribute("normal", new BufferAttribute(normals, 3));
-    return geometry;
-  }
+  //   const geometry = new InstancedBufferGeometry();
+  //   geometry.setAttribute("position", new BufferAttribute(positions, 3));
+  //   geometry.setAttribute("uv", new BufferAttribute(uvs, 2));
+  //   geometry.setIndex(new BufferAttribute(indices, 1));
+  //   geometry.setAttribute("normal", new BufferAttribute(normals, 3));
+  //   return geometry;
+  // }
 
   private async updateAsync(state: State) {
     const { player, clock } = state;
