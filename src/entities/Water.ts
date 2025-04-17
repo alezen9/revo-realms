@@ -43,8 +43,12 @@ export default class Water {
       "water",
     ) as Mesh;
     water.material = new WaterMaterial();
-    water.add(audioManager.lake);
+
     sceneManager.scene.add(water);
+
+    eventsManager.on("audio-ready", () => {
+      water.add(audioManager.lake);
+    });
   }
 }
 

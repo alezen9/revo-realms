@@ -12,6 +12,7 @@ import ambientUrl from "/audio/ambient/ambient.mp3?url";
 import lakeUrl from "/audio/ambient/lake.mp3?url";
 import hitWoodUrl from "/audio/collisions/hitWood.mp3?url";
 import hitStoneUrl from "/audio/collisions/hitStone.mp3?url";
+import { eventsManager } from "./EventsManager";
 
 class AudioManager {
   // Loaders
@@ -19,6 +20,7 @@ class AudioManager {
   private audioListener: AudioListener;
 
   // State
+  isReady = false;
   isMute = true;
   private files: Array<Audio | PositionalAudio> = [];
 
@@ -34,6 +36,7 @@ class AudioManager {
   }
 
   async toggleMute() {
+    if (!this.isReady) return;
     const context = this.audioListener.context;
     if (context.state === "suspended") await context.resume();
     this.isMute = !this.isMute;
@@ -82,6 +85,10 @@ class AudioManager {
     this.lake = this.newPositionalAudio(res[1], 1, true, 10);
     this.hitWood = this.newAudio(res[2], 0, false);
     this.hitStone = this.newAudio(res[3], 0, false);
+
+    this.isReady = true;
+
+    eventsManager.emit("audio-ready");
   }
 }
 

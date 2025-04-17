@@ -10,10 +10,7 @@ export default class _SetupManager {
   }
 
   async initAsync() {
-    await Promise.all([
-      physics.initAsync(),
-      assetManager.initAsync(),
-      audioManager.initAsync(),
-    ]);
+    audioManager.initAsync(); // bg loading
+    await Promise.all([physics.initAsync(), assetManager.initAsync()]);
   }
 }
