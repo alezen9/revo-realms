@@ -1,4 +1,6 @@
-class InputManager {
+import nipplejs from "nipplejs";
+
+class KeyboardManager {
   private keysPressed: Set<string>;
   private keyDownListeners: Map<string, VoidFunction>;
   private keyUpListeners: Map<string, VoidFunction>;
@@ -16,7 +18,7 @@ class InputManager {
   }
 
   private handleKeyDown(event: KeyboardEvent) {
-    const code = event.code; // e.g. "KeyW", "ArrowUp", etc.
+    const code = event.code;
     if (!this.keysPressed.has(code)) {
       this.keysPressed.add(code);
       this.keyDownListeners.get(code)?.();
@@ -29,42 +31,116 @@ class InputManager {
     this.keyUpListeners.get(code)?.();
   }
 
-  public isKeyPressed(code: string): boolean {
+  isKeyPressed(code: string): boolean {
     if (code === "*") return this.keysPressed.size > 0;
     return this.keysPressed.has(code);
   }
 
-  public onKeyDown(code: string, callback: VoidFunction) {
+  onKeyDown(code: string, callback: VoidFunction) {
     this.keyDownListeners.set(code, callback);
   }
 
-  public onKeyUp(code: string, callback: VoidFunction) {
+  onKeyUp(code: string, callback: VoidFunction) {
     this.keyUpListeners.set(code, callback);
   }
 
-  public dispose() {
+  dispose() {
     window.removeEventListener("keydown", this.handleKeyDown);
     window.removeEventListener("keyup", this.handleKeyUp);
   }
+}
 
-  public isForward(): boolean {
-    return this.isKeyPressed("KeyW") || this.isKeyPressed("ArrowUp");
+const keyboardManager = new KeyboardManager();
+
+class JoystickManager {
+  private isActive = false;
+  private direction: { x: number; y: number } = { x: 0, y: 0 };
+
+  constructor() {
+    const zone = document.createElement("div");
+    zone.classList.add("joystick-zone");
+    document.body.appendChild(zone);
+
+    const joystick = nipplejs.create({
+      zone,
+      mode: "static",
+      position: { left: "50%", top: "50%" },
+      restOpacity: 0.1,
+      size: 100,
+      threshold: 0.2,
+    });
+
+    joystick.on("start", () => {
+      this.isActive = true;
+    });
+
+    joystick.on("move", (_, data) => {
+      if (!data?.vector) return;
+      this.direction = { x: data.vector.x, y: data.vector.y };
+    });
+
+    joystick.on("end", () => {
+      this.isActive = false;
+      this.direction = { x: 0, y: 0 };
+    });
   }
 
-  public isBackward(): boolean {
-    return this.isKeyPressed("KeyS") || this.isKeyPressed("ArrowDown");
+  private readonly threshold = 0.2;
+
+  isForward(): boolean {
+    return this.isActive && this.direction.y > -this.threshold;
   }
 
-  public isLeftward(): boolean {
-    return this.isKeyPressed("KeyA") || this.isKeyPressed("ArrowLeft");
+  isBackward(): boolean {
+    return this.isActive && this.direction.y < this.threshold;
   }
 
-  public isRightward(): boolean {
-    return this.isKeyPressed("KeyD") || this.isKeyPressed("ArrowRight");
+  isLeftward(): boolean {
+    return this.isActive && this.direction.x < -this.threshold;
   }
 
-  public isJumpPressed(): boolean {
-    return this.isKeyPressed("Space");
+  isRightward(): boolean {
+    return this.isActive && this.direction.x > this.threshold;
+  }
+}
+
+const joystickManager = new JoystickManager();
+
+class InputManager {
+  isForward(): boolean {
+    return (
+      keyboardManager.isKeyPressed("KeyW") ||
+      keyboardManager.isKeyPressed("ArrowUp") ||
+      joystickManager.isForward()
+    );
+  }
+
+  isBackward(): boolean {
+    return (
+      keyboardManager.isKeyPressed("KeyS") ||
+      keyboardManager.isKeyPressed("ArrowDown") ||
+      joystickManager.isBackward()
+    );
+  }
+
+  isLeftward(): boolean {
+    return (
+      keyboardManager.isKeyPressed("KeyA") ||
+      keyboardManager.isKeyPressed("ArrowLeft") ||
+      joystickManager.isLeftward()
+    );
+  }
+
+  isRightward(): boolean {
+    return (
+      keyboardManager.isKeyPressed("KeyD") ||
+      keyboardManager.isKeyPressed("ArrowRight") ||
+      joystickManager.isRightward()
+    );
+  }
+
+  isJumpPressed(): boolean {
+    return keyboardManager.isKeyPressed("Space");
   }
 }
 
