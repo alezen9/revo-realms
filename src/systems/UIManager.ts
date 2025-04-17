@@ -1,4 +1,5 @@
 import audioManager from "./AudioManager";
+import { eventsManager } from "./EventsManager";
 
 class UIManager {
   constructor() {}
@@ -10,6 +11,7 @@ class UIManager {
 
   private initAudioButton() {
     const button = document.getElementById("audio") as HTMLButtonElement;
+    button.disabled = true;
     const svgPath = button?.querySelector("path");
     if (!button || !svgPath) return;
     const audioOnIconPath =
@@ -22,6 +24,10 @@ class UIManager {
       await audioManager.toggleMute();
       const d = audioManager.isMute ? audioOffIconPath : audioOnIconPath;
       svgPath.setAttribute("d", d);
+    });
+
+    eventsManager.on("audio-ready", () => {
+      button.disabled = false;
     });
   }
 

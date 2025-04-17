@@ -66,8 +66,7 @@ class Physics {
     audioManager.hitStone.play();
   }
 
-  update() {
-    this.world.step(this.eventQueue);
+  private handleCollisionSounds() {
     this.eventQueue.drainCollisionEvents((handle1, handle2, started) => {
       if (audioManager.isMute) return;
       const collider1 = this.world.getCollider(handle1);
@@ -90,6 +89,11 @@ class Physics {
           break;
       }
     });
+  }
+
+  update() {
+    this.world.step(this.eventQueue);
+    if (audioManager.isReady) this.handleCollisionSounds();
   }
 }
 
