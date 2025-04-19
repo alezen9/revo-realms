@@ -25,6 +25,7 @@ import {
   smoothstep,
   step,
   texture,
+  time,
   uniform,
   uv,
   vec2,
@@ -35,7 +36,7 @@ import {
 import { State } from "../Game";
 import { eventsManager } from "../systems/EventsManager";
 import { debugManager } from "../systems/DebugManager";
-import audioManager from "../systems/AudioManager";
+import { audioManager } from "../systems/AudioManager";
 
 export default class Water {
   constructor() {
@@ -55,7 +56,6 @@ export default class Water {
 class WaterMaterial extends MeshBasicNodeMaterial {
   private playerDir = new Vector2(0, 0);
 
-  private uTime = uniform(0);
   private uSpeed = uniform(0.0025);
   private uScale1 = uniform(0.25);
   private uScale2 = uniform(5);
@@ -156,8 +156,7 @@ class WaterMaterial extends MeshBasicNodeMaterial {
   }
 
   private update(state: State) {
-    const { clock, player } = state;
-    this.uTime.value = clock.getElapsedTime();
+    const { player } = state;
 
     // Ripples
     const dx = player.position.x - this.uPlayerPosition.value.x;
@@ -185,7 +184,7 @@ class WaterMaterial extends MeshBasicNodeMaterial {
     );
 
     const rings = this.uRings;
-    const phase = this.uTime.sub(distSq.mul(0.5));
+    const phase = time.sub(distSq.mul(0.5));
     const wave = sin(phase.mul(rings)).mul(
       exp(distSq.negate().mul(this.uAmplitude)),
     );
@@ -235,7 +234,7 @@ class WaterMaterial extends MeshBasicNodeMaterial {
   private computeNormal = Fn(() => {
     const ripple = this.computeRipples();
     const rippleOffset = ripple.xz.mul(this.uRipplesScale);
-    const timer = this.uTime.mul(this.uSpeed).add(rippleOffset);
+    const timer = time.mul(this.uSpeed).add(rippleOffset);
 
     // First sample
     const _uv1 = fract(uv().mul(this.uScale1).add(timer));
@@ -305,7 +304,7 @@ class WaterMaterial extends MeshBasicNodeMaterial {
 
   private computePosition = Fn(() => {
     const random = hash(positionLocal.xz).add(vertexIndex).mul(0.015);
-    const offset = sin(this.uTime.mul(random).mul(this.uWaveFrequency)).mul(
+    const offset = sin(time.mul(random).mul(this.uWaveFrequency)).mul(
       this.uWaveAmplitude,
     );
     return positionLocal.add(vec3(0, offset, 0));

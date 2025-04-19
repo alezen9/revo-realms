@@ -2,7 +2,7 @@ import { Clock } from "three";
 import Player from "./entities/Player";
 import PortfolioRealm from "./realms/PortfolioRealm";
 import { sceneManager } from "./systems/SceneManager";
-import { physics } from "./systems/Physics";
+import { physicsManager } from "./systems/PhysicsManager";
 import { rendererManager } from "./systems/RendererManager";
 import { eventsManager } from "./systems/EventsManager";
 
@@ -54,7 +54,7 @@ export default class Game {
 
     const loop = async () => {
       if (import.meta.env.DEV) sceneManager.update();
-      physics.update();
+      physicsManager.update();
       eventsManager.emit("update", state);
 
       rendererManager.renderAsync();

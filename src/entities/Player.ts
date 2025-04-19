@@ -18,14 +18,14 @@ import {
   smoothstep,
   step,
   texture,
-  uniform,
+  time,
   varying,
   vec3,
 } from "three/tsl";
 import { MeshLambertNodeMaterial } from "three/webgpu";
 import { assetManager } from "../systems/AssetManager";
-import { RevoColliderType, UniformType } from "../types";
-import { physics } from "../systems/Physics";
+import { RevoColliderType } from "../types";
+import { physicsManager } from "../systems/PhysicsManager";
 import { sceneManager } from "../systems/SceneManager";
 import { lighting } from "../systems/LightingSystem";
 import { eventsManager } from "../systems/EventsManager";
@@ -84,17 +84,19 @@ export default class Player {
   private rayOrigin = new Vector3();
   private ray = new Ray(this.rayOrigin, config.DOWN);
 
-  private uTime = uniform(0);
-  private uOffsetShadow = uniform(0);
-
   constructor() {
     this.mesh = this.createCharacterMesh();
     sceneManager.scene.add(this.mesh);
 
     lighting.setTarget(this.mesh);
 
-    this.rigidBody = physics.world.createRigidBody(this.createRigidBodyDesc());
-    physics.world.createCollider(this.createColliderDesc(), this.rigidBody);
+    this.rigidBody = physicsManager.world.createRigidBody(
+      this.createRigidBodyDesc(),
+    );
+    physicsManager.world.createCollider(
+      this.createColliderDesc(),
+      this.rigidBody,
+    );
 
     eventsManager.on("update", this.update.bind(this));
     eventsManager.on(
@@ -128,10 +130,7 @@ export default class Player {
 
   private createCharacterMesh() {
     const geometry = new IcosahedronGeometry(config.RADIUS, 2);
-    const material = new PlayerMaterial({
-      uTime: this.uTime,
-      uOffsetShadow: this.uOffsetShadow,
-    });
+    const material = new PlayerMaterial();
     const mesh = new Mesh(geometry, material);
     mesh.castShadow = true;
     mesh.position.copy(config.PLAYER_INITIAL_POSITION);
@@ -159,8 +158,6 @@ export default class Player {
     const { clock } = state;
 
     const delta = clock.getDelta();
-
-    this.uTime.value = clock.getElapsedTime();
 
     if (this.prevYawInRadians !== this.yawInRadians) {
       this.yawQuaternion.setFromAxisAngle(config.UP, this.yawInRadians);
@@ -198,7 +195,7 @@ export default class Player {
     // 4) Mid-air logic (jump cut, fast fall, clamp)
     const velocity = this.rigidBody.linvel();
     this.handleJumpCut(isJumpKeyPressed, velocity);
-    this.handleFastFall(delta, velocity, physics.world.gravity.y);
+    this.handleFastFall(delta, velocity, physicsManager.world.gravity.y);
     this.clampUpwardVelocity(velocity);
     this.rigidBody.setLinvel(velocity, true);
 
@@ -211,7 +208,7 @@ export default class Player {
     this.rayOrigin.copy(this.rigidBody.translation());
     this.rayOrigin.y -= config.RADIUS + 0.01;
     const maxDistance = 0.2;
-    const hit = physics.world.castRay(this.ray, maxDistance, true);
+    const hit = physicsManager.world.castRay(this.ray, maxDistance, true);
     if (!hit) return false;
     const distanceToGround = hit.timeOfImpact * maxDistance;
     return distanceToGround < 0.01;
@@ -315,16 +312,8 @@ export default class Player {
 }
 
 class PlayerMaterial extends MeshLambertNodeMaterial {
-  private _uniforms: {
-    uTime: UniformType<number>;
-    uOffsetShadow: UniformType<number>;
-  };
-  constructor(uniforms: {
-    uTime: UniformType<number>;
-    uOffsetShadow: UniformType<number>;
-  }) {
+  constructor() {
     super();
-    this._uniforms = { ...uniforms };
     this.createMaterial();
   }
 
@@ -343,11 +332,9 @@ class PlayerMaterial extends MeshLambertNodeMaterial {
       3,
     ).r;
 
-    const timer = sin(this._uniforms.uTime.mul(2.5).add(noiseValue.mul(5))).mul(
-      0.05,
-    );
+    const timer = sin(time.mul(2.5).add(noiseValue.mul(5))).mul(0.05);
 
-    const waterLevel = float(-0.15).add(timer);
+    const waterLevel = float(-0.45).add(timer);
 
     const underwaterFactor = float(1).sub(step(waterLevel, positionWorld.y));
     const abovewaterFactor = float(1).sub(underwaterFactor);

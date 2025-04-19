@@ -37,6 +37,7 @@ import {
   If,
   Discard,
   mod,
+  time,
 } from "three/tsl";
 import {
   MeshBasicNodeMaterial,
@@ -69,7 +70,6 @@ const getConfig = () => {
 const grassConfig = getConfig();
 
 type GrassUniforms = {
-  uTime?: UniformType<number>;
   uPlayerPosition?: UniformType<Vector3>;
   uCameraMatrix?: UniformType<Matrix4>;
   // Scale
@@ -97,7 +97,6 @@ type GrassUniforms = {
 };
 
 const defaultUniforms: Required<GrassUniforms> = {
-  uTime: uniform(0),
   uPlayerPosition: uniform(new Vector3(0, 0, 0)),
   uCameraMatrix: uniform(new Matrix4()),
   // Scale
@@ -213,7 +212,7 @@ class GrassMaterial extends MeshBasicNodeMaterial {
 
   private computeBending = Fn(
     ([data1 = vec4(0, 0, 0, 0), worldPos = vec3(0, 0, 0)]) => {
-      const windUV = worldPos.xz.add(this._uniforms.uTime.mul(0.25)).mul(0.5);
+      const windUV = worldPos.xz.add(time.mul(0.25)).mul(0.5);
 
       const stableUV = fract(windUV);
 
@@ -361,9 +360,7 @@ class GrassMaterial extends MeshBasicNodeMaterial {
     const rotated = rotate(scaled, vec3(0, yawAngle, 0));
 
     const randomPhase = hash(instanceIndex).mul(6.28); // Random phase in range [0, 2π]
-    const swayAmount = sin(
-      this._uniforms.uTime.mul(5.0).add(data1.w).add(randomPhase),
-    ).mul(0.1);
+    const swayAmount = sin(time.mul(5).add(data1.w).add(randomPhase)).mul(0.1);
     const swayFactor = uv().y.mul(data2.w);
     const swayOffset = swayAmount.mul(swayFactor);
 
@@ -458,7 +455,6 @@ export default class Grass {
     uDelta: uniform(new Vector2(0, 0)),
     uPlayerPosition: uniform(new Vector3(0, 0, 0)),
     uCameraMatrix: uniform(new Matrix4()),
-    uTime: uniform(0),
   };
 
   constructor() {
@@ -768,7 +764,7 @@ export default class Grass {
   // }
 
   private async updateAsync(state: State) {
-    const { player, clock } = state;
+    const { player } = state;
     const dx = player.position.x - this.grassField.position.x;
     const dz = player.position.z - this.grassField.position.z;
     this.uniforms.uDelta.value.set(dx, dz);
@@ -776,7 +772,6 @@ export default class Grass {
     this.uniforms.uCameraMatrix.value
       .copy(sceneManager.camera.projectionMatrix)
       .multiply(sceneManager.camera.matrixWorldInverse);
-    this.uniforms.uTime.value = clock.getElapsedTime();
 
     this.grassField.position.copy(player.position).setY(0);
 

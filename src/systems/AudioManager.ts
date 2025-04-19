@@ -6,7 +6,7 @@ import {
   PositionalAudio,
 } from "three";
 import { sceneManager } from "./SceneManager";
-import loadingManager from "./LoadingManager";
+import { loadingManager } from "./LoadingManager";
 
 import ambientUrl from "/audio/ambient/ambient.mp3?url";
 import lakeUrl from "/audio/ambient/lake.mp3?url";
@@ -92,5 +92,4 @@ class AudioManager {
   }
 }
 
-const audioManager = new AudioManager(loadingManager.manager);
-export default audioManager;
+export const audioManager = new AudioManager(loadingManager.manager);

@@ -1,7 +1,7 @@
 import "./style.css";
 import _SetupManager from "./systems/_SetupManager";
 import Game from "./Game";
-import uiManager from "./systems/UIManager";
+import { uiManager } from "./systems/UIManager";
 // import PerformanceMonitor from "./systems/PerformanceMonitor";
 
 // new PerformanceMonitor(60);

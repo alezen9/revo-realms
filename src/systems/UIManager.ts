@@ -1,4 +1,4 @@
-import audioManager from "./AudioManager";
+import { audioManager } from "./AudioManager";
 import { eventsManager } from "./EventsManager";
 
 class UIManager {
@@ -67,5 +67,4 @@ class UIManager {
   }
 }
 
-const uiManager = new UIManager();
-export default uiManager;
+export const uiManager = new UIManager();

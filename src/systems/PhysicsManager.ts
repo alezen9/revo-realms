@@ -1,6 +1,6 @@
 import { Collider, EventQueue, World } from "@dimforge/rapier3d";
 import { RevoColliderType } from "../types";
-import audioManager from "./AudioManager";
+import { audioManager } from "./AudioManager";
 import { MathUtils, Vector3 } from "three";
 
 const getConfig = () => {
@@ -97,4 +97,4 @@ class Physics {
   }
 }
 
-export const physics = new Physics();
+export const physicsManager = new Physics();
