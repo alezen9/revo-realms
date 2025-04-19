@@ -51,7 +51,7 @@ import kunaiDiffuseUrl from "/textures/realm/kunaiDiffuse.webp?url";
 
 import atlasesCoords from "../atlases/atlases.json";
 import { Atlases } from "../atlases/types";
-import loadingManager from "./LoadingManager";
+import { loadingManager } from "./LoadingManager";
 
 class AssetManager {
   // Atlas coords

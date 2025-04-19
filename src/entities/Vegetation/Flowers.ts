@@ -10,6 +10,7 @@ import {
   sin,
   step,
   texture,
+  time,
   uniform,
   uv,
   vec2,
@@ -58,7 +59,6 @@ export default class Flowers {
     uDelta: uniform(new Vector2(0, 0)),
     uPlayerPosition: uniform(new Vector3(0, 0, 0)),
     uCameraMatrix: uniform(new Matrix4()),
-    uTime: uniform(0),
   };
 
   constructor() {
@@ -73,7 +73,7 @@ export default class Flowers {
   }
 
   private async updateAsync(state: State) {
-    const { player, clock } = state;
+    const { player } = state;
     const dx = player.position.x - this.flowerField.position.x;
     const dz = player.position.z - this.flowerField.position.z;
     this.uniforms.uDelta.value.set(dx, dz);
@@ -81,7 +81,6 @@ export default class Flowers {
     this.uniforms.uCameraMatrix.value
       .copy(sceneManager.camera.projectionMatrix)
       .multiply(sceneManager.camera.matrixWorldInverse);
-    this.uniforms.uTime.value = clock.getElapsedTime();
 
     this.flowerField.position.copy(player.position).setY(0);
 
@@ -90,14 +89,12 @@ export default class Flowers {
 }
 
 type FlowersUniforms = {
-  uTime: UniformType<number>;
   uPlayerPosition: UniformType<Vector3>;
   uCameraMatrix: UniformType<Matrix4>;
   uDelta: UniformType<Vector2>;
 };
 
 const defaultUniforms: Required<FlowersUniforms> = {
-  uTime: uniform(0),
   uPlayerPosition: uniform(new Vector3(0, 0, 0)),
   uCameraMatrix: uniform(new Matrix4()),
   uDelta: uniform(new Vector2(0, 0)),
@@ -216,7 +213,7 @@ class FlowerMaterial extends SpriteNodeMaterial {
     const rand2 = hash(instanceIndex.add(33.87));
 
     // Position
-    const timer = this._uniforms.uTime.mul(2);
+    const timer = time.mul(2);
     const sway = sin(timer.add(rand1.mul(100))).mul(0.05);
     this.positionNode = data1.xyz.add(vec3(sway, 0, sway));
 

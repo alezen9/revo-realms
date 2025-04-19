@@ -7,7 +7,7 @@ import {
   positionWorld,
   sin,
   texture,
-  uniform,
+  time,
   uv,
   vec3,
   vertexIndex,
@@ -22,11 +22,9 @@ import {
 } from "three/webgpu";
 import { assetManager } from "../../systems/AssetManager";
 import { ColliderDesc, RigidBodyDesc } from "@dimforge/rapier3d";
-import { physics } from "../../systems/Physics";
+import { physicsManager } from "../../systems/PhysicsManager";
 import { sceneManager } from "../../systems/SceneManager";
 import { tslUtils } from "../../systems/TSLUtils";
-import { eventsManager } from "../../systems/EventsManager";
-import { State } from "../../Game";
 import { RevoColliderType } from "../../types";
 
 class BarkMaterial extends MeshLambertNodeMaterial {
@@ -48,7 +46,6 @@ class BarkMaterial extends MeshLambertNodeMaterial {
 }
 
 class CanopyMaterial extends MeshLambertNodeMaterial {
-  private uTime = uniform(0);
   constructor() {
     super();
     this.precision = "lowp";
@@ -88,17 +85,10 @@ class CanopyMaterial extends MeshLambertNodeMaterial {
     this.alphaTest = 0.9;
 
     // Position
-    const timer = this.uTime.mul(noise.r).add(vertexIndex).mul(7.5);
+    const timer = time.mul(noise.r).add(vertexIndex).mul(7.5);
     const sway = sin(timer).mul(0.015);
     const flutter = cos(timer.mul(0.75)).mul(0.01);
     this.positionNode = positionLocal.add(vec3(0, flutter, sway));
-
-    eventsManager.on("update", this.update.bind(this));
-  }
-
-  private update(state: State) {
-    const { clock } = state;
-    this.uTime.value = clock.elapsedTime;
   }
 }
 
@@ -144,14 +134,14 @@ export default class Trees {
         .setRotation(colliderCylinder.quaternion)
         .setUserData({ type: RevoColliderType.Wood });
 
-      const rigidBody = physics.world.createRigidBody(rigidBodyDesc);
+      const rigidBody = physicsManager.world.createRigidBody(rigidBodyDesc);
       const radius = baseRadius * colliderCylinder.scale.x;
       const halfHeight = baseHalfHeight * colliderCylinder.scale.y;
       const colliderDesc = ColliderDesc.capsule(
         halfHeight,
         radius,
       ).setRestitution(0.75);
-      physics.world.createCollider(colliderDesc, rigidBody);
+      physicsManager.world.createCollider(colliderDesc, rigidBody);
     });
     sceneManager.scene.add(barkInstances, canopyInstances);
   }

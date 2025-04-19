@@ -7,6 +7,7 @@ import {
   pow,
   smoothstep,
   texture,
+  time,
   uniform,
   uv,
   varying,
@@ -23,7 +24,7 @@ import {
   RigidBody,
   RigidBodyDesc,
 } from "@dimforge/rapier3d";
-import { physics } from "../systems/Physics";
+import { physicsManager } from "../systems/PhysicsManager";
 import { State } from "../Game";
 import { sceneManager } from "../systems/SceneManager";
 import { debugManager } from "../systems/DebugManager";
@@ -31,14 +32,12 @@ import { eventsManager } from "../systems/EventsManager";
 import { tslUtils } from "../systems/TSLUtils";
 
 type TerrainUniforms = {
-  uTime: UniformType<number>;
   uGrassTerrainColor: UniformType<Color>;
   uWaterSandColor: UniformType<Color>;
   uPathSandColor: UniformType<Color>;
 };
 
 const defaultUniforms: TerrainUniforms = {
-  uTime: uniform(0),
   uGrassTerrainColor: uniform(new Color()),
   uWaterSandColor: uniform(new Color()),
   uPathSandColor: uniform(new Color()),
@@ -59,7 +58,7 @@ class TerainMaterial extends MeshLambertNodeMaterial {
       vDepth = float(0),
       causticsShadowColor = vec3(0, 0, 0),
     ]) => {
-      const timer = this._uniforms.uTime.mul(0.1);
+      const timer = time.mul(0.1);
       const scaleFactor = float(20);
       const scaledUv = vUv.mul(scaleFactor);
       const scaledCausticsUvA = fract(scaledUv.add(vec2(timer, 0)));
@@ -219,7 +218,7 @@ class InnerTerrain {
     const rigidBodyDesc = RigidBodyDesc.fixed()
       .setTranslation(0, -displacement, 0)
       .setUserData({ type: RevoColliderType.Terrain });
-    const rigidBody = physics.world.createRigidBody(rigidBodyDesc);
+    const rigidBody = physicsManager.world.createRigidBody(rigidBodyDesc);
 
     const colliderDesc = ColliderDesc.heightfield(
       rowsCount - 1,
@@ -235,7 +234,7 @@ class InnerTerrain {
       .setFriction(1)
       .setRestitution(0.2);
 
-    physics.world.createCollider(colliderDesc, rigidBody);
+    physicsManager.world.createCollider(colliderDesc, rigidBody);
   }
 }
 
@@ -249,6 +248,8 @@ class OuterTerrain {
     this.outerFloor.material = material;
     this.kintoun = this.createKintoun();
     sceneManager.scene.add(this.outerFloor);
+
+    eventsManager.on("update", this.update.bind(this));
   }
 
   private createOuterFloorVisual() {
@@ -267,7 +268,7 @@ class OuterTerrain {
         0,
       )
       .setUserData({ type: RevoColliderType.Terrain });
-    const rigidBody = physics.world.createRigidBody(rigidBodyDesc);
+    const rigidBody = physicsManager.world.createRigidBody(rigidBodyDesc);
 
     const halfSize = 2;
 
@@ -278,7 +279,7 @@ class OuterTerrain {
     )
       .setFriction(1)
       .setRestitution(0.2);
-    physics.world.createCollider(colliderDesc, rigidBody);
+    physicsManager.world.createCollider(colliderDesc, rigidBody);
     return rigidBody;
   }
 
@@ -289,7 +290,7 @@ class OuterTerrain {
     this.kintoun.setTranslation(this.kintounPosition, true);
   }
 
-  update(state: State) {
+  private update(state: State) {
     const { player } = state;
     const isPlayerNearEdgeX =
       realmConfig.HALF_MAP_SIZE - Math.abs(player.position.x) <
@@ -316,10 +317,7 @@ class OuterTerrain {
 }
 
 export default class Terrain {
-  private outerTerrain: OuterTerrain;
-
   private uniforms: TerrainUniforms = {
-    uTime: uniform(0),
     uGrassTerrainColor: uniform(new Color().setRGB(0.21, 0.26, 0.05)),
     uWaterSandColor: uniform(new Color().setRGB(0.54, 0.39, 0.2)),
     uPathSandColor: uniform(new Color().setRGB(0.65, 0.49, 0.27)),
@@ -328,8 +326,7 @@ export default class Terrain {
   constructor() {
     const terrainMaterial = new TerainMaterial(this.uniforms);
     new InnerTerrain(terrainMaterial);
-    this.outerTerrain = new OuterTerrain(terrainMaterial);
-    eventsManager.on("update", this.update.bind(this));
+    new OuterTerrain(terrainMaterial);
 
     this.debugTerrain();
   }
@@ -352,11 +349,5 @@ export default class Terrain {
       view: "color",
       color: { type: "float" },
     });
-  }
-
-  private update(state: State) {
-    const { clock } = state;
-    this.uniforms.uTime.value = clock.getElapsedTime();
-    this.outerTerrain.update(state);
   }
 }

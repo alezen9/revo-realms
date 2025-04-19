@@ -10,11 +10,10 @@ import {
   sin,
   step,
   texture,
-  uniform,
+  time,
   uv,
   vec2,
 } from "three/tsl";
-import { eventsManager } from "../../systems/EventsManager";
 import { tslUtils } from "../../systems/TSLUtils";
 
 export default class JoJo {
@@ -63,18 +62,9 @@ class MaskMaterial extends MeshLambertNodeMaterial {
 }
 
 class SymbolMaterial extends MeshLambertNodeMaterial {
-  private uTime = uniform(0);
   constructor() {
     super();
 
-    eventsManager.on("update", ({ clock }) => {
-      this.uTime.value = clock.getElapsedTime();
-    });
-
-    this.createMaterial();
-  }
-
-  private createMaterial() {
     this.precision = "lowp";
     this.flatShading = true;
 
@@ -84,7 +74,7 @@ class SymbolMaterial extends MeshLambertNodeMaterial {
     this.colorNode = mix(darkPurple, purple, uv().y.mul(0.5)).mul(0.45);
 
     // Position
-    const timer = this.uTime.mul(20);
+    const timer = time.mul(20);
     const offset = sin(timer.add(instanceIndex));
     const sharpOffset = step(0, offset).mul(0.25);
     this.positionNode = positionLocal.add(sharpOffset);

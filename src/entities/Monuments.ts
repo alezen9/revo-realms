@@ -9,7 +9,7 @@ import {
 import { RevoColliderType, UniformType } from "../types";
 import { assetManager } from "../systems/AssetManager";
 import { ColliderDesc, RigidBodyDesc } from "@dimforge/rapier3d";
-import { physics } from "../systems/Physics";
+import { physicsManager } from "../systems/PhysicsManager";
 import { sceneManager } from "../systems/SceneManager";
 import { debugManager } from "../systems/DebugManager";
 import { tslUtils } from "../systems/TSLUtils";
@@ -96,12 +96,12 @@ export default class Monuments {
         .setRotation(colliderBox.quaternion)
         .setUserData({ type: RevoColliderType.Stone });
 
-      const rigidBody = physics.world.createRigidBody(rigidBodyDesc);
+      const rigidBody = physicsManager.world.createRigidBody(rigidBodyDesc);
       const hx = 0.5 * colliderBox.scale.x;
       const hy = 0.5 * colliderBox.scale.y;
       const hz = 0.5 * colliderBox.scale.z;
       const colliderDesc = ColliderDesc.cuboid(hx, hy, hz).setRestitution(0.75);
-      physics.world.createCollider(colliderDesc, rigidBody);
+      physicsManager.world.createCollider(colliderDesc, rigidBody);
     });
 
     this.debugMonuments();

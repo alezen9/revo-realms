@@ -3,7 +3,7 @@ import { Color, Mesh } from "three";
 import { sceneManager } from "../../systems/SceneManager";
 import { MeshLambertNodeMaterial } from "three/webgpu";
 import { ColliderDesc, RigidBodyDesc } from "@dimforge/rapier3d";
-import { physics } from "../../systems/Physics";
+import { physicsManager } from "../../systems/PhysicsManager";
 import { RevoColliderType } from "../../types";
 
 class TrunkMaterial extends MeshLambertNodeMaterial {
@@ -50,14 +50,14 @@ export default class GodOfWar {
       .setRotation(axeCollider.quaternion)
       .setUserData({ type: RevoColliderType.Wood });
 
-    const rigidBodyAxe = physics.world.createRigidBody(rigidBodyDescAxe);
+    const rigidBodyAxe = physicsManager.world.createRigidBody(rigidBodyDescAxe);
     const max = axeCollider.geometry.boundingBox!.max;
     const colliderDescAxe = ColliderDesc.cuboid(
       max.x,
       max.y,
       max.z,
     ).setRestitution(0.75);
-    physics.world.createCollider(colliderDescAxe, rigidBodyAxe);
+    physicsManager.world.createCollider(colliderDescAxe, rigidBodyAxe);
 
     const trunkCollider = assetManager.realmModel.scene.getObjectByName(
       "trunk_collider",
@@ -68,13 +68,14 @@ export default class GodOfWar {
       .setRotation(trunkCollider.quaternion)
       .setUserData({ type: RevoColliderType.Wood });
 
-    const rigidBodyTrunk = physics.world.createRigidBody(rigidBodyDescTrunk);
+    const rigidBodyTrunk =
+      physicsManager.world.createRigidBody(rigidBodyDescTrunk);
     const radius = x;
     const halfHeight = y / 2;
     const colliderDescTrunk = ColliderDesc.capsule(
       halfHeight,
       radius,
     ).setRestitution(0.75);
-    physics.world.createCollider(colliderDescTrunk, rigidBodyTrunk);
+    physicsManager.world.createCollider(colliderDescTrunk, rigidBodyTrunk);
   }
 }

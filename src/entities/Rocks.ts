@@ -18,7 +18,7 @@ import {
 } from "three/webgpu";
 import { assetManager } from "../systems/AssetManager";
 import { ColliderDesc, RigidBodyDesc } from "@dimforge/rapier3d";
-import { physics } from "../systems/Physics";
+import { physicsManager } from "../systems/PhysicsManager";
 import { sceneManager } from "../systems/SceneManager";
 import { rendererManager } from "../systems/RendererManager";
 import { tslUtils } from "../systems/TSLUtils";
@@ -130,12 +130,12 @@ export default class Rocks {
         .setRotation(colliderSphere.quaternion)
         .setUserData({ type: RevoColliderType.Stone });
 
-      const rigidBody = physics.world.createRigidBody(rigidBodyDesc);
+      const rigidBody = physicsManager.world.createRigidBody(rigidBodyDesc);
       colliderSphere.geometry.computeBoundingBox();
       const radius =
         colliderSphere.geometry.boundingBox!.max.x * colliderSphere.scale.x;
       const colliderDesc = ColliderDesc.ball(radius).setRestitution(0.75);
-      physics.world.createCollider(colliderDesc, rigidBody);
+      physicsManager.world.createCollider(colliderDesc, rigidBody);
     });
     sceneManager.scene.add(instances);
   }

@@ -3,7 +3,7 @@ import { assetManager } from "../../systems/AssetManager";
 import { MeshBasicNodeMaterial } from "three/webgpu";
 import { ColliderDesc, RigidBodyDesc } from "@dimforge/rapier3d";
 import { RevoColliderType } from "../../types";
-import { physics } from "../../systems/Physics";
+import { physicsManager } from "../../systems/PhysicsManager";
 import { sceneManager } from "../../systems/SceneManager";
 import { texture, uniform, uv } from "three/tsl";
 
@@ -40,11 +40,11 @@ export default class Naruto {
         .setRotation(colliderBox.quaternion)
         .setUserData({ type: RevoColliderType.Wood });
 
-      const rigidBody = physics.world.createRigidBody(rigidBodyDesc);
+      const rigidBody = physicsManager.world.createRigidBody(rigidBodyDesc);
       colliderBox.geometry.computeBoundingBox();
       const { x, y, z } = colliderBox.geometry.boundingBox!.max;
       const colliderDesc = ColliderDesc.cuboid(x, y, z).setRestitution(0.75);
-      physics.world.createCollider(colliderDesc, rigidBody);
+      physicsManager.world.createCollider(colliderDesc, rigidBody);
     });
     sceneManager.scene.add(instances);
   }

@@ -49,5 +49,4 @@ class LoadingManager {
   }
 }
 
-const loadingManager = new LoadingManager();
-export default loadingManager;
+export const loadingManager = new LoadingManager();

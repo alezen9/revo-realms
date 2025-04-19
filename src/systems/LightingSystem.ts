@@ -1,6 +1,5 @@
 import { DirectionalLight, HemisphereLight, Object3D, Vector3 } from "three";
-import { Fn, texture, vec2, vec3 } from "three/tsl";
-import { State } from "../Game";
+import { Fn, texture, vec2 } from "three/tsl";
 import { debugManager } from "./DebugManager";
 import { sceneManager } from "./SceneManager";
 import { eventsManager } from "./EventsManager";
@@ -27,7 +26,11 @@ class LightingSystem {
     this.hemisphereLight = this.setupHemisphereLight();
     sceneManager.scene.add(this.hemisphereLight);
 
-    eventsManager.on("update", this.update.bind(this));
+    eventsManager.on("update", ({ player }) => {
+      this.directionalLight.position
+        .copy(player.position)
+        .add(config.LIGHT_POSITION_OFFSET);
+    });
 
     this.debugLight();
   }
@@ -131,57 +134,8 @@ class LightingSystem {
     });
   }
 
-  // // Simple version
-  // private material_computeAmbientLight = Fn(() => {
-  //   return this.uAmbientHue.mul(this.uAmbientIntensity);
-  // });
-
-  // Enhanced version (Hemisphere light)
-  // private material_computeAmbientLight = Fn(() => {
-  //   // const skyHue = vec3(0.6, 0.8, 1.0); // Sky color
-  //   // const groundHue = vec3(0.2, 0.2, 0.2); // Ground color
-  //   const ambientFactor = normalWorld.y.mul(0.5).add(0.5); // Blend based on surface normal
-  //   return mix(this.uGroundHue, this.uSkyHue, ambientFactor).mul(
-  //     this.uAmbientIntensity,
-  //   );
-  // });
-
-  // Simple version
-  // private material_computeDirectionalLight = Fn(() => {
-  //   const shading = max(0, dot(normalWorld, this.uDirectionalDirection));
-  //   return this.uDirectionalHue.mul(this.uDirectionalIntensity).mul(shading);
-  // });
-
-  // Enhanced version
-  // private material_computeDirectionalLight = Fn(() => {
-  //   const wrapFactor = 0.25; // Adjust for smoother blending
-  //   const baseShading = dot(normalWorld, this.uDirectionalDirection);
-  //   const wrappedShading = baseShading
-  //     .mul(float(1.0).sub(wrapFactor))
-  //     .add(wrapFactor);
-  //   const smoothShading = pow(max(0, wrappedShading), 1.5); // Exponential smoothing
-  //   return this.uDirectionalHue
-  //     .mul(this.uDirectionalIntensity)
-  //     .mul(smoothShading);
-  // });
-
-  material_computeIllumination = Fn(() => {
-    const light = vec3(0);
-    // .add(this.material_computeAmbientLight())
-    // .add(this.material_computeDirectionalLight())
-    // .add(this.emissive.material_computeEmissiveLight());
-    return light;
-  });
-
   setTarget(target: Object3D) {
     this.directionalLight.target = target;
-  }
-
-  private update(state: State) {
-    const { player } = state;
-    this.directionalLight.position
-      .copy(player.position)
-      .add(config.LIGHT_POSITION_OFFSET);
   }
 }
 
