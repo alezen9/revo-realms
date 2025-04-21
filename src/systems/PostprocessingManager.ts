@@ -1,7 +1,8 @@
 import { PostProcessing, WebGPURenderer } from "three/webgpu";
 import { emissive, Fn, mrt, output, pass } from "three/tsl";
 import { sceneManager } from "./SceneManager";
-import { bloom } from "three/examples/jsm/tsl/display/BloomNode.js";
+import { bloom as originalBloom } from "three/examples/jsm/tsl/display/BloomNode.js";
+import { bloom } from "../bloom";
 
 export default class PostprocessingManager extends PostProcessing {
   constructor(renderer: WebGPURenderer) {
@@ -21,7 +22,7 @@ export default class PostprocessingManager extends PostProcessing {
     const outputColor = scenePass.getTextureNode();
     const emissiveColor = scenePass.getTextureNode("emissive");
 
-    const bloomPass = bloom(emissiveColor);
+    const bloomPass = originalBloom(emissiveColor);
 
     return outputColor.add(bloomPass);
   });

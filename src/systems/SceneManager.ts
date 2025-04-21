@@ -1,4 +1,12 @@
-import { CameraHelper, PerspectiveCamera, Scene } from "three";
+import {
+  BoxGeometry,
+  CameraHelper,
+  Mesh,
+  MeshBasicMaterial,
+  MeshLambertMaterial,
+  PerspectiveCamera,
+  Scene,
+} from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { debugManager } from "./DebugManager";
 import { rendererManager } from "./RendererManager";
@@ -51,6 +59,13 @@ class SceneManager {
 
     // Debug
     this.debugScene();
+
+    const box = new Mesh(
+      new BoxGeometry(),
+      new MeshLambertMaterial({ emissive: "blue", emissiveIntensity: 2 }),
+    );
+    box.position.y = 2;
+    scene.add(box);
   }
 
   private debugScene() {
