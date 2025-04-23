@@ -46,6 +46,7 @@ const getConfig = () => {
     LIN_VEL_STRENGTH: 35,
     ANG_VEL_STRENGTH: 25,
     RADIUS: 0.5,
+    MASS: 3,
     PLAYER_INITIAL_POSITION: new Vector3(0, 5, 0),
     CAMERA_OFFSET: new Vector3(0, 11, 17),
     CAMERA_LERP_FACTOR: 7.5,
@@ -100,7 +101,7 @@ export default class Player {
 
     eventsManager.on("update", this.update.bind(this));
     eventsManager.on(
-      "update-throttle-60x",
+      "update-throttle-64x",
       this.resetPlayerPosition.bind(this),
     );
     this.debugPlayer();
@@ -150,7 +151,7 @@ export default class Player {
     return ColliderDesc.ball(config.RADIUS)
       .setRestitution(0.25)
       .setFriction(1)
-      .setMass(3)
+      .setMass(config.MASS)
       .setActiveEvents(ActiveEvents.COLLISION_EVENTS);
   }
 

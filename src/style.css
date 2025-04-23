@@ -193,3 +193,34 @@ body:not(.is-touch-device) .joystick-zone {
   visibility: hidden;
   pointer-events: none;
 }
+
+/**
+Compass
+**/
+.compass-container {
+  --opacity: 0;
+  --size: 6rem;
+  --padding: 1rem;
+  position: fixed;
+  bottom: var(--padding);
+  right: var(--padding);
+  opacity: var(--opacity);
+  width: var(--size);
+  height: var(--size);
+  filter: drop-shadow(0 0 10px black);
+  transition: opacity 0.5s ease-in-out;
+  pointer-events: none;
+}
+.compass {
+  position: absolute;
+  width: 100%;
+}
+
+.compass-arrow {
+  --yaw: 0;
+  position: absolute;
+  width: 100%;
+  transform: rotateZ(var(--yaw));
+  will-change: transform;
+  transition: transform 0.15s linear;
+}
