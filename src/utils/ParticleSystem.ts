@@ -5,16 +5,30 @@ import {
   hash,
   instancedArray,
   instanceIndex,
+  mix,
   PI2,
+  positionLocal,
   sin,
+  smoothstep,
+  step,
   texture,
   time,
   uv,
+  vec2,
+  vec3,
   vec4,
 } from "three/tsl";
 import { eventsManager } from "../systems/EventsManager";
 import { rendererManager } from "../systems/RendererManager";
-import { InstancedMesh, PlaneGeometry, SpriteNodeMaterial } from "three/webgpu";
+import {
+  AddEquation,
+  CustomBlending,
+  InstancedMesh,
+  OneFactor,
+  OneMinusSrcAlphaFactor,
+  PlaneGeometry,
+  SpriteNodeMaterial,
+} from "three/webgpu";
 import { assetManager } from "../systems/AssetManager";
 
 type ParticleBuffer = ReturnType<typeof instancedArray>;
@@ -101,7 +115,9 @@ const getFirePresetConfig = (
   const onInit = Fn(([_buffer]: [ParticleBuffer]) => {
     const data = _buffer.element(instanceIndex);
 
-    const jitter = hash(instanceIndex.add(12345)).mul(0.2).sub(0.1);
+    const jitter = hash(instanceIndex.add(12345))
+      .mul(radius)
+      .sub(radius / 2);
     data.assign(vec4(jitter, 0, jitter, 1));
   });
 
@@ -133,29 +149,57 @@ const getFirePresetConfig = (
     const z = cos(phaseZ).mul(randZ.mul(0.15).add(0.15)).mul(radius);
 
     const fadeY = y.div(height);
-    const alpha = float(0.3).sub(fadeY.pow(3.0)).clamp();
+
+    const fadeIn = smoothstep(0, 0.5, fadeY);
+    const fadeOut = float(1).sub(smoothstep(0.5, 1, fadeY));
+    const alpha = fadeIn.mul(fadeOut);
 
     data.assign(vec4(x, y, z, alpha));
   });
 
   const material = new SpriteNodeMaterial();
   material.precision = "lowp";
+  material.transparent = true;
   material.depthWrite = false;
+  material.blending = CustomBlending;
+  material.blendEquation = AddEquation;
+  material.blendSrc = OneFactor;
+  material.blendDst = OneMinusSrcAlphaFactor;
+
   const data = mainBuffer.element(instanceIndex);
-  const rand = hash(instanceIndex.add(9234));
+  const rand1 = hash(instanceIndex.add(9234));
+  const rand2 = hash(instanceIndex.add(33.87));
 
   // Position
   material.positionNode = data.xyz;
 
   // Size
-  material.scaleNode = rand.mul(data.w).mul(7.5);
-
-  // Opacity
-  material.opacityNode = data.w;
+  material.scaleNode = rand1.mul(data.w);
 
   // Color
-  const diffuse = texture(assetManager.fireDiffuse, uv());
-  material.colorNode = diffuse.mul(0.75);
+  const u = step(0.5, rand1).mul(0.5);
+  const v = step(0.5, rand2).mul(0.5);
+
+  const baseUv = uv().mul(0.5);
+  const fireUv = baseUv.add(vec2(u, v));
+  const sample = texture(assetManager.fireSprites, fireUv, 5);
+
+  const coreDiffuse = vec3(0.72, 0.62, 0.08).mul(2).toConst(); // gold
+  const midDiffuse = vec3(1, 0.1, 0).mul(4).toConst(); // darker red
+  const tipDiffuse = vec3(0.1).toConst(); // black
+  const yFactor = smoothstep(0, 1, positionLocal.y.div(params.height!)).pow(2);
+  const factor1 = smoothstep(0, 0.2, yFactor);
+  const mix1 = mix(coreDiffuse, midDiffuse, factor1);
+  const factor2 = smoothstep(0.9, 1, yFactor);
+  const mix2 = mix(mix1, tipDiffuse, factor2);
+  // 0 -> additive, 1 -> normal
+  const blendFactor = float(1).sub(smoothstep(0, 0.75, yFactor));
+  const alphaScale = float(0.35).toConst();
+  const alphaBlend = sample.a.mul(blendFactor).mul(alphaScale);
+  material.colorNode = mix2.mul(alphaBlend);
+
+  // Opacity
+  material.opacityNode = data.w.mul(sample.a).mul(alphaScale);
 
   return {
     material,
