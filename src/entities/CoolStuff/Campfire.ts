@@ -18,12 +18,12 @@ export default class Campfire {
 
     const fire = new ParticleSystem({
       preset: "fire",
-      count: 256,
-      lifetime: 1.25,
-      height: 2,
+      count: 128,
+      lifetime: 0.75,
+      height: 2.5,
       radius: 2,
     });
-    fire.position.copy(campfire.position);
+    fire.position.copy(campfire.position).setY(-0.5);
 
     sceneManager.scene.add(campfire, fire);
 
