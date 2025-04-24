@@ -220,7 +220,7 @@ Compass
   --yaw: 0;
   position: absolute;
   width: 100%;
-  transform: rotateZ(var(--yaw));
+  transform: rotateZ(calc(var(--yaw) + 180deg));
   will-change: transform;
   transition: transform 0.15s linear;
 }
