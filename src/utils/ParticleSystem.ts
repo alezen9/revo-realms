@@ -116,9 +116,9 @@ const getFirePresetConfig = (
     lifetime: fireLifetime = 1.5,
   } = params;
   const sparkHeight = fireHeight * 2;
-  const sparkLifetime = fireLifetime * 2;
+  const sparkLifetime = fireLifetime * 0.75;
   const secondaryBuffer = instancedArray(params.count, "float");
-  const fireParticlesPersentage = 0.9;
+  const fireParticlesPersentage = 0.95;
 
   const onInit = Fn(([_buffer]: [ParticleBuffer]) => {
     const data = _buffer.element(instanceIndex);
@@ -158,7 +158,7 @@ const getFirePresetConfig = (
     const phaseX = progress.mul(freqX).add(randX.mul(PI2));
     const phaseZ = progress.mul(freqZ).add(randZ.mul(PI2));
 
-    const sparkPhase = float(0.1).mul(isSpark).mul(verticalEase);
+    const sparkPhase = float(0.05).mul(y).mul(isSpark);
     const coneFalloff = float(1).sub(verticalEase); // 1 at bottom, 0 at top
     const radiusFalloff = coneFalloff.mul(radius);
 
@@ -219,7 +219,7 @@ const getFirePresetConfig = (
   const factor2 = smoothstep(0.9, 1, yFactor);
   const fireColor = mix(mix1, tipDiffuse, factor2);
   // 0 -> additive, 1 -> normal
-  const blendFactor = float(1).sub(smoothstep(0, 0.35, yFactor));
+  const blendFactor = float(1).sub(smoothstep(0, 0.5, yFactor));
   const alphaScale = float(0.5).toConst();
   const alphaBlend = sample.a.mul(blendFactor).mul(alphaScale);
   material.colorNode = mix(fireColor, midDiffuse, isSpark).mul(alphaBlend);

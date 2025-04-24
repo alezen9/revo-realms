@@ -20,10 +20,10 @@ export default class Campfire {
       preset: "fire",
       count: 512,
       lifetime: 1,
-      height: 1.75,
-      radius: 3,
+      height: 2.5,
+      radius: 3.75,
     });
-    fire.position.copy(campfire.position).setY(-0.25);
+    fire.position.copy(campfire.position).setY(-0.5);
 
     sceneManager.scene.add(campfire, fire);
 
@@ -31,7 +31,7 @@ export default class Campfire {
     const rigidBodyDesc = RigidBodyDesc.fixed()
       .setTranslation(...campfire.position.toArray())
       .setRotation(campfire.quaternion)
-      .setUserData({ type: RevoColliderType.Wood });
+      .setUserData({ type: RevoColliderType.Stone });
 
     const rigidBody = physicsManager.world.createRigidBody(rigidBodyDesc);
     campfire.geometry.computeBoundingSphere();
