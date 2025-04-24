@@ -1,4 +1,3 @@
-import { Vector2 } from "three";
 import { eventsManager } from "../systems/EventsManager";
 import compassUrl from "/textures/hud/compass.webp?url";
 import arrowUrl from "/textures/hud/compassArrow.webp?url";
@@ -23,8 +22,8 @@ export class Compass {
 
     document.body.appendChild(container);
 
-    const playerPos = new Vector2();
     const distanceThreshold = realmConfig.MAP_SIZE / 2;
+    let relativeAngle = 0;
 
     eventsManager.on("update-throttle-16x", ({ player }) => {
       const isFarX = Math.abs(player.position.x) > distanceThreshold;
@@ -34,12 +33,21 @@ export class Compass {
       container.style.setProperty("--opacity", `${opacity}`);
 
       if (!opacity) return;
-      playerPos.set(player.position.x, player.position.z);
-      // PI/2 to shift origin to be -Z and PI to invert direction -> +3PI/2 -> same as -PI/2
-      const angleToCenter = playerPos.angle() - Math.PI / 2;
-      // account for player rotation as well
-      const relativeAngle = angleToCenter + player.yaw;
-      arrow.style.setProperty("--yaw", `${relativeAngle}rad`);
+      const angleToCenter = Math.atan2(-player.position.x, -player.position.z); // yaw frame
+
+      // unwrap to avoid big jumps
+      relativeAngle = this.unwrapAngle(
+        relativeAngle,
+        angleToCenter - player.yaw,
+      );
+
+      // flip for CSS clockwise rotation
+      arrow.style.setProperty("--yaw", `${-relativeAngle}rad`);
     });
+  }
+
+  private unwrapAngle(prev: number, next: number): number {
+    const diff = next - prev;
+    return prev + (((diff + Math.PI) % (2 * Math.PI)) - Math.PI);
   }
 }
