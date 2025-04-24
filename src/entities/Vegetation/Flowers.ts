@@ -31,7 +31,7 @@ import { sceneManager } from "../../systems/SceneManager";
 import { eventsManager } from "../../systems/EventsManager";
 import { UniformType } from "../../types";
 import { State } from "../../Game";
-import { tslUtils } from "../../systems/TSLUtils";
+import { tslUtils } from "../../utils/TSLUtils";
 
 const getConfig = () => {
   const FLOWER_WIDTH = 0.5;

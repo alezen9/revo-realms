@@ -29,7 +29,7 @@ import { State } from "../Game";
 import { sceneManager } from "../systems/SceneManager";
 import { debugManager } from "../systems/DebugManager";
 import { eventsManager } from "../systems/EventsManager";
-import { tslUtils } from "../systems/TSLUtils";
+import { tslUtils } from "../utils/TSLUtils";
 
 type TerrainUniforms = {
   uGrassTerrainColor: UniformType<Color>;

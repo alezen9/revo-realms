@@ -14,7 +14,7 @@ import {
   uv,
   vec2,
 } from "three/tsl";
-import { tslUtils } from "../../systems/TSLUtils";
+import { tslUtils } from "../../utils/TSLUtils";
 
 export default class JoJo {
   constructor() {

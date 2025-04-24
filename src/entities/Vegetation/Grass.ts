@@ -49,7 +49,7 @@ import { rendererManager } from "../../systems/RendererManager";
 import { sceneManager } from "../../systems/SceneManager";
 import { eventsManager } from "../../systems/EventsManager";
 import { UniformType } from "../../types";
-import { tslUtils } from "../../systems/TSLUtils";
+import { tslUtils } from "../../utils/TSLUtils";
 
 const getConfig = () => {
   const BLADE_WIDTH = 0.1;

@@ -21,7 +21,7 @@ import { ColliderDesc, RigidBodyDesc } from "@dimforge/rapier3d";
 import { physicsManager } from "../systems/PhysicsManager";
 import { sceneManager } from "../systems/SceneManager";
 import { rendererManager } from "../systems/RendererManager";
-import { tslUtils } from "../systems/TSLUtils";
+import { tslUtils } from "../utils/TSLUtils";
 import { RevoColliderType } from "../types";
 
 const COUNT = 20; // Hardcoded, rocks are placed in blender and are less than 20
