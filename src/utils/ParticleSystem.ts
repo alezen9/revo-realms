@@ -110,22 +110,34 @@ const getFirePresetConfig = (
   params: FirePresetParams,
   mainBuffer: ParticleBuffer,
 ) => {
-  const { radius = 2, height = 3, lifetime = 1.5 } = params;
+  const {
+    radius = 1,
+    height: fireHeight = 1,
+    lifetime: fireLifetime = 1.5,
+  } = params;
+  const sparkHeight = fireHeight * 2;
+  const sparkLifetime = fireLifetime * 2;
+  const secondaryBuffer = instancedArray(params.count, "float");
+  const fireParticlesPersentage = 0.9;
 
   const onInit = Fn(([_buffer]: [ParticleBuffer]) => {
     const data = _buffer.element(instanceIndex);
-
-    const jitter = hash(instanceIndex.add(12345))
-      .mul(radius)
-      .sub(radius / 2);
+    const rand = hash(instanceIndex.add(12345));
+    const jitter = rand.mul(radius).sub(radius / 2);
     data.assign(vec4(jitter, 0, jitter, 1));
+
+    const type = secondaryBuffer.element(instanceIndex);
+    const isSpark = step(fireParticlesPersentage, rand);
+    type.assign(isSpark);
   });
 
   const onUpdate = Fn(([_buffer]: [ParticleBuffer]) => {
     const data = _buffer.element(instanceIndex);
+    const isSpark = secondaryBuffer.element(instanceIndex);
 
     const randSeed = hash(instanceIndex);
 
+    const lifetime = mix(fireLifetime, sparkLifetime, isSpark);
     const t = time.mul(0.5).mod(lifetime);
     const offset = randSeed.mul(lifetime);
     const localTime = t.add(offset).mod(lifetime);
@@ -133,7 +145,8 @@ const getFirePresetConfig = (
     const progress = localTime.div(lifetime);
     // start fast, slow down: y = 1 - (1 - progress)^2
     const verticalEase = float(1.0).sub(float(1.0).sub(progress).pow(2));
-    const y = verticalEase.mul(height);
+    const effectiveHeight = mix(fireHeight, sparkHeight, isSpark);
+    const y = verticalEase.mul(effectiveHeight);
 
     const randX = hash(instanceIndex.add(101));
     const randZ = hash(instanceIndex.add(202));
@@ -145,10 +158,19 @@ const getFirePresetConfig = (
     const phaseX = progress.mul(freqX).add(randX.mul(PI2));
     const phaseZ = progress.mul(freqZ).add(randZ.mul(PI2));
 
-    const x = sin(phaseX).mul(randX.mul(0.15).add(0.15)).mul(radius);
-    const z = cos(phaseZ).mul(randZ.mul(0.15).add(0.15)).mul(radius);
+    const sparkPhase = float(0.1).mul(isSpark).mul(verticalEase);
+    const coneFalloff = float(1).sub(verticalEase); // 1 at bottom, 0 at top
+    const radiusFalloff = coneFalloff.mul(radius);
 
-    const fadeY = y.div(height);
+    const x = sin(phaseX)
+      .mul(randX.mul(0.15).add(0.15).add(sparkPhase))
+      .mul(radiusFalloff);
+
+    const z = cos(phaseZ)
+      .mul(randZ.mul(0.15).add(0.15).add(sparkPhase))
+      .mul(radiusFalloff);
+
+    const fadeY = y.div(effectiveHeight);
 
     const fadeIn = smoothstep(0, 0.5, fadeY);
     const fadeOut = float(1).sub(smoothstep(0.5, 1, fadeY));
@@ -167,6 +189,7 @@ const getFirePresetConfig = (
   material.blendDst = OneMinusSrcAlphaFactor;
 
   const data = mainBuffer.element(instanceIndex);
+  const isSpark = secondaryBuffer.element(instanceIndex);
   const rand1 = hash(instanceIndex.add(9234));
   const rand2 = hash(instanceIndex.add(33.87));
 
@@ -174,7 +197,8 @@ const getFirePresetConfig = (
   material.positionNode = data.xyz;
 
   // Size
-  material.scaleNode = rand1.mul(data.w);
+  const sparkScale = float(1).sub(isSpark.mul(0.85));
+  material.scaleNode = rand1.mul(data.w).mul(sparkScale);
 
   // Color
   const u = step(0.5, rand1).mul(0.5);
@@ -182,21 +206,23 @@ const getFirePresetConfig = (
 
   const baseUv = uv().mul(0.5);
   const fireUv = baseUv.add(vec2(u, v));
-  const sample = texture(assetManager.fireSprites, fireUv, 5);
+  const sample = texture(assetManager.fireSprites, fireUv, 4);
 
-  const coreDiffuse = vec3(0.72, 0.62, 0.08).mul(2).toConst(); // gold
+  const baseDiffuse = vec3(0.72, 0.62, 0.08).mul(2).toConst(); // gold
   const midDiffuse = vec3(1, 0.1, 0).mul(4).toConst(); // darker red
-  const tipDiffuse = vec3(0.1).toConst(); // black
-  const yFactor = smoothstep(0, 1, positionLocal.y.div(params.height!)).pow(2);
+  const tipDiffuse = vec3(0).toConst(); // black
+
+  const effectiveHeight = mix(fireHeight, sparkHeight, isSpark);
+  const yFactor = smoothstep(0, 1, positionLocal.y.div(effectiveHeight)).pow(2);
   const factor1 = smoothstep(0, 0.2, yFactor);
-  const mix1 = mix(coreDiffuse, midDiffuse, factor1);
+  const mix1 = mix(baseDiffuse, midDiffuse, factor1);
   const factor2 = smoothstep(0.9, 1, yFactor);
-  const mix2 = mix(mix1, tipDiffuse, factor2);
+  const fireColor = mix(mix1, tipDiffuse, factor2);
   // 0 -> additive, 1 -> normal
-  const blendFactor = float(1).sub(smoothstep(0, 0.75, yFactor));
-  const alphaScale = float(0.35).toConst();
+  const blendFactor = float(1).sub(smoothstep(0, 0.35, yFactor));
+  const alphaScale = float(0.5).toConst();
   const alphaBlend = sample.a.mul(blendFactor).mul(alphaScale);
-  material.colorNode = mix2.mul(alphaBlend);
+  material.colorNode = mix(fireColor, midDiffuse, isSpark).mul(alphaBlend);
 
   // Opacity
   material.opacityNode = data.w.mul(sample.a).mul(alphaScale);

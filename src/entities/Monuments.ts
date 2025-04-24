@@ -12,7 +12,7 @@ import { ColliderDesc, RigidBodyDesc } from "@dimforge/rapier3d";
 import { physicsManager } from "../systems/PhysicsManager";
 import { sceneManager } from "../systems/SceneManager";
 import { debugManager } from "../systems/DebugManager";
-import { tslUtils } from "../systems/TSLUtils";
+import { tslUtils } from "../utils/TSLUtils";
 
 type StoneMaterialUniforms = {
   uBaseColor: UniformType<Color>;

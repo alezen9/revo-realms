@@ -29,7 +29,7 @@ import { physicsManager } from "../systems/PhysicsManager";
 import { sceneManager } from "../systems/SceneManager";
 import { lighting } from "../systems/LightingSystem";
 import { eventsManager } from "../systems/EventsManager";
-import { tslUtils } from "../systems/TSLUtils";
+import { tslUtils } from "../utils/TSLUtils";
 import { debugManager } from "../systems/DebugManager";
 
 const getConfig = () => {

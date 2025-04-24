@@ -24,7 +24,7 @@ import { assetManager } from "../../systems/AssetManager";
 import { ColliderDesc, RigidBodyDesc } from "@dimforge/rapier3d";
 import { physicsManager } from "../../systems/PhysicsManager";
 import { sceneManager } from "../../systems/SceneManager";
-import { tslUtils } from "../../systems/TSLUtils";
+import { tslUtils } from "../../utils/TSLUtils";
 import { RevoColliderType } from "../../types";
 
 class BarkMaterial extends MeshLambertNodeMaterial {

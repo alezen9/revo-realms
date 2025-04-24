@@ -52,7 +52,6 @@ import kunaiDiffuseUrl from "/textures/realm/kunaiDiffuse.webp?url";
 import campfireDiffuseUrl from "/textures/realm/campfireDiffuse.webp?url";
 // Fire
 import fireSpritesUrl from "/textures/realm/fireSprites.webp?url";
-import fireSparkAlphaUrl from "/textures/realm/fireSparkAlpha.webp?url";
 
 import atlasesCoords from "../atlases/atlases.json";
 import { Atlases } from "../atlases/types";
@@ -105,7 +104,6 @@ class AssetManager {
   campfireDiffuse!: Texture;
 
   fireSprites!: Texture;
-  fireSparkAlpha!: Texture;
 
   constructor(manager: LoadingManager) {
     // Texture
@@ -167,9 +165,8 @@ class AssetManager {
       this.textureLoader.loadAsync(kunaiDiffuseUrl),
       // Campfire [23]
       this.textureLoader.loadAsync(campfireDiffuseUrl),
-      // Campfire [24, 25]
+      // Fire [24]
       this.textureLoader.loadAsync(fireSpritesUrl),
-      this.textureLoader.loadAsync(fireSparkAlphaUrl),
       // ------ Still testing the ones below ------
     ]);
 
@@ -240,7 +237,6 @@ class AssetManager {
 
     // Fire
     this.fireSprites = res[24];
-    this.fireSparkAlpha = res[25];
   }
 }
 
