@@ -48,6 +48,7 @@ import trunkNormalUrl from "/textures/realm/trunkNormal.webp?url";
 import onePieceAtlasUrl from "/textures/realm/onePieceAtlas.webp?url";
 // Naruto
 import kunaiDiffuseUrl from "/textures/realm/kunaiDiffuse.webp?url";
+import kunaiMRUrl from "/textures/realm/kunaiMR.webp?url";
 // Campfire
 import campfireDiffuseUrl from "/textures/realm/campfireDiffuse.webp?url";
 // Fire
@@ -100,6 +101,7 @@ class AssetManager {
   onePieceAtlas!: Texture;
 
   kunaiDiffuse!: Texture;
+  kunaiMR!: Texture;
 
   campfireDiffuse!: Texture;
 
@@ -161,11 +163,12 @@ class AssetManager {
       this.textureLoader.loadAsync(trunkNormalUrl),
       // One Piece [21]
       this.textureLoader.loadAsync(onePieceAtlasUrl),
-      // Naruto [22]
+      // Naruto [22, 23]
       this.textureLoader.loadAsync(kunaiDiffuseUrl),
-      // Campfire [23]
+      this.textureLoader.loadAsync(kunaiMRUrl),
+      // Campfire [24]
       this.textureLoader.loadAsync(campfireDiffuseUrl),
-      // Fire [24]
+      // Fire [25]
       this.textureLoader.loadAsync(fireSpritesUrl),
       // ------ Still testing the ones below ------
     ]);
@@ -229,14 +232,16 @@ class AssetManager {
     this.kunaiDiffuse = res[22];
     this.kunaiDiffuse.flipY = false;
     this.kunaiDiffuse.colorSpace = SRGBColorSpace;
+    this.kunaiMR = res[23];
+    this.kunaiMR.flipY = false;
 
     // Campfire
-    this.campfireDiffuse = res[23];
+    this.campfireDiffuse = res[24];
     this.campfireDiffuse.flipY = false;
     this.campfireDiffuse.colorSpace = SRGBColorSpace;
 
     // Fire
-    this.fireSprites = res[24];
+    this.fireSprites = res[25];
   }
 }
 
