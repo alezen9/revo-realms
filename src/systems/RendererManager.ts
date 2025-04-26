@@ -23,7 +23,7 @@ class RendererManager {
     const renderer = new WebGPURenderer({
       canvas,
       antialias: true,
-      trackTimestamp: false,
+      trackTimestamp: this.IS_MONITORING_ENABLED,
       powerPreference: "high-performance",
       stencil: false,
       depth: true,
