@@ -84,7 +84,7 @@ export default class Flowers {
 
     this.flowerField.position.copy(player.position).setY(0);
 
-    await this.material.updateAsync();
+    this.material.updateAsync();
   }
 }
 

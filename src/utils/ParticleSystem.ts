@@ -80,6 +80,7 @@ export default class ParticleSystem extends InstancedMesh {
       case "custom":
         material = params.material;
         onInit = params.onInit;
+        onUpdate = params.onUpdate;
         break;
       case "fire":
         const fireConfig = getFirePresetConfig(params, this.mainBuffer);
