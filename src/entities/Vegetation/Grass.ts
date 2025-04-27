@@ -775,6 +775,6 @@ export default class Grass {
 
     this.grassField.position.copy(player.position).setY(0);
 
-    await this.material.updateAsync();
+    this.material.updateAsync();
   }
 }
