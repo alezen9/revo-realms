@@ -2,10 +2,11 @@ import { CameraHelper, PerspectiveCamera, Scene } from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { debugManager } from "./DebugManager";
 import { rendererManager } from "./RendererManager";
+import { eventsManager } from "./EventsManager";
 
 class SceneManager {
   scene: Scene;
-  camera: PerspectiveCamera;
+  playerCamera: PerspectiveCamera;
   renderCamera: PerspectiveCamera;
   private cameraHelper?: CameraHelper;
   private controls?: OrbitControls;
@@ -23,7 +24,7 @@ class SceneManager {
     // Camera
     const camera = new PerspectiveCamera(45, aspect, 0.01, 150);
     camera.position.set(0, 5, 10);
-    this.camera = camera;
+    this.playerCamera = camera;
     scene.add(camera);
 
     // Default render camera
@@ -60,8 +61,11 @@ class SceneManager {
       .addBinding(this.controls, "enabled", { label: "Enable orbit controls" })
       .on("change", ({ value: isEnabled }) => {
         if (!this.cameraHelper || !this.orbitControlsCamera) return;
-        this.renderCamera = isEnabled ? this.orbitControlsCamera : this.camera;
+        this.renderCamera = isEnabled
+          ? this.orbitControlsCamera
+          : this.playerCamera;
         this.cameraHelper.visible = isEnabled;
+        eventsManager.emit("camera-changed");
       });
   }
 

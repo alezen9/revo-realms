@@ -10,8 +10,8 @@ class RendererManager {
   canvas: HTMLCanvasElement;
   private monitoringManager: MonitoringManager;
   private postprocessingManager!: PostprocessingManager;
-  private readonly IS_POSTPROCESSING_ENABLED = false;
-  private readonly IS_MONITORING_ENABLED = false;
+  private readonly IS_POSTPROCESSING_ENABLED = true;
+  private readonly IS_MONITORING_ENABLED = true;
   private readonly IS_DEBUGGING_ENABLED = import.meta.env.DEV;
 
   constructor() {

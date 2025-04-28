@@ -32,7 +32,7 @@ class AudioManager {
   constructor(manager: LoadingManager) {
     this.audioLoader = new AudioLoader(manager);
     this.audioListener = new AudioListener();
-    sceneManager.camera.add(this.audioListener);
+    sceneManager.playerCamera.add(this.audioListener);
   }
 
   async toggleMute() {

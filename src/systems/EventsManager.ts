@@ -11,6 +11,7 @@ type ThrottledEvents = {
 type Events = {
   update: UpdateEvent;
   "audio-ready": VoidFunction;
+  "camera-changed": VoidFunction;
 } & ThrottledEvents;
 
 export const eventsManager = new EventEmitter<Events>();
