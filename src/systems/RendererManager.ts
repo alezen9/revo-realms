@@ -5,13 +5,16 @@ import PostprocessingManager from "./PostprocessingManager";
 import { debugManager } from "./DebugManager";
 import { sceneManager } from "./SceneManager";
 
+const ENABLE_MONITORING = false;
+
 class RendererManager {
   renderer: WebGPURenderer;
   canvas: HTMLCanvasElement;
   private monitoringManager: MonitoringManager;
   private postprocessingManager!: PostprocessingManager;
   private readonly IS_POSTPROCESSING_ENABLED = true;
-  private readonly IS_MONITORING_ENABLED = false;
+  private readonly IS_MONITORING_ENABLED =
+    import.meta.env.DEV && ENABLE_MONITORING;
   private readonly IS_DEBUGGING_ENABLED = import.meta.env.DEV;
 
   constructor() {

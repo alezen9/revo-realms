@@ -30,7 +30,6 @@ import {
   step,
   min,
   sin,
-  fract,
   abs,
   max,
   clamp,
@@ -52,10 +51,10 @@ import { UniformType } from "../../types";
 import { tslUtils } from "../../utils/TSLUtils";
 
 const getConfig = () => {
-  const BLADE_WIDTH = 0.075;
+  const BLADE_WIDTH = 0.1;
   const BLADE_HEIGHT = 1.5;
   const TILE_SIZE = 150;
-  const BLADES_PER_SIDE = 450;
+  const BLADES_PER_SIDE = 500;
   return {
     BLADE_WIDTH,
     BLADE_HEIGHT,
@@ -119,7 +118,7 @@ const defaultUniforms: Required<GrassUniforms> = {
   // Color
   uBaseColor: uniform(new Color().setRGB(0.06, 0.06, 0.01)),
   // uTipColor: uniform(new Color().setRGB(0.39, 0.14, 0.03)),
-  uTipColor: uniform(new Color().setRGB(0.39, 0.12, 0.0)),
+  uTipColor: uniform(new Color().setRGB(0.39, 0.12, 0.0)), // {r: 0.40, g: 0.15, b: 0.04}
   // Updated externally
   uDelta: uniform(new Vector2(0, 0)),
 };
@@ -128,6 +127,7 @@ class GrassMaterial extends MeshBasicNodeMaterial {
   _uniforms: Required<GrassUniforms>;
   private _buffer1: ReturnType<typeof instancedArray>; // holds: vec4 = (localOffset.x, localOffset.y, yaw, bending angle)
   private _buffer2: ReturnType<typeof instancedArray>; // holds: vec4 = (current scale, original scale, alpha, glow)
+  private _buffer3: ReturnType<typeof instancedArray>; // holds: float = (shadow)
 
   constructor(uniforms?: GrassUniforms) {
     super();
@@ -136,6 +136,8 @@ class GrassMaterial extends MeshBasicNodeMaterial {
     this._buffer1.setPBO(true);
     this._buffer2 = instancedArray(grassConfig.COUNT, "vec4");
     this._buffer2.setPBO(true);
+    this._buffer3 = instancedArray(grassConfig.COUNT, "float");
+    this._buffer3.setPBO(true);
 
     this.computeUpdate.onInit(({ renderer }) => {
       renderer.computeAsync(this.computeInit);
@@ -166,8 +168,8 @@ class GrassMaterial extends MeshBasicNodeMaterial {
       .abs();
 
     const noise = texture(assetManager.noiseTexture, _uv);
-    const noiseX = noise.b.sub(0.5).mul(30);
-    const noiseZ = noise.g.sub(0.5).mul(10);
+    const noiseX = noise.r.sub(0.5).mul(30);
+    const noiseZ = noise.r.sub(0.5).mul(10);
 
     data1.x = offsetX.add(noiseX);
     data1.y = offsetZ.add(noiseZ);
@@ -211,19 +213,15 @@ class GrassMaterial extends MeshBasicNodeMaterial {
     return visible;
   });
 
-  private computeBending = Fn(
-    ([data1 = vec4(0, 0, 0, 0), worldPos = vec3(0, 0, 0)]) => {
-      const windUV = worldPos.xz.add(time.mul(0.25)).mul(0.5);
+  private computeBending = Fn(([data1 = vec4(0), worldPos = vec3(0)]) => {
+    const windUV = worldPos.xz.add(time.mul(0.25)).mul(0.5).fract();
 
-      const stableUV = fract(windUV);
+    const windStrength = texture(assetManager.noiseTexture, windUV, 4).r;
 
-      const windStrength = texture(assetManager.noiseTexture, stableUV, 5).r;
+    const targetBendAngle = windStrength.mul(this._uniforms.uWindStrength);
 
-      const targetBendAngle = windStrength.mul(this._uniforms.uWindStrength);
-
-      return data1.w.add(targetBendAngle.sub(data1.w).mul(0.1));
-    },
-  );
+    return data1.w.add(targetBendAngle.sub(data1.w).mul(0.1));
+  });
 
   private computeAlpha = Fn(([worldPos = vec3(0)]) => {
     const alphaUv = tslUtils.computeMapUvByPosition(worldPos.xz);
@@ -293,9 +291,16 @@ class GrassMaterial extends MeshBasicNodeMaterial {
     },
   );
 
+  private computeShadow = Fn(([worldPos = vec3(0)]) => {
+    const _uv = tslUtils.computeMapUvByPosition(worldPos.xz);
+    const shadowAo = texture(assetManager.terrainShadowAo, _uv);
+    return step(0.65, shadowAo.r);
+  });
+
   private computeUpdate = Fn(() => {
     const data1 = this._buffer1.element(instanceIndex);
     const data2 = this._buffer2.element(instanceIndex);
+    const data3 = this._buffer3.element(instanceIndex);
     // Position
     const newOffsetX = mod(
       data1.x.sub(this._uniforms.uDelta.x).add(grassConfig.TILE_HALF_SIZE),
@@ -347,6 +352,10 @@ class GrassMaterial extends MeshBasicNodeMaterial {
         isBladeSteppedOn,
         isPlayerGrounded,
       );
+
+      // Shadow
+      const isShadow = this.computeShadow(worldPos);
+      data3.assign(isShadow);
     });
   })().compute(grassConfig.COUNT);
 
@@ -369,7 +378,7 @@ class GrassMaterial extends MeshBasicNodeMaterial {
     return worldPosition;
   });
 
-  private computeDiffuseColor = Fn(([data2 = vec4(0)]) => {
+  private computeDiffuseColor = Fn(([data2 = vec4(0), data3 = float(1)]) => {
     const verticalFactor = pow(uv().y, 1.5);
     const baseToTip = mix(
       this._uniforms.uBaseColor,
@@ -385,13 +394,15 @@ class GrassMaterial extends MeshBasicNodeMaterial {
       glowFactor,
     );
 
-    return finalColor;
+    return mix(finalColor.mul(0.35), finalColor, data3);
   });
 
-  private computeAO = Fn(([data1 = vec4(0)]) => {
-    const sideAO = abs(sin(data1.z)).mul(0.5);
-    const verticalAO = smoothstep(-2.5, 1.25, uv().y);
-    return verticalAO.mul(float(1.0).sub(sideAO)).mul(1.5);
+  private computeAO = Fn(() => {
+    const sideDarken = smoothstep(0.15, 0.45, abs(uv().x)); // softer side gradient
+    const baseDarken = smoothstep(0.0, 0.2, uv().y.negate()); // gentle base darkening
+    const combined = sideDarken.add(baseDarken).mul(0.5); // half strength
+    const ao = float(1.0).sub(combined);
+    return ao.mul(1.2); // gentle final boost
   });
 
   // private computeCurvedNormal = Fn(() => {
@@ -435,12 +446,13 @@ class GrassMaterial extends MeshBasicNodeMaterial {
     this.side = DoubleSide;
     const data1 = this._buffer1.element(instanceIndex);
     const data2 = this._buffer2.element(instanceIndex);
+    const data3 = this._buffer3.element(instanceIndex);
     Discard(data2.z.equal(0));
     this.positionNode = this.computePosition(data1, data2);
     this.opacityNode = data2.z;
     this.alphaTest = 0.25;
-    this.aoNode = this.computeAO(data1);
-    this.colorNode = this.computeDiffuseColor(data2);
+    this.aoNode = this.computeAO();
+    this.colorNode = this.computeDiffuseColor(data2, data3);
   }
 
   async updateAsync() {

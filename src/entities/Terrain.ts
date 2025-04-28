@@ -14,7 +14,7 @@ import {
   vec2,
   vec3,
 } from "three/tsl";
-import { RevoColliderType, UniformType } from "../types";
+import { RevoColliderType } from "../types";
 import { Color, Mesh, MeshLambertNodeMaterial, Vector3 } from "three/webgpu";
 import { assetManager } from "../systems/AssetManager";
 import { realmConfig } from "../realms/PortfolioRealm";
@@ -31,25 +31,38 @@ import { debugManager } from "../systems/DebugManager";
 import { eventsManager } from "../systems/EventsManager";
 import { tslUtils } from "../utils/TSLUtils";
 
-type TerrainUniforms = {
-  uGrassTerrainColor: UniformType<Color>;
-  uWaterSandColor: UniformType<Color>;
-  uPathSandColor: UniformType<Color>;
-};
-
-const defaultUniforms: TerrainUniforms = {
-  uGrassTerrainColor: uniform(new Color()),
-  uWaterSandColor: uniform(new Color()),
-  uPathSandColor: uniform(new Color()),
-};
+const defaultUniforms = {
+  uGrassTerrainColor: uniform(new Color().setRGB(0.28, 0.24, 0.0)),
+  uWaterSandColor: uniform(new Color().setRGB(0.54, 0.39, 0.2)),
+  uPathSandColor: uniform(new Color().setRGB(0.65, 0.49, 0.27)),
+} as const;
 
 class TerainMaterial extends MeshLambertNodeMaterial {
-  private _uniforms: TerrainUniforms;
-  constructor(uniforms: Partial<TerrainUniforms>) {
+  private _uniforms = { ...defaultUniforms };
+  constructor() {
     super();
-
-    this._uniforms = { ...defaultUniforms, ...uniforms };
     this.createMaterial();
+    this.debugTerrain();
+  }
+
+  private debugTerrain() {
+    const terrainFolder = debugManager.panel.addFolder({ title: "⛰️ Terrain" });
+    terrainFolder.expanded = false;
+    terrainFolder.addBinding(this._uniforms.uPathSandColor, "value", {
+      label: "Path color",
+      view: "color",
+      color: { type: "float" },
+    });
+    terrainFolder.addBinding(this._uniforms.uWaterSandColor, "value", {
+      label: "Water bed color",
+      view: "color",
+      color: { type: "float" },
+    });
+    terrainFolder.addBinding(this._uniforms.uGrassTerrainColor, "value", {
+      label: "Grass terrain color",
+      view: "color",
+      color: { type: "float" },
+    });
   }
 
   private computeCausticsDiffuse = Fn(
@@ -127,14 +140,11 @@ class TerainMaterial extends MeshLambertNodeMaterial {
 
     // Diffuse
     // Grass
-    const grassUv2 = fract(vUv.mul(15));
-    const grassColorSample1 = texture(assetManager.grassDiffuse, grassUv);
-    const grassColorSample2 = texture(assetManager.grassDiffuse, grassUv2);
-    const grassColorSample = mix(grassColorSample1, grassColorSample2, 0.5);
+    const grassColorSample = texture(assetManager.grassDiffuse, grassUv);
     const sandAlpha = float(1).sub(grassColorSample.a);
     const grassColor = this._uniforms.uGrassTerrainColor
       .mul(sandAlpha)
-      .add(grassColorSample.mul(vec3(1.0, 0.79, 0.79)))
+      .add(grassColorSample)
       .mul(grassFactor)
       .mul(0.85);
 
@@ -317,37 +327,9 @@ class OuterTerrain {
 }
 
 export default class Terrain {
-  private uniforms: TerrainUniforms = {
-    uGrassTerrainColor: uniform(new Color().setRGB(0.21, 0.26, 0.05)),
-    uWaterSandColor: uniform(new Color().setRGB(0.54, 0.39, 0.2)),
-    uPathSandColor: uniform(new Color().setRGB(0.65, 0.49, 0.27)),
-  };
-
   constructor() {
-    const terrainMaterial = new TerainMaterial(this.uniforms);
+    const terrainMaterial = new TerainMaterial();
     new InnerTerrain(terrainMaterial);
     new OuterTerrain(terrainMaterial);
-
-    this.debugTerrain();
-  }
-
-  private debugTerrain() {
-    const terrainFolder = debugManager.panel.addFolder({ title: "⛰️ Terrain" });
-    terrainFolder.expanded = false;
-    terrainFolder.addBinding(this.uniforms.uPathSandColor, "value", {
-      label: "Path color",
-      view: "color",
-      color: { type: "float" },
-    });
-    terrainFolder.addBinding(this.uniforms.uWaterSandColor, "value", {
-      label: "Water bed color",
-      view: "color",
-      color: { type: "float" },
-    });
-    terrainFolder.addBinding(this.uniforms.uGrassTerrainColor, "value", {
-      label: "Grass terrain color",
-      view: "color",
-      color: { type: "float" },
-    });
   }
 }
