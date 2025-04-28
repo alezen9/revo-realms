@@ -59,17 +59,17 @@ class TerainMaterial extends MeshLambertNodeMaterial {
       causticsShadowColor = vec3(0, 0, 0),
     ]) => {
       const timer = time.mul(0.15);
-      const scaleFactor = float(30);
-      const scaledUv = vUv.mul(scaleFactor);
-      const scaledCausticsUvA = fract(scaledUv.add(vec2(timer, 0)));
-      const scaledCausticsUvB = fract(scaledUv.add(vec2(0, timer.negate())));
+      const scaledUvA = vUv.mul(17);
+      const scaledCausticsUvA = fract(scaledUvA.add(vec2(timer, 0)));
       const noiseA = texture(assetManager.noiseTexture, scaledCausticsUvA, 1).g;
-      const noiseB = texture(assetManager.noiseTexture, scaledCausticsUvB, 2).g;
+      const scaledUvB = vUv.mul(33);
+      const scaledCausticsUvB = fract(scaledUvB.add(vec2(0, timer.negate())));
+      const noiseB = texture(assetManager.noiseTexture, scaledCausticsUvB, 3).g;
       const caustics = noiseA.add(noiseB);
       const depthFalloff = smoothstep(-1, 7.5, vDepth);
       const adjustedCaustics = pow(caustics, 3).mul(float(1).sub(depthFalloff));
 
-      const causticsHighlightColor = vec3(0.6, 0.8, 1.0).mul(0.2);
+      const causticsHighlightColor = vec3(0.6, 0.8, 1.0).mul(0.5);
 
       const causticsColor = mix(
         causticsShadowColor,

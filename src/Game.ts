@@ -35,8 +35,8 @@ export default class Game {
   private onResize() {
     const sizes = this.getSizes();
     // Update camera
-    sceneManager.camera.aspect = sizes.aspect;
-    sceneManager.camera.updateProjectionMatrix();
+    sceneManager.playerCamera.aspect = sizes.aspect;
+    sceneManager.playerCamera.updateProjectionMatrix();
 
     // Update renderer
     rendererManager.renderer.setSize(sizes.width, sizes.height);

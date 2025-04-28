@@ -52,10 +52,10 @@ import { UniformType } from "../../types";
 import { tslUtils } from "../../utils/TSLUtils";
 
 const getConfig = () => {
-  const BLADE_WIDTH = 0.1;
+  const BLADE_WIDTH = 0.075;
   const BLADE_HEIGHT = 1.5;
   const TILE_SIZE = 150;
-  const BLADES_PER_SIDE = 500;
+  const BLADES_PER_SIDE = 450;
   return {
     BLADE_WIDTH,
     BLADE_HEIGHT,
@@ -118,7 +118,8 @@ const defaultUniforms: Required<GrassUniforms> = {
   uWindStrength: uniform(0.6),
   // Color
   uBaseColor: uniform(new Color().setRGB(0.06, 0.06, 0.01)),
-  uTipColor: uniform(new Color().setRGB(0.28, 0.13, 0.06)),
+  // uTipColor: uniform(new Color().setRGB(0.39, 0.14, 0.03)),
+  uTipColor: uniform(new Color().setRGB(0.39, 0.12, 0.0)),
   // Updated externally
   uDelta: uniform(new Vector2(0, 0)),
 };
@@ -390,7 +391,7 @@ class GrassMaterial extends MeshBasicNodeMaterial {
   private computeAO = Fn(([data1 = vec4(0)]) => {
     const sideAO = abs(sin(data1.z)).mul(0.5);
     const verticalAO = smoothstep(-2.5, 1.25, uv().y);
-    return verticalAO.mul(float(1.0).sub(sideAO));
+    return verticalAO.mul(float(1.0).sub(sideAO)).mul(1.5);
   });
 
   // private computeCurvedNormal = Fn(() => {
@@ -770,8 +771,8 @@ export default class Grass {
     this.uniforms.uDelta.value.set(dx, dz);
     this.uniforms.uPlayerPosition.value.copy(player.position);
     this.uniforms.uCameraMatrix.value
-      .copy(sceneManager.camera.projectionMatrix)
-      .multiply(sceneManager.camera.matrixWorldInverse);
+      .copy(sceneManager.playerCamera.projectionMatrix)
+      .multiply(sceneManager.playerCamera.matrixWorldInverse);
 
     this.grassField.position.copy(player.position).setY(0);
 

@@ -299,8 +299,8 @@ export default class Player {
     this.smoothedCameraTarget.lerp(this.desiredTargetPosition, lerpFactor);
 
     // Assign to camera
-    sceneManager.camera.position.copy(this.smoothedCameraPosition);
-    sceneManager.camera.lookAt(this.smoothedCameraTarget);
+    sceneManager.playerCamera.position.copy(this.smoothedCameraPosition);
+    sceneManager.playerCamera.lookAt(this.smoothedCameraTarget);
   }
 
   get position() {

@@ -79,8 +79,8 @@ export default class Flowers {
     this.uniforms.uDelta.value.set(dx, dz);
     this.uniforms.uPlayerPosition.value.copy(player.position);
     this.uniforms.uCameraMatrix.value
-      .copy(sceneManager.camera.projectionMatrix)
-      .multiply(sceneManager.camera.matrixWorldInverse);
+      .copy(sceneManager.playerCamera.projectionMatrix)
+      .multiply(sceneManager.playerCamera.matrixWorldInverse);
 
     this.flowerField.position.copy(player.position).setY(0);
 
