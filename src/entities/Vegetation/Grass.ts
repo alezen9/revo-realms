@@ -52,7 +52,7 @@ import { tslUtils } from "../../utils/TSLUtils";
 
 const getConfig = () => {
   const BLADE_WIDTH = 0.1;
-  const BLADE_HEIGHT = 1.5;
+  const BLADE_HEIGHT = 1.55;
   const TILE_SIZE = 150;
   const BLADES_PER_SIDE = 500;
   return {
@@ -111,14 +111,13 @@ const defaultUniforms: Required<GrassUniforms> = {
   uGlowRadiusSquared: uniform(4),
   uGlowFadeIn: uniform(0.05),
   uGlowFadeOut: uniform(0.01),
-  uGlowColor: uniform(new Color().setRGB(0.45, 0.19, 0.07)),
+  uGlowColor: uniform(new Color().setRGB(0.55, 0.21, 0.05)),
   // Bending
   uBladeMaxBendAngle: uniform(Math.PI * 0.15),
   uWindStrength: uniform(0.6),
   // Color
-  uBaseColor: uniform(new Color().setRGB(0.06, 0.06, 0.01)),
-  // uTipColor: uniform(new Color().setRGB(0.39, 0.14, 0.03)),
-  uTipColor: uniform(new Color().setRGB(0.39, 0.12, 0.0)), // {r: 0.40, g: 0.15, b: 0.04}
+  uBaseColor: uniform(new Color().setRGB(0.07, 0.07, 0)),
+  uTipColor: uniform(new Color().setRGB(0.49, 0.22, 0.09)),
   // Updated externally
   uDelta: uniform(new Vector2(0, 0)),
 };
@@ -147,12 +146,14 @@ class GrassMaterial extends MeshBasicNodeMaterial {
 
   private computeInit = Fn(() => {
     const data1 = this._buffer1.element(instanceIndex);
+
     // Position XZ
     const row = floor(float(instanceIndex).div(grassConfig.BLADES_PER_SIDE));
     const col = float(instanceIndex).mod(grassConfig.BLADES_PER_SIDE);
 
     const randX = hash(instanceIndex.add(4321));
     const randZ = hash(instanceIndex.add(1234));
+
     const offsetX = col
       .mul(grassConfig.SPACING)
       .sub(grassConfig.TILE_HALF_SIZE)
@@ -168,8 +169,8 @@ class GrassMaterial extends MeshBasicNodeMaterial {
       .abs();
 
     const noise = texture(assetManager.noiseTexture, _uv);
-    const noiseX = noise.r.sub(0.5).mul(30);
-    const noiseZ = noise.r.sub(0.5).mul(10);
+    const noiseX = noise.b.sub(0.5).mul(17);
+    const noiseZ = noise.b.sub(0.5).mul(13);
 
     data1.x = offsetX.add(noiseX);
     data1.y = offsetZ.add(noiseZ);
@@ -183,7 +184,7 @@ class GrassMaterial extends MeshBasicNodeMaterial {
     const scaleRange = this._uniforms.uBladeMaxScale.sub(
       this._uniforms.uBladeMinScale,
     );
-    const randomScale = hash(instanceIndex.add(100))
+    const randomScale = hash(instanceIndex.add(958.32))
       .mul(scaleRange)
       .add(this._uniforms.uBladeMinScale);
 
@@ -379,7 +380,7 @@ class GrassMaterial extends MeshBasicNodeMaterial {
   });
 
   private computeDiffuseColor = Fn(([data2 = vec4(0), data3 = float(1)]) => {
-    const verticalFactor = pow(uv().y, 1.5);
+    const verticalFactor = pow(uv().y, grassConfig.BLADE_HEIGHT);
     const baseToTip = mix(
       this._uniforms.uBaseColor,
       this._uniforms.uTipColor,
@@ -387,22 +388,37 @@ class GrassMaterial extends MeshBasicNodeMaterial {
     );
 
     const colorVariation = hash(instanceIndex).mul(0.05).sub(0.025);
+    const variedColor = baseToTip.add(colorVariation).clamp();
+
     const glowFactor = data2.w;
     const finalColor = mix(
-      baseToTip.add(colorVariation),
+      variedColor,
       this._uniforms.uGlowColor.mul(0.5),
       glowFactor,
     );
 
-    return mix(finalColor.mul(0.35), finalColor, data3);
+    return mix(finalColor.mul(0.5), finalColor, data3);
   });
 
   private computeAO = Fn(() => {
-    const sideDarken = smoothstep(0.15, 0.45, abs(uv().x)); // softer side gradient
-    const baseDarken = smoothstep(0.0, 0.2, uv().y.negate()); // gentle base darkening
-    const combined = sideDarken.add(baseDarken).mul(0.5); // half strength
+    const uvX = uv().x;
+    const uvY = uv().y;
+
+    // Side darken (favor left side slightly)
+    const instanceBias = hash(instanceIndex).mul(0.1).sub(0.05);
+    const sideFactor = smoothstep(0.2, 0.5, abs(uvX.add(instanceBias)));
+
+    // Vertical darken (stronger at base)
+    const baseFactor = smoothstep(0.0, 0.25, uvY.negate());
+
+    // Slight vertical mid-toning (blade body)
+    const midFactor = smoothstep(0.3, 0.6, uvY).mul(0.1);
+
+    const combined = sideFactor.add(baseFactor).add(midFactor).mul(0.45);
+
     const ao = float(1.0).sub(combined);
-    return ao.mul(1.2); // gentle final boost
+
+    return ao.mul(1.1);
   });
 
   // private computeCurvedNormal = Fn(() => {
