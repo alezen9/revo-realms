@@ -52,7 +52,7 @@ import { tslUtils } from "../../utils/TSLUtils";
 
 const getConfig = () => {
   const BLADE_WIDTH = 0.1;
-  const BLADE_HEIGHT = 1.55;
+  const BLADE_HEIGHT = 1.5;
   const TILE_SIZE = 150;
   const BLADES_PER_SIDE = 500;
   return {
@@ -217,7 +217,7 @@ class GrassMaterial extends MeshBasicNodeMaterial {
   private computeBending = Fn(([data1 = vec4(0), worldPos = vec3(0)]) => {
     const windUV = worldPos.xz.add(time.mul(0.25)).mul(0.5).fract();
 
-    const windStrength = texture(assetManager.noiseTexture, windUV, 4).r;
+    const windStrength = texture(assetManager.noiseTexture, windUV, 2).r;
 
     const targetBendAngle = windStrength.mul(this._uniforms.uWindStrength);
 
@@ -307,6 +307,7 @@ class GrassMaterial extends MeshBasicNodeMaterial {
       data1.x.sub(this._uniforms.uDelta.x).add(grassConfig.TILE_HALF_SIZE),
       grassConfig.TILE_SIZE,
     ).sub(grassConfig.TILE_HALF_SIZE);
+
     const newOffsetZ = mod(
       data1.y.sub(this._uniforms.uDelta.y).add(grassConfig.TILE_HALF_SIZE),
       grassConfig.TILE_SIZE,
@@ -380,7 +381,7 @@ class GrassMaterial extends MeshBasicNodeMaterial {
   });
 
   private computeDiffuseColor = Fn(([data2 = vec4(0), data3 = float(1)]) => {
-    const verticalFactor = pow(uv().y, grassConfig.BLADE_HEIGHT);
+    const verticalFactor = pow(uv().y, 2);
     const baseToTip = mix(
       this._uniforms.uBaseColor,
       this._uniforms.uTipColor,
@@ -388,74 +389,40 @@ class GrassMaterial extends MeshBasicNodeMaterial {
     );
 
     const colorVariation = hash(instanceIndex).mul(0.05).sub(0.025);
-    const variedColor = baseToTip.add(colorVariation).clamp();
+    const variation = hash(instanceIndex).mul(0.08).sub(0.04);
+    const tint = variation.add(1);
+    const variedColor = baseToTip.mul(tint).add(colorVariation).clamp();
 
     const glowFactor = data2.w;
+
     const finalColor = mix(
       variedColor,
       this._uniforms.uGlowColor.mul(0.5),
       glowFactor,
     );
 
-    return mix(finalColor.mul(0.5), finalColor, data3);
+    const diff = mix(finalColor.mul(0.5), finalColor, data3);
+
+    return diff;
   });
 
   private computeAO = Fn(() => {
     const uvX = uv().x;
     const uvY = uv().y;
 
-    // Side darken (favor left side slightly)
     const instanceBias = hash(instanceIndex).mul(0.1).sub(0.05);
-    const sideFactor = smoothstep(0.2, 0.5, abs(uvX.add(instanceBias)));
+    const sideFactor = smoothstep(0, 1.2, abs(uvX.add(instanceBias)));
 
-    // Vertical darken (stronger at base)
-    const baseFactor = smoothstep(0.0, 0.25, uvY.negate());
+    const baseFactor = smoothstep(0, 0.6, uvY.negate());
 
-    // Slight vertical mid-toning (blade body)
     const midFactor = smoothstep(0.3, 0.6, uvY).mul(0.1);
 
-    const combined = sideFactor.add(baseFactor).add(midFactor).mul(0.45);
+    const combined = baseFactor.add(sideFactor).add(midFactor).mul(0.8);
 
     const ao = float(1.0).sub(combined);
 
-    return ao.mul(1.1);
+    return ao;
   });
-
-  // private computeCurvedNormal = Fn(() => {
-  //   // Fake cylindrical shape by curving normals
-  //   const sideFactor = sin(uv().x.mul(Math.PI)); // Smoother curvature: -1 -> 0 -> 1
-  //   const heightFactor = pow(uv().y, 1.5); // Softer curvature transition toward the tip
-
-  //   // Stronger curvature at the base, softer at the tip
-  //   const curvatureStrength = mix(0.6, 0.15, heightFactor);
-
-  //   // Subtle Twisting for Organic Shape
-  //   const twistStrength = mix(0.0, 0.2, heightFactor); // Slight twist near the tip
-  //   const twistAngle = uv().y.mul(Math.PI).mul(twistStrength); // Vary twist over height
-
-  //   // Apply combined curvature and twist for cylindrical illusion
-  //   let curvedNormal = normalize(
-  //     vec3(
-  //       sideFactor.mul(curvatureStrength).cos().sub(twistAngle.sin().mul(0.1)), // Side curvature with slight twist
-  //       twistAngle.sin().mul(0.05), // Subtle upward twist
-  //       1.0,
-  //     ),
-  //   );
-
-  //   // Transform Normals to World Space
-  //   curvedNormal = normalize(
-  //     transformDirection(curvedNormal, modelNormalMatrix),
-  //   );
-
-  //   // Correct for Backface Rendering
-  //   curvedNormal = mix(
-  //     curvedNormal,
-  //     curvedNormal.negate(),
-  //     float(faceDirection.lessThan(0.0)),
-  //   );
-
-  //   return curvedNormal;
-  // });
 
   private createGrassMaterial() {
     this.precision = "lowp";
@@ -466,7 +433,7 @@ class GrassMaterial extends MeshBasicNodeMaterial {
     Discard(data2.z.equal(0));
     this.positionNode = this.computePosition(data1, data2);
     this.opacityNode = data2.z;
-    this.alphaTest = 0.25;
+    this.alphaTest = 0.5;
     this.aoNode = this.computeAO();
     this.colorNode = this.computeDiffuseColor(data2, data3);
   }
@@ -555,17 +522,17 @@ export default class Grass {
       0,
       0,
       // C, D
-      -quarterWidth,
+      -quarterWidth * 1.25,
       segmentHeight * 1,
       0,
-      quarterWidth,
+      quarterWidth * 1.25,
       segmentHeight * 1,
       0,
       // F, F'
-      -quarterWidth * 0.5,
+      -quarterWidth * 0.75,
       segmentHeight * 2,
       0,
-      quarterWidth * 0.5,
+      quarterWidth * 0.75,
       segmentHeight * 2,
       0,
       // G (tip)
