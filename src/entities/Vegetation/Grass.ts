@@ -12,7 +12,6 @@ import { State } from "../../Game";
 import {
   Fn,
   mix,
-  pow,
   uniform,
   uv,
   instancedArray,
@@ -51,8 +50,8 @@ import { UniformType } from "../../types";
 import { tslUtils } from "../../utils/TSLUtils";
 
 const getConfig = () => {
-  const BLADE_WIDTH = 0.1;
-  const BLADE_HEIGHT = 1.5;
+  const BLADE_WIDTH = 0.075;
+  const BLADE_HEIGHT = 1.45;
   const TILE_SIZE = 150;
   const BLADES_PER_SIDE = 500;
   return {
@@ -117,7 +116,7 @@ const defaultUniforms: Required<GrassUniforms> = {
   uWindStrength: uniform(0.6),
   // Color
   uBaseColor: uniform(new Color().setRGB(0.07, 0.07, 0)),
-  uTipColor: uniform(new Color().setRGB(0.49, 0.22, 0.09)),
+  uTipColor: uniform(new Color().setRGB(0.4, 0.2, 0.09)),
   // Updated externally
   uDelta: uniform(new Vector2(0, 0)),
 };
@@ -381,17 +380,15 @@ class GrassMaterial extends MeshBasicNodeMaterial {
   });
 
   private computeDiffuseColor = Fn(([data2 = vec4(0), data3 = float(1)]) => {
-    const verticalFactor = pow(uv().y, 2);
+    const verticalFactor = uv().y;
     const baseToTip = mix(
       this._uniforms.uBaseColor,
       this._uniforms.uTipColor,
       verticalFactor,
     );
 
-    const colorVariation = hash(instanceIndex).mul(0.05).sub(0.025);
-    const variation = hash(instanceIndex).mul(0.08).sub(0.04);
-    const tint = variation.add(1);
-    const variedColor = baseToTip.mul(tint).add(colorVariation).clamp();
+    const tint = hash(instanceIndex.add(1000)).mul(0.03).add(0.985);
+    const variedColor = baseToTip.mul(tint).clamp();
 
     const glowFactor = data2.w;
 
@@ -410,18 +407,18 @@ class GrassMaterial extends MeshBasicNodeMaterial {
     const uvX = uv().x;
     const uvY = uv().y;
 
-    const instanceBias = hash(instanceIndex).mul(0.1).sub(0.05);
+    const instanceBias = hash(instanceIndex).mul(0.5).sub(0.05);
     const sideFactor = smoothstep(0, 1.2, abs(uvX.add(instanceBias)));
 
     const baseFactor = smoothstep(0, 0.6, uvY.negate());
 
     const midFactor = smoothstep(0.3, 0.6, uvY).mul(0.1);
 
-    const combined = baseFactor.add(sideFactor).add(midFactor).mul(0.8);
+    const combined = baseFactor.add(sideFactor).add(midFactor).mul(0.75);
 
     const ao = float(1.0).sub(combined);
 
-    return ao;
+    return ao.mul(1.2);
   });
 
   private createGrassMaterial() {
