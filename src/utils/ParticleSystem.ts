@@ -30,6 +30,7 @@ import {
   SpriteNodeMaterial,
 } from "three/webgpu";
 import { assetManager } from "../systems/AssetManager";
+import { isMeshVisible } from "./isMeshVisible";
 
 type ParticleBuffer = ReturnType<typeof instancedArray>;
 
@@ -103,6 +104,7 @@ export default class ParticleSystem extends InstancedMesh {
     }
 
     eventsManager.on("update", () => {
+      if (!isMeshVisible(this)) return;
       rendererManager.renderer.computeAsync(computeUpdate);
     });
   }
