@@ -37,15 +37,22 @@ import { State } from "../Game";
 import { eventsManager } from "../systems/EventsManager";
 import { debugManager } from "../systems/DebugManager";
 import { audioManager } from "../systems/AudioManager";
+import { isMeshVisible } from "../utils/isMeshVisible";
 
 export default class Water {
   constructor() {
     const water = assetManager.realmModel.scene.getObjectByName(
       "water",
     ) as Mesh;
-    water.material = new WaterMaterial();
+    const material = new WaterMaterial();
+    water.material = material;
 
     sceneManager.scene.add(water);
+
+    eventsManager.on("update", (state) => {
+      if (!isMeshVisible(water)) return;
+      material.update(state);
+    });
 
     eventsManager.on("audio-ready", () => {
       water.add(audioManager.lake);
@@ -83,9 +90,6 @@ class WaterMaterial extends MeshBasicNodeMaterial {
   constructor() {
     super();
     this.createMaterial();
-
-    eventsManager.on("update", this.update.bind(this));
-
     this.debugWater();
   }
 
@@ -155,7 +159,7 @@ class WaterMaterial extends MeshBasicNodeMaterial {
     });
   }
 
-  private update(state: State) {
+  update(state: State) {
     const { player } = state;
 
     // Ripples

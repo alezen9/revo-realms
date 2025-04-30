@@ -436,7 +436,7 @@ class GrassMaterial extends MeshBasicNodeMaterial {
   }
 
   async updateAsync() {
-    await rendererManager.renderer.computeAsync(this.computeUpdate);
+    rendererManager.renderer.computeAsync(this.computeUpdate);
   }
 }
 
