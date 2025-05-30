@@ -41,7 +41,22 @@ export default class PostprocessingManager extends PostProcessing {
   // }
 
   private getPasses() {
+    // antialias
     const smaaPass = smaa(this.scenePass);
+    // const ssaa = ssaaPass(sceneManager.scene, sceneManager.renderCamera); // good looking but too expensive
+    // ssaa.sampleLevel = 3;
+
+    // dof
+    // const scenePassColor = smaaPass.getTextureNode();
+    // const scenePassViewZ = this.scenePass.getViewZNode();
+
+    // const dofPass = dof(
+    //   scenePassColor,
+    //   scenePassViewZ,
+    //   20,
+    //   float(7.5).mul(0.00001),
+    //   0.01,
+    // );
 
     return smaaPass;
   }

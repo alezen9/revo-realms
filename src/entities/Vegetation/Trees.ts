@@ -10,6 +10,7 @@ import {
   time,
   uv,
   vec3,
+  vec4,
   vertexIndex,
 } from "three/tsl";
 import {
@@ -19,6 +20,7 @@ import {
   Mesh,
   MeshLambertNodeMaterial,
   NormalMapNode,
+  Vector2,
 } from "three/webgpu";
 import { assetManager } from "../../systems/AssetManager";
 import { ColliderDesc, RigidBodyDesc } from "@dimforge/rapier3d";
@@ -37,7 +39,7 @@ class BarkMaterial extends MeshLambertNodeMaterial {
 
     // Diffuse
     const diff = texture(assetManager.barkDiffuse, _uv);
-    this.colorNode = diff;
+    this.colorNode = diff.mul(2.5);
 
     // Normal
     const nor = texture(assetManager.barkNormal, _uv);
@@ -75,11 +77,15 @@ class CanopyMaterial extends MeshLambertNodeMaterial {
       vec3(1, 0.162, 0.009),
       0.5,
     );
-    this.colorNode = mix(diff.mul(1.25), seasonalAmbience, noise.b.mul(0.4));
+    this.colorNode = vec4(
+      mix(diff.rgb.mul(1.25), seasonalAmbience, noise.b.mul(0.4)).rgb,
+      diff.a,
+    );
 
     // Normal
     const nor = texture(assetManager.canopyNormal, uv());
     this.normalNode = new NormalMapNode(nor, float(1.25));
+    this.normalScale = new Vector2(1, -1);
 
     // Alpha
     this.alphaTest = 0.9;
