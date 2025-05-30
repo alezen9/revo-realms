@@ -1,4 +1,4 @@
-import { Mesh, IcosahedronGeometry, Vector3, Quaternion } from "three";
+import { Mesh, Vector3, Quaternion } from "three";
 import {
   ColliderDesc,
   RigidBody,
@@ -19,6 +19,7 @@ import {
   step,
   texture,
   time,
+  uv,
   varying,
   vec3,
 } from "three/tsl";
@@ -46,7 +47,7 @@ const getConfig = () => {
     LIN_VEL_STRENGTH: 35,
     ANG_VEL_STRENGTH: 25,
     RADIUS: 0.5,
-    MASS: 3,
+    MASS: 0.5,
     PLAYER_INITIAL_POSITION: new Vector3(0, 5, 0),
     CAMERA_OFFSET: new Vector3(0, 11, 17),
     CAMERA_LERP_FACTOR: 7.5,
@@ -130,9 +131,10 @@ export default class Player {
   }
 
   private createCharacterMesh() {
-    const geometry = new IcosahedronGeometry(config.RADIUS, 2);
-    const material = new PlayerMaterial();
-    const mesh = new Mesh(geometry, material);
+    const mesh = assetManager.realmModel.scene.getObjectByName(
+      "player",
+    ) as Mesh;
+    mesh.material = new PlayerMaterial();
     mesh.castShadow = true;
     mesh.position.copy(config.PLAYER_INITIAL_POSITION);
     return mesh;
@@ -319,7 +321,7 @@ class PlayerMaterial extends MeshLambertNodeMaterial {
   }
 
   private createMaterial() {
-    this.flatShading = true;
+    this.flatShading = false;
 
     this.castShadowNode = vec3(0.6);
 
@@ -340,7 +342,7 @@ class PlayerMaterial extends MeshLambertNodeMaterial {
     const underwaterFactor = float(1).sub(step(waterLevel, positionWorld.y));
     const abovewaterFactor = float(1).sub(underwaterFactor);
 
-    const baseColor = vec3(1);
+    const baseColor = texture(assetManager.footballDiffuse, uv()).mul(1.5);
 
     const tintStrength = float(1).sub(
       smoothstep(-1.5, 1, positionWorld.y).mul(underwaterFactor),
