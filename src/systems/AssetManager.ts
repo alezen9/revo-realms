@@ -53,6 +53,8 @@ import kunaiMRUrl from "/textures/realm/kunaiMR.webp?url";
 import campfireDiffuseUrl from "/textures/realm/campfireDiffuse.webp?url";
 // Fire
 import fireSpritesUrl from "/textures/realm/fireSprites.webp?url";
+// Football (Player)
+import footballDiffuseUrl from "/textures/realm/footballDiffuse.webp?url";
 
 import atlasesCoords from "../atlases/atlases.json";
 import { Atlases } from "../atlases/types";
@@ -106,6 +108,8 @@ class AssetManager {
   campfireDiffuse!: Texture;
 
   fireSprites!: Texture;
+
+  footballDiffuse!: Texture;
 
   constructor(manager: LoadingManager) {
     // Texture
@@ -170,6 +174,8 @@ class AssetManager {
       this.textureLoader.loadAsync(campfireDiffuseUrl),
       // Fire [25]
       this.textureLoader.loadAsync(fireSpritesUrl),
+      // Football (Player) [26]
+      this.textureLoader.loadAsync(footballDiffuseUrl),
       // ------ Still testing the ones below ------
     ]);
 
@@ -244,6 +250,10 @@ class AssetManager {
 
     // Fire
     this.fireSprites = res[25];
+
+    // Football (Player)
+    this.footballDiffuse = res[26];
+    this.footballDiffuse.colorSpace = SRGBColorSpace;
   }
 }
 
