@@ -1,4 +1,4 @@
-import { ACESFilmicToneMapping, SRGBColorSpace, PCFShadowMap } from "three";
+import { ACESFilmicToneMapping, PCFShadowMap } from "three";
 import { WebGPURenderer } from "three/webgpu";
 import MonitoringManager from "./MonitoringManager";
 import PostprocessingManager from "./PostprocessingManager";
@@ -34,7 +34,6 @@ class RendererManager {
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = PCFShadowMap;
     renderer.toneMapping = ACESFilmicToneMapping;
-    renderer.outputColorSpace = SRGBColorSpace;
     renderer.setClearColor(0x000000, 1);
 
     renderer.toneMappingExposure = 1.5;

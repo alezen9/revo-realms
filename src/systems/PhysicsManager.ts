@@ -2,6 +2,10 @@ import { Collider, EventQueue, World } from "@dimforge/rapier3d";
 import { RevoColliderType } from "../types";
 import { audioManager } from "./AudioManager";
 import { MathUtils, Vector3 } from "three";
+import { LineSegments2 } from "three/examples/jsm/lines/webgpu/LineSegments2.js";
+import { LineSegmentsGeometry } from "three/examples/jsm/Addons.js";
+import { Line2NodeMaterial } from "three/webgpu";
+import { sceneManager } from "./SceneManager";
 
 const getConfig = () => {
   return {
@@ -16,11 +20,17 @@ const config = getConfig();
 
 class Physics {
   world!: World;
-  eventQueue!: EventQueue;
+  private eventQueue!: EventQueue;
+  private readonly IS_DEBUGGING_ENABLED = false;
 
   private dummyVectorLinVel = new Vector3();
+  private debugMesh?: LineSegments2;
 
-  constructor() {}
+  constructor() {
+    if (!this.IS_DEBUGGING_ENABLED) return;
+    this.debugMesh = this.createDebugMesh();
+    sceneManager.scene.add(this.debugMesh);
+  }
 
   async initAsync() {
     return import("@dimforge/rapier3d").then(() => {
@@ -91,7 +101,26 @@ class Physics {
     });
   }
 
+  private createDebugMesh() {
+    const debugMesh = new LineSegments2(
+      new LineSegmentsGeometry(),
+      new Line2NodeMaterial(),
+    );
+    return debugMesh;
+  }
+
+  private updateDebugMesh() {
+    if (!this.debugMesh) return;
+    const debugBuffer = this.world.debugRender();
+
+    this.debugMesh.geometry.dispose();
+    this.debugMesh.geometry = new LineSegmentsGeometry();
+    this.debugMesh.geometry.setPositions(debugBuffer.vertices);
+    this.debugMesh.computeLineDistances();
+  }
+
   update() {
+    this.updateDebugMesh();
     this.world.step(this.eventQueue);
     if (audioManager.isReady) this.handleCollisionSounds();
   }

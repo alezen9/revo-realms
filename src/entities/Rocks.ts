@@ -15,6 +15,7 @@ import {
   Mesh,
   MeshLambertNodeMaterial,
   NormalMapNode,
+  Vector2,
 } from "three/webgpu";
 import { assetManager } from "../systems/AssetManager";
 import { ColliderDesc, RigidBodyDesc } from "@dimforge/rapier3d";
@@ -89,6 +90,7 @@ class RockMaterial extends MeshLambertNodeMaterial {
     const _uvNor = tslUtils.computeAtlasUv(scaleNormal, offsetNormal, _uv);
     const norAo = texture(assetManager.stoneAtlas, _uvNor);
     this.normalNode = new NormalMapNode(norAo.rgb, float(3));
+    this.normalScale = new Vector2(1, -1);
 
     // AO
     this.aoNode = norAo.a;

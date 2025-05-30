@@ -207,10 +207,12 @@ class AssetManager {
     // Trees
     this.canopyDiffuse = res[13];
     this.canopyDiffuse.flipY = false;
+    this.canopyDiffuse.colorSpace = SRGBColorSpace;
     this.canopyNormal = res[14];
     this.canopyNormal.flipY = false;
     this.barkDiffuse = res[15];
     this.barkDiffuse.flipY = false;
+    this.barkDiffuse.colorSpace = SRGBColorSpace;
     this.barkNormal = res[16];
     this.barkNormal.flipY = false;
 
@@ -224,7 +226,7 @@ class AssetManager {
     this.trunkNormal = res[20];
     this.trunkNormal.flipY = false;
 
-    // One Piece
+    // One Piece (on purpose linear space although srgb)
     this.onePieceAtlas = res[21];
     this.onePieceAtlas.flipY = false;
 
