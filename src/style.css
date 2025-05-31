@@ -199,7 +199,7 @@ Compass
 **/
 .compass-container {
   --opacity: 0;
-  --size: max(10vh, 7.5vw);
+  --size: min(10vh, 7.5vw);
   --padding: 1rem;
   position: fixed;
   bottom: var(--padding);

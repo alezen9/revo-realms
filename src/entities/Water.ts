@@ -63,17 +63,17 @@ export default class Water {
 class WaterMaterial extends MeshBasicNodeMaterial {
   private playerDir = new Vector2(0, 0);
 
-  private uSpeed = uniform(0.0025);
-  private uScale1 = uniform(0.25);
-  private uScale2 = uniform(5);
-  private uWaveFrequency = uniform(2);
-  private uWaveAmplitude = uniform(0.1);
+  private uSpeed = uniform(0.0075);
+  private uScale1 = uniform(1);
+  private uScale2 = uniform(4);
+  private uWaveFrequency = uniform(0.25);
+  private uWaveAmplitude = uniform(0.075);
 
-  private uFresnelScale = uniform(0.4);
+  private uFresnelScale = uniform(0.325);
   private uMinDist = uniform(15);
-  private uMaxDist = uniform(55);
+  private uMaxDist = uniform(35);
 
-  private uBaseColor = uniform(new Color().setRGB(0.06, 0.11, 0.1));
+  private uBaseColor = uniform(new Color().setRGB(0.05, 0.09, 0.08));
 
   uPlayerPosition = uniform(new Vector3(0, 0, 0));
   uPlayerDirection = uniform(new Vector2(0, 0));

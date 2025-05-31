@@ -15,9 +15,10 @@ class KunaiMaterial extends MeshStandardNodeMaterial {
     const diffuse = texture(assetManager.kunaiDiffuse, uv());
     this.colorNode = diffuse.mul(5);
 
+    // Metalness / Roughness
     const mr = texture(assetManager.kunaiMR, uv());
-    this.metalnessNode = mr.g;
-    this.roughnessNode = mr.b;
+    this.metalnessNode = mr.b.mul(0.75);
+    this.roughnessNode = mr.g;
   }
 }
 
@@ -52,6 +53,7 @@ export default class Naruto {
       const colliderDesc = ColliderDesc.cuboid(x, y, z).setRestitution(0.75);
       physicsManager.world.createCollider(colliderDesc, rigidBody);
     });
+
     sceneManager.scene.add(instances);
   }
 }

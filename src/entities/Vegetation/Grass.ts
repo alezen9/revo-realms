@@ -225,7 +225,9 @@ class GrassMaterial extends MeshBasicNodeMaterial {
 
   private computeAlpha = Fn(([worldPos = vec3(0)]) => {
     const alphaUv = tslUtils.computeMapUvByPosition(worldPos.xz);
-    return texture(assetManager.terrainTypeMap, alphaUv).g;
+    const alpha = texture(assetManager.terrainTypeMap, alphaUv).g;
+    const threshold = step(0.25, alpha);
+    return alpha.mul(threshold);
   });
 
   private computeTrailScale = Fn(
