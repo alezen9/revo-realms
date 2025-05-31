@@ -6,6 +6,7 @@ import { debugManager } from "./DebugManager";
 import { sceneManager } from "./SceneManager";
 
 const ENABLE_MONITORING = false;
+const ENABLE_DEBUGGING = false;
 
 class RendererManager {
   renderer: WebGPURenderer;
@@ -15,7 +16,8 @@ class RendererManager {
   private readonly IS_POSTPROCESSING_ENABLED = true;
   private readonly IS_MONITORING_ENABLED =
     import.meta.env.DEV && ENABLE_MONITORING;
-  private readonly IS_DEBUGGING_ENABLED = import.meta.env.DEV;
+  private readonly IS_DEBUGGING_ENABLED =
+    import.meta.env.DEV && ENABLE_DEBUGGING;
 
   constructor() {
     const canvas = document.createElement("canvas");

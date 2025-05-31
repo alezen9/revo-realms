@@ -5,13 +5,15 @@ import { MeshLambertNodeMaterial } from "three/webgpu";
 import { ColliderDesc, RigidBodyDesc } from "@dimforge/rapier3d";
 import { physicsManager } from "../../systems/PhysicsManager";
 import { RevoColliderType } from "../../types";
+import { texture, uv } from "three/tsl";
 
 class TrunkMaterial extends MeshLambertNodeMaterial {
   constructor() {
     super();
     this.precision = "lowp";
     this.flatShading = false;
-    this.map = assetManager.trunkDiffuse;
+    const diffuse = texture(assetManager.trunkDiffuse, uv());
+    this.colorNode = diffuse.mul(1.75);
     this.normalMap = assetManager.trunkNormal;
   }
 }

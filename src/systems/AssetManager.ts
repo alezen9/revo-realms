@@ -183,13 +183,14 @@ class AssetManager {
     this.realmModel = res[0];
     // Environment
     this.envMapTexture = res[1];
+    this.envMapTexture.colorSpace = SRGBColorSpace;
     this.envMapTexture.generateMipmaps = false;
     // Noise
     this.noiseTexture = res[2];
     // Terain
     this.terrainTypeMap = res[3];
     this.terrainTypeMap.flipY = false;
-    this.grassDiffuse = res[4];
+    this.grassDiffuse = res[4]; // linear space on purpose
     this.grassNormal = res[5];
     this.sandNormal = res[6];
     this.waterNormal = res[7];
@@ -197,23 +198,22 @@ class AssetManager {
     this.terrainShadowAo.flipY = false;
 
     // Water lilies
-    this.waterLiliesTexture = res[9];
+    this.waterLiliesTexture = res[9]; // linear space on purpose
     this.waterLiliesTexture.flipY = false;
     this.waterLiliesAlphaTexture = res[10];
     this.waterLiliesAlphaTexture.flipY = false;
 
     // Flowers
-    this.flowerAtlas = res[11];
+    this.flowerAtlas = res[11]; // linear space on purpose
     this.flowerAtlas.flipY = false;
 
     // Rocks
-    this.stoneAtlas = res[12];
+    this.stoneAtlas = res[12]; // linear space on purpose, it also includes normals
     this.stoneAtlas.flipY = false;
 
     // Trees
-    this.canopyDiffuse = res[13];
+    this.canopyDiffuse = res[13]; // linear space on purpose
     this.canopyDiffuse.flipY = false;
-    this.canopyDiffuse.colorSpace = SRGBColorSpace;
     this.canopyNormal = res[14];
     this.canopyNormal.flipY = false;
     this.barkDiffuse = res[15];
@@ -223,17 +223,18 @@ class AssetManager {
     this.barkNormal.flipY = false;
 
     // God of War
-    this.axeDiffuse = res[17];
+    this.axeDiffuse = res[17]; // linear space on purpose
     this.axeDiffuse.flipY = false;
     this.axeEmissive = res[18];
     this.axeEmissive.flipY = false;
     this.trunkDiffuse = res[19];
     this.trunkDiffuse.flipY = false;
+    this.trunkDiffuse.colorSpace = SRGBColorSpace;
     this.trunkNormal = res[20];
     this.trunkNormal.flipY = false;
 
-    // One Piece (on purpose linear space although srgb)
-    this.onePieceAtlas = res[21];
+    // One Piece
+    this.onePieceAtlas = res[21]; // linear space on purpose
     this.onePieceAtlas.flipY = false;
 
     // Naruto

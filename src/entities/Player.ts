@@ -151,7 +151,7 @@ export default class Player {
 
   private createColliderDesc() {
     return ColliderDesc.ball(config.RADIUS)
-      .setRestitution(0.25)
+      .setRestitution(0.6)
       .setFriction(1)
       .setMass(config.MASS)
       .setActiveEvents(ActiveEvents.COLLISION_EVENTS);
