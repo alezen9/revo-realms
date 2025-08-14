@@ -45,6 +45,7 @@ class RendererManager {
   }
 
   async init() {
+    sceneManager.init();
     this.postprocessingManager = new PostprocessingManager(this.renderer);
     if (this.IS_MONITORING_ENABLED)
       await this.monitoringManager.stats.init(this.renderer);

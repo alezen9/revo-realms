@@ -81,7 +81,7 @@ class AudioManager {
       this.audioLoader.loadAsync(hitStoneUrl),
     ]);
 
-    this.ambient = this.newAudio(res[0], 0.01, true);
+    this.ambient = this.newAudio(res[0], 0.05, true);
     this.lake = this.newPositionalAudio(res[1], 1, true, 10);
     this.hitWood = this.newAudio(res[2], 0, false);
     this.hitStone = this.newAudio(res[3], 0, false);

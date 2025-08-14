@@ -12,7 +12,7 @@ const getConfig = () => {
     minImpactSq: 5,
     maxImpactSq: 400,
     minImpactVolume: 0.01,
-    maxImpactVolume: 0.08,
+    maxImpactVolume: 0.25,
   };
 };
 
