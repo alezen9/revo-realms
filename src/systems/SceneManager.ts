@@ -29,29 +29,6 @@ class SceneManager {
 
     // Default render camera
     this.renderCamera = camera;
-
-    if (!import.meta.env.DEV) return;
-    const cameraHelper = new CameraHelper(camera);
-    cameraHelper.visible = false;
-    scene.add(cameraHelper);
-    this.cameraHelper = cameraHelper;
-
-    // Orbit controls
-    const orbitControlsCamera = camera.clone();
-    const controls = new OrbitControls(
-      orbitControlsCamera,
-      rendererManager.canvas,
-    );
-    orbitControlsCamera.near = 0.01;
-    orbitControlsCamera.far = 5000;
-    this.orbitControlsCamera = orbitControlsCamera;
-    controls.enableDamping = true;
-    controls.maxPolarAngle = Math.PI / 2.05;
-    controls.enabled = false;
-    this.controls = controls;
-
-    // Debug
-    this.debugScene();
   }
 
   private debugScene() {
@@ -67,6 +44,31 @@ class SceneManager {
         this.cameraHelper.visible = isEnabled;
         eventsManager.emit("camera-changed");
       });
+  }
+
+  init() {
+    if (!import.meta.env.DEV) return;
+    const cameraHelper = new CameraHelper(this.playerCamera);
+    cameraHelper.visible = false;
+    this.scene.add(cameraHelper);
+    this.cameraHelper = cameraHelper;
+
+    // Orbit controls
+    const orbitControlsCamera = this.playerCamera.clone();
+    const controls = new OrbitControls(
+      orbitControlsCamera,
+      rendererManager.canvas,
+    );
+    orbitControlsCamera.near = 0.01;
+    orbitControlsCamera.far = 5000;
+    this.orbitControlsCamera = orbitControlsCamera;
+    controls.enableDamping = true;
+    controls.maxPolarAngle = Math.PI / 2.05;
+    controls.enabled = false;
+    this.controls = controls;
+
+    // Debug
+    this.debugScene();
   }
 
   update() {

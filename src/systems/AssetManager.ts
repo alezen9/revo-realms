@@ -117,7 +117,7 @@ class AssetManager {
 
     // GLTF
     const dracoLoader = new DRACOLoader();
-    dracoLoader.setDecoderPath("/revo-realms/draco/");
+    dracoLoader.setDecoderPath("/draco/");
     this.gltfLoader = new GLTFLoader(manager);
     this.gltfLoader.setDRACOLoader(dracoLoader);
 

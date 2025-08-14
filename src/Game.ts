@@ -44,7 +44,6 @@ export default class Game {
   }
 
   async startLoop() {
-    await rendererManager.init();
     const clock = new Clock(true);
 
     const state: State = {

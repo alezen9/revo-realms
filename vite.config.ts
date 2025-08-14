@@ -4,7 +4,7 @@ import topLevelAwait from "vite-plugin-top-level-await";
 
 export default defineConfig({
   plugins: [wasm(), topLevelAwait()],
-  base: "/revo-realms",
+  base: "/",
   build: {
     target: "esnext",
     chunkSizeWarningLimit: 1024,
