@@ -7,6 +7,8 @@ import {
   Mesh,
   MeshBasicMaterial,
   PlaneGeometry,
+  Sphere,
+  Vector3,
 } from "three";
 import { sceneManager } from "../../../systems/SceneManager";
 import {
@@ -25,12 +27,19 @@ import {
   vertexIndex,
   color,
   Fn,
+  instancedArray,
+  instanceIndex,
+  hash,
+  texture,
+  vec2,
 } from "three/tsl";
 import { State } from "../../../Game";
 import { eventsManager } from "../../../systems/EventsManager";
 import { MeshBasicNodeMaterial } from "three/webgpu";
 import { TextGeometry } from "three/examples/jsm/Addons.js";
 import { assetManager } from "../../../systems/AssetManager";
+import { tslUtils } from "../../../utils/TSLUtils";
+import { rendererManager } from "../../../systems/RendererManager";
 
 const getConfig = () => {
   const BLADE_WIDTH = 0.075;
@@ -38,6 +47,9 @@ const getConfig = () => {
   const TILE_SIZE = 40;
   const BLADES_PER_SIDE = 100;
   const SEGMENTS = 7; // must be odd
+
+  const boundingSphereCenter = new Vector3(TILE_SIZE / 2, 0, TILE_SIZE / 2);
+  const boundingSphereRadius = TILE_SIZE * 1.5;
   return {
     BLADE_WIDTH,
     BLADE_HEIGHT,
@@ -48,51 +60,54 @@ const getConfig = () => {
     COUNT: BLADES_PER_SIDE * BLADES_PER_SIDE,
     SPACING: TILE_SIZE / BLADES_PER_SIDE,
     SEGMENTS,
+    BOUNDING_SPHERE: new Sphere(boundingSphereCenter, boundingSphereRadius),
   };
 };
 const config = getConfig();
 
 export default class NewGrass {
-  private material = new GrassMaterial();
   private group = new Group();
   private nGrid = 5; // 5x5 grid of tiles
   constructor() {
-    // const tile = this.createTile(this.material);
-    // this.group.add(tile);
-
-    this.group = this.createGrid();
+    const material = new GrassMaterial();
+    const geometries = [
+      this.createGeometry(5),
+      this.createGeometry(3),
+      this.createGeometry(1),
+    ];
+    this.group = this.createGrid(material, geometries);
     sceneManager.scene.add(this.group);
 
     eventsManager.on("update-throttle-16x", this.followPlayer.bind(this));
   }
 
-  private createGrid() {
+  private createGrid(material: GrassMaterial, geometries: BufferGeometry[]) {
     const group = new Group();
     let idx = 0;
     for (let i = 0; i < this.nGrid; i++) {
       for (let j = 0; j < this.nGrid; j++) {
         idx++;
-        const tile = this.createPlane();
+        const tile = this.createTile(material, geometries);
         tile.position.set(
           (i - Math.floor(this.nGrid / 2)) * config.TILE_SIZE,
           0,
           (j - Math.floor(this.nGrid / 2)) * config.TILE_SIZE,
         );
 
-        // add text geometry label to tile with the incremental index
-        const textGeom = new TextGeometry(`${idx}`, {
-          font: assetManager.font,
-          size: 5,
-          depth: 0.2,
-          curveSegments: 12,
-          bevelEnabled: false,
-        });
-        textGeom.center();
-        textGeom.rotateX(-Math.PI / 2);
-        textGeom.translate(0, 0.2, 0);
-        const textMaterial = new MeshBasicMaterial({ color: "white" });
-        const textMesh = new Mesh(textGeom, textMaterial);
-        tile.add(textMesh);
+        // // add text geometry label to tile with the incremental index
+        // const textGeom = new TextGeometry(`${idx}`, {
+        //   font: assetManager.font,
+        //   size: 5,
+        //   depth: 0.2,
+        //   curveSegments: 12,
+        //   bevelEnabled: false,
+        // });
+        // textGeom.center();
+        // textGeom.rotateX(-Math.PI / 2);
+        // textGeom.translate(0, 0.2, 0);
+        // const textMaterial = new MeshBasicMaterial({ color: "white" });
+        // const textMesh = new Mesh(textGeom, textMaterial);
+        // tile.add(textMesh);
 
         group.add(tile);
       }
@@ -200,17 +215,33 @@ export default class NewGrass {
       indices.set([leftTop, rightTop, tip], offset);
     }
 
-    console.log({ indices });
-
     const geometry = new BufferGeometry();
     geometry.setIndex(new BufferAttribute(indices, 1));
     return geometry;
   }
 
-  private createTile(material: GrassMaterial) {
-    const geometry = this.createGeometry(config.SEGMENTS);
-    const mesh = new InstancedMesh(geometry, material, config.COUNT);
-    return mesh;
+  private createTile(material: GrassMaterial, geometries: BufferGeometry[]) {
+    const lod = new LOD();
+    const meshHigh = new InstancedMesh(geometries[0], material, config.COUNT);
+    meshHigh.boundingSphere = config.BOUNDING_SPHERE;
+    meshHigh.onBeforeRender = (_, __, ___, ____, material: GrassMaterial) => {
+      material.colorNode = color(0x00ff00);
+    };
+    lod.addLevel(meshHigh, 0);
+    const meshMid = new InstancedMesh(geometries[1], material, config.COUNT);
+    meshMid.boundingSphere = config.BOUNDING_SPHERE;
+    meshMid.onBeforeRender = (_, __, ___, ____, material: GrassMaterial) => {
+      material.colorNode = color(0xffbf00);
+    };
+    lod.addLevel(meshMid, 75);
+    const meshLow = new InstancedMesh(geometries[2], material, config.COUNT);
+    meshLow.boundingSphere = config.BOUNDING_SPHERE;
+    meshLow.onBeforeRender = (_, __, ___, ____, material: GrassMaterial) => {
+      material.colorNode = color(0xff0000);
+    };
+    lod.addLevel(meshLow, 100);
+    // set bounding sphere to cover the whole tile
+    return lod;
   }
 }
 
@@ -223,10 +254,21 @@ class GrassMaterial extends MeshBasicNodeMaterial {
     uTileSize: uniform(config.TILE_SIZE),
     uHalfTileSize: uniform(config.TILE_HALF_SIZE),
   };
+
+  private buffer: ReturnType<typeof instancedArray>;
+
   constructor() {
     super();
+    const { ssbo, update } = createSsbo(config.COUNT);
+    this.buffer = ssbo;
+    eventsManager.on("update", ({ clock }) => {
+      this._uniforms.uTime.value = clock.getElapsedTime();
+    });
+    eventsManager.on("update-throttle-4x", () => {
+      rendererManager.renderer.computeAsync(update);
+    });
+
     this.create();
-    eventsManager.on("update", this.update.bind(this));
   }
 
   private computeDiffuse = Fn(() => {
@@ -274,16 +316,97 @@ class GrassMaterial extends MeshBasicNodeMaterial {
   });
 
   private create() {
+    this.precision = "lowp";
+    const data = this.buffer.element(instanceIndex);
+
     // color
     this.colorNode = this.computeDiffuse();
 
     // assign to node pipeline
     const localPos = this.computeBaseVertexPosition();
-    this.positionNode = localPos;
-  }
-
-  private update(state: State) {
-    const { clock } = state;
-    this._uniforms.uTime.value = clock.getElapsedTime();
+    // const offsetX = tslUtils.unpackUnits(
+    //   data.x,
+    //   0,
+    //   12,
+    //   -config.TILE_HALF_SIZE,
+    //   config.TILE_HALF_SIZE,
+    // );
+    // const offsetZ = tslUtils.unpackUnits(
+    //   data.x,
+    //   0,
+    //   12,
+    //   -config.TILE_HALF_SIZE,
+    //   config.TILE_HALF_SIZE,
+    // );
+    this.positionNode = localPos.add(vec3(data.x, 0, data.y));
   }
 }
+
+const createSsbo = (n: number) => {
+  const ssbo = instancedArray(n, "vec4");
+  ssbo.setPBO(true);
+
+  const init = Fn(() => {
+    const data = ssbo.element(instanceIndex);
+    // Position XZ
+    const row = floor(float(instanceIndex).div(config.BLADES_PER_SIDE));
+    const col = float(instanceIndex).mod(config.BLADES_PER_SIDE);
+
+    const randX = hash(instanceIndex.add(4321));
+    const randZ = hash(instanceIndex.add(1234));
+
+    const offsetX = col
+      .mul(config.SPACING)
+      .sub(config.TILE_HALF_SIZE)
+      .add(randX.mul(config.SPACING * 0.5));
+    const offsetZ = row
+      .mul(config.SPACING)
+      .sub(config.TILE_HALF_SIZE)
+      .add(randZ.mul(config.SPACING * 0.5));
+
+    const _uv = vec3(offsetX, 0, offsetZ)
+      .xz.add(config.TILE_HALF_SIZE)
+      .div(config.TILE_SIZE)
+      .abs();
+
+    const noise = texture(assetManager.noiseTexture, _uv);
+    const noiseX = noise.b.sub(0.5).mul(17);
+    const noiseZ = noise.b.sub(0.5).mul(13);
+
+    const x = offsetX.add(noiseX);
+    const z = offsetZ.add(noiseZ);
+    data.x = x; // X
+    data.y = z; // Z
+    // tslUtils.packUnits(
+    //   data.x,
+    //   0,
+    //   12,
+    //   x,
+    //   -config.TILE_HALF_SIZE,
+    //   config.TILE_HALF_SIZE,
+    // ); // X
+    // tslUtils.packUnits(
+    //   data.x,
+    //   0,
+    //   12,
+    //   z,
+    //   -config.TILE_HALF_SIZE,
+    //   config.TILE_HALF_SIZE,
+    // ); // Z
+
+    // Yaw
+    // map noise from [0..1] to [0..2PI]
+    const yaw = noise.g.mul(Math.PI * 2);
+    // tslUtils.packAngle(data.y, 0, 6, yaw); // Yaw
+    data.z = float(0); // unused
+    data.w = float(0); // unused
+  })().compute(n);
+
+  const update = Fn(() => {})().compute(n);
+
+  update.onInit(({ renderer }) => {
+    renderer.computeAsync(init);
+  });
+
+  return { ssbo, update };
+};

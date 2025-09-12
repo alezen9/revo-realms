@@ -1,7 +1,187 @@
-import { Fn, vec2 } from "three/tsl";
+import {
+  Fn,
+  vec2,
+  float,
+  pow,
+  floor,
+  mod,
+  add,
+  sub,
+  clamp,
+  max,
+  PI2,
+} from "three/tsl";
 import { realmConfig } from "../realms/PortfolioRealm";
 
 class TSLUtils {
+  // 2^n helper (kept as a node)
+  private pow2 = Fn(([n = float(0)]) => pow(float(2.0), n));
+  // nearest-integer (ties to +inf like roundf)
+  private roundf = Fn(([x = float(0)]) => floor(add(x, 0.5)));
+
+  // Zero a bit-field [offset .. offset+bits-1] inside a packed float
+  private clearBitsF32 = Fn(
+    ([packed = float(0), offset = float(0), bits = float(1)]) => {
+      const base = this.pow2(offset); // 2^offset
+      const span = this.pow2(bits); // 2^bits
+      const slot = floor(packed.div(base)); // shift right
+      const kept = sub(slot, mod(slot, span)); // clear that field
+      return kept.mul(base); // shift back
+    },
+  );
+
+  /**
+   * packF32
+   * Write 'value' into [offset,bits] of 'packed' using fixed-point (lsb,bias).
+   * Returns NEW packed float (pure).
+   *
+   * @param packed existing word (float)
+   * @param offset bit offset (0..)
+   * @param bits   field width (1..24)
+   * @param value  real value to store
+   * @param lsb    step size (value per count)
+   * @param bias   value represented by count 0
+   */
+  packF32 = Fn(
+    ([
+      packed = float(0),
+      offset = float(0),
+      bits = float(8),
+      value = float(0),
+      lsb = float(1),
+      bias = float(0),
+    ]) => {
+      const levels = sub(this.pow2(bits), 1.0); // max count
+      const q = this.roundf(sub(value, bias).div(max(lsb, 1e-20)));
+      const qClmp = clamp(q, 0.0, levels);
+      const base = this.pow2(offset);
+      return this.clearBitsF32(packed, offset, bits).add(qClmp.mul(base));
+    },
+  );
+
+  /**
+   * unpackF32
+   * Read field at [offset,bits] and reconstruct a real value with (lsb,bias).
+   */
+  unpackF32 = Fn(
+    ([
+      packed = float(0),
+      offset = float(0),
+      bits = float(8),
+      lsb = float(1),
+      bias = float(0),
+    ]) => {
+      const base = this.pow2(offset);
+      const span = this.pow2(bits);
+      const slot = floor(packed.div(base));
+      const q = mod(slot, span); // integer count
+      return q.mul(lsb).add(bias);
+    },
+  );
+
+  // [0..1] unit value
+  packUnit = Fn(
+    ([
+      packed = float(0),
+      offset = float(0),
+      bits = float(8),
+      x01 = float(0),
+    ]) => {
+      const lsb = float(1).div(sub(this.pow2(bits), 1.0)); // 1/(2^bits-1)
+      return this.packF32(packed, offset, bits, x01, lsb, float(0));
+    },
+  );
+  unpackUnit = Fn(([packed = float(0), offset = float(0), bits = float(8)]) => {
+    const lsb = float(1).div(sub(this.pow2(bits), 1.0));
+    return this.unpackF32(packed, offset, bits, lsb, float(0));
+  });
+
+  // Boolean/flag (single bit 0/1) – uses packUnit with bits=1
+  packFlag = Fn(([packed = float(0), offset = float(0), flag01 = float(0)]) =>
+    this.packF32(packed, offset, float(1), flag01, float(1), float(0)),
+  );
+  unpackFlag = Fn(([packed = float(0), offset = float(0)]) =>
+    this.unpackF32(packed, offset, float(1), float(1), float(0)),
+  );
+
+  // Angle in radians [0..2π)
+  packAngle = Fn(
+    ([
+      packed = float(0),
+      offset = float(0),
+      bits = float(9),
+      angle = float(0),
+    ]) => {
+      const levels = sub(this.pow2(bits), 1.0);
+      const lsb = PI2.div(levels); // 2π/(2^bits-1)
+      // wrap into [0,2π)
+      const a = angle.sub(PI2.mul(floor(angle.div(PI2))));
+      return this.packF32(packed, offset, bits, a, lsb, float(0));
+    },
+  );
+  unpackAngle = Fn(
+    ([packed = float(0), offset = float(0), bits = float(9)]) => {
+      const lsb = PI2.div(sub(this.pow2(bits), 1.0));
+      return this.unpackF32(packed, offset, bits, lsb, float(0));
+    },
+  );
+
+  // Signed range [-A..+A]
+  packSigned = Fn(
+    ([
+      packed = float(0),
+      offset = float(0),
+      bits = float(8),
+      value = float(0),
+      maxAbs = float(1),
+    ]) => {
+      const levels = sub(this.pow2(bits), 1.0);
+      const lsb = maxAbs.mul(2.0).div(levels); // step
+      const bias = maxAbs.negate();
+      return this.packF32(packed, offset, bits, value, lsb, bias);
+    },
+  );
+  unpackSigned = Fn(
+    ([
+      packed = float(0),
+      offset = float(0),
+      bits = float(8),
+      maxAbs = float(1),
+    ]) => {
+      const lsb = maxAbs.mul(2.0).div(sub(this.pow2(bits), 1.0));
+      const bias = maxAbs.negate();
+      return this.unpackF32(packed, offset, bits, lsb, bias);
+    },
+  );
+
+  // Generic units [min..max] (inclusive)
+  packUnits = Fn(
+    ([
+      packed = float(0),
+      offset = float(0),
+      bits = float(8),
+      value = float(0),
+      minV = float(0),
+      maxV = float(1),
+    ]) => {
+      const levels = sub(this.pow2(bits), 1.0);
+      const lsb = maxV.sub(minV).div(levels);
+      return this.packF32(packed, offset, bits, value, lsb, minV);
+    },
+  );
+  unpackUnits = Fn(
+    ([
+      packed = float(0),
+      offset = float(0),
+      bits = float(8),
+      minV = float(0),
+      maxV = float(1),
+    ]) => {
+      const lsb = maxV.sub(minV).div(sub(this.pow2(bits), 1.0));
+      return this.unpackF32(packed, offset, bits, lsb, minV);
+    },
+  );
+
   computeMapUvByPosition = Fn(([pos = vec2(0)]) => {
     return pos.add(realmConfig.HALF_MAP_SIZE).div(realmConfig.MAP_SIZE);
   });
