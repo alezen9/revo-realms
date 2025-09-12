@@ -2,7 +2,7 @@ import Grass from "./Grass";
 import Flowers from "./Flowers";
 import { WaterLilies } from "./WaterLilies";
 import Trees from "./Trees";
-import NewGrass from "./NewGrass";
+import NewGrass from "./Grass2.0/GrassField";
 
 export default class Vegetation {
   constructor() {

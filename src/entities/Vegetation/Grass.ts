@@ -365,12 +365,10 @@ class GrassMaterial extends MeshBasicNodeMaterial {
   private computePosition = Fn(([data1 = vec4(0), data2 = vec4(0)]) => {
     const offset = vec3(data1.x, 0, data1.y);
     const yawAngle = data1.z;
-    const bendingAngle = data1.w;
+    const windAngle = data1.w.mul(uv().y);
     const scale = data2.x;
-    const bendAmount = bendingAngle.mul(uv().y);
-    const bentPosition = rotate(positionLocal, vec3(bendAmount, 0, 0));
-    const scaled = bentPosition.mul(vec3(1, scale, 1));
-    const rotated = rotate(scaled, vec3(0, yawAngle, 0));
+    const scaled = positionLocal.mul(vec3(1, scale, 1));
+    const rotated = rotate(scaled, vec3(windAngle, yawAngle, windAngle));
 
     const randomPhase = hash(instanceIndex).mul(6.28); // Random phase in range [0, 2π]
     const swayAmount = sin(time.mul(5).add(data1.w).add(randomPhase)).mul(0.1);
