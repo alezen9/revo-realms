@@ -59,6 +59,8 @@ import footballDiffuseUrl from "/textures/realm/footballDiffuse.webp?url";
 import atlasesCoords from "../atlases/atlases.json";
 import { Atlases } from "../atlases/types";
 import { loadingManager } from "./LoadingManager";
+import { Font, FontLoader } from "three/examples/jsm/Addons.js";
+import fontUrl from "three/examples/fonts/helvetiker_regular.typeface.json?url";
 
 class AssetManager {
   // Atlas coords
@@ -68,6 +70,7 @@ class AssetManager {
   textureLoader: TextureLoader;
   gltfLoader: GLTFLoader;
   cubeTextureLoader: CubeTextureLoader;
+  fontLoader: FontLoader;
 
   // Assets
   realmModel!: GLTF;
@@ -111,6 +114,8 @@ class AssetManager {
 
   footballDiffuse!: Texture;
 
+  font!: Font;
+
   constructor(manager: LoadingManager) {
     // Texture
     this.textureLoader = new TextureLoader(manager);
@@ -123,6 +128,9 @@ class AssetManager {
 
     // Env maps
     this.cubeTextureLoader = new CubeTextureLoader(manager);
+
+    // Fonts
+    this.fontLoader = new FontLoader(manager);
   }
 
   async initAsync() {
@@ -177,6 +185,7 @@ class AssetManager {
       // Football (Player) [26]
       this.textureLoader.loadAsync(footballDiffuseUrl),
       // ------ Still testing the ones below ------
+      this.fontLoader.loadAsync(fontUrl), // Font [27]
     ]);
 
     // Models
@@ -255,6 +264,9 @@ class AssetManager {
     // Football (Player)
     this.footballDiffuse = res[26];
     this.footballDiffuse.colorSpace = SRGBColorSpace;
+
+    // Font
+    this.font = res[27];
   }
 }
 
