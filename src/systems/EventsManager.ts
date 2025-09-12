@@ -3,7 +3,7 @@ import { State } from "../Game";
 
 type UpdateEvent = (state: State) => void;
 
-const throttle = [16, 64] as const;
+const throttle = [4, 16, 64] as const;
 type ThrottledEvents = {
   [T in (typeof throttle)[number] as `update-throttle-${T}x`]: UpdateEvent;
 };
