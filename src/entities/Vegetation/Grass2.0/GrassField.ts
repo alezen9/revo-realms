@@ -1,4 +1,13 @@
-import { BufferAttribute, BufferGeometry, Group, InstancedMesh } from "three";
+import {
+  BufferAttribute,
+  BufferGeometry,
+  Group,
+  InstancedMesh,
+  LOD,
+  Mesh,
+  MeshBasicMaterial,
+  PlaneGeometry,
+} from "three";
 import { sceneManager } from "../../../systems/SceneManager";
 import {
   float,
@@ -20,11 +29,13 @@ import {
 import { State } from "../../../Game";
 import { eventsManager } from "../../../systems/EventsManager";
 import { MeshBasicNodeMaterial } from "three/webgpu";
+import { TextGeometry } from "three/examples/jsm/Addons.js";
+import { assetManager } from "../../../systems/AssetManager";
 
 const getConfig = () => {
   const BLADE_WIDTH = 0.075;
   const BLADE_HEIGHT = 1.45;
-  const TILE_SIZE = 25;
+  const TILE_SIZE = 40;
   const BLADES_PER_SIDE = 100;
   const SEGMENTS = 7; // must be odd
   return {
@@ -44,10 +55,120 @@ const config = getConfig();
 export default class NewGrass {
   private material = new GrassMaterial();
   private group = new Group();
+  private nGrid = 5; // 5x5 grid of tiles
   constructor() {
-    const tile = this.createTile(this.material);
-    this.group.add(tile);
+    // const tile = this.createTile(this.material);
+    // this.group.add(tile);
+
+    this.group = this.createGrid();
     sceneManager.scene.add(this.group);
+
+    eventsManager.on("update-throttle-16x", this.followPlayer.bind(this));
+  }
+
+  private createGrid() {
+    const group = new Group();
+    let idx = 0;
+    for (let i = 0; i < this.nGrid; i++) {
+      for (let j = 0; j < this.nGrid; j++) {
+        idx++;
+        const tile = this.createPlane();
+        tile.position.set(
+          (i - Math.floor(this.nGrid / 2)) * config.TILE_SIZE,
+          0,
+          (j - Math.floor(this.nGrid / 2)) * config.TILE_SIZE,
+        );
+
+        // add text geometry label to tile with the incremental index
+        const textGeom = new TextGeometry(`${idx}`, {
+          font: assetManager.font,
+          size: 5,
+          depth: 0.2,
+          curveSegments: 12,
+          bevelEnabled: false,
+        });
+        textGeom.center();
+        textGeom.rotateX(-Math.PI / 2);
+        textGeom.translate(0, 0.2, 0);
+        const textMaterial = new MeshBasicMaterial({ color: "white" });
+        const textMesh = new Mesh(textGeom, textMaterial);
+        tile.add(textMesh);
+
+        group.add(tile);
+      }
+    }
+    return group;
+  }
+
+  private followPlayer(state: State) {
+    const { player } = state;
+    const dx = player.position.x - this.group.position.x;
+    const dz = player.position.z - this.group.position.z;
+    const distSq = dx * dx + dz * dz;
+    if (distSq < config.TILE_SIZE * config.TILE_SIZE) return; // don't move if within 1 tile
+    this.group.position.x =
+      Math.round(player.position.x / config.TILE_SIZE) * config.TILE_SIZE;
+    this.group.position.z =
+      Math.round(player.position.z / config.TILE_SIZE) * config.TILE_SIZE;
+
+    this.wrapTiles(dx, dz);
+  }
+
+  private wrapTiles(dx: number, dz: number) {
+    // move tiles opposite to player movement and wrap around
+    this.group.children.forEach((tile) => {
+      tile.position.x -= config.TILE_SIZE * Math.sign(dx);
+      tile.position.z -= config.TILE_SIZE * Math.sign(dz);
+      if (Math.abs(tile.position.x) > (this.nGrid / 2) * config.TILE_SIZE) {
+        tile.position.x -=
+          Math.sign(tile.position.x) * this.nGrid * config.TILE_SIZE;
+      }
+      if (Math.abs(tile.position.z) > (this.nGrid / 2) * config.TILE_SIZE) {
+        tile.position.z -=
+          Math.sign(tile.position.z) * this.nGrid * config.TILE_SIZE;
+      }
+    });
+  }
+
+  private createPlane() {
+    const geomHigh = new PlaneGeometry(
+      config.TILE_SIZE,
+      config.TILE_SIZE,
+      (config.BLADES_PER_SIDE - 1) * 9,
+      config.BLADES_PER_SIDE - 1,
+    );
+    geomHigh.rotateX(-Math.PI / 2);
+    geomHigh.translate(0, 0.1, 0);
+
+    const geomHMid = new PlaneGeometry(
+      config.TILE_SIZE,
+      config.TILE_SIZE,
+      (config.BLADES_PER_SIDE - 1) * 5,
+      config.BLADES_PER_SIDE - 1,
+    );
+    geomHMid.rotateX(-Math.PI / 2);
+    geomHMid.translate(0, 0.1, 0);
+
+    const geomLow = new PlaneGeometry(
+      config.TILE_SIZE,
+      config.TILE_SIZE,
+      (config.BLADES_PER_SIDE - 1) * 3,
+      config.BLADES_PER_SIDE - 1,
+    );
+    geomLow.rotateX(-Math.PI / 2);
+    geomLow.translate(0, 0.1, 0);
+
+    const materialHigh = new MeshBasicNodeMaterial({ color: "green" });
+    const materialMedium = new MeshBasicNodeMaterial({ color: "orange" });
+    const materialLow = new MeshBasicNodeMaterial({ color: "red" });
+    const lod = new LOD();
+    const meshHigh = new Mesh(geomHigh, materialHigh);
+    const meshMedium = new Mesh(geomHMid, materialMedium);
+    const meshLow = new Mesh(geomLow, materialLow);
+    lod.addLevel(meshHigh, 0);
+    lod.addLevel(meshMedium, 50);
+    lod.addLevel(meshLow, 75);
+    return lod;
   }
 
   private createGeometry(nSegments: number) {
@@ -94,7 +215,7 @@ export default class NewGrass {
 }
 
 class GrassMaterial extends MeshBasicNodeMaterial {
-  private baseUniforms = {
+  private _uniforms = {
     uTime: uniform(0),
     uSegments: uniform(3),
     uBladeWidth: uniform(config.BLADE_WIDTH),
@@ -109,14 +230,14 @@ class GrassMaterial extends MeshBasicNodeMaterial {
   }
 
   private computeDiffuse = Fn(() => {
-    return color(0x2e8b57); // seagreen-ish
+    return color(0x00ff00); // seagreen-ish
   });
 
   private computeBaseVertexPosition = Fn(() => {
     // aliases
-    const segs = this.baseUniforms.uSegments;
-    const bW = this.baseUniforms.uBladeWidth;
-    const bH = this.baseUniforms.uBladeHeight;
+    const segs = this._uniforms.uSegments;
+    const bW = this._uniforms.uBladeWidth;
+    const bH = this._uniforms.uBladeHeight;
 
     // quads = (n-1)/2, rows = quads+1, tipIx = 2*rows
     const quads = div(sub(segs, int(1)), int(2));
@@ -163,6 +284,6 @@ class GrassMaterial extends MeshBasicNodeMaterial {
 
   private update(state: State) {
     const { clock } = state;
-    this.baseUniforms.uTime.value = clock.getElapsedTime();
+    this._uniforms.uTime.value = clock.getElapsedTime();
   }
 }
