@@ -39,6 +39,7 @@ import {
   deltaTime,
   exp,
   mix,
+  smoothstep,
 } from "three/tsl";
 import { State } from "../../../Game";
 import { eventsManager } from "../../../systems/EventsManager";
@@ -47,6 +48,7 @@ import { TextGeometry } from "three/examples/jsm/Addons.js";
 import { assetManager } from "../../../systems/AssetManager";
 import { tslUtils } from "../../../utils/TSLUtils";
 import { rendererManager } from "../../../systems/RendererManager";
+import { debugManager } from "../../../systems/DebugManager";
 
 const getConfig = () => {
   const BLADE_WIDTH = 0.075;
@@ -75,6 +77,10 @@ const config = getConfig();
 export default class NewGrass {
   private group = new Group();
   private nGrid = 5;
+  private debug = {
+    enableLodColors: false,
+  };
+
   constructor() {
     const material = new GrassMaterial();
     const geometries = [
@@ -84,7 +90,6 @@ export default class NewGrass {
     ];
     this.group = this.createGrid(material, geometries);
     sceneManager.scene.add(this.group);
-
     eventsManager.on("update-throttle-16x", ({ player }) => {
       const dx = player.position.x - this.group.position.x;
       const dz = player.position.z - this.group.position.z;
@@ -185,21 +190,21 @@ export default class NewGrass {
     const lod = new LOD();
     const meshHigh = new InstancedMesh(geometries[0], material, config.COUNT);
     meshHigh.boundingSphere = config.BOUNDING_SPHERE;
-    meshHigh.onBeforeRender = (_, __, ___, ____, material: GrassMaterial) => {
-      material.colorNode = color("green");
-    };
+    // meshHigh.onBeforeRender = (_, __, ___, ____, material: GrassMaterial) => {
+    //   material.colorNode = color("darkgreen");
+    // };
     lod.addLevel(meshHigh, 0);
     const meshMid = new InstancedMesh(geometries[1], material, config.COUNT);
     meshMid.boundingSphere = config.BOUNDING_SPHERE;
-    meshMid.onBeforeRender = (_, __, ___, ____, material: GrassMaterial) => {
-      material.colorNode = color("orange");
-    };
+    // meshMid.onBeforeRender = (_, __, ___, ____, material: GrassMaterial) => {
+    //   material.colorNode = color("orange");
+    // };
     lod.addLevel(meshMid, 50);
     const meshLow = new InstancedMesh(geometries[2], material, config.COUNT);
     meshLow.boundingSphere = config.BOUNDING_SPHERE;
-    meshLow.onBeforeRender = (_, __, ___, ____, material: GrassMaterial) => {
-      material.colorNode = color("red");
-    };
+    // meshLow.onBeforeRender = (_, __, ___, ____, material: GrassMaterial) => {
+    //   material.colorNode = color("red");
+    // };
     lod.addLevel(meshLow, 100);
     return lod;
   }
@@ -233,7 +238,7 @@ class GrassMaterial extends MeshBasicNodeMaterial {
   }
 
   private computeDiffuse = Fn(() => {
-    return color(0x00ff00); // seagreen-ish
+    return color("darkgreen");
   });
 
   private computeBaseVertexPosition = Fn(() => {
@@ -276,6 +281,24 @@ class GrassMaterial extends MeshBasicNodeMaterial {
     return localPos;
   });
 
+  private computeAO = Fn(([localPos = vec3(0, 0, 0)]) => {
+    const uvX = localPos.x.add(0.5);
+    const uvY = localPos.y;
+
+    const instanceBias = hash(instanceIndex).mul(0.5).sub(0.05);
+    const sideFactor = smoothstep(0, 1.2, abs(uvX.add(instanceBias)));
+
+    const baseFactor = smoothstep(0, 0.6, uvY.negate());
+
+    const midFactor = smoothstep(0.3, 0.6, uvY).mul(0.1);
+
+    const combined = baseFactor.add(sideFactor).add(midFactor).mul(0.75);
+
+    const ao = float(1.0).sub(combined);
+
+    return ao.mul(1.2);
+  });
+
   private create() {
     this.precision = "lowp";
     this.side = DoubleSide;
@@ -301,9 +324,14 @@ class GrassMaterial extends MeshBasicNodeMaterial {
     );
     const localPos = this.computeBaseVertexPosition();
     const yaw = tslUtils.unpackAngle(data.y, 0, 8);
-    let lean = tslUtils.unpackAngle(data.y, 8, 8);
-    lean = lean.mul(localPos.y);
-    const rotatedPos = rotate(localPos, vec3(lean, yaw, lean));
+
+    const windUV = positionWorld.xz.add(time.mul(0.25)).mul(0.5).fract();
+
+    const windStrength = texture(assetManager.noiseTexture, windUV, 2).r;
+
+    const lean = windStrength.mul(uniforms.uWindStrength).mul(localPos.y);
+
+    const rotatedPos = rotate(localPos, vec3(lean, yaw, 0));
     const offsetPos = rotatedPos.add(vec3(offsetX, 0, offsetZ));
     this.positionNode = offsetPos;
 
@@ -313,6 +341,8 @@ class GrassMaterial extends MeshBasicNodeMaterial {
     const threshold = step(0.25, alpha);
     this.alphaTest = 0.5;
     this.opacityNode = alpha.mul(threshold);
+
+    this.aoNode = this.computeAO(localPos);
   }
 }
 
@@ -393,7 +423,7 @@ const createSsbo = () => {
     );
 
     const tau = float(0.35); // smoothing time constant (seconds)
-    const alpha = sub(float(1.0), exp(deltaTime.negate().div(tau))); // alpha = 1 - e^(-dt/τ)
+    const alpha = sub(float(1.0), exp(time.negate().div(tau))); // alpha = 1 - e^(-dt/τ)
 
     const windUV = vec2(x, z).add(time.mul(0.25)).mul(0.5).fract();
     const strength = texture(assetManager.noiseTexture, windUV, 2).r;
