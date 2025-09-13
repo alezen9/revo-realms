@@ -1,6 +1,7 @@
 import {
   BufferAttribute,
   BufferGeometry,
+  DoubleSide,
   Group,
   InstancedMesh,
   LOD,
@@ -32,6 +33,12 @@ import {
   hash,
   texture,
   vec2,
+  positionWorld,
+  rotate,
+  time,
+  deltaTime,
+  exp,
+  mix,
 } from "three/tsl";
 import { State } from "../../../Game";
 import { eventsManager } from "../../../systems/EventsManager";
@@ -67,7 +74,7 @@ const config = getConfig();
 
 export default class NewGrass {
   private group = new Group();
-  private nGrid = 5; // 5x5 grid of tiles
+  private nGrid = 5;
   constructor() {
     const material = new GrassMaterial();
     const geometries = [
@@ -78,7 +85,18 @@ export default class NewGrass {
     this.group = this.createGrid(material, geometries);
     sceneManager.scene.add(this.group);
 
-    eventsManager.on("update-throttle-16x", this.followPlayer.bind(this));
+    eventsManager.on("update-throttle-16x", ({ player }) => {
+      const dx = player.position.x - this.group.position.x;
+      const dz = player.position.z - this.group.position.z;
+      const distSq = dx * dx + dz * dz;
+      if (distSq < config.TILE_SIZE * config.TILE_SIZE) return; // don't move if within 1 tile
+      this.group.position.x =
+        Math.round(player.position.x / config.TILE_SIZE) * config.TILE_SIZE;
+      this.group.position.z =
+        Math.round(player.position.z / config.TILE_SIZE) * config.TILE_SIZE;
+
+      this.wrapTiles(dx, dz);
+    });
   }
 
   private createGrid(material: GrassMaterial, geometries: BufferGeometry[]) {
@@ -87,12 +105,10 @@ export default class NewGrass {
     for (let i = 0; i < this.nGrid; i++) {
       for (let j = 0; j < this.nGrid; j++) {
         idx++;
+        const x = (i - Math.floor(this.nGrid / 2)) * config.TILE_SIZE;
+        const z = (j - Math.floor(this.nGrid / 2)) * config.TILE_SIZE;
         const tile = this.createTile(material, geometries);
-        tile.position.set(
-          (i - Math.floor(this.nGrid / 2)) * config.TILE_SIZE,
-          0,
-          (j - Math.floor(this.nGrid / 2)) * config.TILE_SIZE,
-        );
+        tile.position.set(x, 0, z);
 
         // // add text geometry label to tile with the incremental index
         // const textGeom = new TextGeometry(`${idx}`, {
@@ -115,20 +131,6 @@ export default class NewGrass {
     return group;
   }
 
-  private followPlayer(state: State) {
-    const { player } = state;
-    const dx = player.position.x - this.group.position.x;
-    const dz = player.position.z - this.group.position.z;
-    const distSq = dx * dx + dz * dz;
-    if (distSq < config.TILE_SIZE * config.TILE_SIZE) return; // don't move if within 1 tile
-    this.group.position.x =
-      Math.round(player.position.x / config.TILE_SIZE) * config.TILE_SIZE;
-    this.group.position.z =
-      Math.round(player.position.z / config.TILE_SIZE) * config.TILE_SIZE;
-
-    this.wrapTiles(dx, dz);
-  }
-
   private wrapTiles(dx: number, dz: number) {
     // move tiles opposite to player movement and wrap around
     this.group.children.forEach((tile) => {
@@ -143,47 +145,6 @@ export default class NewGrass {
           Math.sign(tile.position.z) * this.nGrid * config.TILE_SIZE;
       }
     });
-  }
-
-  private createPlane() {
-    const geomHigh = new PlaneGeometry(
-      config.TILE_SIZE,
-      config.TILE_SIZE,
-      (config.BLADES_PER_SIDE - 1) * 9,
-      config.BLADES_PER_SIDE - 1,
-    );
-    geomHigh.rotateX(-Math.PI / 2);
-    geomHigh.translate(0, 0.1, 0);
-
-    const geomHMid = new PlaneGeometry(
-      config.TILE_SIZE,
-      config.TILE_SIZE,
-      (config.BLADES_PER_SIDE - 1) * 5,
-      config.BLADES_PER_SIDE - 1,
-    );
-    geomHMid.rotateX(-Math.PI / 2);
-    geomHMid.translate(0, 0.1, 0);
-
-    const geomLow = new PlaneGeometry(
-      config.TILE_SIZE,
-      config.TILE_SIZE,
-      (config.BLADES_PER_SIDE - 1) * 3,
-      config.BLADES_PER_SIDE - 1,
-    );
-    geomLow.rotateX(-Math.PI / 2);
-    geomLow.translate(0, 0.1, 0);
-
-    const materialHigh = new MeshBasicNodeMaterial({ color: "green" });
-    const materialMedium = new MeshBasicNodeMaterial({ color: "orange" });
-    const materialLow = new MeshBasicNodeMaterial({ color: "red" });
-    const lod = new LOD();
-    const meshHigh = new Mesh(geomHigh, materialHigh);
-    const meshMedium = new Mesh(geomHMid, materialMedium);
-    const meshLow = new Mesh(geomLow, materialLow);
-    lod.addLevel(meshHigh, 0);
-    lod.addLevel(meshMedium, 50);
-    lod.addLevel(meshLow, 75);
-    return lod;
   }
 
   private createGeometry(nSegments: number) {
@@ -225,48 +186,48 @@ export default class NewGrass {
     const meshHigh = new InstancedMesh(geometries[0], material, config.COUNT);
     meshHigh.boundingSphere = config.BOUNDING_SPHERE;
     meshHigh.onBeforeRender = (_, __, ___, ____, material: GrassMaterial) => {
-      material.colorNode = color(0x00ff00);
+      material.colorNode = color("green");
     };
     lod.addLevel(meshHigh, 0);
     const meshMid = new InstancedMesh(geometries[1], material, config.COUNT);
     meshMid.boundingSphere = config.BOUNDING_SPHERE;
     meshMid.onBeforeRender = (_, __, ___, ____, material: GrassMaterial) => {
-      material.colorNode = color(0xffbf00);
+      material.colorNode = color("orange");
     };
-    lod.addLevel(meshMid, 75);
+    lod.addLevel(meshMid, 50);
     const meshLow = new InstancedMesh(geometries[2], material, config.COUNT);
     meshLow.boundingSphere = config.BOUNDING_SPHERE;
     meshLow.onBeforeRender = (_, __, ___, ____, material: GrassMaterial) => {
-      material.colorNode = color(0xff0000);
+      material.colorNode = color("red");
     };
     lod.addLevel(meshLow, 100);
-    // set bounding sphere to cover the whole tile
     return lod;
   }
 }
 
-class GrassMaterial extends MeshBasicNodeMaterial {
-  private _uniforms = {
-    uTime: uniform(0),
-    uSegments: uniform(3),
-    uBladeWidth: uniform(config.BLADE_WIDTH),
-    uBladeHeight: uniform(config.BLADE_HEIGHT),
-    uTileSize: uniform(config.TILE_SIZE),
-    uHalfTileSize: uniform(config.TILE_HALF_SIZE),
-  };
+const createUniforms = () => ({
+  uSegments: uniform(3),
+  uBladeWidth: uniform(config.BLADE_WIDTH),
+  uBladeHeight: uniform(config.BLADE_HEIGHT),
+  uWindStrength: uniform(0.6),
+});
 
+const uniforms = createUniforms();
+
+class GrassMaterial extends MeshBasicNodeMaterial {
   private buffer: ReturnType<typeof instancedArray>;
 
   constructor() {
     super();
-    const { ssbo, update } = createSsbo(config.COUNT);
+    const { ssbo, update } = createSsbo();
     this.buffer = ssbo;
-    eventsManager.on("update", ({ clock }) => {
-      this._uniforms.uTime.value = clock.getElapsedTime();
-    });
-    eventsManager.on("update-throttle-4x", () => {
+    eventsManager.on("update", () => {
       rendererManager.renderer.computeAsync(update);
     });
+
+    // eventsManager.on("update-throttle-4x", () => {
+    //   rendererManager.renderer.computeAsync(update);
+    // });
 
     this.create();
   }
@@ -277,9 +238,9 @@ class GrassMaterial extends MeshBasicNodeMaterial {
 
   private computeBaseVertexPosition = Fn(() => {
     // aliases
-    const segs = this._uniforms.uSegments;
-    const bW = this._uniforms.uBladeWidth;
-    const bH = this._uniforms.uBladeHeight;
+    const segs = uniforms.uSegments;
+    const bW = uniforms.uBladeWidth;
+    const bH = uniforms.uBladeHeight;
 
     // quads = (n-1)/2, rows = quads+1, tipIx = 2*rows
     const quads = div(sub(segs, int(1)), int(2));
@@ -317,92 +278,130 @@ class GrassMaterial extends MeshBasicNodeMaterial {
 
   private create() {
     this.precision = "lowp";
+    this.side = DoubleSide;
     const data = this.buffer.element(instanceIndex);
 
     // color
     this.colorNode = this.computeDiffuse();
 
-    // assign to node pipeline
+    // position + rotation
+    const offsetX = tslUtils.unpackUnits(
+      data.x,
+      0,
+      12,
+      -config.TILE_HALF_SIZE,
+      config.TILE_HALF_SIZE,
+    );
+    const offsetZ = tslUtils.unpackUnits(
+      data.x,
+      12,
+      12,
+      -config.TILE_HALF_SIZE,
+      config.TILE_HALF_SIZE,
+    );
     const localPos = this.computeBaseVertexPosition();
-    // const offsetX = tslUtils.unpackUnits(
-    //   data.x,
-    //   0,
-    //   12,
-    //   -config.TILE_HALF_SIZE,
-    //   config.TILE_HALF_SIZE,
-    // );
-    // const offsetZ = tslUtils.unpackUnits(
-    //   data.x,
-    //   0,
-    //   12,
-    //   -config.TILE_HALF_SIZE,
-    //   config.TILE_HALF_SIZE,
-    // );
-    this.positionNode = localPos.add(vec3(data.x, 0, data.y));
+    const yaw = tslUtils.unpackAngle(data.y, 0, 8);
+    let lean = tslUtils.unpackAngle(data.y, 8, 8);
+    lean = lean.mul(localPos.y);
+    const rotatedPos = rotate(localPos, vec3(lean, yaw, lean));
+    const offsetPos = rotatedPos.add(vec3(offsetX, 0, offsetZ));
+    this.positionNode = offsetPos;
+
+    // alpha
+    const alphaUv = tslUtils.computeMapUvByPosition(positionWorld.xz);
+    const alpha = texture(assetManager.terrainTypeMap, alphaUv).g;
+    const threshold = step(0.25, alpha);
+    this.alphaTest = 0.5;
+    this.opacityNode = alpha.mul(threshold);
   }
 }
 
-const createSsbo = (n: number) => {
-  const ssbo = instancedArray(n, "vec4");
+const createSsbo = () => {
+  const ssbo = instancedArray(config.COUNT, "vec4");
   ssbo.setPBO(true);
 
   const init = Fn(() => {
     const data = ssbo.element(instanceIndex);
-    // Position XZ
-    const row = floor(float(instanceIndex).div(config.BLADES_PER_SIDE));
-    const col = float(instanceIndex).mod(config.BLADES_PER_SIDE);
 
-    const randX = hash(instanceIndex.add(4321));
-    const randZ = hash(instanceIndex.add(1234));
+    // grid constants
+    const N = float(config.BLADES_PER_SIDE); // blades per side
+    const size = float(config.TILE_SIZE); // tile size
+    const cell = size.div(N); // cell size (spacing)
 
-    const offsetX = col
-      .mul(config.SPACING)
-      .sub(config.TILE_HALF_SIZE)
-      .add(randX.mul(config.SPACING * 0.5));
-    const offsetZ = row
-      .mul(config.SPACING)
-      .sub(config.TILE_HALF_SIZE)
-      .add(randZ.mul(config.SPACING * 0.5));
+    // instance -> row/col
+    const row = floor(float(instanceIndex).div(N)); // 0..N-1
+    const col = mod(float(instanceIndex), N); // 0..N-1
 
-    const _uv = vec3(offsetX, 0, offsetZ)
+    const j = 0.75; // fraction of half-cell
+    const jx = hash(instanceIndex.mul(73))
+      .mul(2)
+      .sub(1)
+      .mul(cell.mul(0.5).mul(j));
+    const jz = hash(instanceIndex.mul(137))
+      .mul(2)
+      .sub(1)
+      .mul(cell.mul(0.5).mul(j));
+    const x = col.add(0.5).mul(cell).sub(config.TILE_HALF_SIZE).add(jx);
+    const z = row.add(0.5).mul(cell).sub(config.TILE_HALF_SIZE).add(jz);
+
+    data.x = tslUtils.packUnits(
+      data.x,
+      0,
+      12,
+      x,
+      -config.TILE_HALF_SIZE,
+      config.TILE_HALF_SIZE,
+    );
+    data.x = tslUtils.packUnits(
+      data.x,
+      12,
+      12,
+      z,
+      -config.TILE_HALF_SIZE,
+      config.TILE_HALF_SIZE,
+    );
+
+    const _uv = vec3(x, 0, z)
       .xz.add(config.TILE_HALF_SIZE)
       .div(config.TILE_SIZE)
       .abs();
 
     const noise = texture(assetManager.noiseTexture, _uv);
-    const noiseX = noise.b.sub(0.5).mul(17);
-    const noiseZ = noise.b.sub(0.5).mul(13);
 
-    const x = offsetX.add(noiseX);
-    const z = offsetZ.add(noiseZ);
-    data.x = x; // X
-    data.y = z; // Z
-    // tslUtils.packUnits(
-    //   data.x,
-    //   0,
-    //   12,
-    //   x,
-    //   -config.TILE_HALF_SIZE,
-    //   config.TILE_HALF_SIZE,
-    // ); // X
-    // tslUtils.packUnits(
-    //   data.x,
-    //   0,
-    //   12,
-    //   z,
-    //   -config.TILE_HALF_SIZE,
-    //   config.TILE_HALF_SIZE,
-    // ); // Z
+    const yaw = noise.b.mul(float(Math.PI * 2));
+    data.y = tslUtils.packAngle(data.y, 0, 8, yaw);
 
-    // Yaw
-    // map noise from [0..1] to [0..2PI]
-    const yaw = noise.g.mul(Math.PI * 2);
-    // tslUtils.packAngle(data.y, 0, 6, yaw); // Yaw
-    data.z = float(0); // unused
-    data.w = float(0); // unused
-  })().compute(n);
+    data.z = float(0);
+    data.w = float(0);
+  })().compute(config.COUNT);
 
-  const update = Fn(() => {})().compute(n);
+  const update = Fn(() => {
+    const data = ssbo.element(instanceIndex);
+    const x = tslUtils.unpackUnits(
+      data.x,
+      0,
+      12,
+      -config.TILE_HALF_SIZE,
+      config.TILE_HALF_SIZE,
+    );
+    const z = tslUtils.unpackUnits(
+      data.x,
+      12,
+      12,
+      -config.TILE_HALF_SIZE,
+      config.TILE_HALF_SIZE,
+    );
+
+    const tau = float(0.35); // smoothing time constant (seconds)
+    const alpha = sub(float(1.0), exp(deltaTime.negate().div(tau))); // alpha = 1 - e^(-dt/τ)
+
+    const windUV = vec2(x, z).add(time.mul(0.25)).mul(0.5).fract();
+    const strength = texture(assetManager.noiseTexture, windUV, 2).r;
+    const prev = tslUtils.unpackAngle(data.y, 8, 8);
+    const target = strength.mul(uniforms.uWindStrength);
+    const lean = mix(prev, target, alpha);
+    data.y = tslUtils.packAngle(data.y, 8, 8, lean);
+  })().compute(config.COUNT);
 
   update.onInit(({ renderer }) => {
     renderer.computeAsync(init);

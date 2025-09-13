@@ -10,38 +10,14 @@ import {
   clamp,
   max,
   PI2,
+  round,
 } from "three/tsl";
 import { realmConfig } from "../realms/PortfolioRealm";
 
 class TSLUtils {
-  // 2^n helper (kept as a node)
   private pow2 = Fn(([n = float(0)]) => pow(float(2.0), n));
-  // nearest-integer (ties to +inf like roundf)
-  private roundf = Fn(([x = float(0)]) => floor(add(x, 0.5)));
 
-  // Zero a bit-field [offset .. offset+bits-1] inside a packed float
-  private clearBitsF32 = Fn(
-    ([packed = float(0), offset = float(0), bits = float(1)]) => {
-      const base = this.pow2(offset); // 2^offset
-      const span = this.pow2(bits); // 2^bits
-      const slot = floor(packed.div(base)); // shift right
-      const kept = sub(slot, mod(slot, span)); // clear that field
-      return kept.mul(base); // shift back
-    },
-  );
-
-  /**
-   * packF32
-   * Write 'value' into [offset,bits] of 'packed' using fixed-point (lsb,bias).
-   * Returns NEW packed float (pure).
-   *
-   * @param packed existing word (float)
-   * @param offset bit offset (0..)
-   * @param bits   field width (1..24)
-   * @param value  real value to store
-   * @param lsb    step size (value per count)
-   * @param bias   value represented by count 0
-   */
+  /** pack into [offset, bits] using fixed-point (lsb, bias) */
   packF32 = Fn(
     ([
       packed = float(0),
@@ -51,18 +27,21 @@ class TSLUtils {
       lsb = float(1),
       bias = float(0),
     ]) => {
-      const levels = sub(this.pow2(bits), 1.0); // max count
-      const q = this.roundf(sub(value, bias).div(max(lsb, 1e-20)));
-      const qClmp = clamp(q, 0.0, levels);
-      const base = this.pow2(offset);
-      return this.clearBitsF32(packed, offset, bits).add(qClmp.mul(base));
+      const levels = sub(this.pow2(bits), 1.0);
+      const qRaw = sub(value, bias).div(max(lsb, 1e-20));
+      const q = clamp(round(qRaw), 0.0, levels);
+
+      const base = this.pow2(offset); // 2^offset
+      const span = this.pow2(bits); // 2^bits
+      const slot = floor(packed.div(base));
+      const old = mod(slot, span).mul(base); // old field value * base
+
+      // remove old field, add new field
+      return packed.sub(old).add(q.mul(base));
     },
   );
 
-  /**
-   * unpackF32
-   * Read field at [offset,bits] and reconstruct a real value with (lsb,bias).
-   */
+  /** unpack from [offset, bits] with (lsb, bias) */
   unpackF32 = Fn(
     ([
       packed = float(0),
@@ -74,7 +53,7 @@ class TSLUtils {
       const base = this.pow2(offset);
       const span = this.pow2(bits);
       const slot = floor(packed.div(base));
-      const q = mod(slot, span); // integer count
+      const q = mod(slot, span);
       return q.mul(lsb).add(bias);
     },
   );
