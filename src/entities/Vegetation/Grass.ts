@@ -37,6 +37,8 @@ import {
   Discard,
   mod,
   time,
+  fract,
+  color,
 } from "three/tsl";
 import {
   MeshBasicNodeMaterial,
@@ -201,26 +203,84 @@ class GrassMaterial extends MeshBasicNodeMaterial {
     );
   })().compute(grassConfig.COUNT);
 
+  // private computeVisibility = Fn(([worldPos = vec3(0)]) => {
+  //   const clipPos = this._uniforms.uCameraMatrix.mul(vec4(worldPos, 1.0));
+
+  //   // Convert to normalized device coordinates
+  //   const ndc = clipPos.xyz.div(clipPos.w);
+
+  //   // Compute an approximate threshold for the blade's radius in NDC space.
+  //   const radiusNDC = grassConfig.BLADE_BOUNDING_SPHERE_RADIUS;
+
+  //   // Check if the sphere (centered at ndc with "radiusNDC") is at least partially within the clip volume:
+  //   const one = float(1);
+  //   const visible = step(one.negate().sub(radiusNDC), ndc.x)
+  //     .mul(step(ndc.x, one.add(radiusNDC)))
+  //     .mul(step(one.negate().sub(radiusNDC), ndc.y))
+  //     .mul(step(ndc.y, one.add(radiusNDC)))
+  //     .mul(step(0.0, ndc.z)) // Ensure it's in front of the near plane
+  //     .mul(step(ndc.z, one)); // Ensure it's inside the far plane
+
+  //   // visible will be 1 if inside, 0 if outside.
+  //   return visible;
+  // });
+
+  // returns 0/1 visibility with stochastic keep outside the frustum
+
+  // returns 0/1 visibility; inside frustum we probabilistically keep fewer blades
+  // as they get farther in depth (ndc.z). outside frustum = 0.
+
+  // returns 0/1 visibility; inside the frustum we probabilistically keep fewer
+  // blades as depth increases. Outside the frustum = culled.
+
+  // 0/1 visibility: inside frustum we keep everything within R0,
+  // then probabilistically thin to pMin by R1. Outside frustum = 0.
   private computeVisibility = Fn(([worldPos = vec3(0)]) => {
+    // ---- 1) Frustum test (unchanged) ----
     const clipPos = this._uniforms.uCameraMatrix.mul(vec4(worldPos, 1.0));
-
-    // Convert to normalized device coordinates
     const ndc = clipPos.xyz.div(clipPos.w);
-
-    // Compute an approximate threshold for the blade's radius in NDC space.
+    const one = float(1.0);
     const radiusNDC = grassConfig.BLADE_BOUNDING_SPHERE_RADIUS;
 
-    // Check if the sphere (centered at ndc with "radiusNDC") is at least partially within the clip volume:
-    const one = float(1);
-    const visible = step(one.negate().sub(radiusNDC), ndc.x)
+    const inFrustum = step(one.negate().sub(radiusNDC), ndc.x)
       .mul(step(ndc.x, one.add(radiusNDC)))
       .mul(step(one.negate().sub(radiusNDC), ndc.y))
       .mul(step(ndc.y, one.add(radiusNDC)))
-      .mul(step(0.0, ndc.z)) // Ensure it's in front of the near plane
-      .mul(step(ndc.z, one)); // Ensure it's inside the far plane
+      .mul(step(0.0, ndc.z))
+      .mul(step(ndc.z, one)); // 1 if inside, else 0
 
-    // visible will be 1 if inside, 0 if outside.
-    return visible;
+    // Early out mask
+    // (we'll still multiply by this at the end)
+    // ---- 2) World-space radial thinning (no sqrt) ----
+    const dx = worldPos.x.sub(this._uniforms.uPlayerPosition.x);
+    const dz = worldPos.z.sub(this._uniforms.uPlayerPosition.z);
+    const distSq = dx.mul(dx).add(dz.mul(dz));
+
+    // Full density inside R0; reach pMin by R1.
+    // Pick R1 near the tile half-size so you thin toward the edge.
+    const R0 = float(50.0); // meters: no thinning inside this
+    const R1 = float(max(51.0, grassConfig.TILE_HALF_SIZE)); // where thinning hits pMin
+    const R0Sq = R0.mul(R0);
+    const R1Sq = R1.mul(R1);
+    const pMin = float(0.15); // keep at least 15% far
+
+    // t = 0 inside R0, 1 at/after R1 (monotonic in distSq)
+    const t = clamp(distSq.sub(R0Sq).div(max(R1Sq.sub(R0Sq), 1e-5)), 0.0, 1.0);
+    const p = mix(1.0, pMin, t); // keep probability: 1 → pMin
+
+    // ---- 3) RNG seeded by instance + coarse world cell (updates on wrap) ----
+    const cellSize = float(max(0.5, grassConfig.SPACING * 2.0)); // tweak if needed
+    const cx = floor(worldPos.x.div(cellSize));
+    const cz = floor(worldPos.z.div(cellSize));
+    const cellHash = cx.add(cz.mul(131.0));
+    const rnd = fract(
+      sin(float(instanceIndex).mul(0.618).add(cellHash)).mul(43758.5453),
+    );
+
+    const keepInside = step(rnd, p); // 0/1 per-instance decision
+
+    // ---- 4) Final ----
+    return inFrustum.mul(keepInside); // inside&kept → 1, else 0
   });
 
   private computeBending = Fn(
@@ -517,6 +577,9 @@ class GrassMaterial extends MeshBasicNodeMaterial {
     this.opacityNode = isVisible;
     this.alphaTest = 0.5;
     this.aoNode = this.computeAO();
+    // const c1 = this.computeDiffuseColor(glowFactor, isShadow).mul(isVisible);
+    // const c2 = color("red").mul(float(1).sub(isVisible));
+    // this.colorNode = c1.add(c2);
     this.colorNode = this.computeDiffuseColor(glowFactor, isShadow);
   }
 
