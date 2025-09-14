@@ -6,8 +6,8 @@ import NewGrass from "./Grass2.0/GrassField";
 
 export default class Vegetation {
   constructor() {
-    // new Grass();
-    new NewGrass();
+    new Grass();
+    // new NewGrass();
     new WaterLilies();
     new Flowers();
     new Trees();

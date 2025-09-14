@@ -5,6 +5,7 @@ import {
   InstancedBufferGeometry,
   Matrix4,
   Mesh,
+  StaticDrawUsage,
   Vector2,
   Vector3,
 } from "three";
@@ -123,19 +124,13 @@ const defaultUniforms: Required<GrassUniforms> = {
 
 class GrassMaterial extends MeshBasicNodeMaterial {
   _uniforms: Required<GrassUniforms>;
-  private _buffer1: ReturnType<typeof instancedArray>; // holds: vec4 = (localOffset.x, localOffset.y, yaw, bending angle)
-  private _buffer2: ReturnType<typeof instancedArray>; // holds: vec4 = (current scale, original scale, alpha, glow)
-  private _buffer3: ReturnType<typeof instancedArray>; // holds: float = (shadow)
+  private _buffer: ReturnType<typeof instancedArray>; // holds: vec4 = (localOffset.x, localOffset.y, [yaw (4), bending angle (13), alpha (1), glow (6)], [current scale (8), original scale (8), shadow (1)])
 
   constructor(uniforms?: GrassUniforms) {
     super();
     this._uniforms = { ...defaultUniforms, ...uniforms };
-    this._buffer1 = instancedArray(grassConfig.COUNT, "vec4");
-    this._buffer1.setPBO(true);
-    this._buffer2 = instancedArray(grassConfig.COUNT, "vec4");
-    this._buffer2.setPBO(true);
-    this._buffer3 = instancedArray(grassConfig.COUNT, "float");
-    this._buffer3.setPBO(true);
+    this._buffer = instancedArray(grassConfig.COUNT, "vec4");
+    this._buffer.setPBO(true);
 
     this.computeUpdate.onInit(({ renderer }) => {
       renderer.computeAsync(this.computeInit);
@@ -144,7 +139,7 @@ class GrassMaterial extends MeshBasicNodeMaterial {
   }
 
   private computeInit = Fn(() => {
-    const data1 = this._buffer1.element(instanceIndex);
+    const data = this._buffer.element(instanceIndex);
 
     // Position XZ
     const row = floor(float(instanceIndex).div(grassConfig.BLADES_PER_SIDE));
@@ -171,15 +166,15 @@ class GrassMaterial extends MeshBasicNodeMaterial {
     const noiseX = noise.b.sub(0.5).mul(17);
     const noiseZ = noise.b.sub(0.5).mul(13);
 
-    data1.x = offsetX.add(noiseX);
-    data1.y = offsetZ.add(noiseZ);
+    data.x = offsetX.add(noiseX);
+    data.y = offsetZ.add(noiseZ);
 
     // Yaw
     const yawVariation = noise.b.sub(0.5).mul(float(Math.PI * 2)); // Map noise to [-PI, PI]
-    data1.z = yawVariation;
+
+    data.z = tslUtils.packUnits(data.z, 0, 4, yawVariation, -Math.PI, Math.PI);
 
     // Scale
-    const data2 = this._buffer2.element(instanceIndex);
     const scaleRange = this._uniforms.uBladeMaxScale.sub(
       this._uniforms.uBladeMinScale,
     );
@@ -187,8 +182,23 @@ class GrassMaterial extends MeshBasicNodeMaterial {
       .mul(scaleRange)
       .add(this._uniforms.uBladeMinScale);
 
-    data2.x = randomScale;
-    data2.y = randomScale;
+    data.w = tslUtils.packUnits(
+      data.w,
+      0,
+      8,
+      randomScale,
+      this._uniforms.uBladeMinScale,
+      this._uniforms.uBladeMaxScale,
+    );
+
+    data.w = tslUtils.packUnits(
+      data.w,
+      8,
+      8,
+      randomScale,
+      this._uniforms.uBladeMinScale,
+      this._uniforms.uBladeMaxScale,
+    );
   })().compute(grassConfig.COUNT);
 
   private computeVisibility = Fn(([worldPos = vec3(0)]) => {
@@ -213,15 +223,17 @@ class GrassMaterial extends MeshBasicNodeMaterial {
     return visible;
   });
 
-  private computeBending = Fn(([data1 = vec4(0), worldPos = vec3(0)]) => {
-    const windUV = worldPos.xz.add(time.mul(0.25)).mul(0.5).fract();
+  private computeBending = Fn(
+    ([prevBending = float(0), worldPos = vec3(0)]) => {
+      const windUV = worldPos.xz.add(time.mul(0.25)).mul(0.5).fract();
 
-    const windStrength = texture(assetManager.noiseTexture, windUV, 2).r;
+      const windStrength = texture(assetManager.noiseTexture, windUV, 2).r;
 
-    const targetBendAngle = windStrength.mul(this._uniforms.uWindStrength);
+      const targetBendAngle = windStrength.mul(this._uniforms.uWindStrength);
 
-    return data1.w.add(targetBendAngle.sub(data1.w).mul(0.1));
-  });
+      return prevBending.add(targetBendAngle.sub(prevBending).mul(0.1));
+    },
+  );
 
   private computeAlpha = Fn(([worldPos = vec3(0)]) => {
     const alphaUv = tslUtils.computeMapUvByPosition(worldPos.xz);
@@ -231,21 +243,25 @@ class GrassMaterial extends MeshBasicNodeMaterial {
   });
 
   private computeTrailScale = Fn(
-    ([data2 = vec4(0), isBladeSteppedOn = float(0)]) => {
-      const growScale = data2.x.add(this._uniforms.uTrailGrowthRate);
+    ([
+      originalScale = float(0),
+      currentScale = float(0),
+      isBladeSteppedOn = float(0),
+    ]) => {
+      const growScale = originalScale.add(this._uniforms.uTrailGrowthRate);
 
       const growScaleFactor = float(1).sub(isBladeSteppedOn);
       const targetScale = this._uniforms.uTrailMinScale
         .mul(isBladeSteppedOn)
         .add(growScale.mul(growScaleFactor));
 
-      return min(targetScale, data2.y);
+      return min(targetScale, currentScale);
     },
   );
 
   private computeTrailGlow = Fn(
     ([
-      data2 = vec4(0),
+      prevGlow = float(0),
       distSq = float(0),
       isBladeSteppedOn = float(0),
       isPlayerGrounded = float(0),
@@ -270,7 +286,7 @@ class GrassMaterial extends MeshBasicNodeMaterial {
         .mul(isPlayerGrounded);
 
       // If moving or glow was already active, apply glow effect
-      const isBladeAffected = max(isPlayerMoving, data2.w).mul(baseGlowFactor);
+      const isBladeAffected = max(isPlayerMoving, prevGlow).mul(baseGlowFactor);
 
       // Compute fade-in when affected, fade-out when not affected
       const fadeIn = isBladeAffected.mul(this._uniforms.uGlowFadeIn);
@@ -282,11 +298,11 @@ class GrassMaterial extends MeshBasicNodeMaterial {
       const forceFadeOut = float(1)
         .sub(isPlayerMoving)
         .mul(this._uniforms.uGlowFadeOut)
-        .mul(data2.w);
+        .mul(prevGlow);
 
       // Apply glow effect and ensure full fade-out when stationary
       return clamp(
-        data2.w.add(fadeIn).sub(fadeOut).sub(forceFadeOut),
+        prevGlow.add(fadeIn).sub(fadeOut).sub(forceFadeOut),
         0.0,
         1.0,
       );
@@ -300,29 +316,28 @@ class GrassMaterial extends MeshBasicNodeMaterial {
   });
 
   private computeUpdate = Fn(() => {
-    const data1 = this._buffer1.element(instanceIndex);
-    const data2 = this._buffer2.element(instanceIndex);
-    const data3 = this._buffer3.element(instanceIndex);
+    const data = this._buffer.element(instanceIndex);
+
     // Position
     const newOffsetX = mod(
-      data1.x.sub(this._uniforms.uDelta.x).add(grassConfig.TILE_HALF_SIZE),
+      data.x.sub(this._uniforms.uDelta.x).add(grassConfig.TILE_HALF_SIZE),
       grassConfig.TILE_SIZE,
     ).sub(grassConfig.TILE_HALF_SIZE);
 
     const newOffsetZ = mod(
-      data1.y.sub(this._uniforms.uDelta.y).add(grassConfig.TILE_HALF_SIZE),
+      data.y.sub(this._uniforms.uDelta.y).add(grassConfig.TILE_HALF_SIZE),
       grassConfig.TILE_SIZE,
     ).sub(grassConfig.TILE_HALF_SIZE);
     const pos = vec3(newOffsetX, 0, newOffsetZ);
 
-    data1.x = newOffsetX;
-    data1.y = newOffsetZ;
+    data.x = newOffsetX;
+    data.y = newOffsetZ;
 
     const worldPos = pos.add(this._uniforms.uPlayerPosition);
 
     // Visibility
     const isVisible = this.computeVisibility(worldPos);
-    data2.z = isVisible;
+    data.z = tslUtils.packFlag(data.z, 17, isVisible);
 
     // Soft culling
     If(isVisible, () => {
@@ -343,65 +358,113 @@ class GrassMaterial extends MeshBasicNodeMaterial {
       ).mul(isPlayerGrounded); // 1 if stepped on, 0 if not
 
       // Trail
-      data2.x = this.computeTrailScale(data2, isBladeSteppedOn);
+      const originalScale = tslUtils.unpackUnits(
+        data.w,
+        0,
+        8,
+        this._uniforms.uBladeMinScale,
+        this._uniforms.uBladeMaxScale,
+      );
+      const currentScale = tslUtils.unpackUnits(
+        data.w,
+        8,
+        8,
+        this._uniforms.uBladeMinScale,
+        this._uniforms.uBladeMaxScale,
+      );
+      const newScale = this.computeTrailScale(
+        originalScale,
+        currentScale,
+        isBladeSteppedOn,
+      );
+      data.w = tslUtils.packUnits(
+        data.w,
+        8,
+        8,
+        newScale,
+        this._uniforms.uBladeMinScale,
+        this._uniforms.uBladeMaxScale,
+      );
       // Alpha
-      data2.z = this.computeAlpha(worldPos);
+      const alpha = this.computeAlpha(worldPos);
+      data.z = tslUtils.packFlag(data.z, 17, alpha);
       // Wind
-      data1.w = this.computeBending(data1, worldPos);
+      const prevBending = tslUtils.unpackUnits(
+        data.z,
+        4,
+        13,
+        -Math.PI,
+        Math.PI,
+      );
+      const newBending = this.computeBending(prevBending, worldPos);
+      data.z = tslUtils.packUnits(data.z, 4, 13, newBending, -Math.PI, Math.PI);
       // Glow
-      data2.w = this.computeTrailGlow(
-        data2,
+      const prevGlow = tslUtils.unpackUnit(data.z, 18, 6);
+      const newGlow = this.computeTrailGlow(
+        prevGlow,
         distSq,
         isBladeSteppedOn,
         isPlayerGrounded,
       );
 
+      data.z = tslUtils.packUnit(data.z, 18, 6, newGlow);
+
       // Shadow
       const isShadow = this.computeShadow(worldPos);
-      data3.assign(isShadow);
+      data.w = tslUtils.packFlag(data.w, 18, isShadow);
     });
   })().compute(grassConfig.COUNT);
 
-  private computePosition = Fn(([data1 = vec4(0), data2 = vec4(0)]) => {
-    const offset = vec3(data1.x, 0, data1.y);
-    const yawAngle = data1.z;
-    const windAngle = data1.w.mul(uv().y);
-    const scale = data2.x;
-    const scaled = positionLocal.mul(vec3(1, scale, 1));
-    const rotated = rotate(scaled, vec3(windAngle, yawAngle, windAngle));
+  private computePosition = Fn(
+    ([
+      offsetX = float(0),
+      offsetZ = float(0),
+      yawAngle = float(0),
+      bendingAngle = float(0),
+      scale = float(0),
+      glowFactor = float(0),
+    ]) => {
+      const offset = vec3(offsetX, 0, offsetZ);
+      const bendAmount = bendingAngle.mul(uv().y);
+      const bentPosition = rotate(positionLocal, vec3(bendAmount, 0, 0));
+      const scaled = bentPosition.mul(vec3(1, scale, 1));
+      const rotated = rotate(scaled, vec3(0, yawAngle, 0));
 
-    const randomPhase = hash(instanceIndex).mul(6.28); // Random phase in range [0, 2π]
-    const swayAmount = sin(time.mul(5).add(data1.w).add(randomPhase)).mul(0.1);
-    const swayFactor = uv().y.mul(data2.w);
-    const swayOffset = swayAmount.mul(swayFactor);
+      const randomPhase = hash(instanceIndex).mul(6.28); // Random phase in range [0, 2π]
+      const swayAmount = sin(
+        time.mul(5).add(bendingAngle).add(randomPhase),
+      ).mul(0.1);
+      const swayFactor = uv().y.mul(glowFactor);
+      const swayOffset = swayAmount.mul(swayFactor);
 
-    const worldPosition = rotated.add(offset).add(vec3(swayOffset));
-    return worldPosition;
-  });
+      const worldPosition = rotated.add(offset).add(vec3(swayOffset));
+      return worldPosition;
+    },
+  );
 
-  private computeDiffuseColor = Fn(([data2 = vec4(0), data3 = float(1)]) => {
-    const verticalFactor = uv().y;
-    const baseToTip = mix(
-      this._uniforms.uBaseColor,
-      this._uniforms.uTipColor,
-      verticalFactor,
-    );
+  private computeDiffuseColor = Fn(
+    ([glowFactor = float(0), isShadow = float(1)]) => {
+      const verticalFactor = uv().y;
+      const baseToTip = mix(
+        this._uniforms.uBaseColor,
+        this._uniforms.uTipColor,
+        verticalFactor,
+      );
 
-    const tint = hash(instanceIndex.add(1000)).mul(0.03).add(0.985);
-    const variedColor = baseToTip.mul(tint).clamp();
+      const tint = hash(instanceIndex.add(1000)).mul(0.03).add(0.985);
+      const variedColor = baseToTip.mul(tint).clamp();
 
-    const glowFactor = data2.w;
+      const finalColor = mix(
+        variedColor,
+        this._uniforms.uGlowColor.mul(0.5),
+        glowFactor,
+      );
 
-    const finalColor = mix(
-      variedColor,
-      this._uniforms.uGlowColor.mul(0.5),
-      glowFactor,
-    );
+      const diff = mix(finalColor.mul(0.5), finalColor, isShadow);
 
-    const diff = mix(finalColor.mul(0.5), finalColor, data3);
-
-    return diff;
-  });
+      return diff;
+    },
+  );
 
   private computeAO = Fn(() => {
     const uvX = uv().x;
@@ -424,15 +487,37 @@ class GrassMaterial extends MeshBasicNodeMaterial {
   private createGrassMaterial() {
     this.precision = "lowp";
     this.side = DoubleSide;
-    const data1 = this._buffer1.element(instanceIndex);
-    const data2 = this._buffer2.element(instanceIndex);
-    const data3 = this._buffer3.element(instanceIndex);
-    Discard(data2.z.equal(0));
-    this.positionNode = this.computePosition(data1, data2);
-    this.opacityNode = data2.z;
+    const data = this._buffer.element(instanceIndex);
+
+    const offsetX = data.x;
+    const offsetZ = data.y;
+
+    const yawAngle = tslUtils.unpackUnits(data.z, 0, 4, -Math.PI, Math.PI);
+    const bendingAngle = tslUtils.unpackUnits(data.z, 4, 13, -Math.PI, Math.PI);
+    const scale = tslUtils.unpackUnits(
+      data.w,
+      8,
+      8,
+      this._uniforms.uBladeMinScale,
+      this._uniforms.uBladeMaxScale,
+    );
+    const isVisible = tslUtils.unpackFlag(data.z, 17);
+    const glowFactor = tslUtils.unpackUnit(data.z, 18, 6);
+    const isShadow = tslUtils.unpackFlag(data.w, 18);
+
+    Discard(isVisible.equal(0));
+    this.positionNode = this.computePosition(
+      offsetX,
+      offsetZ,
+      yawAngle,
+      bendingAngle,
+      scale,
+      glowFactor,
+    );
+    this.opacityNode = isVisible;
     this.alphaTest = 0.5;
     this.aoNode = this.computeAO();
-    this.colorNode = this.computeDiffuseColor(data2, data3);
+    this.colorNode = this.computeDiffuseColor(glowFactor, isShadow);
   }
 
   async updateAsync() {
@@ -559,7 +644,7 @@ export default class Grass {
       segmentHeight * 3,
     ]);
 
-    const indices = new Uint16Array([
+    const indices = new Uint8Array([
       // A-B-D, A-D-C
       0, 1, 3, 0, 3, 2,
       // C-D-F', C-F'-F
@@ -614,7 +699,9 @@ export default class Grass {
     ]);
 
     const geometry = new InstancedBufferGeometry();
-    geometry.setAttribute("position", new BufferAttribute(positions, 3));
+    const positionAttribute = new BufferAttribute(positions, 3);
+    positionAttribute.setUsage(StaticDrawUsage);
+    geometry.setAttribute("position", positionAttribute);
     geometry.setAttribute("uv", new BufferAttribute(uvs, 2));
     geometry.setIndex(new BufferAttribute(indices, 1));
     geometry.setAttribute("normal", new BufferAttribute(normals, 3));
