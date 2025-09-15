@@ -1,15 +1,15 @@
 import {
   BufferAttribute,
+  BufferGeometry,
   Color,
   DoubleSide,
-  InstancedBufferGeometry,
+  InstancedMesh,
   Matrix4,
   Mesh,
   StaticDrawUsage,
   Vector2,
   Vector3,
 } from "three";
-import { State } from "../../Game";
 import {
   Fn,
   mix,
@@ -41,10 +41,7 @@ import {
   color,
   pow,
 } from "three/tsl";
-import {
-  MeshBasicNodeMaterial,
-  // IndirectStorageBufferAttribute,
-} from "three/webgpu";
+import { MeshBasicNodeMaterial } from "three/webgpu";
 import { assetManager } from "../../systems/AssetManager";
 import { debugManager } from "../../systems/DebugManager";
 import { rendererManager } from "../../systems/RendererManager";
@@ -79,6 +76,7 @@ type GrassUniforms = {
   uBladeMaxScale?: UniformType<number>;
   // Trail
   uTrailGrowthRate?: UniformType<number>;
+  uTrailShrinkthRate?: UniformType<number>;
   uTrailMinScale?: UniformType<number>;
   uTrailRaius?: UniformType<number>;
   uTrailRaiusSquared?: UniformType<number>;
@@ -96,6 +94,12 @@ type GrassUniforms = {
   uTipColor?: UniformType<Color>;
   // Updated externally
   uDelta: UniformType<Vector2>;
+
+  uR0: UniformType<number>;
+  uR1: UniformType<number>;
+  uPMin: UniformType<number>;
+
+  uWindSpeed: UniformType<number>;
 };
 
 const defaultUniforms: Required<GrassUniforms> = {
@@ -106,6 +110,7 @@ const defaultUniforms: Required<GrassUniforms> = {
   uBladeMaxScale: uniform(1.25),
   // Trail
   uTrailGrowthRate: uniform(0.004),
+  uTrailShrinkthRate: uniform(0.01),
   uTrailMinScale: uniform(0.25),
   uTrailRaius: uniform(0.65),
   uTrailRaiusSquared: uniform(0.65 * 0.65),
@@ -123,6 +128,12 @@ const defaultUniforms: Required<GrassUniforms> = {
   uTipColor: uniform(new Color().setRGB(0.4, 0.2, 0.09)),
   // Updated externally
   uDelta: uniform(new Vector2(0, 0)),
+
+  uR0: uniform(grassConfig.TILE_HALF_SIZE * 0.25),
+  uR1: uniform(grassConfig.TILE_HALF_SIZE * 0.95),
+  uPMin: uniform(0.1),
+
+  uWindSpeed: uniform(0.25),
 };
 
 class GrassMaterial extends MeshBasicNodeMaterial {
@@ -237,12 +248,12 @@ class GrassMaterial extends MeshBasicNodeMaterial {
     const distSq = dx.mul(dx).add(dz.mul(dz));
 
     // ---- Radii & params ----
-    const R0 = float(grassConfig.TILE_HALF_SIZE * 0.25); // inner full-density radius
-    const R1 = float(grassConfig.TILE_HALF_SIZE * 1); // outer min-density radius
-    const pMin = float(0.15); // far-field keep
+    const R0Sq = this._uniforms.uR0.mul(this._uniforms.uR0);
+    const R1Sq = this._uniforms.uR1.mul(this._uniforms.uR1);
+    const pMin = float(this._uniforms.uPMin); // far-field keep
 
     // ---- Coarse cell (decorrelate across screen/world) ----
-    const cellSize = float(max(0.25, grassConfig.SPACING * 1.0));
+    const cellSize = float(max(0.15, grassConfig.SPACING * 1.0));
     const cx = floor(worldPos.x.div(cellSize));
     const cz = floor(worldPos.z.div(cellSize));
     const cellHash = this.hash12(vec2(cx, cz)); // 0..1 float
@@ -254,8 +265,8 @@ class GrassMaterial extends MeshBasicNodeMaterial {
     const j = jMix.mul(jMeters); // meters
 
     // Approximate (R + j)^2 ≈ R^2 + 2*R*j (drop j^2)
-    const R0SqJ = R0.mul(R0).add(R0.mul(j).mul(2.0));
-    const R1SqJ = R1.mul(R1).add(R1.mul(j).mul(2.0));
+    const R0SqJ = R0Sq.add(this._uniforms.uR0.mul(j).mul(2.0));
+    const R1SqJ = R1Sq.add(this._uniforms.uR1.mul(j).mul(2.0));
     const lo = min(R0SqJ, R1SqJ);
     const hi = max(R0SqJ, R1SqJ);
 
@@ -266,19 +277,28 @@ class GrassMaterial extends MeshBasicNodeMaterial {
     // ---- Probability ----
     const p = mix(1.0, pMin, t);
 
+    // Near-field boost: keep 100% within ~10 m, fade out by ~18 m
+    const keepNear = float(1.0).sub(smoothstep(R0Sq, R1Sq, distSq));
+
+    // Blend toward 1 only very close to the player (no branch)
+    const pBoosted = p.add(keepNear.mul(float(1.0).sub(p)));
+
     // ---- Deterministic RNG using instance + cell ----
     const rnd = this.hash12(
       vec2(float(instanceIndex).mul(0.618), cellHash.mul(1.37)),
     );
 
     // ---- Final keep ----
-    const keepInside = step(rnd, p); // 0/1
+    const keepInside = step(rnd, pBoosted); // 0/1
     return inFrustum.mul(keepInside); // 0/1
   });
 
   private computeBending = Fn(
     ([prevBending = float(0), worldPos = vec3(0)]) => {
-      const windUV = worldPos.xz.add(time.mul(0.25)).mul(0.5).fract();
+      const windUV = worldPos.xz
+        .add(time.mul(this._uniforms.uWindSpeed))
+        .mul(0.5)
+        .fract();
 
       const windStrength = texture(assetManager.noiseTexture, windUV, 2).r;
 
@@ -301,14 +321,14 @@ class GrassMaterial extends MeshBasicNodeMaterial {
       currentScale = float(0),
       isBladeSteppedOn = float(0),
     ]) => {
-      const growScale = originalScale.add(this._uniforms.uTrailGrowthRate);
+      const growScale = currentScale.add(this._uniforms.uTrailGrowthRate);
 
       const growScaleFactor = float(1).sub(isBladeSteppedOn);
       const targetScale = this._uniforms.uTrailMinScale
         .mul(isBladeSteppedOn)
         .add(growScale.mul(growScaleFactor));
 
-      return min(targetScale, currentScale);
+      return min(targetScale, originalScale);
     },
   );
 
@@ -479,9 +499,8 @@ class GrassMaterial extends MeshBasicNodeMaterial {
     ]) => {
       const offset = vec3(offsetX, 0, offsetZ);
       const bendAmount = bendingAngle.mul(uv().y);
-      const bentPosition = rotate(positionLocal, vec3(bendAmount, 0, 0));
-      const scaled = bentPosition.mul(vec3(1, scale, 1));
-      const rotated = rotate(scaled, vec3(0, yawAngle, 0));
+      const scaled = positionLocal.mul(vec3(1, scale, 1));
+      const rotated = rotate(scaled, vec3(bendAmount, yawAngle, bendAmount));
 
       const randomPhase = hash(instanceIndex).mul(6.28); // Random phase in range [0, 2π]
       const swayAmount = sin(
@@ -582,7 +601,6 @@ class GrassMaterial extends MeshBasicNodeMaterial {
 }
 
 export default class Grass {
-  private material: GrassMaterial;
   private grassField: Mesh;
   private uniforms = {
     ...defaultUniforms,
@@ -592,22 +610,24 @@ export default class Grass {
   };
 
   constructor() {
-    const geometry = this.createBladeGeometry();
-    geometry.instanceCount = grassConfig.COUNT;
-    // const uint32 = new Uint32Array(5);
-    // uint32[0] = geometry.index!.count;
-    // uint32[1] = grassConfig.COUNT; // instance count
-    // uint32[2] = 0;
-    // uint32[3] = 0;
-    // uint32[4] = 0;
-    // const drawBuffer = new IndirectStorageBufferAttribute(uint32, 5);
-    // geometry.setIndirect(drawBuffer);
-
-    this.material = new GrassMaterial(this.uniforms);
-    this.grassField = new Mesh(geometry, this.material);
+    const geometry = this.createGeometry(4);
+    const material = new GrassMaterial(this.uniforms);
+    this.grassField = new InstancedMesh(geometry, material, grassConfig.COUNT);
     sceneManager.scene.add(this.grassField);
 
-    eventsManager.on("update-throttle-4x", this.updateAsync.bind(this));
+    eventsManager.on("update-throttle-2x", ({ player }) => {
+      const dx = player.position.x - this.grassField.position.x;
+      const dz = player.position.z - this.grassField.position.z;
+      this.uniforms.uDelta.value.set(dx, dz);
+      this.uniforms.uPlayerPosition.value.copy(player.position);
+      this.uniforms.uCameraMatrix.value
+        .copy(sceneManager.playerCamera.projectionMatrix)
+        .multiply(sceneManager.playerCamera.matrixWorldInverse);
+
+      this.grassField.position.copy(player.position).setY(0);
+
+      material.updateAsync();
+    });
 
     this.debugGrass();
   }
@@ -636,281 +656,118 @@ export default class Grass {
       max: Math.PI / 2,
       step: 0.1,
     });
+    grassFolder.addBinding(this.uniforms.uWindSpeed, "value", {
+      label: "Wind speed",
+      min: 0,
+      max: 5,
+      step: 0.01,
+    });
+
+    grassFolder.addBinding(this.uniforms.uR0, "value", {
+      label: "Inner ring",
+      min: 0,
+      max: grassConfig.TILE_SIZE,
+      step: 0.1,
+    });
+    grassFolder.addBinding(this.uniforms.uR1, "value", {
+      label: "Outer ring",
+      min: 0,
+      max: grassConfig.TILE_SIZE,
+      step: 0.1,
+    });
+    grassFolder.addBinding(this.uniforms.uPMin, "value", {
+      label: "P Min",
+      min: 0,
+      max: 1,
+      step: 0.01,
+    });
   }
 
-  private createBladeGeometry() {
-    //    G
-    //   / \
-    //  F---F'
-    // /     \
-    // C-------D
-    // |   \   |
-    // A-------B
+  private createGeometry(nSegments: number) {
+    const segments = Math.max(1, Math.floor(nSegments)); // total vertical slices
+    const height = grassConfig.BLADE_HEIGHT;
+    const halfWidthBase = grassConfig.BLADE_WIDTH * 0.5;
 
-    const halfWidth = grassConfig.BLADE_WIDTH / 2;
-    const quarterWidth = halfWidth / 2;
-    const segmentHeight = grassConfig.BLADE_HEIGHT / 4;
+    // We have `segments` rows of (L,R) vertices, then a single tip vertex.
+    const rowCount = segments; // #pair-rows
+    const vertexCount = rowCount * 2 + 1; // 2 per row + tip
+    const quadCount = Math.max(0, rowCount - 1); // quads between consecutive rows
+    const indexCount = quadCount * 6 + 3; // 6 per quad + 3 for tip
 
-    const positions = new Float32Array([
-      // A, B
-      -halfWidth,
-      0,
-      0,
-      halfWidth,
-      0,
-      0,
-      // C, D
-      -quarterWidth * 1.25,
-      segmentHeight * 1,
-      0,
-      quarterWidth * 1.25,
-      segmentHeight * 1,
-      0,
-      // F, F'
-      -quarterWidth * 0.75,
-      segmentHeight * 2,
-      0,
-      quarterWidth * 0.75,
-      segmentHeight * 2,
-      0,
-      // G (tip)
-      0,
-      segmentHeight * 3,
-      0,
-    ]);
+    const positions = new Float32Array(vertexCount * 3);
+    const uvs = new Float32Array(vertexCount * 2);
+    const indices = new Uint8Array(indexCount);
 
-    const uvs = new Float32Array([
-      // A, B
-      0,
-      0,
-      1,
-      0,
-      // C, D
-      0.25,
-      segmentHeight * 1,
-      0.75,
-      segmentHeight * 1,
-      // F, F'
-      0.375,
-      segmentHeight * 2,
-      0.625,
-      segmentHeight * 2,
-      // G
-      0.5,
-      segmentHeight * 3,
-    ]);
+    // simple taper: ~linear → narrower toward tip; tweak as you like
+    const taper = (t: number) => halfWidthBase * (1.0 - 0.7 * t); // t in [0..1]
 
-    const indices = new Uint8Array([
-      // A-B-D, A-D-C
-      0, 1, 3, 0, 3, 2,
-      // C-D-F', C-F'-F
-      2, 3, 5, 2, 5, 4,
-      // F-F'-G
-      4, 5, 6,
-    ]);
+    // build rows
+    let idx = 0; // write cursor for indices
+    for (let row = 0; row < rowCount; row++) {
+      const v = row / segments; // normalized height [0..(segments-1)/segments]
+      const y = v * height;
+      const halfWidth = taper(v);
 
-    // Angles per segment
-    const angle1 = (25 * Math.PI) / 180;
-    const angle2 = (15 * Math.PI) / 180;
-    const angle3 = (8 * Math.PI) / 180;
+      const left = row * 2;
+      const right = left + 1;
 
-    const cos1 = Math.cos(angle1);
-    const sin1 = Math.sin(angle1);
+      // positions
+      positions[3 * left + 0] = -halfWidth;
+      positions[3 * left + 1] = y;
+      positions[3 * left + 2] = 0;
 
-    const cos2 = Math.cos(angle2);
-    const sin2 = Math.sin(angle2);
+      positions[3 * right + 0] = halfWidth;
+      positions[3 * right + 1] = y;
+      positions[3 * right + 2] = 0;
 
-    const cos3 = Math.cos(angle3);
-    const sin3 = Math.sin(angle3);
+      // uvs (L=0, R=1; V along height)
+      uvs[2 * left + 0] = 0.0;
+      uvs[2 * left + 1] = v;
+      uvs[2 * right + 0] = 1.0;
+      uvs[2 * right + 1] = v;
 
-    const normals = new Float32Array([
-      // A
-      -cos1,
-      sin1,
-      0,
-      // B
-      cos1,
-      sin1,
-      0,
-      // C
-      -cos2,
-      sin2,
-      0,
-      // D
-      cos2,
-      sin2,
-      0,
-      // F
-      -cos3,
-      sin3,
-      0,
-      // F'
-      cos3,
-      sin3,
-      0,
-      // G (tip)
-      0.0,
-      1.0,
-      0,
-    ]);
+      // make a quad with the previous row (except for the very first row)
+      if (row > 0) {
+        const prevLeft = (row - 1) * 2;
+        const prevRight = prevLeft + 1;
 
-    const geometry = new InstancedBufferGeometry();
-    const positionAttribute = new BufferAttribute(positions, 3);
-    positionAttribute.setUsage(StaticDrawUsage);
-    geometry.setAttribute("position", positionAttribute);
-    geometry.setAttribute("uv", new BufferAttribute(uvs, 2));
-    geometry.setIndex(new BufferAttribute(indices, 1));
-    geometry.setAttribute("normal", new BufferAttribute(normals, 3));
+        // (prevL, prevR, currR) and (prevL, currR, currL)
+        indices[idx++] = prevLeft;
+        indices[idx++] = prevRight;
+        indices[idx++] = right;
 
-    return geometry;
-  }
+        indices[idx++] = prevLeft;
+        indices[idx++] = right;
+        indices[idx++] = left;
+      }
+    }
 
-  // private createBladeGeometryLow() {
-  //   const halfWidth = grassConfig.BLADE_WIDTH / 2;
-  //   const height = grassConfig.BLADE_HEIGHT;
+    // tip vertex at full height
+    const tip = rowCount * 2;
+    positions[3 * tip + 0] = 0;
+    positions[3 * tip + 1] = height;
+    positions[3 * tip + 2] = 0;
+    uvs[2 * tip + 0] = 0.5;
+    uvs[2 * tip + 1] = 1.0;
 
-  //   const positions = new Float32Array([
-  //     -halfWidth,
-  //     0,
-  //     0, // A
-  //     halfWidth,
-  //     0,
-  //     0, // B
-  //     0,
-  //     height,
-  //     0, // C
-  //   ]);
+    // connect last row to tip (single triangle)
+    const lastLeft = (rowCount - 1) * 2;
+    const lastRight = lastLeft + 1;
+    indices[idx++] = lastLeft;
+    indices[idx++] = lastRight;
+    indices[idx++] = tip;
 
-  //   const uvs = new Float32Array([
-  //     0,
-  //     0, // A
-  //     1,
-  //     0, // B
-  //     0.5,
-  //     1, // C
-  //   ]);
-
-  //   const angleDeg1 = 25;
-  //   const angleRad1 = (angleDeg1 * Math.PI) / 180;
-  //   const cosTheta1 = Math.cos(angleRad1);
-  //   const sinTheta1 = Math.sin(angleRad1);
-
-  //   const normals = new Float32Array([
-  //     -cosTheta1,
-  //     sinTheta1,
-  //     0, // A
-  //     cosTheta1,
-  //     sinTheta1,
-  //     0, // B
-  //     0.0,
-  //     1.0,
-  //     0, // C (Tip remains straight)
-  //   ]);
-
-  //   const indices = new Uint16Array([0, 1, 2]);
-
-  //   const geometry = new InstancedBufferGeometry();
-  //   geometry.setAttribute("position", new BufferAttribute(positions, 3));
-  //   geometry.setAttribute("uv", new BufferAttribute(uvs, 2));
-  //   geometry.setAttribute("normal", new BufferAttribute(normals, 3));
-  //   geometry.setIndex(new BufferAttribute(indices, 1));
-  //   return geometry;
-  // }
-
-  // private createBladeGeometry() {
-  //   //    E
-  //   //   /  \
-  //   //  C----D
-  //   // |  \   |
-  //   // A------B
-  //   const halfWidth = grassConfig.BLADE_WIDTH / 2;
-  //   const quarterWidth = halfWidth / 2;
-  //   const segmentHeight = grassConfig.BLADE_HEIGHT / 2;
-  //   const positions = new Float32Array([
-  //     -halfWidth,
-  //     0,
-  //     0, // A
-  //     halfWidth,
-  //     0,
-  //     0, // B
-  //     -quarterWidth,
-  //     segmentHeight * 1,
-  //     0, // C
-  //     quarterWidth,
-  //     segmentHeight * 1,
-  //     0, // D
-  //     0,
-  //     segmentHeight * 2,
-  //     0, // E
-  //   ]);
-  //   const uvs = new Float32Array([
-  //     0,
-  //     0, // A
-  //     1,
-  //     0, // B
-  //     0.25,
-  //     segmentHeight * 1, // C
-  //     0.75,
-  //     segmentHeight * 1, // D
-  //     0.5,
-  //     segmentHeight * 2, // E
-  //   ]);
-
-  //   const indices = new Uint16Array([
-  //     // A-B-D A-D-C
-  //     0, 1, 3, 0, 3, 2,
-  //     // C-D-E
-  //     2, 3, 4,
-  //   ]);
-
-  //   const angleDeg1 = 25;
-  //   const angleRad1 = (angleDeg1 * Math.PI) / 180;
-  //   const cosTheta1 = Math.cos(angleRad1);
-  //   const sinTheta1 = Math.sin(angleRad1);
-
-  //   const angleDeg2 = 15;
-  //   const angleRad2 = (angleDeg2 * Math.PI) / 180;
-  //   const cosTheta2 = Math.cos(angleRad2);
-  //   const sinTheta2 = Math.sin(angleRad2);
-
-  //   const normals = new Float32Array([
-  //     -cosTheta1,
-  //     sinTheta1,
-  //     0, // A
-  //     cosTheta1,
-  //     sinTheta1,
-  //     0, // B
-  //     -cosTheta2,
-  //     sinTheta2,
-  //     0, // C
-  //     cosTheta2,
-  //     sinTheta2,
-  //     0, // D
-  //     0.0,
-  //     1.0,
-  //     0, // E (Tip remains straight)
-  //   ]);
-
-  //   const geometry = new InstancedBufferGeometry();
-  //   geometry.setAttribute("position", new BufferAttribute(positions, 3));
-  //   geometry.setAttribute("uv", new BufferAttribute(uvs, 2));
-  //   geometry.setIndex(new BufferAttribute(indices, 1));
-  //   geometry.setAttribute("normal", new BufferAttribute(normals, 3));
-  //   return geometry;
-  // }
-
-  private async updateAsync(state: State) {
-    const { player } = state;
-    const dx = player.position.x - this.grassField.position.x;
-    const dz = player.position.z - this.grassField.position.z;
-    this.uniforms.uDelta.value.set(dx, dz);
-    this.uniforms.uPlayerPosition.value.copy(player.position);
-    this.uniforms.uCameraMatrix.value
-      .copy(sceneManager.playerCamera.projectionMatrix)
-      .multiply(sceneManager.playerCamera.matrixWorldInverse);
-
-    this.grassField.position.copy(player.position).setY(0);
-
-    this.material.updateAsync();
+    // assemble geometry
+    const geom = new BufferGeometry();
+    geom.setAttribute(
+      "position",
+      new BufferAttribute(positions, 3).setUsage(StaticDrawUsage),
+    );
+    geom.setAttribute(
+      "uv",
+      new BufferAttribute(uvs, 2).setUsage(StaticDrawUsage),
+    );
+    geom.setIndex(new BufferAttribute(indices, 1).setUsage(StaticDrawUsage));
+    return geom;
   }
 }
