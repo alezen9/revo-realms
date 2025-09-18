@@ -5,13 +5,19 @@ import { sceneManager } from "./systems/SceneManager";
 import { physicsManager } from "./systems/PhysicsManager";
 import { rendererManager } from "./systems/RendererManager";
 import { eventsManager } from "./systems/EventsManager";
+import { debounce } from "lodash-es";
 
 export type State = {
   clock: Clock;
   player: Player;
 };
 
-type Sizes = { width: number; height: number; dpr: number; aspect: number };
+export type Sizes = {
+  width: number;
+  height: number;
+  dpr: number;
+  aspect: number;
+};
 
 export default class Game {
   private player: Player;
@@ -34,13 +40,7 @@ export default class Game {
 
   private onResize() {
     const sizes = this.getSizes();
-    // Update camera
-    sceneManager.playerCamera.aspect = sizes.aspect;
-    sceneManager.playerCamera.updateProjectionMatrix();
-
-    // Update renderer
-    rendererManager.renderer.setSize(sizes.width, sizes.height);
-    rendererManager.renderer.setPixelRatio(sizes.dpr);
+    eventsManager.emit("resize", sizes);
   }
 
   async startLoop() {
@@ -60,9 +60,9 @@ export default class Game {
     };
 
     // On resize
-    const resizeObserver = new ResizeObserver(() => {
-      this.onResize();
-    });
+    const debouncedResize = debounce(this.onResize.bind(this), 300);
+    this.onResize();
+    const resizeObserver = new ResizeObserver(debouncedResize);
     resizeObserver.observe(document.body);
 
     rendererManager.renderer.setAnimationLoop(loop);

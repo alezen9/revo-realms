@@ -1,4 +1,11 @@
-import { DirectionalLight, HemisphereLight, Object3D, Vector3 } from "three";
+import {
+  Color,
+  DirectionalLight,
+  FogExp2,
+  HemisphereLight,
+  Object3D,
+  Vector3,
+} from "three";
 import { Fn, texture, vec2 } from "three/tsl";
 import { debugManager } from "./DebugManager";
 import { sceneManager } from "./SceneManager";
@@ -7,12 +14,27 @@ import { assetManager } from "./AssetManager";
 
 const config = {
   LIGHT_POSITION_OFFSET: new Vector3(10, 10, 10),
+  // directionalColor: new Color(0.53, 0.65, 0.79), // Dark
+  // directionalIntensity: 0.16, // Dark
+  directionalColor: new Color(0.85, 0.75, 0.7), // Light
+  directionalIntensity: 0.8, // Light
+  // hemiSkyColor: new Color(0.4, 0.45, 0.6), // Dark
+  // hemiGroundColor: new Color(0.3, 0.2, 0.2), // Dark
+  hemiSkyColor: new Color(0.6, 0.4, 0.5), // Light
+  hemiGroundColor: new Color(0.3, 0.2, 0.2), // Light
+  hemiIntensity: 0.3,
+  // fogColor: new Color(0.05, 0.12, 0.24), // Dark
+  // fogDensity: 0.009, // Dark
+  fogColor: new Color(0.29, 0.08, 0.0), // Light
+  fogDensity: 0.0046, // Light
 };
+
 class LightingSystem {
   private directionalLight: DirectionalLight;
   // private ambientLight: AmbientLight;
   private hemisphereLight: HemisphereLight;
   // emissive = new EmissiveIllumination();
+  private fog: FogExp2;
 
   constructor() {
     // this.emissive = new EmissiveIllumination();
@@ -25,6 +47,13 @@ class LightingSystem {
 
     this.hemisphereLight = this.setupHemisphereLight();
     sceneManager.scene.add(this.hemisphereLight);
+
+    this.fog = this.setupFog();
+    // sceneManager.scene.fog = this.fog;
+
+    eventsManager.on("camera-changed", () => {
+      sceneManager.scene.fog = sceneManager.scene.fog ? null : this.fog;
+    });
 
     eventsManager.on("update", ({ player }) => {
       this.directionalLight.position
@@ -44,8 +73,8 @@ class LightingSystem {
 
   private setupHemisphereLight() {
     const hemiLight = new HemisphereLight();
-    hemiLight.color.setRGB(0.6, 0.4, 0.5);
-    hemiLight.groundColor.setRGB(0.3, 0.2, 0.2);
+    hemiLight.color.copy(config.hemiSkyColor);
+    hemiLight.groundColor.copy(config.hemiGroundColor);
     hemiLight.intensity = 0.3;
     hemiLight.position.copy(config.LIGHT_POSITION_OFFSET);
     return hemiLight;
@@ -53,8 +82,8 @@ class LightingSystem {
 
   private setupDirectionalLighting() {
     const directionalLight = new DirectionalLight();
-    directionalLight.intensity = 0.8;
-    directionalLight.color.setRGB(0.85, 0.75, 0.7);
+    directionalLight.intensity = config.directionalIntensity;
+    directionalLight.color.copy(config.directionalColor);
     directionalLight.position.copy(config.LIGHT_POSITION_OFFSET);
 
     directionalLight.target = new Object3D();
@@ -76,6 +105,11 @@ class LightingSystem {
     directionalLight.shadow.bias = -0.001;
 
     return directionalLight;
+  }
+
+  private setupFog() {
+    const fog = new FogExp2(config.fogColor, config.fogDensity);
+    return fog;
   }
 
   getTerrainShadowFactor = Fn(([mapUv = vec2(0)]) => {
@@ -104,6 +138,17 @@ class LightingSystem {
       min: 0,
       max: 5,
       label: "Directional intensity",
+    });
+    lightFolder.addBinding(this.fog, "color", {
+      label: "Fog Color",
+      view: "color",
+      color: { type: "float" },
+    });
+    lightFolder.addBinding(this.fog, "density", {
+      label: "Fog Density",
+      min: 0,
+      max: 0.025,
+      step: 0.0001,
     });
 
     // lightFolder.addBinding(this.ambientLight, "color", {

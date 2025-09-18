@@ -217,10 +217,6 @@ class FlowerMaterial extends SpriteNodeMaterial {
     const sway = sin(timer.add(rand1.mul(100))).mul(0.05);
     this.positionNode = data1.xyz.add(vec3(sway, 0, sway));
 
-    // Opacity
-    this.opacityNode = data1.w;
-    this.alphaTest = 0.15;
-
     // Size
     this.scaleNode = rand1.mul(0.2).add(0.3);
 
@@ -231,7 +227,11 @@ class FlowerMaterial extends SpriteNodeMaterial {
     const baseUv = uv().mul(0.5);
     const flowerUv = baseUv.add(vec2(u, v));
     const flower = texture(assetManager.flowerAtlas, flowerUv);
-    this.colorNode = vec4(flower.rgb.mul(0.5), flower.a);
+    this.colorNode = flower;
+
+    // Opacity
+    this.opacityNode = data1.w;
+    this.alphaTest = 0.15;
   }
 
   async updateAsync() {

@@ -4,9 +4,10 @@ import MonitoringManager from "./MonitoringManager";
 import PostprocessingManager from "./PostprocessingManager";
 import { debugManager } from "./DebugManager";
 import { sceneManager } from "./SceneManager";
+import { eventsManager } from "./EventsManager";
 
-const ENABLE_MONITORING = true;
-const ENABLE_DEBUGGING = true;
+const ENABLE_MONITORING = false;
+const ENABLE_DEBUGGING = false;
 
 class RendererManager {
   renderer: WebGPURenderer;
@@ -42,6 +43,11 @@ class RendererManager {
     this.renderer = renderer;
     this.monitoringManager = new MonitoringManager(this.IS_MONITORING_ENABLED);
     debugManager.setVisibility(this.IS_DEBUGGING_ENABLED);
+
+    eventsManager.on("resize", (sizes) => {
+      renderer.setSize(sizes.width, sizes.height);
+      renderer.setPixelRatio(sizes.dpr);
+    });
   }
 
   async init() {

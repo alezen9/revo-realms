@@ -37,9 +37,6 @@ import {
   Discard,
   mod,
   time,
-  fract,
-  color,
-  pow,
 } from "three/tsl";
 import { MeshBasicNodeMaterial } from "three/webgpu";
 import { assetManager } from "../../systems/AssetManager";
@@ -47,7 +44,6 @@ import { debugManager } from "../../systems/DebugManager";
 import { rendererManager } from "../../systems/RendererManager";
 import { sceneManager } from "../../systems/SceneManager";
 import { eventsManager } from "../../systems/EventsManager";
-import { UniformType } from "../../types";
 import { tslUtils } from "../../utils/TSLUtils";
 
 const getConfig = () => {
@@ -68,41 +64,7 @@ const getConfig = () => {
 };
 const grassConfig = getConfig();
 
-type GrassUniforms = {
-  uPlayerPosition?: UniformType<Vector3>;
-  uCameraMatrix?: UniformType<Matrix4>;
-  // Scale
-  uBladeMinScale?: UniformType<number>;
-  uBladeMaxScale?: UniformType<number>;
-  // Trail
-  uTrailGrowthRate?: UniformType<number>;
-  uTrailShrinkthRate?: UniformType<number>;
-  uTrailMinScale?: UniformType<number>;
-  uTrailRaius?: UniformType<number>;
-  uTrailRaiusSquared?: UniformType<number>;
-  // Glow
-  uGlowRadius?: UniformType<number>;
-  uGlowRadiusSquared?: UniformType<number>;
-  uGlowFadeIn?: UniformType<number>;
-  uGlowFadeOut?: UniformType<number>;
-  uGlowColor?: UniformType<Color>;
-  // Bending
-  uBladeMaxBendAngle?: UniformType<number>;
-  uWindStrength?: UniformType<number>;
-  // Color
-  uBaseColor?: UniformType<Color>;
-  uTipColor?: UniformType<Color>;
-  // Updated externally
-  uDelta: UniformType<Vector2>;
-
-  uR0: UniformType<number>;
-  uR1: UniformType<number>;
-  uPMin: UniformType<number>;
-
-  uWindSpeed: UniformType<number>;
-};
-
-const defaultUniforms: Required<GrassUniforms> = {
+const uniforms = {
   uPlayerPosition: uniform(new Vector3(0, 0, 0)),
   uCameraMatrix: uniform(new Matrix4()),
   // Scale
@@ -110,7 +72,6 @@ const defaultUniforms: Required<GrassUniforms> = {
   uBladeMaxScale: uniform(1.25),
   // Trail
   uTrailGrowthRate: uniform(0.004),
-  uTrailShrinkthRate: uniform(0.01),
   uTrailMinScale: uniform(0.25),
   uTrailRaius: uniform(0.65),
   uTrailRaiusSquared: uniform(0.65 * 0.65),
@@ -119,41 +80,135 @@ const defaultUniforms: Required<GrassUniforms> = {
   uGlowRadiusSquared: uniform(4),
   uGlowFadeIn: uniform(0.05),
   uGlowFadeOut: uniform(0.01),
-  uGlowColor: uniform(new Color().setRGB(0.55, 0.21, 0.05)),
+  uGlowColor: uniform(new Color().setRGB(0.39, 0.14, 0.02)),
   // Bending
   uBladeMaxBendAngle: uniform(Math.PI * 0.15),
   uWindStrength: uniform(0.6),
   // Color
-  uBaseColor: uniform(new Color().setRGB(0.07, 0.07, 0)),
-  uTipColor: uniform(new Color().setRGB(0.4, 0.2, 0.09)),
+  uBaseColor: uniform(new Color().setRGB(0.07, 0.07, 0)), // Light
+  uTipColor: uniform(new Color().setRGB(0.23, 0.11, 0.05)), // Light
+  // uBaseColor: uniform(new Color().setRGB(0.0, 0.01, 0.01)), // Dark
+  // uTipColor: uniform(new Color().setRGB(0.0, 0.11, 0.06)), // Dark
   // Updated externally
   uDelta: uniform(new Vector2(0, 0)),
+  uGlowMul: uniform(1),
 
-  uR0: uniform(grassConfig.TILE_HALF_SIZE * 0.25),
-  uR1: uniform(grassConfig.TILE_HALF_SIZE * 0.95),
-  uPMin: uniform(0.1),
+  // uR0: uniform(grassConfig.TILE_HALF_SIZE * 0.25),
+  // uR1: uniform(grassConfig.TILE_HALF_SIZE * 0.95),
+  // uPMin: uniform(0.1),
 
   uWindSpeed: uniform(0.25),
 };
 
-class GrassMaterial extends MeshBasicNodeMaterial {
-  _uniforms: Required<GrassUniforms>;
-  private _buffer: ReturnType<typeof instancedArray>; // holds: vec4 = (localOffset.x, localOffset.y, [yaw (4), bending angle (13), alpha (1), glow (6)], [current scale (8), original scale (8), shadow (1)])
+class GrassSsbo {
+  // x -> offsetX (0 unused)
+  // y -> offsetZ (0 unused)
+  // z -> 0/12 yaw - 12/12 bend (0 unused)
+  // w -> 0/8 current scale - 8/8 original scale - 16/1 shadow - 17/1 visibility - 18/4 glow factor (0 unused)
+  private buffer = instancedArray(grassConfig.COUNT, "vec4");
 
-  constructor(uniforms?: GrassUniforms) {
-    super();
-    this._uniforms = { ...defaultUniforms, ...uniforms };
-    this._buffer = instancedArray(grassConfig.COUNT, "vec4");
-    this._buffer.setPBO(true);
-
+  constructor() {
+    this.buffer.setPBO(true);
     this.computeUpdate.onInit(({ renderer }) => {
       renderer.computeAsync(this.computeInit);
     });
-    this.createGrassMaterial();
   }
 
+  get computeBuffer() {
+    return this.buffer;
+  }
+
+  getYaw = Fn(([data = vec4(0)]) => {
+    return tslUtils.unpackUnits(data.z, 0, 12, -Math.PI, Math.PI);
+  });
+
+  getBend = Fn(([data = vec4(0)]) => {
+    return tslUtils.unpackUnits(data.z, 12, 12, -Math.PI, Math.PI);
+  });
+
+  getScale = Fn(([data = vec4(0)]) => {
+    return tslUtils.unpackUnits(
+      data.w,
+      0,
+      8,
+      uniforms.uBladeMinScale,
+      uniforms.uBladeMaxScale,
+    );
+  });
+
+  getOriginalScale = Fn(([data = vec4(0)]) => {
+    return tslUtils.unpackUnits(
+      data.w,
+      8,
+      8,
+      uniforms.uBladeMinScale,
+      uniforms.uBladeMaxScale,
+    );
+  });
+
+  getShadow = Fn(([data = vec4(0)]) => {
+    return tslUtils.unpackFlag(data.w, 16);
+  });
+
+  getVisibility = Fn(([data = vec4(0)]) => {
+    return tslUtils.unpackFlag(data.w, 17);
+  });
+
+  getGlow = Fn(([data = vec4(0)]) => {
+    return tslUtils.unpackUnit(data.w, 18, 6);
+  });
+
+  private setYaw = Fn(([data = vec4(0), value = float(0)]) => {
+    data.z = tslUtils.packUnits(data.z, 0, 12, value, -Math.PI, Math.PI);
+    return data;
+  });
+
+  private setBend = Fn(([data = vec4(0), value = float(0)]) => {
+    data.z = tslUtils.packUnits(data.z, 12, 12, value, -Math.PI, Math.PI);
+    return data;
+  });
+
+  private setScale = Fn(([data = vec4(0), value = float(0)]) => {
+    data.w = tslUtils.packUnits(
+      data.w,
+      0,
+      8,
+      value,
+      uniforms.uBladeMinScale,
+      uniforms.uBladeMaxScale,
+    );
+    return data;
+  });
+
+  private setOriginalScale = Fn(([data = vec4(0), value = float(0)]) => {
+    data.w = tslUtils.packUnits(
+      data.w,
+      8,
+      8,
+      value,
+      uniforms.uBladeMinScale,
+      uniforms.uBladeMaxScale,
+    );
+    return data;
+  });
+
+  private setShadow = Fn(([data = vec4(0), value = float(0)]) => {
+    data.w = tslUtils.packFlag(data.w, 16, value);
+    return data;
+  });
+
+  private setVisibility = Fn(([data = vec4(0), value = float(0)]) => {
+    data.w = tslUtils.packFlag(data.w, 17, value);
+    return data;
+  });
+
+  private setGlow = Fn(([data = vec4(0), value = float(0)]) => {
+    data.w = tslUtils.packUnit(data.w, 18, 6, value);
+    return data;
+  });
+
   private computeInit = Fn(() => {
-    const data = this._buffer.element(instanceIndex);
+    const data = this.buffer.element(instanceIndex);
 
     // Position XZ
     const row = floor(float(instanceIndex).div(grassConfig.BLADES_PER_SIDE));
@@ -184,125 +239,82 @@ class GrassMaterial extends MeshBasicNodeMaterial {
     data.y = offsetZ.add(noiseZ);
 
     // Yaw
-    const yawVariation = noise.b.sub(0.5).mul(float(Math.PI * 2)); // Map noise to [-PI, PI]
-
-    data.z = tslUtils.packUnits(data.z, 0, 4, yawVariation, -Math.PI, Math.PI);
+    const yaw = noise.b.sub(0.5).mul(float(Math.PI * 2)); // Map noise to [-PI, PI]
+    data.assign(this.setYaw(data, yaw));
 
     // Scale
-    const scaleRange = this._uniforms.uBladeMaxScale.sub(
-      this._uniforms.uBladeMinScale,
-    );
-    const randomScale = hash(instanceIndex.add(958.32))
-      .mul(scaleRange)
-      .add(this._uniforms.uBladeMinScale);
+    const scaleRange = uniforms.uBladeMaxScale.sub(uniforms.uBladeMinScale);
+    const randomScale = noise.r.mul(scaleRange).add(uniforms.uBladeMinScale);
 
-    data.w = tslUtils.packUnits(
-      data.w,
-      0,
-      8,
-      randomScale,
-      this._uniforms.uBladeMinScale,
-      this._uniforms.uBladeMaxScale,
-    );
-
-    data.w = tslUtils.packUnits(
-      data.w,
-      8,
-      8,
-      randomScale,
-      this._uniforms.uBladeMinScale,
-      this._uniforms.uBladeMaxScale,
-    );
+    data.assign(this.setScale(data, randomScale));
+    data.assign(this.setOriginalScale(data, randomScale));
   })().compute(grassConfig.COUNT);
 
-  // Cheap 1D and 2D hashes (Inigo Quilez style)
-  private hash12 = Fn(([p = vec2(0)]) => {
-    const p3 = fract(vec3(p.x, p.y, p.x).mul(0.1031));
-    const n = p3.dot(p3.yzx.add(33.33)); // float
-    const p3b = p3.add(n); // broadcast add
-    const v = p3b.x.add(p3b.y); // float
-    return fract(v.mul(p3b.z)); // float in [0,1)
-  });
+  // private computeVisibility = Fn(([worldPos = vec3(0)]) => {
+  //   // frustum
+  //   const clipPos = uniforms.uCameraMatrix.mul(vec4(worldPos, 1.0));
+  //   const ndc = clipPos.xyz.div(clipPos.w);
+  //   const one = float(1.0);
+  //   const rNDC = grassConfig.BLADE_BOUNDING_SPHERE_RADIUS;
+  //   const inFrustum = step(one.negate().sub(rNDC), ndc.x)
+  //     .mul(step(ndc.x, one.add(rNDC)))
+  //     .mul(step(one.negate().sub(rNDC), ndc.y))
+  //     .mul(step(ndc.y, one.add(rNDC)))
+  //     .mul(step(0.0, ndc.z))
+  //     .mul(step(ndc.z, one));
 
-  private hash11 = Fn(([x = float(0)]) => {
-    // just hash12 on a made-up 2D from x
-    return this.hash12(vec2(x, x.mul(0.5).add(11.1)));
-  });
+  //   // world-space radial thinning (no sqrt)
+  //   const dx = worldPos.x.sub(uniforms.uPlayerPosition.x);
+  //   const dz = worldPos.z.sub(uniforms.uPlayerPosition.z);
+  //   const distSq = dx.mul(dx).add(dz.mul(dz));
+
+  //   const R0 = uniforms.uR0,
+  //     R1 = uniforms.uR1,
+  //     pMin = uniforms.uPMin;
+  //   const R0Sq = R0.mul(R0),
+  //     R1Sq = R1.mul(R1);
+
+  //   // 0 inside R0, 1 at/after R1
+  //   const t = clamp(distSq.sub(R0Sq).div(max(R1Sq.sub(R0Sq), 1e-5)), 0.0, 1.0);
+
+  //   // keep probability from 1 → pMin
+  //   const p = mix(1.0, pMin, t);
+
+  //   // deterministic RNG per blade (stable under wrap)
+  //   const rnd = hash(float(instanceIndex).mul(0.73));
+
+  //   const keep = step(rnd, p);
+  //   return inFrustum.mul(keep);
+  // });
 
   private computeVisibility = Fn(([worldPos = vec3(0)]) => {
-    // ---- Frustum ----
-    const clipPos = this._uniforms.uCameraMatrix.mul(vec4(worldPos, 1.0));
+    const clipPos = uniforms.uCameraMatrix.mul(vec4(worldPos, 1.0));
+    // Convert to normalized device coordinates
     const ndc = clipPos.xyz.div(clipPos.w);
-    const one = float(1.0);
-    const rNDC = grassConfig.BLADE_BOUNDING_SPHERE_RADIUS;
-    const inFrustum = step(one.negate().sub(rNDC), ndc.x)
-      .mul(step(ndc.x, one.add(rNDC)))
-      .mul(step(one.negate().sub(rNDC), ndc.y))
-      .mul(step(ndc.y, one.add(rNDC)))
-      .mul(step(0.0, ndc.z))
-      .mul(step(ndc.z, one));
-
-    // ---- World distance^2 from player ----
-    const dx = worldPos.x.sub(this._uniforms.uPlayerPosition.x);
-    const dz = worldPos.z.sub(this._uniforms.uPlayerPosition.z);
-    const distSq = dx.mul(dx).add(dz.mul(dz));
-
-    // ---- Radii & params ----
-    const R0Sq = this._uniforms.uR0.mul(this._uniforms.uR0);
-    const R1Sq = this._uniforms.uR1.mul(this._uniforms.uR1);
-    const pMin = float(this._uniforms.uPMin); // far-field keep
-
-    // ---- Coarse cell (decorrelate across screen/world) ----
-    const cellSize = float(max(0.15, grassConfig.SPACING * 1.0));
-    const cx = floor(worldPos.x.div(cellSize));
-    const cz = floor(worldPos.z.div(cellSize));
-    const cellHash = this.hash12(vec2(cx, cz)); // 0..1 float
-
-    // ---- Per-instance jitter (meters), mixed with cellHash ----
-    const jMeters = float(2.0);
-    const jInst = this.hash11(float(instanceIndex)).mul(2.0).sub(1.0); // -1..1
-    const jMix = jInst.mul(0.7).add(cellHash.mul(0.3)); // -1..1
-    const j = jMix.mul(jMeters); // meters
-
-    // Approximate (R + j)^2 ≈ R^2 + 2*R*j (drop j^2)
-    const R0SqJ = R0Sq.add(this._uniforms.uR0.mul(j).mul(2.0));
-    const R1SqJ = R1Sq.add(this._uniforms.uR1.mul(j).mul(2.0));
-    const lo = min(R0SqJ, R1SqJ);
-    const hi = max(R0SqJ, R1SqJ);
-
-    // ---- Gentle ramp: linear then cubic ease (no reassignment) ----
-    const tLin = clamp(distSq.sub(lo).div(max(hi.sub(lo), 1e-5)), 0.0, 1.0);
-    const t = tLin.mul(tLin).mul(tLin); // cubic ease-in
-
-    // ---- Probability ----
-    const p = mix(1.0, pMin, t);
-
-    // Near-field boost: keep 100% within ~10 m, fade out by ~18 m
-    const keepNear = float(1.0).sub(smoothstep(R0Sq, R1Sq, distSq));
-
-    // Blend toward 1 only very close to the player (no branch)
-    const pBoosted = p.add(keepNear.mul(float(1.0).sub(p)));
-
-    // ---- Deterministic RNG using instance + cell ----
-    const rnd = this.hash12(
-      vec2(float(instanceIndex).mul(0.618), cellHash.mul(1.37)),
-    );
-
-    // ---- Final keep ----
-    const keepInside = step(rnd, pBoosted); // 0/1
-    return inFrustum.mul(keepInside); // 0/1
+    // Compute an approximate threshold for the blade's radius in NDC space.
+    const radiusNDC = grassConfig.BLADE_BOUNDING_SPHERE_RADIUS;
+    // Check if the sphere (centered at ndc with "radiusNDC") is at least partially within the clip volume:
+    const one = float(1);
+    const visible = step(one.negate().sub(radiusNDC), ndc.x)
+      .mul(step(ndc.x, one.add(radiusNDC)))
+      .mul(step(one.negate().sub(radiusNDC), ndc.y))
+      .mul(step(ndc.y, one.add(radiusNDC)))
+      .mul(step(0.0, ndc.z)) // Ensure it's in front of the near plane
+      .mul(step(ndc.z, one)); // Ensure it's inside the far plane
+    // visible will be 1 if inside, 0 if outside.
+    return visible;
   });
 
   private computeBending = Fn(
     ([prevBending = float(0), worldPos = vec3(0)]) => {
       const windUV = worldPos.xz
-        .add(time.mul(this._uniforms.uWindSpeed))
+        .add(time.mul(uniforms.uWindSpeed))
         .mul(0.5)
         .fract();
 
       const windStrength = texture(assetManager.noiseTexture, windUV, 2).r;
 
-      const targetBendAngle = windStrength.mul(this._uniforms.uWindStrength);
+      const targetBendAngle = windStrength.mul(uniforms.uWindStrength);
 
       return prevBending.add(targetBendAngle.sub(prevBending).mul(0.1));
     },
@@ -321,10 +333,10 @@ class GrassMaterial extends MeshBasicNodeMaterial {
       currentScale = float(0),
       isBladeSteppedOn = float(0),
     ]) => {
-      const growScale = currentScale.add(this._uniforms.uTrailGrowthRate);
+      const growScale = currentScale.add(uniforms.uTrailGrowthRate);
 
       const growScaleFactor = float(1).sub(isBladeSteppedOn);
-      const targetScale = this._uniforms.uTrailMinScale
+      const targetScale = uniforms.uTrailMinScale
         .mul(isBladeSteppedOn)
         .add(growScale.mul(growScaleFactor));
 
@@ -340,39 +352,30 @@ class GrassMaterial extends MeshBasicNodeMaterial {
       isPlayerGrounded = float(0),
     ]) => {
       const glowRadiusFactor = smoothstep(
-        this._uniforms.uGlowRadiusSquared, // Outer radius (low intensity)
+        uniforms.uGlowRadiusSquared, // Outer radius (low intensity)
         float(0), // Inner radius (high intensity)
         distSq, // Distance squared to player
       );
-
       // Check if the player is moving (prevents constant glow when stationary)
       const precision = 100.0;
-      const absDeltaX = floor(abs(this._uniforms.uDelta.x).mul(precision));
-      const absDeltaZ = floor(abs(this._uniforms.uDelta.y).mul(precision));
-
+      const absDeltaX = floor(abs(uniforms.uDelta.x).mul(precision));
+      const absDeltaZ = floor(abs(uniforms.uDelta.y).mul(precision));
       // Step function correctly returns 1 if sum > 0, else 0
       const isPlayerMoving = step(1.0, absDeltaX.add(absDeltaZ));
-
       // Base glow factor (only applies if within radius, not squished, and player grounded)
       const baseGlowFactor = glowRadiusFactor
         .mul(float(1).sub(isBladeSteppedOn))
         .mul(isPlayerGrounded);
-
       // If moving or glow was already active, apply glow effect
       const isBladeAffected = max(isPlayerMoving, prevGlow).mul(baseGlowFactor);
-
       // Compute fade-in when affected, fade-out when not affected
-      const fadeIn = isBladeAffected.mul(this._uniforms.uGlowFadeIn);
-      const fadeOut = float(1)
-        .sub(isBladeAffected)
-        .mul(this._uniforms.uGlowFadeOut);
-
+      const fadeIn = isBladeAffected.mul(uniforms.uGlowFadeIn);
+      const fadeOut = float(1).sub(isBladeAffected).mul(uniforms.uGlowFadeOut);
       // Force fade-out when **fully stationary**
       const forceFadeOut = float(1)
         .sub(isPlayerMoving)
-        .mul(this._uniforms.uGlowFadeOut)
+        .mul(uniforms.uGlowFadeOut)
         .mul(prevGlow);
-
       // Apply glow effect and ensure full fade-out when stationary
       return clamp(
         prevGlow.add(fadeIn).sub(fadeOut).sub(forceFadeOut),
@@ -388,17 +391,17 @@ class GrassMaterial extends MeshBasicNodeMaterial {
     return step(0.65, shadowAo.r);
   });
 
-  private computeUpdate = Fn(() => {
-    const data = this._buffer.element(instanceIndex);
+  computeUpdate = Fn(() => {
+    const data = this.buffer.element(instanceIndex);
 
     // Position
     const newOffsetX = mod(
-      data.x.sub(this._uniforms.uDelta.x).add(grassConfig.TILE_HALF_SIZE),
+      data.x.sub(uniforms.uDelta.x).add(grassConfig.TILE_HALF_SIZE),
       grassConfig.TILE_SIZE,
     ).sub(grassConfig.TILE_HALF_SIZE);
 
     const newOffsetZ = mod(
-      data.y.sub(this._uniforms.uDelta.y).add(grassConfig.TILE_HALF_SIZE),
+      data.y.sub(uniforms.uDelta.y).add(grassConfig.TILE_HALF_SIZE),
       grassConfig.TILE_SIZE,
     ).sub(grassConfig.TILE_HALF_SIZE);
     const pos = vec3(newOffsetX, 0, newOffsetZ);
@@ -406,73 +409,50 @@ class GrassMaterial extends MeshBasicNodeMaterial {
     data.x = newOffsetX;
     data.y = newOffsetZ;
 
-    const worldPos = pos.add(this._uniforms.uPlayerPosition);
+    const worldPos = pos.add(uniforms.uPlayerPosition);
 
     // Visibility
     const isVisible = this.computeVisibility(worldPos);
-    data.z = tslUtils.packFlag(data.z, 17, isVisible);
+    data.assign(this.setVisibility(data, isVisible));
 
     // Soft culling
     If(isVisible, () => {
       // Compute distance to player
-      const playerPos = vec2(this._uniforms.uDelta.x, this._uniforms.uDelta.y);
+      const playerPos = vec2(uniforms.uDelta.x, uniforms.uDelta.y);
       const diff = pos.xz.sub(playerPos);
       const distSq = diff.dot(diff);
 
       // Check if the player is on the ground
       const isPlayerGrounded = step(
         0.1,
-        float(1).sub(this._uniforms.uPlayerPosition.y),
+        float(1).sub(uniforms.uPlayerPosition.y),
       ); // 1 if grounded, 0 if airborne
 
-      const isBladeSteppedOn = step(
-        distSq,
-        this._uniforms.uTrailRaiusSquared,
-      ).mul(isPlayerGrounded); // 1 if stepped on, 0 if not
+      const isBladeSteppedOn = step(distSq, uniforms.uTrailRaiusSquared).mul(
+        isPlayerGrounded,
+      ); // 1 if stepped on, 0 if not
 
       // Trail
-      const originalScale = tslUtils.unpackUnits(
-        data.w,
-        0,
-        8,
-        this._uniforms.uBladeMinScale,
-        this._uniforms.uBladeMaxScale,
-      );
-      const currentScale = tslUtils.unpackUnits(
-        data.w,
-        8,
-        8,
-        this._uniforms.uBladeMinScale,
-        this._uniforms.uBladeMaxScale,
-      );
+      const currentScale = this.getScale(data);
+      const originalScale = this.getOriginalScale(data);
       const newScale = this.computeTrailScale(
         originalScale,
         currentScale,
         isBladeSteppedOn,
       );
-      data.w = tslUtils.packUnits(
-        data.w,
-        8,
-        8,
-        newScale,
-        this._uniforms.uBladeMinScale,
-        this._uniforms.uBladeMaxScale,
-      );
+      data.assign(this.setScale(data, newScale));
+
       // Alpha
       const alpha = this.computeAlpha(worldPos);
-      data.z = tslUtils.packFlag(data.z, 17, alpha);
+      data.assign(this.setVisibility(data, alpha));
+
       // Wind
-      const prevBending = tslUtils.unpackUnits(
-        data.z,
-        4,
-        13,
-        -Math.PI,
-        Math.PI,
-      );
+      const prevBending = this.getBend(data);
       const newBending = this.computeBending(prevBending, worldPos);
-      data.z = tslUtils.packUnits(data.z, 4, 13, newBending, -Math.PI, Math.PI);
+      data.assign(this.setBend(data, newBending));
+
       // Glow
-      const prevGlow = tslUtils.unpackUnit(data.z, 18, 6);
+      const prevGlow = this.getGlow(data);
       const newGlow = this.computeTrailGlow(
         prevGlow,
         distSq,
@@ -480,13 +460,22 @@ class GrassMaterial extends MeshBasicNodeMaterial {
         isPlayerGrounded,
       );
 
-      data.z = tslUtils.packUnit(data.z, 18, 6, newGlow);
+      data.assign(this.setGlow(data, newGlow));
 
       // Shadow
       const isShadow = this.computeShadow(worldPos);
-      data.w = tslUtils.packFlag(data.w, 18, isShadow);
+      data.assign(this.setShadow(data, isShadow));
     });
   })().compute(grassConfig.COUNT);
+}
+
+class GrassMaterial extends MeshBasicNodeMaterial {
+  private ssbo: GrassSsbo;
+  constructor(ssbo: GrassSsbo) {
+    super();
+    this.ssbo = ssbo;
+    this.createGrassMaterial();
+  }
 
   private computePosition = Fn(
     ([
@@ -499,16 +488,15 @@ class GrassMaterial extends MeshBasicNodeMaterial {
     ]) => {
       const offset = vec3(offsetX, 0, offsetZ);
       const bendAmount = bendingAngle.mul(uv().y);
-      const scaled = positionLocal.mul(vec3(1, scale, 1));
-      const rotated = rotate(scaled, vec3(bendAmount, yawAngle, bendAmount));
-
+      const bentPosition = rotate(positionLocal, vec3(bendAmount, 0, 0));
+      const scaled = bentPosition.mul(vec3(1, scale, 1));
+      const rotated = rotate(scaled, vec3(0, yawAngle, 0));
       const randomPhase = hash(instanceIndex).mul(6.28); // Random phase in range [0, 2π]
       const swayAmount = sin(
         time.mul(5).add(bendingAngle).add(randomPhase),
       ).mul(0.1);
       const swayFactor = uv().y.mul(glowFactor);
       const swayOffset = swayAmount.mul(swayFactor);
-
       const worldPosition = rotated.add(offset).add(vec3(swayOffset));
       return worldPosition;
     },
@@ -518,8 +506,8 @@ class GrassMaterial extends MeshBasicNodeMaterial {
     ([glowFactor = float(0), isShadow = float(1)]) => {
       const verticalFactor = uv().y;
       const baseToTip = mix(
-        this._uniforms.uBaseColor,
-        this._uniforms.uTipColor,
+        uniforms.uBaseColor,
+        uniforms.uTipColor,
         verticalFactor,
       );
 
@@ -528,7 +516,7 @@ class GrassMaterial extends MeshBasicNodeMaterial {
 
       const finalColor = mix(
         variedColor,
-        this._uniforms.uGlowColor.mul(0.5),
+        uniforms.uGlowColor.mul(uniforms.uGlowMul),
         glowFactor,
       );
 
@@ -538,44 +526,37 @@ class GrassMaterial extends MeshBasicNodeMaterial {
     },
   );
 
-  private computeAO = Fn(() => {
-    const uvX = uv().x;
-    const uvY = uv().y;
+  // private computeAO = Fn(() => {
+  //   const uvX = uv().x;
+  //   const uvY = uv().y;
 
-    const instanceBias = hash(instanceIndex).mul(0.5).sub(0.05);
-    const sideFactor = smoothstep(0, 1.2, abs(uvX.add(instanceBias)));
+  //   const instanceBias = hash(instanceIndex).mul(0.5).sub(0.05);
+  //   const sideFactor = smoothstep(0, 1.2, abs(uvX.add(instanceBias)));
 
-    const baseFactor = smoothstep(0, 0.6, uvY.negate());
+  //   const baseFactor = smoothstep(0, 0.6, uvY.negate());
 
-    const midFactor = smoothstep(0.3, 0.6, uvY).mul(0.1);
+  //   const midFactor = smoothstep(0.3, 0.6, uvY).mul(0.1);
 
-    const combined = baseFactor.add(sideFactor).add(midFactor).mul(0.75);
+  //   const combined = baseFactor.add(sideFactor).add(midFactor).mul(0.75);
 
-    const ao = float(1.0).sub(combined);
+  //   const ao = float(1.0).sub(combined);
 
-    return ao.mul(1.2);
-  });
+  //   return ao.mul(1.2);
+  // });
 
   private createGrassMaterial() {
     this.precision = "lowp";
     this.side = DoubleSide;
-    const data = this._buffer.element(instanceIndex);
+    const data = this.ssbo.computeBuffer.element(instanceIndex);
 
     const offsetX = data.x;
     const offsetZ = data.y;
-
-    const yawAngle = tslUtils.unpackUnits(data.z, 0, 4, -Math.PI, Math.PI);
-    const bendingAngle = tslUtils.unpackUnits(data.z, 4, 13, -Math.PI, Math.PI);
-    const scale = tslUtils.unpackUnits(
-      data.w,
-      8,
-      8,
-      this._uniforms.uBladeMinScale,
-      this._uniforms.uBladeMaxScale,
-    );
-    const isVisible = tslUtils.unpackFlag(data.z, 17);
-    const glowFactor = tslUtils.unpackUnit(data.z, 18, 6);
-    const isShadow = tslUtils.unpackFlag(data.w, 18);
+    const yawAngle = this.ssbo.getYaw(data);
+    const bendingAngle = this.ssbo.getBend(data);
+    const scale = this.ssbo.getScale(data);
+    const isVisible = this.ssbo.getVisibility(data);
+    const glowFactor = this.ssbo.getGlow(data);
+    const isShadow = this.ssbo.getShadow(data);
 
     Discard(isVisible.equal(0));
     this.positionNode = this.computePosition(
@@ -588,45 +569,33 @@ class GrassMaterial extends MeshBasicNodeMaterial {
     );
     this.opacityNode = isVisible;
     this.alphaTest = 0.5;
-    this.aoNode = this.computeAO();
-    // const c1 = this.computeDiffuseColor(glowFactor, isShadow).mul(isVisible);
-    // const c2 = color("red").mul(float(1).sub(isVisible));
-    // this.colorNode = c1.add(c2);
+    // this.aoNode = this.computeAO();
     this.colorNode = this.computeDiffuseColor(glowFactor, isShadow);
-  }
-
-  async updateAsync() {
-    rendererManager.renderer.computeAsync(this.computeUpdate);
   }
 }
 
 export default class Grass {
   private grassField: Mesh;
-  private uniforms = {
-    ...defaultUniforms,
-    uDelta: uniform(new Vector2(0, 0)),
-    uPlayerPosition: uniform(new Vector3(0, 0, 0)),
-    uCameraMatrix: uniform(new Matrix4()),
-  };
 
   constructor() {
-    const geometry = this.createGeometry(4);
-    const material = new GrassMaterial(this.uniforms);
+    const ssbo = new GrassSsbo();
+    const geometry = this.createGeometry(3);
+    const material = new GrassMaterial(ssbo);
     this.grassField = new InstancedMesh(geometry, material, grassConfig.COUNT);
     sceneManager.scene.add(this.grassField);
 
     eventsManager.on("update-throttle-2x", ({ player }) => {
       const dx = player.position.x - this.grassField.position.x;
       const dz = player.position.z - this.grassField.position.z;
-      this.uniforms.uDelta.value.set(dx, dz);
-      this.uniforms.uPlayerPosition.value.copy(player.position);
-      this.uniforms.uCameraMatrix.value
+      uniforms.uDelta.value.set(dx, dz);
+      uniforms.uPlayerPosition.value.copy(player.position);
+      uniforms.uCameraMatrix.value
         .copy(sceneManager.playerCamera.projectionMatrix)
         .multiply(sceneManager.playerCamera.matrixWorldInverse);
 
       this.grassField.position.copy(player.position).setY(0);
 
-      material.updateAsync();
+      rendererManager.renderer.computeAsync(ssbo.computeUpdate);
     });
 
     this.debugGrass();
@@ -635,52 +604,59 @@ export default class Grass {
   private debugGrass() {
     const grassFolder = debugManager.panel.addFolder({ title: "🌱 Grass" });
     grassFolder.expanded = false;
-    grassFolder.addBinding(this.uniforms.uTipColor, "value", {
+    grassFolder.addBinding(uniforms.uTipColor, "value", {
       label: "Tip Color",
       view: "color",
       color: { type: "float" },
     });
-    grassFolder.addBinding(this.uniforms.uBaseColor, "value", {
+    grassFolder.addBinding(uniforms.uBaseColor, "value", {
       label: "Base Color",
       view: "color",
       color: { type: "float" },
     });
-    grassFolder.addBinding(this.uniforms.uGlowColor, "value", {
+    grassFolder.addBinding(uniforms.uGlowColor, "value", {
       label: "Glow Color",
       view: "color",
       color: { type: "float" },
     });
-    grassFolder.addBinding(this.uniforms.uWindStrength, "value", {
+    grassFolder.addBinding(uniforms.uWindStrength, "value", {
       label: "Wind strength",
       min: 0,
       max: Math.PI / 2,
       step: 0.1,
     });
-    grassFolder.addBinding(this.uniforms.uWindSpeed, "value", {
+    grassFolder.addBinding(uniforms.uWindSpeed, "value", {
       label: "Wind speed",
       min: 0,
       max: 5,
       step: 0.01,
     });
 
-    grassFolder.addBinding(this.uniforms.uR0, "value", {
-      label: "Inner ring",
-      min: 0,
-      max: grassConfig.TILE_SIZE,
-      step: 0.1,
-    });
-    grassFolder.addBinding(this.uniforms.uR1, "value", {
-      label: "Outer ring",
-      min: 0,
-      max: grassConfig.TILE_SIZE,
-      step: 0.1,
-    });
-    grassFolder.addBinding(this.uniforms.uPMin, "value", {
-      label: "P Min",
-      min: 0,
-      max: 1,
+    grassFolder.addBinding(uniforms.uGlowMul, "value", {
+      label: "Glow bloom",
+      min: 1,
+      max: 20,
       step: 0.01,
     });
+
+    // grassFolder.addBinding(uniforms.uR0, "value", {
+    //   label: "Inner ring",
+    //   min: 0,
+    //   max: grassConfig.TILE_SIZE,
+    //   step: 0.1,
+    // });
+    // grassFolder.addBinding(uniforms.uR1, "value", {
+    //   label: "Outer ring",
+    //   min: 0,
+    //   max: grassConfig.TILE_SIZE,
+    //   step: 0.1,
+    // });
+    // grassFolder.addBinding(uniforms.uPMin, "value", {
+    //   label: "P Min",
+    //   min: 0,
+    //   max: 1,
+    //   step: 0.01,
+    // });
   }
 
   private createGeometry(nSegments: number) {
@@ -759,15 +735,18 @@ export default class Grass {
 
     // assemble geometry
     const geom = new BufferGeometry();
-    geom.setAttribute(
-      "position",
-      new BufferAttribute(positions, 3).setUsage(StaticDrawUsage),
-    );
-    geom.setAttribute(
-      "uv",
-      new BufferAttribute(uvs, 2).setUsage(StaticDrawUsage),
-    );
-    geom.setIndex(new BufferAttribute(indices, 1).setUsage(StaticDrawUsage));
+
+    const posAttribute = new BufferAttribute(positions, 3);
+    posAttribute.setUsage(StaticDrawUsage);
+    geom.setAttribute("position", posAttribute);
+
+    const uvAttribute = new BufferAttribute(uvs, 2);
+    uvAttribute.setUsage(StaticDrawUsage);
+    geom.setAttribute("uv", uvAttribute);
+
+    const indexAttribute = new BufferAttribute(indices, 1);
+    indexAttribute.setUsage(StaticDrawUsage);
+    geom.setIndex(indexAttribute);
     return geom;
   }
 }
