@@ -6,7 +6,6 @@ import { ColliderDesc, RigidBodyDesc } from "@dimforge/rapier3d";
 import { physicsManager } from "../../systems/PhysicsManager";
 import { RevoColliderType } from "../../types";
 import { texture, uv } from "three/tsl";
-import { debugManager } from "../../systems/DebugManager";
 
 class TrunkMaterial extends MeshLambertNodeMaterial {
   constructor() {
@@ -38,11 +37,6 @@ export default class GodOfWar {
       "kratos_axe",
     ) as Mesh;
     axe.material = new AxeMaterial();
-
-    debugManager.panel.addBinding(
-      axe.material as AxeMaterial,
-      "emissiveIntensity",
-    );
 
     const trunk = assetManager.realmModel.scene.getObjectByName(
       "tree_trunk",

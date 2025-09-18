@@ -21,6 +21,7 @@ export default class Campfire {
       count: 512,
       speed: 0.65,
       radius: 0.75,
+      workGroupSize: 256,
     });
     fire.position.copy(campfire.position).setY(0.25);
 

@@ -6,8 +6,8 @@ import { debugManager } from "./DebugManager";
 import { sceneManager } from "./SceneManager";
 import { eventsManager } from "./EventsManager";
 
-const ENABLE_MONITORING = false;
-const ENABLE_DEBUGGING = false;
+const ENABLE_MONITORING = true;
+const ENABLE_DEBUGGING = true;
 
 class RendererManager {
   renderer: WebGPURenderer;

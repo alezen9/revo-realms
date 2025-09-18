@@ -42,6 +42,7 @@ type ParticleComputeFn = typeof _computeFn;
 
 type BaseParams = {
   count: number;
+  workGroupSize?: number;
 };
 
 type FirePresetParams = BaseParams & {
@@ -95,8 +96,12 @@ export default class ParticleSystem extends InstancedMesh {
 
     this.material = material;
 
-    const computeUpdate = onUpdate(this.mainBuffer).compute(params.count);
-    const computeInit = onInit?.(this.mainBuffer).compute(params.count);
+    const computeUpdate = onUpdate(this.mainBuffer).compute(params.count, [
+      params.workGroupSize ?? 1,
+    ]);
+    const computeInit = onInit?.(this.mainBuffer).compute(params.count, [
+      params.workGroupSize ?? 1,
+    ]);
     if (computeInit) {
       computeUpdate?.onInit(({ renderer }) => {
         renderer.computeAsync(computeInit);
