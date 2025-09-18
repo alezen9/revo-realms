@@ -239,6 +239,7 @@ const getFirePresetConfig = (
   const alphaScale = float(0.5).toConst();
   const alphaBlend = sample.a.mul(blendFactor).mul(alphaScale);
   material.colorNode = mix(fireColor, midDiffuse, isSpark).mul(alphaBlend);
+  material.alphaTest = 0.1;
 
   // Opacity
   material.opacityNode = data.w.mul(sample.a).mul(alphaScale);

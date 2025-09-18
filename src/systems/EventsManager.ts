@@ -1,7 +1,8 @@
 import { EventEmitter } from "tseep/lib/ee-safe";
-import { State } from "../Game";
+import { Sizes, State } from "../Game";
 
 type UpdateEvent = (state: State) => void;
+type ResizeEvent = (sizes: Sizes) => void;
 
 const throttle = [2, 4, 16, 64] as const;
 type ThrottledEvents = {
@@ -12,6 +13,7 @@ type Events = {
   update: UpdateEvent;
   "audio-ready": VoidFunction;
   "camera-changed": VoidFunction;
+  resize: ResizeEvent;
 } & ThrottledEvents;
 
 export const eventsManager = new EventEmitter<Events>();

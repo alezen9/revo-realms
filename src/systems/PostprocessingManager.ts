@@ -1,22 +1,19 @@
 import { PostProcessing, WebGPURenderer } from "three/webgpu";
-import { emissive, mrt, output, pass } from "three/tsl";
+import { pass, renderOutput } from "three/tsl";
 import { sceneManager } from "./SceneManager";
-import { smaa } from "three/examples/jsm/tsl/display/SMAANode.js";
 import { eventsManager } from "./EventsManager";
+import { bloom } from "three/addons/tsl/display/BloomNode.js";
+import { smaa } from "three/addons/tsl/display/SMAANode.js";
+import { debugManager } from "./DebugManager";
 
 export default class PostprocessingManager extends PostProcessing {
   private scenePass: ReturnType<typeof pass>;
+
   constructor(renderer: WebGPURenderer) {
     super(renderer);
     this.scenePass = pass(sceneManager.scene, sceneManager.renderCamera);
-    this.scenePass.setMRT(
-      mrt({
-        output,
-        emissive,
-      }),
-    );
 
-    const passes = this.getPasses();
+    const passes = this.makeGraph();
     this.outputNode = passes;
 
     eventsManager.on("camera-changed", () => {
@@ -25,39 +22,40 @@ export default class PostprocessingManager extends PostProcessing {
     });
   }
 
-  // IMPORTANT -> set this.outputColorTransform = false; when using this version
-  // private makeGraph() {
-  //   const colourLinear = this.scenePass.getTextureNode(); // MRT[0]
-  //   const emissiveLinear = this.scenePass.getTextureNode("emissive");
+  private makeGraph() {
+    this.outputColorTransform = false;
+    const colorHDR = this.scenePass.getTextureNode();
 
-  //   /* bloom in HDR / linear space */
-  //   const colourPlusBloom = colourLinear.add(bloom(emissiveLinear));
+    const bloomPass = bloom(colorHDR, 0.5, 0.15, 0.6);
+    bloomPass.smoothWidth.value = 0.04;
 
-  //   /* tone-map + sRGB so SMAA sees LDR */
-  //   const ldrColour = renderOutput(colourPlusBloom);
+    debugManager.panel.addBinding(bloomPass.strength, "value");
 
-  //   /* SMAA antialias on the final image */
-  //   return smaa(ldrColour);
-  // }
+    const withBloomHDR = colorHDR.add(bloomPass);
 
-  private getPasses() {
-    // antialias
-    const smaaPass = smaa(this.scenePass);
-    // const ssaa = ssaaPass(sceneManager.scene, sceneManager.renderCamera); // good looking but too expensive
-    // ssaa.sampleLevel = 3;
+    const withSmaaHDR = smaa(withBloomHDR);
 
-    // dof
-    // const scenePassColor = smaaPass.getTextureNode();
-    // const scenePassViewZ = this.scenePass.getViewZNode();
-
-    // const dofPass = dof(
-    //   scenePassColor,
-    //   scenePassViewZ,
-    //   20,
-    //   float(7.5).mul(0.00001),
-    //   0.01,
-    // );
-
-    return smaaPass;
+    return renderOutput(withSmaaHDR);
   }
+
+  // private getPasses() {
+  //   // antialias
+  //   const smaaPass = smaa(this.scenePass);
+  //   // const ssaa = ssaaPass(sceneManager.scene, sceneManager.renderCamera); // good looking but too expensive
+  //   // ssaa.sampleLevel = 3;
+
+  //   // dof
+  //   // const scenePassColor = smaaPass.getTextureNode();
+  //   // const scenePassViewZ = this.scenePass.getViewZNode();
+
+  //   // const dofPass = dof(
+  //   //   scenePassColor,
+  //   //   scenePassViewZ,
+  //   //   20,
+  //   //   float(7.5).mul(0.00001),
+  //   //   0.01,
+  //   // );
+
+  //   return smaaPass;
+  // }
 }

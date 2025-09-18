@@ -29,6 +29,11 @@ class SceneManager {
 
     // Default render camera
     this.renderCamera = camera;
+
+    eventsManager.on("resize", (sizes) => {
+      this.playerCamera.aspect = sizes.aspect;
+      this.playerCamera.updateProjectionMatrix();
+    });
   }
 
   private debugScene() {
