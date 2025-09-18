@@ -37,6 +37,7 @@ import {
   Discard,
   mod,
   time,
+  PI2,
 } from "three/tsl";
 import { MeshBasicNodeMaterial } from "three/webgpu";
 import { assetManager } from "../../systems/AssetManager";
@@ -47,10 +48,10 @@ import { eventsManager } from "../../systems/EventsManager";
 import { tslUtils } from "../../utils/TSLUtils";
 
 const getConfig = () => {
-  const BLADE_WIDTH = 0.075;
+  const BLADE_WIDTH = 0.1;
   const BLADE_HEIGHT = 1.45;
   const TILE_SIZE = 150;
-  const BLADES_PER_SIDE = 500;
+  const BLADES_PER_SIDE = 512; // power of 2
   return {
     BLADE_WIDTH,
     BLADE_HEIGHT,
@@ -60,9 +61,10 @@ const getConfig = () => {
     BLADES_PER_SIDE,
     COUNT: BLADES_PER_SIDE * BLADES_PER_SIDE,
     SPACING: TILE_SIZE / BLADES_PER_SIDE,
+    WORKGROUP_SIZE: 256,
   };
 };
-const grassConfig = getConfig();
+const config = getConfig();
 
 const uniforms = {
   uPlayerPosition: uniform(new Vector3(0, 0, 0)),
@@ -91,11 +93,11 @@ const uniforms = {
   // uTipColor: uniform(new Color().setRGB(0.0, 0.11, 0.06)), // Dark
   // Updated externally
   uDelta: uniform(new Vector2(0, 0)),
-  uGlowMul: uniform(1),
+  uGlowMul: uniform(3),
 
-  // uR0: uniform(grassConfig.TILE_HALF_SIZE * 0.25),
-  // uR1: uniform(grassConfig.TILE_HALF_SIZE * 0.95),
-  // uPMin: uniform(0.1),
+  uR0: uniform(40),
+  uR1: uniform(65),
+  uPMin: uniform(0.22),
 
   uWindSpeed: uniform(0.25),
 };
@@ -105,10 +107,10 @@ class GrassSsbo {
   // y -> offsetZ (0 unused)
   // z -> 0/12 yaw - 12/12 bend (0 unused)
   // w -> 0/8 current scale - 8/8 original scale - 16/1 shadow - 17/1 visibility - 18/4 glow factor (0 unused)
-  private buffer = instancedArray(grassConfig.COUNT, "vec4");
+  private buffer: ReturnType<typeof instancedArray>;
 
   constructor() {
-    this.buffer.setPBO(true);
+    this.buffer = instancedArray(config.COUNT, "vec4");
     this.computeUpdate.onInit(({ renderer }) => {
       renderer.computeAsync(this.computeInit);
     });
@@ -211,29 +213,29 @@ class GrassSsbo {
     const data = this.buffer.element(instanceIndex);
 
     // Position XZ
-    const row = floor(float(instanceIndex).div(grassConfig.BLADES_PER_SIDE));
-    const col = float(instanceIndex).mod(grassConfig.BLADES_PER_SIDE);
+    const row = floor(float(instanceIndex).div(config.BLADES_PER_SIDE));
+    const col = float(instanceIndex).mod(config.BLADES_PER_SIDE);
 
     const randX = hash(instanceIndex.add(4321));
     const randZ = hash(instanceIndex.add(1234));
 
     const offsetX = col
-      .mul(grassConfig.SPACING)
-      .sub(grassConfig.TILE_HALF_SIZE)
-      .add(randX.mul(grassConfig.SPACING * 0.5));
+      .mul(config.SPACING)
+      .sub(config.TILE_HALF_SIZE)
+      .add(randX.mul(config.SPACING * 0.5));
     const offsetZ = row
-      .mul(grassConfig.SPACING)
-      .sub(grassConfig.TILE_HALF_SIZE)
-      .add(randZ.mul(grassConfig.SPACING * 0.5));
+      .mul(config.SPACING)
+      .sub(config.TILE_HALF_SIZE)
+      .add(randZ.mul(config.SPACING * 0.5));
 
     const _uv = vec3(offsetX, 0, offsetZ)
-      .xz.add(grassConfig.TILE_HALF_SIZE)
-      .div(grassConfig.TILE_SIZE)
+      .xz.add(config.TILE_HALF_SIZE)
+      .div(config.TILE_SIZE)
       .abs();
 
     const noise = texture(assetManager.noiseTexture, _uv);
-    const noiseX = noise.b.sub(0.5).mul(17);
-    const noiseZ = noise.b.sub(0.5).mul(13);
+    const noiseX = noise.r.sub(0.5).mul(17).fract();
+    const noiseZ = noise.b.sub(0.5).mul(13).fract();
 
     data.x = offsetX.add(noiseX);
     data.y = offsetZ.add(noiseZ);
@@ -248,51 +250,39 @@ class GrassSsbo {
 
     data.assign(this.setScale(data, randomScale));
     data.assign(this.setOriginalScale(data, randomScale));
-  })().compute(grassConfig.COUNT);
+  })().compute(config.COUNT, [config.WORKGROUP_SIZE]);
 
-  // private computeVisibility = Fn(([worldPos = vec3(0)]) => {
-  //   // frustum
-  //   const clipPos = uniforms.uCameraMatrix.mul(vec4(worldPos, 1.0));
-  //   const ndc = clipPos.xyz.div(clipPos.w);
-  //   const one = float(1.0);
-  //   const rNDC = grassConfig.BLADE_BOUNDING_SPHERE_RADIUS;
-  //   const inFrustum = step(one.negate().sub(rNDC), ndc.x)
-  //     .mul(step(ndc.x, one.add(rNDC)))
-  //     .mul(step(one.negate().sub(rNDC), ndc.y))
-  //     .mul(step(ndc.y, one.add(rNDC)))
-  //     .mul(step(0.0, ndc.z))
-  //     .mul(step(ndc.z, one));
+  private computeStochasticKeep = Fn(([worldPos = vec3(0)]) => {
+    // world-space radial thinning (no sqrt)
+    const dx = worldPos.x.sub(uniforms.uPlayerPosition.x);
+    const dz = worldPos.z.sub(uniforms.uPlayerPosition.z);
+    const distSq = dx.mul(dx).add(dz.mul(dz));
 
-  //   // world-space radial thinning (no sqrt)
-  //   const dx = worldPos.x.sub(uniforms.uPlayerPosition.x);
-  //   const dz = worldPos.z.sub(uniforms.uPlayerPosition.z);
-  //   const distSq = dx.mul(dx).add(dz.mul(dz));
+    const R0 = uniforms.uR0,
+      R1 = uniforms.uR1,
+      pMin = uniforms.uPMin;
+    const R0Sq = R0.mul(R0),
+      R1Sq = R1.mul(R1);
 
-  //   const R0 = uniforms.uR0,
-  //     R1 = uniforms.uR1,
-  //     pMin = uniforms.uPMin;
-  //   const R0Sq = R0.mul(R0),
-  //     R1Sq = R1.mul(R1);
+    // 0 inside R0, 1 at/after R1
+    const t = clamp(distSq.sub(R0Sq).div(max(R1Sq.sub(R0Sq), 1e-5)), 0.0, 1.0);
 
-  //   // 0 inside R0, 1 at/after R1
-  //   const t = clamp(distSq.sub(R0Sq).div(max(R1Sq.sub(R0Sq), 1e-5)), 0.0, 1.0);
+    // keep probability from 1 → pMin
+    const p = mix(1.0, pMin, t);
 
-  //   // keep probability from 1 → pMin
-  //   const p = mix(1.0, pMin, t);
+    // deterministic RNG per blade (stable under wrap)
+    const rnd = hash(float(instanceIndex).mul(0.73));
 
-  //   // deterministic RNG per blade (stable under wrap)
-  //   const rnd = hash(float(instanceIndex).mul(0.73));
-
-  //   const keep = step(rnd, p);
-  //   return inFrustum.mul(keep);
-  // });
+    const keep = step(rnd, p);
+    return keep;
+  });
 
   private computeVisibility = Fn(([worldPos = vec3(0)]) => {
     const clipPos = uniforms.uCameraMatrix.mul(vec4(worldPos, 1.0));
     // Convert to normalized device coordinates
     const ndc = clipPos.xyz.div(clipPos.w);
     // Compute an approximate threshold for the blade's radius in NDC space.
-    const radiusNDC = grassConfig.BLADE_BOUNDING_SPHERE_RADIUS;
+    const radiusNDC = config.BLADE_BOUNDING_SPHERE_RADIUS;
     // Check if the sphere (centered at ndc with "radiusNDC") is at least partially within the clip volume:
     const one = float(1);
     const visible = step(one.negate().sub(radiusNDC), ndc.x)
@@ -324,7 +314,7 @@ class GrassSsbo {
     const alphaUv = tslUtils.computeMapUvByPosition(worldPos.xz);
     const alpha = texture(assetManager.terrainTypeMap, alphaUv).g;
     const threshold = step(0.25, alpha);
-    return alpha.mul(threshold);
+    return threshold;
   });
 
   private computeTrailScale = Fn(
@@ -396,14 +386,14 @@ class GrassSsbo {
 
     // Position
     const newOffsetX = mod(
-      data.x.sub(uniforms.uDelta.x).add(grassConfig.TILE_HALF_SIZE),
-      grassConfig.TILE_SIZE,
-    ).sub(grassConfig.TILE_HALF_SIZE);
+      data.x.sub(uniforms.uDelta.x).add(config.TILE_HALF_SIZE),
+      config.TILE_SIZE,
+    ).sub(config.TILE_HALF_SIZE);
 
     const newOffsetZ = mod(
-      data.y.sub(uniforms.uDelta.y).add(grassConfig.TILE_HALF_SIZE),
-      grassConfig.TILE_SIZE,
-    ).sub(grassConfig.TILE_HALF_SIZE);
+      data.y.sub(uniforms.uDelta.y).add(config.TILE_HALF_SIZE),
+      config.TILE_SIZE,
+    ).sub(config.TILE_HALF_SIZE);
     const pos = vec3(newOffsetX, 0, newOffsetZ);
 
     data.x = newOffsetX;
@@ -412,7 +402,8 @@ class GrassSsbo {
     const worldPos = pos.add(uniforms.uPlayerPosition);
 
     // Visibility
-    const isVisible = this.computeVisibility(worldPos);
+    const stochasticKeep = this.computeStochasticKeep(worldPos);
+    const isVisible = this.computeVisibility(worldPos).mul(stochasticKeep);
     data.assign(this.setVisibility(data, isVisible));
 
     // Soft culling
@@ -466,7 +457,7 @@ class GrassSsbo {
       const isShadow = this.computeShadow(worldPos);
       data.assign(this.setShadow(data, isShadow));
     });
-  })().compute(grassConfig.COUNT);
+  })().compute(config.COUNT, [config.WORKGROUP_SIZE]);
 }
 
 class GrassMaterial extends MeshBasicNodeMaterial {
@@ -491,7 +482,7 @@ class GrassMaterial extends MeshBasicNodeMaterial {
       const bentPosition = rotate(positionLocal, vec3(bendAmount, 0, 0));
       const scaled = bentPosition.mul(vec3(1, scale, 1));
       const rotated = rotate(scaled, vec3(0, yawAngle, 0));
-      const randomPhase = hash(instanceIndex).mul(6.28); // Random phase in range [0, 2π]
+      const randomPhase = hash(instanceIndex).mul(PI2); // Random phase in range [0, 2π]
       const swayAmount = sin(
         time.mul(5).add(bendingAngle).add(randomPhase),
       ).mul(0.1);
@@ -504,25 +495,17 @@ class GrassMaterial extends MeshBasicNodeMaterial {
 
   private computeDiffuseColor = Fn(
     ([glowFactor = float(0), isShadow = float(1)]) => {
-      const verticalFactor = uv().y;
-      const baseToTip = mix(
-        uniforms.uBaseColor,
-        uniforms.uTipColor,
-        verticalFactor,
-      );
+      const baseToTip = mix(uniforms.uBaseColor, uniforms.uTipColor, uv().y);
 
-      const tint = hash(instanceIndex.add(1000)).mul(0.03).add(0.985);
-      const variedColor = baseToTip.mul(tint).clamp();
-
-      const finalColor = mix(
-        variedColor,
+      const withGlow = mix(
+        baseToTip,
         uniforms.uGlowColor.mul(uniforms.uGlowMul),
         glowFactor,
       );
 
-      const diff = mix(finalColor.mul(0.5), finalColor, isShadow);
+      const withShadow = mix(withGlow.mul(0.5), withGlow, isShadow);
 
-      return diff;
+      return withShadow;
     },
   );
 
@@ -581,7 +564,7 @@ export default class Grass {
     const ssbo = new GrassSsbo();
     const geometry = this.createGeometry(3);
     const material = new GrassMaterial(ssbo);
-    this.grassField = new InstancedMesh(geometry, material, grassConfig.COUNT);
+    this.grassField = new InstancedMesh(geometry, material, config.COUNT);
     sceneManager.scene.add(this.grassField);
 
     eventsManager.on("update-throttle-2x", ({ player }) => {
@@ -639,30 +622,30 @@ export default class Grass {
       step: 0.01,
     });
 
-    // grassFolder.addBinding(uniforms.uR0, "value", {
-    //   label: "Inner ring",
-    //   min: 0,
-    //   max: grassConfig.TILE_SIZE,
-    //   step: 0.1,
-    // });
-    // grassFolder.addBinding(uniforms.uR1, "value", {
-    //   label: "Outer ring",
-    //   min: 0,
-    //   max: grassConfig.TILE_SIZE,
-    //   step: 0.1,
-    // });
-    // grassFolder.addBinding(uniforms.uPMin, "value", {
-    //   label: "P Min",
-    //   min: 0,
-    //   max: 1,
-    //   step: 0.01,
-    // });
+    grassFolder.addBinding(uniforms.uR0, "value", {
+      label: "Inner ring",
+      min: 0,
+      max: config.TILE_SIZE,
+      step: 0.1,
+    });
+    grassFolder.addBinding(uniforms.uR1, "value", {
+      label: "Outer ring",
+      min: 0,
+      max: config.TILE_SIZE,
+      step: 0.1,
+    });
+    grassFolder.addBinding(uniforms.uPMin, "value", {
+      label: "P Min",
+      min: 0,
+      max: 1,
+      step: 0.01,
+    });
   }
 
   private createGeometry(nSegments: number) {
     const segments = Math.max(1, Math.floor(nSegments)); // total vertical slices
-    const height = grassConfig.BLADE_HEIGHT;
-    const halfWidthBase = grassConfig.BLADE_WIDTH * 0.5;
+    const height = config.BLADE_HEIGHT;
+    const halfWidthBase = config.BLADE_WIDTH * 0.5;
 
     // We have `segments` rows of (L,R) vertices, then a single tip vertex.
     const rowCount = segments; // #pair-rows

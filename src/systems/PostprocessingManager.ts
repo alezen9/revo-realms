@@ -8,6 +8,10 @@ import { debugManager } from "./DebugManager";
 
 export default class PostprocessingManager extends PostProcessing {
   private scenePass: ReturnType<typeof pass>;
+  private debugFolder = debugManager.panel.addFolder({
+    title: "⭐️ Postprocessing",
+    expanded: false,
+  });
 
   constructor(renderer: WebGPURenderer) {
     super(renderer);
@@ -29,7 +33,9 @@ export default class PostprocessingManager extends PostProcessing {
     const bloomPass = bloom(colorHDR, 0.5, 0.15, 0.6);
     bloomPass.smoothWidth.value = 0.04;
 
-    debugManager.panel.addBinding(bloomPass.strength, "value");
+    this.debugFolder.addBinding(bloomPass.strength, "value", {
+      label: "Bloom strength",
+    });
 
     const withBloomHDR = colorHDR.add(bloomPass);
 

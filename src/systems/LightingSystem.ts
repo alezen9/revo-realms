@@ -51,9 +51,9 @@ class LightingSystem {
     this.fog = this.setupFog();
     // sceneManager.scene.fog = this.fog;
 
-    eventsManager.on("camera-changed", () => {
-      sceneManager.scene.fog = sceneManager.scene.fog ? null : this.fog;
-    });
+    // eventsManager.on("camera-changed", () => {
+    //   sceneManager.scene.fog = sceneManager.scene.fog ? null : this.fog;
+    // });
 
     eventsManager.on("update", ({ player }) => {
       this.directionalLight.position

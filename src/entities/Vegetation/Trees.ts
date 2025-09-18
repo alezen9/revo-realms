@@ -6,14 +6,17 @@ import {
   positionLocal,
   positionWorld,
   sin,
+  step,
   texture,
   time,
+  uniform,
   uv,
   vec3,
   vec4,
   vertexIndex,
 } from "three/tsl";
 import {
+  Color,
   DoubleSide,
   Group,
   InstancedMesh,
@@ -28,6 +31,7 @@ import { physicsManager } from "../../systems/PhysicsManager";
 import { sceneManager } from "../../systems/SceneManager";
 import { tslUtils } from "../../utils/TSLUtils";
 import { RevoColliderType } from "../../types";
+import { debugManager } from "../../systems/DebugManager";
 
 class BarkMaterial extends MeshLambertNodeMaterial {
   constructor() {
@@ -47,6 +51,12 @@ class BarkMaterial extends MeshLambertNodeMaterial {
   }
 }
 
+const uniforms = {
+  uPrimaryColor: uniform(new Color().setRGB(0.889, 0.095, 0)),
+  uSecondaryColor: uniform(new Color().setRGB(1, 0.162, 0.009)),
+  uMixFactor: uniform(0.5),
+};
+
 class CanopyMaterial extends MeshLambertNodeMaterial {
   constructor() {
     super();
@@ -60,26 +70,16 @@ class CanopyMaterial extends MeshLambertNodeMaterial {
 
     // Diffuse
     const diff = texture(assetManager.canopyDiffuse, uv());
-    // const summerAmbiance = mix(
-    //   vec3(0.384, 0.511, 0.011),
-    //   vec3(0.268, 0.162, 0.009),
-    //   0.5,
-    // );
-
-    // const autumnAmbiance2 = mix(
-    //   vec3(1, 0.254, 0.052),
-    //   vec3(1, 0.767, 0.004),
-    //   0.5,
-    // );
 
     const seasonalAmbience = mix(
-      vec3(0.889, 0.095, 0),
-      vec3(1, 0.162, 0.009),
-      0.5,
+      uniforms.uPrimaryColor,
+      uniforms.uSecondaryColor,
+      uniforms.uMixFactor,
     );
+
     this.colorNode = vec4(
-      mix(diff.rgb.mul(1.25), seasonalAmbience, noise.b.mul(0.4)).rgb,
-      diff.a,
+      mix(diff.rgb, seasonalAmbience, noise.b.mul(0.4)).rgb,
+      1,
     );
 
     // Normal
@@ -88,7 +88,8 @@ class CanopyMaterial extends MeshLambertNodeMaterial {
     this.normalScale = new Vector2(1, -1);
 
     // Alpha
-    this.alphaTest = 0.9;
+    this.opacityNode = step(0.5, diff.a);
+    this.alphaTest = 0.1;
 
     // Position
     const timer = time.mul(noise.r).add(vertexIndex).mul(7.5);
@@ -150,5 +151,25 @@ export default class Trees {
       physicsManager.world.createCollider(colliderDesc, rigidBody);
     });
     sceneManager.scene.add(barkInstances, canopyInstances);
+
+    this.debugTrees();
+  }
+
+  private debugTrees() {
+    const folder = debugManager.panel.addFolder({ title: "🌳 Trees" });
+    folder.expanded = false;
+    folder.addBinding(uniforms.uPrimaryColor, "value", {
+      label: "Primary Leaf Color",
+      view: "color",
+      color: { type: "float" },
+    });
+    folder.addBinding(uniforms.uSecondaryColor, "value", {
+      label: "Seconary Leaf Color",
+      view: "color",
+      color: { type: "float" },
+    });
+    folder.addBinding(uniforms.uMixFactor, "value", {
+      label: "Mix factor",
+    });
   }
 }
