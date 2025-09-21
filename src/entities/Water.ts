@@ -46,6 +46,10 @@ const uniforms = {
   uMinDist: uniform(10),
   uMaxDist: uniform(50),
   uFromSunDir: uniform(new Vector3(0, -1, 0)),
+  // uFoamColor: uniform(new Color("white")),
+  // uFoamDistance: uniform(0.125),
+  // uDepthDistance: uniform(0.75),
+  // uBeersCoefficient: uniform(0.6),
 };
 
 export default class Water {
@@ -106,11 +110,25 @@ class WaterMaterial extends MeshBasicNodeMaterial {
     folder.addBinding(uniforms.uMaxDist, "value", {
       label: "Opacity max dist",
     });
+    // folder.addBinding(uniforms.uFoamDistance, "value", {
+    //   label: "Foam distance",
+    // });
+    // folder.addBinding(uniforms.uDepthDistance, "value", {
+    //   label: "Depth distance",
+    // });
+    // folder.addBinding(uniforms.uBeersCoefficient, "value", {
+    //   label: "Beer's coefficient",
+    // });
     folder.addBinding(uniforms.uWaterColor, "value", {
       label: "Water color",
       view: "color",
       color: { type: "float" },
     });
+    // folder.addBinding(uniforms.uFoamColor, "value", {
+    //   label: "Foam color",
+    //   view: "color",
+    //   color: { type: "float" },
+    // });
   }
 
   private createMaterial() {
@@ -133,6 +151,8 @@ class WaterMaterial extends MeshBasicNodeMaterial {
     const sceneLinear = p3z.div(sceneDepth.add(p2z));
     const fragLinear = positionView.z.negate();
     const isUnderWater = step(fragLinear, sceneLinear);
+    // const fragmentDepth = sceneLinear.sub(fragLinear);
+    // const waterDepth = fragmentDepth.div(uniforms.uDepthDistance).clamp();
 
     // 2. refracted UV
     const refractedScreenUv = screenUV.add(distortion.mul(isUnderWater));
@@ -141,6 +161,14 @@ class WaterMaterial extends MeshBasicNodeMaterial {
     const depthRefr = viewportDepthTexture(refractedScreenUv, 3).r;
     const sceneLinearRefr = p3z.div(depthRefr.add(p2z));
     const isSafe = step(fragLinear, sceneLinearRefr);
+    // const fragmentDepthRefr = sceneLinearRefr.sub(fragLinear);
+    // const waterDepthRefr = fragmentDepthRefr
+    //   .div(uniforms.uDepthDistance)
+    //   .clamp();
+    // const waterDepthBeerRefr = float(1).sub(
+    //   exp(waterDepthRefr.mul(uniforms.uBeersCoefficient.negate())),
+    // );
+    // const waterDepthBeerFinal = mix(waterDepth, waterDepthBeerRefr, isSafe);
 
     // 4. reflection and fresnel
     const viewDir = normalize(cameraPosition.sub(positionWorld));
@@ -153,6 +181,8 @@ class WaterMaterial extends MeshBasicNodeMaterial {
     const fresnel = exp2(log2(float(1.0).sub(reflection)));
     const fresnelFactor = uniforms.uFresnelScale.mul(fresnel);
     const waterColor = mix(uniforms.uWaterColor, reflectedColor, fresnelFactor);
+    // const foamFactor = step(uniforms.uFoamDistance, waterDepthBeerFinal);
+    // const waterColor = mix(uniforms.uFoamColor, waterColor1, foamFactor);
 
     // 5. screen color
     const safeScreenUv = mix(screenUV, refractedScreenUv, isSafe);
