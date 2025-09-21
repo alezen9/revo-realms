@@ -1,4 +1,4 @@
-import { Color, Mesh, PlaneGeometry, Vector2, Vector3 } from "three";
+import { Color, Mesh, Vector2, Vector3 } from "three";
 import { sceneManager } from "../systems/SceneManager";
 import { MeshBasicNodeMaterial } from "three/webgpu";
 import { assetManager } from "../systems/AssetManager";
@@ -55,17 +55,10 @@ const uniforms = {
 export default class Water {
   constructor() {
     uniforms.uFromSunDir.value.copy(lighting.sunDirection);
-    const waterObject = assetManager.realmModel.scene.getObjectByName(
+    const water = assetManager.realmModel.scene.getObjectByName(
       "water",
     ) as Mesh;
-    const bb = waterObject.geometry.boundingBox!;
-    const width = Math.abs(bb.min.x) + Math.abs(bb.max.x);
-    const height = Math.abs(bb.min.z) + Math.abs(bb.max.z);
-    const geometry = new PlaneGeometry(width, height);
-    geometry.rotateX(-Math.PI / 2);
-    const material = new WaterMaterial();
-    const water = new Mesh(geometry, material);
-    water.position.copy(waterObject.position);
+    water.material = new WaterMaterial();
     water.renderOrder = 100;
 
     sceneManager.scene.add(water);
@@ -86,7 +79,7 @@ class WaterMaterial extends MeshBasicNodeMaterial {
   private debugWater() {
     const folder = debugManager.panel.addFolder({
       title: "🌊 Water",
-      expanded: true,
+      expanded: false,
     });
 
     folder.addBinding(uniforms.uSpeed, "value", {

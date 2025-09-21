@@ -5,7 +5,6 @@ import {
   DoubleSide,
   InstancedMesh,
   Matrix4,
-  Mesh,
   StaticDrawUsage,
   Vector2,
   Vector3,
@@ -509,24 +508,6 @@ class GrassMaterial extends MeshBasicNodeMaterial {
     },
   );
 
-  // private computeAO = Fn(() => {
-  //   const uvX = uv().x;
-  //   const uvY = uv().y;
-
-  //   const instanceBias = hash(instanceIndex).mul(0.5).sub(0.05);
-  //   const sideFactor = smoothstep(0, 1.2, abs(uvX.add(instanceBias)));
-
-  //   const baseFactor = smoothstep(0, 0.6, uvY.negate());
-
-  //   const midFactor = smoothstep(0.3, 0.6, uvY).mul(0.1);
-
-  //   const combined = baseFactor.add(sideFactor).add(midFactor).mul(0.75);
-
-  //   const ao = float(1.0).sub(combined);
-
-  //   return ao.mul(1.2);
-  // });
-
   private createGrassMaterial() {
     this.precision = "lowp";
     this.side = DoubleSide;
@@ -552,31 +533,28 @@ class GrassMaterial extends MeshBasicNodeMaterial {
     );
     this.opacityNode = isVisible;
     this.alphaTest = 0.5;
-    // this.aoNode = this.computeAO();
     this.colorNode = this.computeDiffuseColor(glowFactor, isShadow);
   }
 }
 
 export default class Grass {
-  private grassField: Mesh;
-
   constructor() {
     const ssbo = new GrassSsbo();
     const geometry = this.createGeometry(3);
     const material = new GrassMaterial(ssbo);
-    this.grassField = new InstancedMesh(geometry, material, config.COUNT);
-    sceneManager.scene.add(this.grassField);
+    const grass = new InstancedMesh(geometry, material, config.COUNT);
+    sceneManager.scene.add(grass);
 
     eventsManager.on("update-throttle-2x", ({ player }) => {
-      const dx = player.position.x - this.grassField.position.x;
-      const dz = player.position.z - this.grassField.position.z;
+      const dx = player.position.x - grass.position.x;
+      const dz = player.position.z - grass.position.z;
       uniforms.uDelta.value.set(dx, dz);
       uniforms.uPlayerPosition.value.copy(player.position);
       uniforms.uCameraMatrix.value
         .copy(sceneManager.playerCamera.projectionMatrix)
         .multiply(sceneManager.playerCamera.matrixWorldInverse);
 
-      this.grassField.position.copy(player.position).setY(0);
+      grass.position.copy(player.position).setY(0);
 
       rendererManager.renderer.computeAsync(ssbo.computeUpdate);
     });
@@ -585,56 +563,58 @@ export default class Grass {
   }
 
   private debugGrass() {
-    const grassFolder = debugManager.panel.addFolder({ title: "🌱 Grass" });
-    grassFolder.expanded = false;
-    grassFolder.addBinding(uniforms.uTipColor, "value", {
+    const folder = debugManager.panel.addFolder({
+      title: "🌱 Grass",
+      expanded: false,
+    });
+    folder.addBinding(uniforms.uTipColor, "value", {
       label: "Tip Color",
       view: "color",
       color: { type: "float" },
     });
-    grassFolder.addBinding(uniforms.uBaseColor, "value", {
+    folder.addBinding(uniforms.uBaseColor, "value", {
       label: "Base Color",
       view: "color",
       color: { type: "float" },
     });
-    grassFolder.addBinding(uniforms.uGlowColor, "value", {
+    folder.addBinding(uniforms.uGlowColor, "value", {
       label: "Glow Color",
       view: "color",
       color: { type: "float" },
     });
-    grassFolder.addBinding(uniforms.uWindStrength, "value", {
+    folder.addBinding(uniforms.uWindStrength, "value", {
       label: "Wind strength",
       min: 0,
       max: Math.PI / 2,
       step: 0.1,
     });
-    grassFolder.addBinding(uniforms.uWindSpeed, "value", {
+    folder.addBinding(uniforms.uWindSpeed, "value", {
       label: "Wind speed",
       min: 0,
       max: 5,
       step: 0.01,
     });
 
-    grassFolder.addBinding(uniforms.uGlowMul, "value", {
+    folder.addBinding(uniforms.uGlowMul, "value", {
       label: "Glow bloom",
       min: 1,
       max: 20,
       step: 0.01,
     });
 
-    grassFolder.addBinding(uniforms.uR0, "value", {
+    folder.addBinding(uniforms.uR0, "value", {
       label: "Inner ring",
       min: 0,
       max: config.TILE_SIZE,
       step: 0.1,
     });
-    grassFolder.addBinding(uniforms.uR1, "value", {
+    folder.addBinding(uniforms.uR1, "value", {
       label: "Outer ring",
       min: 0,
       max: config.TILE_SIZE,
       step: 0.1,
     });
-    grassFolder.addBinding(uniforms.uPMin, "value", {
+    folder.addBinding(uniforms.uPMin, "value", {
       label: "P Min",
       min: 0,
       max: 1,
@@ -656,6 +636,7 @@ export default class Grass {
     const positions = new Float32Array(vertexCount * 3);
     const uvs = new Float32Array(vertexCount * 2);
     const indices = new Uint8Array(indexCount);
+    const normals = new Float32Array(0);
 
     // simple taper: ~linear → narrower toward tip; tweak as you like
     const taper = (t: number) => halfWidthBase * (1.0 - 0.7 * t); // t in [0..1]
@@ -730,6 +711,11 @@ export default class Grass {
     const indexAttribute = new BufferAttribute(indices, 1);
     indexAttribute.setUsage(StaticDrawUsage);
     geom.setIndex(indexAttribute);
+
+    const normalAttribute = new BufferAttribute(normals, 3);
+    normalAttribute.setUsage(StaticDrawUsage);
+    geom.setAttribute("normal", normalAttribute);
+
     return geom;
   }
 }
