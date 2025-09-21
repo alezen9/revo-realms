@@ -6,8 +6,8 @@ import { debugManager } from "./DebugManager";
 import { sceneManager } from "./SceneManager";
 import { eventsManager } from "./EventsManager";
 
-const ENABLE_MONITORING = true;
-const ENABLE_DEBUGGING = true;
+const ENABLE_MONITORING = false;
+const ENABLE_DEBUGGING = false;
 
 class RendererManager {
   renderer: WebGPURenderer;
@@ -45,8 +45,13 @@ class RendererManager {
     debugManager.setVisibility(this.IS_DEBUGGING_ENABLED);
 
     eventsManager.on("resize", (sizes) => {
+      // reduce dpr to 85% if postprocessing enabled
+      const dpr =
+        sizes.dpr === 1 || this.IS_POSTPROCESSING_ENABLED
+          ? sizes.dpr
+          : sizes.dpr * 0.85;
       renderer.setSize(sizes.width, sizes.height);
-      renderer.setPixelRatio(sizes.dpr);
+      renderer.setPixelRatio(dpr);
     });
   }
 

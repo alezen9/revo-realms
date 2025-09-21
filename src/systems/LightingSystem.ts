@@ -36,6 +36,8 @@ class LightingSystem {
   // emissive = new EmissiveIllumination();
   private fog: FogExp2;
 
+  sunDirection = config.LIGHT_POSITION_OFFSET.clone().normalize().negate();
+
   constructor() {
     // this.emissive = new EmissiveIllumination();
 
