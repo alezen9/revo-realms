@@ -3,7 +3,6 @@ import { pass, renderOutput } from "three/tsl";
 import { sceneManager } from "./SceneManager";
 import { eventsManager } from "./EventsManager";
 import { bloom } from "three/addons/tsl/display/BloomNode.js";
-import { smaa } from "three/addons/tsl/display/SMAANode.js";
 import { debugManager } from "./DebugManager";
 
 export default class PostprocessingManager extends PostProcessing {
@@ -32,36 +31,20 @@ export default class PostprocessingManager extends PostProcessing {
 
     const bloomPass = bloom(colorHDR, 0.5, 0.15, 0.6);
     bloomPass.smoothWidth.value = 0.04;
+    // @ts-expect-error I know its private but looks good enough and reduces workload
+    bloomPass._nMips = 2;
 
     this.debugFolder.addBinding(bloomPass.strength, "value", {
       label: "Bloom strength",
     });
+    this.debugFolder.addBinding(bloomPass.threshold, "value", {
+      label: "Bloom threshold",
+    });
 
     const withBloomHDR = colorHDR.add(bloomPass);
 
-    const withSmaaHDR = smaa(withBloomHDR);
+    const toneMappedRender = renderOutput(withBloomHDR);
 
-    return renderOutput(withSmaaHDR);
+    return toneMappedRender;
   }
-
-  // private getPasses() {
-  //   // antialias
-  //   const smaaPass = smaa(this.scenePass);
-  //   // const ssaa = ssaaPass(sceneManager.scene, sceneManager.renderCamera); // good looking but too expensive
-  //   // ssaa.sampleLevel = 3;
-
-  //   // dof
-  //   // const scenePassColor = smaaPass.getTextureNode();
-  //   // const scenePassViewZ = this.scenePass.getViewZNode();
-
-  //   // const dofPass = dof(
-  //   //   scenePassColor,
-  //   //   scenePassViewZ,
-  //   //   20,
-  //   //   float(7.5).mul(0.00001),
-  //   //   0.01,
-  //   // );
-
-  //   return smaaPass;
-  // }
 }
