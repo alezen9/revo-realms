@@ -55,6 +55,8 @@ import campfireDiffuseUrl from "/textures/realm/campfireDiffuse.webp?url";
 import fireSpritesUrl from "/textures/realm/fireSprites.webp?url";
 // Football (Player)
 import footballDiffuseUrl from "/textures/realm/footballDiffuse.webp?url";
+// Leaf
+import leafDiffuseUrl from "/textures/realm/leafDiffuse.webp?url";
 
 import atlasesCoords from "../atlases/atlases.json";
 import { Atlases } from "../atlases/types";
@@ -110,6 +112,8 @@ class AssetManager {
   fireSprites!: Texture;
 
   footballDiffuse!: Texture;
+
+  leafDiffuse!: Texture;
 
   constructor(manager: LoadingManager) {
     // Texture
@@ -177,6 +181,7 @@ class AssetManager {
       // Football (Player) [26]
       this.textureLoader.loadAsync(footballDiffuseUrl),
       // ------ Still testing the ones below ------
+      this.textureLoader.loadAsync(leafDiffuseUrl),
     ]);
 
     // Models
@@ -255,6 +260,10 @@ class AssetManager {
     // Football (Player)
     this.footballDiffuse = res[26];
     this.footballDiffuse.colorSpace = SRGBColorSpace;
+
+    // Leaf
+    this.leafDiffuse = res[27];
+    this.leafDiffuse.colorSpace = SRGBColorSpace;
   }
 }
 

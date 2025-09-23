@@ -25,7 +25,7 @@ class AxeMaterial extends MeshLambertNodeMaterial {
     this.flatShading = false;
     this.map = assetManager.axeDiffuse;
     this.emissiveMap = assetManager.axeEmissive;
-    this.emissiveIntensity = 15;
+    this.emissiveIntensity = 35;
     this.emissive = new Color("lightblue");
   }
 }

@@ -61,6 +61,10 @@ export default class Water {
     water.material = new WaterMaterial();
     water.renderOrder = 100;
 
+    const geom = water.geometry;
+    const bsLocal = geom.boundingSphere!;
+    bsLocal.radius = bsLocal.radius * 0.75;
+
     sceneManager.scene.add(water);
 
     eventsManager.on("audio-ready", () => {

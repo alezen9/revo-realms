@@ -29,7 +29,7 @@ export default class PostprocessingManager extends PostProcessing {
     this.outputColorTransform = false;
     const colorHDR = this.scenePass.getTextureNode();
 
-    const bloomPass = bloom(colorHDR, 0.5, 0.15, 0.6);
+    const bloomPass = bloom(colorHDR, 0.25, 0.15, 1);
     bloomPass.smoothWidth.value = 0.04;
     // @ts-expect-error I know its private but looks good enough and reduces workload
     bloomPass._nMips = 2;

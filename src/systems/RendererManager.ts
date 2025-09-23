@@ -6,12 +6,13 @@ import { debugManager } from "./DebugManager";
 import { sceneManager } from "./SceneManager";
 import { eventsManager } from "./EventsManager";
 
-const ENABLE_MONITORING = false;
+const ENABLE_MONITORING = true;
 const ENABLE_DEBUGGING = false;
 
 class RendererManager {
   renderer: WebGPURenderer;
   canvas: HTMLCanvasElement;
+  private prevFrame: Promise<any> | null = null;
   private monitoringManager: MonitoringManager;
   private postprocessingManager!: PostprocessingManager;
   private readonly IS_POSTPROCESSING_ENABLED = true;
@@ -72,12 +73,25 @@ class RendererManager {
       );
   }
 
-  private async renderWithMonitoring() {
-    await this.renderer.resolveTimestampsAsync("compute");
-    await this.renderSceneAsync();
-    this.monitoringManager.updateCustomPanels();
-    await this.renderer.resolveTimestampsAsync("render");
-    this.monitoringManager.stats.update();
+  private renderWithMonitoring() {
+    const p = Promise.all([
+      this.renderer.resolveTimestampsAsync("compute"),
+      this.renderSceneAsync(),
+      this.renderer.resolveTimestampsAsync("render"),
+    ]);
+
+    // Consume last frame’s results now (they should be ready)
+    this.prevFrame
+      ?.then(() => {
+        this.monitoringManager.updateCustomPanels();
+        this.monitoringManager.stats.update();
+      })
+      .catch((err) => {
+        console.error("[renderWithMonitoring] previous frame error:", err);
+      });
+
+    // Set current as previous for next loop
+    this.prevFrame = p;
   }
 
   async renderAsync() {

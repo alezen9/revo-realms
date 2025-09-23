@@ -38,7 +38,7 @@ class SceneManager {
 
   private debugScene() {
     if (!this.controls) return;
-    const folder = debugManager.panel.addFolder({ title: "🎥 View" });
+    const folder = debugManager.panel.addFolder({ title: "🎥 View", index: 0 });
     folder
       .addBinding(this.controls, "enabled", { label: "Enable orbit controls" })
       .on("change", ({ value: isEnabled }) => {
