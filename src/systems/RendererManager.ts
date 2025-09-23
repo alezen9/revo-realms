@@ -6,7 +6,7 @@ import { debugManager } from "./DebugManager";
 import { sceneManager } from "./SceneManager";
 import { eventsManager } from "./EventsManager";
 
-const ENABLE_MONITORING = true;
+const ENABLE_MONITORING = false;
 const ENABLE_DEBUGGING = false;
 
 class RendererManager {
