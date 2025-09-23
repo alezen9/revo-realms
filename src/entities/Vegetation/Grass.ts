@@ -543,6 +543,7 @@ export default class Grass {
     const geometry = this.createGeometry(3);
     const material = new GrassMaterial(ssbo);
     const grass = new InstancedMesh(geometry, material, config.COUNT);
+    grass.frustumCulled = false;
     sceneManager.scene.add(grass);
 
     eventsManager.on("update-throttle-2x", ({ player }) => {
