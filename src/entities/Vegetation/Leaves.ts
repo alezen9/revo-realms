@@ -346,7 +346,7 @@ export default class Leaves {
     indexAttribute.setUsage(StaticDrawUsage);
     geom.setIndex(indexAttribute);
 
-    const normals = new Float32Array(0);
+    const normals = new Float32Array(indices.length * 3);
     const normalAttribute = new BufferAttribute(normals, 3);
     normalAttribute.setUsage(StaticDrawUsage);
     geom.setAttribute("normal", normalAttribute);
