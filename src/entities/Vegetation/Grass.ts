@@ -38,17 +38,17 @@ import {
   time,
   PI2,
 } from "three/tsl";
-import { MeshBasicNodeMaterial } from "three/webgpu";
 import { assetManager } from "../../systems/AssetManager";
 import { debugManager } from "../../systems/DebugManager";
 import { rendererManager } from "../../systems/RendererManager";
 import { sceneManager } from "../../systems/SceneManager";
 import { eventsManager } from "../../systems/EventsManager";
 import { tslUtils } from "../../utils/TSLUtils";
+import { MeshBasicNodeMaterial } from "three/webgpu";
 
 const getConfig = () => {
   const BLADE_WIDTH = 0.1;
-  const BLADE_HEIGHT = 1.45;
+  const BLADE_HEIGHT = 1.65;
   const TILE_SIZE = 150;
   const BLADES_PER_SIDE = 512; // power of 2
   return {
@@ -94,9 +94,9 @@ const uniforms = {
   uDelta: uniform(new Vector2(0, 0)),
   uGlowMul: uniform(3),
 
-  uR0: uniform(40),
-  uR1: uniform(65),
-  uPMin: uniform(0.22),
+  uR0: uniform(20),
+  uR1: uniform(75),
+  uPMin: uniform(0.05),
 
   uWindSpeed: uniform(0.25),
 };
@@ -637,7 +637,7 @@ export default class Grass {
     const positions = new Float32Array(vertexCount * 3);
     const uvs = new Float32Array(vertexCount * 2);
     const indices = new Uint8Array(indexCount);
-    const normals = new Float32Array(0);
+    const normals = new Float32Array(indexCount * 3);
 
     // simple taper: ~linear → narrower toward tip; tweak as you like
     const taper = (t: number) => halfWidthBase * (1.0 - 0.7 * t); // t in [0..1]

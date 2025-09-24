@@ -9,7 +9,6 @@ import {
   dot,
   exp2,
   float,
-  int,
   log2,
   max,
   mix,
@@ -142,7 +141,7 @@ class WaterMaterial extends MeshBasicNodeMaterial {
     const distortion = tsn.xy.mul(uniforms.uRefractionStrength); // NOTE: xy not xz because z is up in the texture
 
     // 1. depth
-    const sceneDepth = viewportDepthTexture(screenUV, 3).r;
+    const sceneDepth = viewportDepthTexture(screenUV).r;
     const p3z = cameraProjectionMatrix.element(3).element(2);
     const p2z = cameraProjectionMatrix.element(2).element(2);
     const sceneLinear = p3z.div(sceneDepth.add(p2z));
@@ -155,7 +154,7 @@ class WaterMaterial extends MeshBasicNodeMaterial {
     const refractedScreenUv = screenUV.add(distortion.mul(isUnderWater));
 
     // 3. refracted depth
-    const depthRefr = viewportDepthTexture(refractedScreenUv, 3).r;
+    const depthRefr = viewportDepthTexture(refractedScreenUv).r;
     const sceneLinearRefr = p3z.div(depthRefr.add(p2z));
     const isSafe = step(fragLinear, sceneLinearRefr);
     // const fragmentDepthRefr = sceneLinearRefr.sub(fragLinear);
@@ -183,7 +182,7 @@ class WaterMaterial extends MeshBasicNodeMaterial {
 
     // 5. screen color
     const safeScreenUv = mix(screenUV, refractedScreenUv, isSafe);
-    const screenColor = viewportTexture(safeScreenUv, int(3)).rgb;
+    const screenColor = viewportTexture(safeScreenUv).rgb;
 
     // 6. surface highlights
     const reflectedLight = reflect(uniforms.uFromSunDir, tsn.rbg); // NOTE: rbg and not rgb, same reason as above
