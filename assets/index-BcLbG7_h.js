@@ -1,10 +1,10 @@
-import { L as Zt, T as jt, D as Kt, G as qt, C as Yt, S as ye, P as Jt, p as Xt, b as $t, r as Qt, W as es, a as ts, A as ss, c as os, d as ns, e as as, f as is, g as rs, h as ls, V as v, _ as cs, M as Ke, i as ds, j as lt, k as us, l as W, H as hs, m as ms, O as ps, F as fs, n as p, t as x, v as P, o as gs, q as Oe, I as pe, s as yt, u as Ee, w as k, x as A, y as I, z as B, B as ee, E as i, J as be, K as Z, N as fe, Q as bt, R as U, U as St, X as ws, Y as ys, Z as bs, $ as Ss, a0 as R, a1 as L, a2 as Te, a3 as As, a4 as $, a5 as ct, a6 as xs, a7 as g, a8 as Je, a9 as ie, aa as ke, ab as Ie, ac as At, ad as dt, ae as Ze, af as ut, ag as Ms, ah as Is, ai as je, aj as X, ak as Ls, al as _s, am as Ps, an as Es, ao as Ts, ap as Ds, aq as Ue, ar as ht, as as Xe, at as qe, au as vs, av as Ne, aw as Re, ax as Se, ay as Ye, az as Bs, aA as mt, aB as Me, aC as xt, aD as pt, aE as Cs, aF as Ns, aG as ne, aH as Rs, aI as Fs, aJ as Us } from "./three-BMh0vsTg.js";
-import { P as Os } from "./tweakpane-SMt8byX-.js";
-import { S as ft } from "./stats-gl-C2M3amu4.js";
-import { e as ks } from "./tseep-zr-hWxBz.js";
-import { World as Gs, EventQueue as Hs, RigidBodyDesc as re, ColliderDesc as le, HeightFieldFlags as zs, Ray as Ws, ActiveEvents as Vs, __tla as __tla_0 } from "./@dimforge-CqaeYUkE.js";
-import { n as Zs } from "./nipplejs-BxsX8Mt3.js";
-import { d as js } from "./lodash-es-BMmXVQ06.js";
+import { L as Kt, T as qt, D as Yt, G as Jt, C as Xt, S as ye, P as $t, p as Qt, b as es, r as ts, W as ss, a as os, A as ns, c as as, d as is, e as rs, f as ls, g as cs, h as ds, V as D, _ as us, M as Je, i as hs, j as ut, k as ms, l as W, H as ps, m as fs, O as gs, F as ws, n as f, t as x, v as E, o as ys, q as ke, I as pe, s as At, u as Te, w as k, x as A, y as L, z as C, B as ee, E as i, J as be, K as j, N as fe, Q as xt, R as O, U as Mt, X as bs, Y as Ss, Z as As, $ as xs, a0 as R, a1 as I, a2 as ve, a3 as Ms, a4 as $, a5 as ht, a6 as Ls, a7 as p, a8 as Qe, a9 as re, aa as Ge, ab as Le, ac as Lt, ad as mt, ae as Ke, af as pt, ag as Is, ah as _s, ai as qe, aj as X, ak as ft, al as Ps, am as Ee, an as Ye, ao as Oe, ap as Es, aq as Xe, ar as Ts, as as Re, at as Fe, au as Se, av as $e, aw as vs, ax as gt, ay as Me, az as It, aA as wt, aB as Ds, aC as Bs, aD as ae, aE as Cs, aF as Ns, aG as Rs } from "./three-oEvGoOXy.js";
+import { P as Fs } from "./tweakpane-SMt8byX-.js";
+import { S as yt } from "./stats-gl-C2M3amu4.js";
+import { e as Us } from "./tseep-zr-hWxBz.js";
+import { World as Os, EventQueue as ks, RigidBodyDesc as le, ColliderDesc as ce, HeightFieldFlags as Gs, Ray as Hs, ActiveEvents as zs, __tla as __tla_0 } from "./@dimforge-CqaeYUkE.js";
+import { n as Ws } from "./nipplejs-BxsX8Mt3.js";
+import { d as Vs } from "./lodash-es-BMmXVQ06.js";
 Promise.all([
     (()=>{
         try {
@@ -33,7 +33,7 @@ Promise.all([
             fetch(o.href, n);
         }
     })();
-    const Ks = "/models/realm.glb", qs = "/textures/environment/px.webp", Ys = "/textures/environment/nx.webp", Js = "/textures/environment/py.webp", Xs = "/textures/environment/ny.webp", $s = "/textures/environment/pz.webp", Qs = "/textures/environment/nz.webp", eo = "/textures/noise/noise.webp", to = "/textures/realm/terrainType.webp", so = "/textures/realm/sandNormal.webp", oo = "/textures/realm/grassNormal.webp", no = "/textures/realm/grassDiffuse.webp", ao = "/textures/realm/waterNormal.webp", io = "/textures/realm/terrainShadowAo.webp", ro = "/textures/realm/waterLiliesDiffuse.webp", lo = "/textures/realm/waterLiliesAlpha.webp", co = "/textures/realm/flowerAtlas.webp", uo = "/textures/realm/stoneAtlas.webp", ho = "/textures/realm/barkDiffuse.webp", mo = "/textures/realm/barkNormal.webp", po = "/textures/realm/canopyDiffuse.webp", fo = "/textures/realm/canopyNormal.webp", go = "/textures/realm/axeDiffuse.webp", wo = "/textures/realm/axeEmissive.webp", yo = "/textures/realm/trunkDiffuse.webp", bo = "/textures/realm/trunkNormal.webp", So = "/textures/realm/onePieceAtlas.webp", Ao = "/textures/realm/kunaiDiffuse.webp", xo = "/textures/realm/kunaiMR.webp", Mo = "/textures/realm/campfireDiffuse.webp", Io = "/textures/realm/fireSprites.webp", Lo = "/textures/realm/footballDiffuse.webp", _o = "/textures/realm/leafDiffuse.webp", Po = {
+    const Zs = "/models/realm.glb", js = "/textures/environment/px.webp", Ks = "/textures/environment/nx.webp", qs = "/textures/environment/py.webp", Ys = "/textures/environment/ny.webp", Js = "/textures/environment/pz.webp", Xs = "/textures/environment/nz.webp", $s = "/textures/noise/noise.webp", Qs = "/textures/realm/terrainType.webp", eo = "/textures/realm/sandNormal.webp", to = "/textures/realm/grassNormal.webp", so = "/textures/realm/grassDiffuse.webp", oo = "/textures/realm/waterNormal.webp", no = "/textures/realm/terrainShadowAo.webp", ao = "/textures/realm/waterLiliesDiffuse.webp", io = "/textures/realm/waterLiliesAlpha.webp", ro = "/textures/realm/flowerAtlas.webp", lo = "/textures/realm/stoneAtlas.webp", co = "/textures/realm/barkDiffuse.webp", uo = "/textures/realm/barkNormal.webp", ho = "/textures/realm/canopyDiffuse.webp", mo = "/textures/realm/canopyNormal.webp", po = "/textures/realm/axeDiffuse.webp", fo = "/textures/realm/axeEmissive.webp", go = "/textures/realm/trunkDiffuse.webp", wo = "/textures/realm/trunkNormal.webp", yo = "/textures/realm/onePieceAtlas.webp", bo = "/textures/realm/kunaiDiffuse.webp", So = "/textures/realm/kunaiMR.webp", Ao = "/textures/realm/campfireDiffuse.webp", xo = "/textures/realm/fireSprites.webp", Mo = "/textures/realm/footballDiffuse.webp", Lo = "/textures/realm/leafDiffuse.webp", Io = {
         stoneDiffuse: {
             scale: [
                 .4921875,
@@ -74,10 +74,10 @@ Promise.all([
                 .50390625
             ]
         }
-    }, Eo = {
-        stones: Po
+    }, _o = {
+        stones: Io
     };
-    class To {
+    class Po {
         manager;
         constructor(){
             this.manager = this.createLoadingManager();
@@ -86,13 +86,13 @@ Promise.all([
             console.log("There was an error loading " + e);
         }
         createLoadingManager() {
-            const e = new Zt;
+            const e = new Kt;
             return e.onError = this.onErrorLog, e;
         }
     }
-    const Mt = new To;
-    class Do {
-        atlasesCoords = Eo;
+    const _t = new Po;
+    class Eo {
+        atlasesCoords = _o;
         textureLoader;
         gltfLoader;
         cubeTextureLoader;
@@ -125,36 +125,38 @@ Promise.all([
         footballDiffuse;
         leafDiffuse;
         constructor(e){
-            this.textureLoader = new jt(e);
-            const t = new Kt;
-            t.setDecoderPath("/draco/"), this.gltfLoader = new qt(e), this.gltfLoader.setDRACOLoader(t), this.cubeTextureLoader = new Yt(e);
+            this.textureLoader = new qt(e);
+            const t = new Yt;
+            t.setDecoderPath("/draco/"), this.gltfLoader = new Jt(e), this.gltfLoader.setDRACOLoader(t), this.cubeTextureLoader = new Xt(e);
         }
         async initAsync() {
             const e = await Promise.all([
-                this.gltfLoader.loadAsync(Ks),
+                this.gltfLoader.loadAsync(Zs),
                 u.cubeTextureLoader.loadAsync([
+                    js,
+                    Ks,
                     qs,
                     Ys,
                     Js,
-                    Xs,
-                    $s,
-                    Qs
+                    Xs
                 ]),
-                this.textureLoader.loadAsync(eo),
-                this.textureLoader.loadAsync(to),
-                this.textureLoader.loadAsync(no),
-                this.textureLoader.loadAsync(oo),
+                this.textureLoader.loadAsync($s),
+                this.textureLoader.loadAsync(Qs),
                 this.textureLoader.loadAsync(so),
+                this.textureLoader.loadAsync(to),
+                this.textureLoader.loadAsync(eo),
+                this.textureLoader.loadAsync(oo),
+                this.textureLoader.loadAsync(no),
                 this.textureLoader.loadAsync(ao),
                 this.textureLoader.loadAsync(io),
                 this.textureLoader.loadAsync(ro),
                 this.textureLoader.loadAsync(lo),
+                this.textureLoader.loadAsync(ho),
+                this.textureLoader.loadAsync(mo),
                 this.textureLoader.loadAsync(co),
                 this.textureLoader.loadAsync(uo),
                 this.textureLoader.loadAsync(po),
                 this.textureLoader.loadAsync(fo),
-                this.textureLoader.loadAsync(ho),
-                this.textureLoader.loadAsync(mo),
                 this.textureLoader.loadAsync(go),
                 this.textureLoader.loadAsync(wo),
                 this.textureLoader.loadAsync(yo),
@@ -163,18 +165,16 @@ Promise.all([
                 this.textureLoader.loadAsync(Ao),
                 this.textureLoader.loadAsync(xo),
                 this.textureLoader.loadAsync(Mo),
-                this.textureLoader.loadAsync(Io),
-                this.textureLoader.loadAsync(Lo),
-                this.textureLoader.loadAsync(_o)
+                this.textureLoader.loadAsync(Lo)
             ]);
-            this.realmModel = e[0], this.envMapTexture = e[1], this.envMapTexture.colorSpace = ye, this.envMapTexture.generateMipmaps = !1, this.noiseTexture = e[2], this.terrainTypeMap = e[3], this.terrainTypeMap.flipY = !1, this.grassDiffuse = e[4], this.grassNormal = e[5], this.sandNormal = e[6], this.waterNormal = e[7], this.terrainShadowAo = e[8], this.terrainShadowAo.flipY = !1, this.waterLiliesTexture = e[9], this.waterLiliesTexture.flipY = !1, this.waterLiliesAlphaTexture = e[10], this.waterLiliesAlphaTexture.flipY = !1, this.flowerAtlas = e[11], this.flowerAtlas.flipY = !1, this.stoneAtlas = e[12], this.stoneAtlas.flipY = !1, this.canopyDiffuse = e[13], this.canopyDiffuse.flipY = !1, this.canopyNormal = e[14], this.canopyNormal.flipY = !1, this.barkDiffuse = e[15], this.barkDiffuse.flipY = !1, this.barkDiffuse.colorSpace = ye, this.barkNormal = e[16], this.barkNormal.flipY = !1, this.axeDiffuse = e[17], this.axeDiffuse.flipY = !1, this.axeEmissive = e[18], this.axeEmissive.flipY = !1, this.trunkDiffuse = e[19], this.trunkDiffuse.flipY = !1, this.trunkDiffuse.colorSpace = ye, this.trunkNormal = e[20], this.trunkNormal.flipY = !1, this.onePieceAtlas = e[21], this.onePieceAtlas.flipY = !1, this.kunaiDiffuse = e[22], this.kunaiDiffuse.flipY = !1, this.kunaiDiffuse.colorSpace = ye, this.kunaiMR = e[23], this.kunaiMR.flipY = !1, this.campfireDiffuse = e[24], this.campfireDiffuse.flipY = !1, this.campfireDiffuse.colorSpace = ye, this.fireSprites = e[25], this.footballDiffuse = e[26], this.footballDiffuse.colorSpace = ye, this.leafDiffuse = e[27], this.leafDiffuse.colorSpace = ye;
+            this.realmModel = e[0], this.envMapTexture = e[1], this.envMapTexture.colorSpace = ye, this.noiseTexture = e[2], this.terrainTypeMap = e[3], this.terrainTypeMap.flipY = !1, this.grassDiffuse = e[4], this.grassNormal = e[5], this.sandNormal = e[6], this.waterNormal = e[7], this.terrainShadowAo = e[8], this.terrainShadowAo.flipY = !1, this.waterLiliesTexture = e[9], this.waterLiliesTexture.flipY = !1, this.waterLiliesAlphaTexture = e[10], this.waterLiliesAlphaTexture.flipY = !1, this.flowerAtlas = e[11], this.flowerAtlas.flipY = !1, this.stoneAtlas = e[12], this.stoneAtlas.flipY = !1, this.canopyDiffuse = e[13], this.canopyDiffuse.flipY = !1, this.canopyNormal = e[14], this.canopyNormal.flipY = !1, this.barkDiffuse = e[15], this.barkDiffuse.flipY = !1, this.barkDiffuse.colorSpace = ye, this.barkNormal = e[16], this.barkNormal.flipY = !1, this.axeDiffuse = e[17], this.axeDiffuse.flipY = !1, this.axeEmissive = e[18], this.axeEmissive.flipY = !1, this.trunkDiffuse = e[19], this.trunkDiffuse.flipY = !1, this.trunkDiffuse.colorSpace = ye, this.trunkNormal = e[20], this.trunkNormal.flipY = !1, this.onePieceAtlas = e[21], this.onePieceAtlas.flipY = !1, this.kunaiDiffuse = e[22], this.kunaiDiffuse.flipY = !1, this.kunaiDiffuse.colorSpace = ye, this.kunaiMR = e[23], this.kunaiMR.flipY = !1, this.campfireDiffuse = e[24], this.campfireDiffuse.flipY = !1, this.campfireDiffuse.colorSpace = ye, this.fireSprites = e[25], this.footballDiffuse = e[26], this.footballDiffuse.colorSpace = ye, this.leafDiffuse = e[27], this.leafDiffuse.colorSpace = ye;
         }
     }
-    const u = new Do(Mt.manager);
-    class vo {
+    const u = new Eo(_t.manager);
+    class To {
         panel;
         constructor(){
-            this.panel = new Os({
+            this.panel = new Fs({
                 title: "Revo Realms"
             }), this.panel.hidden = !0, this.panel.element.parentElement?.classList.add("debug-panel");
         }
@@ -182,14 +182,14 @@ Promise.all([
             this.panel.hidden = !e;
         }
     }
-    const te = new vo;
-    class Bo {
+    const te = new To;
+    class vo {
         stats;
         lastSecond = performance.now();
         drawCallsPanel;
         trianglesPanel;
         constructor(e){
-            const t = new ft({
+            const t = new yt({
                 trackGPU: !0,
                 logsPerSecond: 4,
                 graphsPerSecond: 30,
@@ -201,7 +201,7 @@ Promise.all([
             t.dom.classList.add("monitoring-panel"), e && document.body.appendChild(t.dom), this.stats = t, this.drawCallsPanel = this.createNumberPanel("# DRAW CALLS", "#fff", "#333"), this.trianglesPanel = this.createNumberPanel("# TRIANGLES", "#ffdab9", "#163843");
         }
         createNumberPanel(e, t, s) {
-            const o = this.stats.addPanel(new ft.Panel(e, t, s));
+            const o = this.stats.addPanel(new yt.Panel(e, t, s));
             return o.update = (n)=>{
                 const a = o.canvas.getContext("2d");
                 if (!a) return;
@@ -209,7 +209,7 @@ Promise.all([
                 a.clearRect(0, 0, r, l), a.fillStyle = s, a.fillRect(0, 0, r, l), a.fillStyle = t;
                 const d = a.font;
                 a.textAlign = "left", a.textBaseline = "top", a.fillText(o.name, 4, 4), a.font = "bold 20px Arial", a.textAlign = "center", a.textBaseline = "middle";
-                const h = Co.format(n);
+                const h = Do.format(n);
                 a.fillText(`${h}`, r / 2, l / 1.65), a.font = d;
             }, o;
         }
@@ -220,28 +220,28 @@ Promise.all([
             this.drawCallsPanel.update(t.drawCalls, 0), this.trianglesPanel.update(t.triangles, 0), this.lastSecond = e;
         }
     }
-    const Co = new Intl.NumberFormat("en-US", {
+    const Do = new Intl.NumberFormat("en-US", {
         notation: "compact"
-    }), No = [
+    }), Bo = [
         2,
         4,
         16,
         64
-    ], F = new ks.EventEmitter, Ro = (c)=>{
+    ], F = new Us.EventEmitter, Co = (c)=>{
         let e = 0;
         F.on("update", (t)=>{
             e++, !(e < c) && (e = 0, F.emit(`update-throttle-${c}x`, t));
         });
     };
-    No.forEach((c)=>Ro(c));
-    class Fo extends Jt {
+    Bo.forEach((c)=>Co(c));
+    class No extends $t {
         scenePass;
         debugFolder = te.panel.addFolder({
             title: "⭐️ Postprocessing",
             expanded: !1
         });
         constructor(e){
-            super(e), this.scenePass = Xt(M.scene, M.renderCamera);
+            super(e), this.scenePass = Qt(M.scene, M.renderCamera);
             const t = this.makeGraph();
             this.outputNode = t, F.on("camera-changed", ()=>{
                 this.scenePass.camera = M.renderCamera, this.scenePass.needsUpdate = !0;
@@ -249,17 +249,17 @@ Promise.all([
         }
         makeGraph() {
             this.outputColorTransform = !1;
-            const e = this.scenePass.getTextureNode(), t = $t(e, .25, .15, 1);
+            const e = this.scenePass.getTextureNode(), t = es(e, .25, .15, 1);
             t.smoothWidth.value = .04, t._nMips = 2, this.debugFolder.addBinding(t.strength, "value", {
                 label: "Bloom strength"
             }), this.debugFolder.addBinding(t.threshold, "value", {
                 label: "Bloom threshold"
             });
             const s = e.add(t);
-            return Qt(s);
+            return ts(s);
         }
     }
-    class Uo {
+    class Ro {
         renderer;
         canvas;
         prevFrame = null;
@@ -271,7 +271,7 @@ Promise.all([
         constructor(){
             const e = document.createElement("canvas");
             e.classList.add("revo-realms"), document.body.appendChild(e), this.canvas = e;
-            const t = new es({
+            const t = new ss({
                 canvas: e,
                 antialias: !0,
                 trackTimestamp: this.IS_MONITORING_ENABLED,
@@ -279,13 +279,13 @@ Promise.all([
                 stencil: !1,
                 depth: !0
             });
-            t.shadowMap.enabled = !0, t.shadowMap.type = ts, t.toneMapping = ss, t.setClearColor(0, 1), t.toneMappingExposure = 1.5, this.renderer = t, this.monitoringManager = new Bo(this.IS_MONITORING_ENABLED), te.setVisibility(this.IS_DEBUGGING_ENABLED), F.on("resize", (s)=>{
+            t.shadowMap.enabled = !0, t.shadowMap.type = os, t.toneMapping = ns, t.setClearColor(0, 1), t.toneMappingExposure = 1.5, this.renderer = t, this.monitoringManager = new vo(this.IS_MONITORING_ENABLED), te.setVisibility(this.IS_DEBUGGING_ENABLED), F.on("resize", (s)=>{
                 const o = Math.max(this.IS_POSTPROCESSING_ENABLED ? s.dpr * .75 : s.dpr, 1);
                 t.setSize(s.width, s.height), t.setPixelRatio(o);
             });
         }
         async init() {
-            M.init(), this.postprocessingManager = new Fo(this.renderer), this.IS_MONITORING_ENABLED && await this.monitoringManager.stats.init(this.renderer);
+            M.init(), this.postprocessingManager = new No(this.renderer), this.IS_MONITORING_ENABLED && await this.monitoringManager.stats.init(this.renderer);
         }
         async renderSceneAsync() {
             return this.IS_POSTPROCESSING_ENABLED ? this.postprocessingManager.renderAsync() : this.renderer.renderAsync(M.scene, M.renderCamera);
@@ -306,8 +306,8 @@ Promise.all([
             this.IS_MONITORING_ENABLED ? this.renderWithMonitoring() : this.renderSceneAsync();
         }
     }
-    const ge = new Uo;
-    class Oo {
+    const ge = new Ro;
+    class Fo {
         scene;
         playerCamera;
         renderCamera;
@@ -315,9 +315,9 @@ Promise.all([
         controls;
         orbitControlsCamera;
         constructor(){
-            const e = new os;
+            const e = new as;
             this.scene = e;
-            const t = window.innerWidth, s = window.innerHeight, o = t / s, n = new ns(45, o, .01, 150);
+            const t = window.innerWidth, s = window.innerHeight, o = t / s, n = new is(45, o, .01, 150);
             n.position.set(0, 5, 10), this.playerCamera = n, e.add(n), this.renderCamera = n, F.on("resize", (a)=>{
                 this.playerCamera.aspect = a.aspect, this.playerCamera.updateProjectionMatrix();
             });
@@ -338,8 +338,8 @@ Promise.all([
             this.controls?.enabled && this.controls.update();
         }
     }
-    const M = new Oo, ko = "/audio/ambient/ambient.mp3", Go = "/audio/ambient/lake.mp3", Ho = "/audio/collisions/hitWood.mp3", zo = "/audio/collisions/hitStone.mp3";
-    class Wo {
+    const M = new Fo, Uo = "/audio/ambient/ambient.mp3", Oo = "/audio/ambient/lake.mp3", ko = "/audio/collisions/hitWood.mp3", Go = "/audio/collisions/hitStone.mp3";
+    class Ho {
         audioLoader;
         audioListener;
         isReady = !1;
@@ -350,7 +350,7 @@ Promise.all([
         hitWood;
         hitStone;
         constructor(e){
-            this.audioLoader = new as(e), this.audioListener = new is, M.playerCamera.add(this.audioListener);
+            this.audioLoader = new rs(e), this.audioListener = new ls, M.playerCamera.add(this.audioListener);
         }
         async toggleMute() {
             if (!this.isReady) return;
@@ -361,58 +361,58 @@ Promise.all([
             });
         }
         newAudio(e, t = 1, s = !1) {
-            const o = new rs(this.audioListener);
+            const o = new cs(this.audioListener);
             return o.setBuffer(e), o.setVolume(0), o.setLoop(s), o.userData.originalVolume = t, this.files.push(o), o;
         }
         newPositionalAudio(e, t = 1, s = !1, o = 1) {
-            const n = new ls(this.audioListener);
+            const n = new ds(this.audioListener);
             return n.setBuffer(e), n.setVolume(0), n.setLoop(s), n.userData.originalVolume = t, n.setMaxDistance(o), this.files.push(n), n;
         }
         async initAsync() {
             const e = await Promise.all([
+                this.audioLoader.loadAsync(Uo),
+                this.audioLoader.loadAsync(Oo),
                 this.audioLoader.loadAsync(ko),
-                this.audioLoader.loadAsync(Go),
-                this.audioLoader.loadAsync(Ho),
-                this.audioLoader.loadAsync(zo)
+                this.audioLoader.loadAsync(Go)
             ]);
             this.ambient = this.newAudio(e[0], .05, !0), this.lake = this.newPositionalAudio(e[1], 1, !0, 10), this.hitWood = this.newAudio(e[2], 0, !1), this.hitStone = this.newAudio(e[3], 0, !1), this.isReady = !0, F.emit("audio-ready");
         }
     }
-    const ae = new Wo(Mt.manager);
-    var j = ((c)=>(c.Player = "Player", c.Terrain = "Terrain", c.Wood = "Wood", c.Stone = "Stone", c))(j || {});
-    const Vo = ()=>({
+    const ie = new Ho(_t.manager);
+    var K = ((c)=>(c.Player = "Player", c.Terrain = "Terrain", c.Wood = "Wood", c.Stone = "Stone", c))(K || {});
+    const zo = ()=>({
             minImpactSq: 5,
             maxImpactSq: 400,
             minImpactVolume: .01,
             maxImpactVolume: .25
-        }), me = Vo();
-    class Zo {
+        }), me = zo();
+    class Wo {
         world;
         eventQueue;
         IS_DEBUGGING_ENABLED = !1;
-        dummyVectorLinVel = new v;
+        dummyVectorLinVel = new D;
         debugMesh;
         constructor(){
             this.IS_DEBUGGING_ENABLED && (this.debugMesh = this.createDebugMesh(), M.scene.add(this.debugMesh));
         }
         async initAsync() {
-            return cs(()=>import("./@dimforge-CqaeYUkE.js").then(async (m)=>{
+            return us(()=>import("./@dimforge-CqaeYUkE.js").then(async (m)=>{
                     await m.__tla;
                     return m;
                 }), []).then(()=>{
-                this.world = new Gs({
+                this.world = new Os({
                     x: 0,
                     y: -9.81,
                     z: 0
-                }), this.eventQueue = new Hs(!0);
+                }), this.eventQueue = new ks(!0);
             });
         }
         getColliderName(e) {
             return e?.parent?.()?.userData?.type;
         }
         impactToVolume(e) {
-            const t = Ke.mapLinear(e, me.minImpactSq, me.maxImpactSq, me.minImpactVolume, me.maxImpactVolume);
-            return Ke.clamp(t, me.minImpactVolume, me.maxImpactVolume);
+            const t = Je.mapLinear(e, me.minImpactSq, me.maxImpactSq, me.minImpactVolume, me.maxImpactVolume);
+            return Je.clamp(t, me.minImpactVolume, me.maxImpactVolume);
         }
         onCollisionWithWood(e) {
             const t = e.parent()?.linvel();
@@ -421,7 +421,7 @@ Promise.all([
             const s = this.dummyVectorLinVel.lengthSq();
             if (s < me.minImpactSq) return;
             const o = this.impactToVolume(s);
-            ae.hitWood.setVolume(o), ae.hitWood.play();
+            ie.hitWood.setVolume(o), ie.hitWood.play();
         }
         onCollisionWithStone(e) {
             const t = e.parent()?.linvel();
@@ -430,48 +430,48 @@ Promise.all([
             const s = this.dummyVectorLinVel.lengthSq();
             if (s < me.minImpactSq) return;
             const o = this.impactToVolume(s);
-            ae.hitStone.setVolume(o), ae.hitStone.play();
+            ie.hitStone.setVolume(o), ie.hitStone.play();
         }
         handleCollisionSounds() {
             this.eventQueue.drainCollisionEvents((e, t, s)=>{
-                if (ae.isMute) return;
+                if (ie.isMute) return;
                 const o = this.world.getCollider(e), n = this.world.getCollider(t);
-                if (!(this.getColliderName(o) === j.Player) || !s) return;
+                if (!(this.getColliderName(o) === K.Player) || !s) return;
                 switch(this.getColliderName(n)){
-                    case j.Wood:
+                    case K.Wood:
                         this.onCollisionWithWood(o);
                         break;
-                    case j.Stone:
+                    case K.Stone:
                         this.onCollisionWithStone(o);
                         break;
                 }
             });
         }
         createDebugMesh() {
-            return new ds(new lt, new us);
+            return new hs(new ut, new ms);
         }
         updateDebugMesh() {
             if (!this.debugMesh) return;
             const e = this.world.debugRender();
-            this.debugMesh.geometry.dispose(), this.debugMesh.geometry = new lt, this.debugMesh.geometry.setPositions(e.vertices), this.debugMesh.computeLineDistances();
+            this.debugMesh.geometry.dispose(), this.debugMesh.geometry = new ut, this.debugMesh.geometry.setPositions(e.vertices), this.debugMesh.computeLineDistances();
         }
         update() {
-            this.updateDebugMesh(), this.world.step(this.eventQueue), ae.isReady && this.handleCollisionSounds();
+            this.updateDebugMesh(), this.world.step(this.eventQueue), ie.isReady && this.handleCollisionSounds();
         }
     }
-    const D = new Zo;
-    class jo {
+    const B = new Wo;
+    class Vo {
         constructor(){
             ("ontouchstart" in window || navigator.maxTouchPoints > 0) && document.body.classList.add("is-touch-device");
         }
         async initAsync() {
-            await ge.init(), ae.initAsync(), await Promise.all([
-                D.initAsync(),
+            await Promise.all([
+                B.initAsync(),
                 u.initAsync()
-            ]);
+            ]), await ge.init(), ie.initAsync();
         }
     }
-    class Ko {
+    class Zo {
         keysPressed;
         keyDownListeners;
         keyUpListeners;
@@ -499,8 +499,8 @@ Promise.all([
             window.removeEventListener("keydown", this.handleKeyDown), window.removeEventListener("keyup", this.handleKeyUp);
         }
     }
-    const de = new Ko;
-    class qo {
+    const de = new Zo;
+    class jo {
         isActive = !1;
         direction = {
             x: 0,
@@ -509,7 +509,7 @@ Promise.all([
         constructor(){
             const e = document.createElement("div");
             e.classList.add("joystick-zone"), document.body.appendChild(e);
-            const t = Zs.create({
+            const t = Ws.create({
                 zone: e,
                 mode: "static",
                 position: {
@@ -548,26 +548,26 @@ Promise.all([
             return this.isActive && this.direction.x > this.threshold;
         }
     }
-    const Fe = new qo;
-    class Yo {
+    const Ue = new jo;
+    class Ko {
         isForward() {
-            return de.isKeyPressed("KeyW") || de.isKeyPressed("ArrowUp") || Fe.isForward();
+            return de.isKeyPressed("KeyW") || de.isKeyPressed("ArrowUp") || Ue.isForward();
         }
         isBackward() {
-            return de.isKeyPressed("KeyS") || de.isKeyPressed("ArrowDown") || Fe.isBackward();
+            return de.isKeyPressed("KeyS") || de.isKeyPressed("ArrowDown") || Ue.isBackward();
         }
         isLeftward() {
-            return de.isKeyPressed("KeyA") || de.isKeyPressed("ArrowLeft") || Fe.isLeftward();
+            return de.isKeyPressed("KeyA") || de.isKeyPressed("ArrowLeft") || Ue.isLeftward();
         }
         isRightward() {
-            return de.isKeyPressed("KeyD") || de.isKeyPressed("ArrowRight") || Fe.isRightward();
+            return de.isKeyPressed("KeyD") || de.isKeyPressed("ArrowRight") || Ue.isRightward();
         }
         isJumpPressed() {
             return de.isKeyPressed("Space");
         }
     }
-    const Pe = new Yo, q = {
-        LIGHT_POSITION_OFFSET: new v(10, 10, 10),
+    const Pe = new Ko, q = {
+        LIGHT_POSITION_OFFSET: new D(10, 10, 10),
         directionalColor: new W(.85, .75, .7),
         directionalIntensity: .8,
         hemiSkyColor: new W(.6, .4, .5),
@@ -575,7 +575,7 @@ Promise.all([
         fogColor: new W(.29, .08, 0),
         fogDensity: .0046
     };
-    class Jo {
+    class qo {
         directionalLight;
         hemisphereLight;
         fog;
@@ -586,19 +586,19 @@ Promise.all([
             }), this.debugLight();
         }
         setupHemisphereLight() {
-            const e = new hs;
+            const e = new ps;
             return e.color.copy(q.hemiSkyColor), e.groundColor.copy(q.hemiGroundColor), e.intensity = .3, e.position.copy(q.LIGHT_POSITION_OFFSET), e;
         }
         setupDirectionalLighting() {
-            const e = new ms;
-            e.intensity = q.directionalIntensity, e.color.copy(q.directionalColor), e.position.copy(q.LIGHT_POSITION_OFFSET), e.target = new ps, e.castShadow = !0, e.shadow.mapSize.set(64, 64);
+            const e = new fs;
+            e.intensity = q.directionalIntensity, e.color.copy(q.directionalColor), e.position.copy(q.LIGHT_POSITION_OFFSET), e.target = new gs, e.castShadow = !0, e.shadow.mapSize.set(64, 64);
             const t = 1;
             return e.shadow.intensity = .85, e.shadow.camera.left = -t, e.shadow.camera.right = t, e.shadow.camera.top = t, e.shadow.camera.bottom = -t, e.shadow.camera.near = .01, e.shadow.camera.far = 30, e.shadow.normalBias = .1, e.shadow.bias = -.001, e;
         }
         setupFog() {
-            return new fs(q.fogColor, q.fogDensity);
+            return new ws(q.fogColor, q.fogDensity);
         }
-        getTerrainShadowFactor = p(([e = P(0)])=>x(u.terrainShadowAo, e).r);
+        getTerrainShadowFactor = f(([e = E(0)])=>x(u.terrainShadowAo, e).r);
         debugLight() {
             const e = te.panel.addFolder({
                 title: "💡 Light"
@@ -652,21 +652,21 @@ Promise.all([
             this.directionalLight.target = e;
         }
     }
-    const $e = new Jo, It = new gs, gt = new Oe;
+    const et = new qo, Pt = new ys, bt = new ke;
     F.on("update-throttle-16x", ()=>{
-        gt.multiplyMatrices(M.renderCamera.projectionMatrix, M.renderCamera.matrixWorldInverse), It.setFromProjectionMatrix(gt);
+        bt.multiplyMatrices(M.renderCamera.projectionMatrix, M.renderCamera.matrixWorldInverse), Pt.setFromProjectionMatrix(bt);
     });
-    const Xo = (c)=>(c.geometry.boundingSphere || c.geometry.computeBoundingSphere(), It.intersectsObject(c)), $o = p(([c])=>{});
-    class Qo extends pe {
+    const Yo = (c)=>(c.geometry.boundingSphere || c.geometry.computeBoundingSphere(), Pt.intersectsObject(c)), Jo = f(([c])=>{});
+    class Xo extends pe {
         mainBuffer;
         constructor(e){
-            let t, s, o = $o;
-            switch(super(new yt, void 0, e.count), this.mainBuffer = Ee(e.count, "vec4"), this.mainBuffer.setPBO(!0), e.preset){
+            let t, s, o = Jo;
+            switch(super(new At, void 0, e.count), this.mainBuffer = Te(e.count, "vec4"), this.mainBuffer.setPBO(!0), e.preset){
                 case "custom":
                     t = e.material, s = e.onInit, o = e.onUpdate;
                     break;
                 case "fire":
-                    const r = en(e, this.mainBuffer);
+                    const r = $o(e, this.mainBuffer);
                     t = r.material, s = r.onInit, o = r.onUpdate;
                     break;
                 default:
@@ -681,37 +681,37 @@ Promise.all([
             a && n?.onInit(({ renderer: r })=>{
                 r.computeAsync(a);
             }), F.on("update", ()=>{
-                Xo(this) && ge.renderer.computeAsync(n);
+                Yo(this) && ge.renderer.computeAsync(n);
             });
         }
     }
-    const en = (c, e)=>{
-        const { speed: t = .5, radius: s = 1, height: o = 1, lifetime: n = 1, scale: a = 1, detail: r = 4, coneFactor: l = 1 } = c, d = o * 1.5, h = n * .75, m = Ee(c.count, "float"), b = .95, w = p(([et])=>{
-            const ze = k(A.add(12345)), Ae = m.element(A), Be = I(b, ze);
-            Ae.assign(Be);
-        }), S = p(([et])=>{
-            const ze = et.element(A), Ae = m.element(A), Be = k(A), We = B(n, h, Ae), Ce = ee.mul(t).add(Be.mul(We)).mod(We).div(We), Ve = i(1).sub(i(1).sub(Ce).pow(2)), tt = B(o, d, Ae), st = Ve.mul(tt), ot = k(A.add(7890)).mul(be), Dt = k(A.add(5678)), vt = i(1).sub(i(1).sub(Dt).pow(2)), Bt = i(1).sub(Ve.mul(l)), Ct = Z(0, .35, Ve), Nt = fe(ee.mul(.5)).mul(.05).add(1), Rt = B(s * .25, s, Ct).mul(Bt).mul(Nt), Ft = vt.mul(Rt), Ut = I(.5, ot).mul(2).sub(1), nt = ot.add(Ce.mul(be).mul(.05).mul(Ut)), Ot = B(1, .85, Ae), at = Be.sub(.5).mul(.05).mul(Ce), kt = Z(0, .75, Ce).mul(Ae), it = Ft.add(kt.mul(Ot)), Gt = bt(nt.add(at)).mul(it), Ht = fe(nt.add(at)).mul(it), rt = st.div(tt), zt = Z(0, .5, rt), Wt = i(1).sub(Z(.5, 1, rt)), Vt = zt.mul(Wt);
-            ze.assign(U(Gt, st, Ht, Vt));
-        }), y = new St;
-        y.precision = "lowp", y.transparent = !0, y.depthWrite = !1, y.blending = ws, y.blendEquation = ys, y.blendSrc = bs, y.blendDst = Ss;
-        const O = e.element(A), z = m.element(A), G = k(A.add(9234)), H = k(A.add(33.87));
-        y.positionNode = O.xyz;
-        const K = i(1).sub(z.mul(.85)), se = H.clamp(.25, 1);
-        y.scaleNode = se.mul(O.w).mul(K).mul(a);
-        const ue = I(.5, G).mul(.5), V = I(.5, H).mul(.5), he = R().mul(.5).add(P(ue, V)), oe = x(u.fireSprites, he, r), Q = L(.72, .62, .08).mul(2).toConst(), Y = L(1, .1, 0).mul(4).toConst(), we = L(0).toConst(), Le = B(o, d, z), _e = Z(0, 1, Te.y.div(Le)).pow(2), De = Z(0, .25, _e), ve = B(Q, Y, De), Ge = Z(.9, 1, _e), He = B(ve, we, Ge), Pt = i(1).sub(Z(0, .85, _e)), Et = I(.65, H).mul(Pt), Qe = i(.5).toConst(), Tt = oe.a.mul(Et).mul(Qe);
-        return y.colorNode = B(He, Y, z).mul(Tt).mul(1.5), y.alphaTest = .1, y.opacityNode = O.w.mul(oe.a).mul(Qe), {
-            material: y,
+    const $o = (c, e)=>{
+        const { speed: t = .5, radius: s = 1, height: o = 1, lifetime: n = 1, scale: a = 1, detail: r = 4, coneFactor: l = 1 } = c, d = o * 1.5, h = n * .75, m = Te(c.count, "float"), y = .95, w = f(([ot])=>{
+            const Ve = k(A.add(12345)), Ae = m.element(A), Ce = L(y, Ve);
+            Ae.assign(Ce);
+        }), b = f(([ot])=>{
+            const Ve = ot.element(A), Ae = m.element(A), Ce = k(A), Ze = C(n, h, Ae), Ne = ee.mul(t).add(Ce.mul(Ze)).mod(Ze).div(Ze), je = i(1).sub(i(1).sub(Ne).pow(2)), nt = C(o, d, Ae), at = je.mul(nt), it = k(A.add(7890)).mul(be), Bt = k(A.add(5678)), Ct = i(1).sub(i(1).sub(Bt).pow(2)), Nt = i(1).sub(je.mul(l)), Rt = j(0, .35, je), Ft = fe(ee.mul(.5)).mul(.05).add(1), Ut = C(s * .25, s, Rt).mul(Nt).mul(Ft), Ot = Ct.mul(Ut), kt = L(.5, it).mul(2).sub(1), rt = it.add(Ne.mul(be).mul(.05).mul(kt)), Gt = C(1, .85, Ae), lt = Ce.sub(.5).mul(.05).mul(Ne), Ht = j(0, .75, Ne).mul(Ae), ct = Ot.add(Ht.mul(Gt)), zt = xt(rt.add(lt)).mul(ct), Wt = fe(rt.add(lt)).mul(ct), dt = at.div(nt), Vt = j(0, .5, dt), Zt = i(1).sub(j(.5, 1, dt)), jt = Vt.mul(Zt);
+            Ve.assign(O(zt, at, Wt, jt));
+        }), S = new Mt;
+        S.precision = "lowp", S.transparent = !0, S.depthWrite = !1, S.blending = bs, S.blendEquation = Ss, S.blendSrc = As, S.blendDst = xs;
+        const U = e.element(A), z = m.element(A), G = k(A.add(9234)), H = k(A.add(33.87));
+        S.positionNode = U.xyz;
+        const V = i(1).sub(z.mul(.85)), se = H.clamp(.25, 1);
+        S.scaleNode = se.mul(U.w).mul(V).mul(a);
+        const ue = L(.5, G).mul(.5), Z = L(.5, H).mul(.5), he = R().mul(.5).add(E(ue, Z)), ne = x(u.fireSprites, he, r), Q = I(.72, .62, .08).mul(2).toConst(), Y = I(1, .1, 0).mul(4).toConst(), we = I(0).toConst(), Ie = C(o, d, z), _e = j(0, 1, ve.y.div(Ie)).pow(2), He = j(0, .25, _e), ze = C(Q, Y, He), De = j(.9, 1, _e), Be = C(ze, we, De), We = i(1).sub(j(0, .85, _e)), vt = L(.65, H).mul(We), st = i(.5).toConst(), Dt = ne.a.mul(vt).mul(st);
+        return S.colorNode = C(Be, Y, z).mul(Dt).mul(1.5), S.alphaTest = .1, S.opacityNode = U.w.mul(ne.a).mul(st), {
+            material: S,
             onInit: w,
-            onUpdate: S
+            onUpdate: b
         };
     };
-    class tn {
+    class Qo {
         constructor(){
             const e = u.realmModel.scene.getObjectByName("campfire");
-            e.material = new As({
+            e.material = new Ms({
                 map: u.campfireDiffuse
             });
-            const t = new Qo({
+            const t = new Xo({
                 preset: "fire",
                 count: 512,
                 speed: .65,
@@ -719,47 +719,47 @@ Promise.all([
                 workGroupSize: 256
             });
             t.position.copy(e.position).setY(.25), M.scene.add(e, t);
-            const s = re.fixed().setTranslation(...e.position.toArray()).setRotation(e.quaternion).setUserData({
-                type: j.Stone
-            }), o = D.world.createRigidBody(s);
+            const s = le.fixed().setTranslation(...e.position.toArray()).setRotation(e.quaternion).setUserData({
+                type: K.Stone
+            }), o = B.world.createRigidBody(s);
             e.geometry.computeBoundingSphere();
-            const { radius: n } = e.geometry.boundingSphere, a = le.ball(n).setRestitution(.75);
-            D.world.createCollider(a, o);
+            const { radius: n } = e.geometry.boundingSphere, a = ce.ball(n).setRestitution(.75);
+            B.world.createCollider(a, o);
         }
     }
-    class sn extends $ {
+    class en extends $ {
         constructor(){
             super(), this.precision = "lowp", this.flatShading = !1;
             const e = x(u.trunkDiffuse, R());
             this.colorNode = e.mul(1.75), this.normalMap = u.trunkNormal;
         }
     }
-    class on extends $ {
+    class tn extends $ {
         constructor(){
             super(), this.precision = "lowp", this.flatShading = !1, this.map = u.axeDiffuse, this.emissiveMap = u.axeEmissive, this.emissiveIntensity = 35, this.emissive = new W("lightblue");
         }
     }
-    class nn {
+    class sn {
         constructor(){
             const e = u.realmModel.scene.getObjectByName("kratos_axe");
-            e.material = new on;
+            e.material = new tn;
             const t = u.realmModel.scene.getObjectByName("tree_trunk");
-            t.material = new sn, M.scene.add(e, t);
-            const s = u.realmModel.scene.getObjectByName("axe_collider"), o = re.fixed().setTranslation(...s.position.toArray()).setRotation(s.quaternion).setUserData({
-                type: j.Wood
-            }), n = D.world.createRigidBody(o), a = s.geometry.boundingBox.max, r = le.cuboid(a.x, a.y, a.z).setRestitution(.75);
-            D.world.createCollider(r, n);
-            const l = u.realmModel.scene.getObjectByName("trunk_collider"), { x: d, y: h } = l.geometry.boundingBox.max, m = re.fixed().setTranslation(...l.position.toArray()).setRotation(l.quaternion).setUserData({
-                type: j.Wood
-            }), b = D.world.createRigidBody(m), w = d, S = h / 2, y = le.capsule(S, w).setRestitution(.75);
-            D.world.createCollider(y, b);
+            t.material = new en, M.scene.add(e, t);
+            const s = u.realmModel.scene.getObjectByName("axe_collider"), o = le.fixed().setTranslation(...s.position.toArray()).setRotation(s.quaternion).setUserData({
+                type: K.Wood
+            }), n = B.world.createRigidBody(o), a = s.geometry.boundingBox.max, r = ce.cuboid(a.x, a.y, a.z).setRestitution(.75);
+            B.world.createCollider(r, n);
+            const l = u.realmModel.scene.getObjectByName("trunk_collider"), { x: d, y: h } = l.geometry.boundingBox.max, m = le.fixed().setTranslation(...l.position.toArray()).setRotation(l.quaternion).setUserData({
+                type: K.Wood
+            }), y = B.world.createRigidBody(m), w = d, b = h / 2, S = ce.capsule(b, w).setRestitution(.75);
+            B.world.createCollider(S, y);
         }
     }
-    class an {
+    class on {
         constructor(){
             const e = u.realmModel.scene.getObjectByName("jojo_mask");
-            e.material = new rn;
-            const t = u.realmModel.scene.children.filter((n)=>n.name.startsWith("jojo_symbol")), s = new ln, o = new pe(t[0].geometry, s, t.length);
+            e.material = new nn;
+            const t = u.realmModel.scene.children.filter((n)=>n.name.startsWith("jojo_symbol")), s = new an, o = new pe(t[0].geometry, s, t.length);
             for(let n = 0; n < t.length; n++){
                 const a = t[n];
                 o.setMatrixAt(n, a.matrix);
@@ -767,24 +767,24 @@ Promise.all([
             M.scene.add(e, o);
         }
     }
-    class rn extends $ {
+    class nn extends $ {
         constructor(){
             super(), this.precision = "lowp", this.flatShading = !0;
-            const { stoneDiffuse: e } = u.atlasesCoords.stones, t = T.computeAtlasUv(P(...e.scale), P(...e.offset), R()), s = x(u.stoneAtlas, t);
+            const { stoneDiffuse: e } = u.atlasesCoords.stones, t = v.computeAtlasUv(E(...e.scale), E(...e.offset), R()), s = x(u.stoneAtlas, t);
             this.colorNode = s;
         }
     }
-    class ln extends $ {
+    class an extends $ {
         constructor(){
             super(), this.precision = "lowp", this.flatShading = !0;
-            const e = ct("#eb5694"), t = ct("#9642D3");
-            this.colorNode = B(t, e, R().y.mul(.5)).mul(.45);
-            const s = ee.mul(20), o = fe(s.add(A)), n = I(0, o).mul(.25);
-            this.positionNode = Te.add(n);
+            const e = ht("#eb5694"), t = ht("#9642D3");
+            this.colorNode = C(t, e, R().y.mul(.5)).mul(.45);
+            const s = ee.mul(20), o = fe(s.add(A)), n = L(0, o).mul(.25);
+            this.positionNode = ve.add(n);
         }
     }
-    class cn extends xs {
-        uScale = g(1);
+    class rn extends Ls {
+        uScale = p(1);
         constructor(){
             super();
             const e = x(u.kunaiDiffuse, R());
@@ -793,43 +793,43 @@ Promise.all([
             this.metalnessNode = t.b.mul(.75), this.roughnessNode = t.g;
         }
     }
-    class dn {
+    class ln {
         constructor(){
-            const e = u.realmModel.scene.children.filter(({ name: l })=>l.startsWith("kunai")), t = u.realmModel.scene.getObjectByName("base_kunai"), s = new cn, o = new pe(t.geometry, s, e.length), { x: n, y: a, z: r } = t.geometry.boundingBox.max;
+            const e = u.realmModel.scene.children.filter(({ name: l })=>l.startsWith("kunai")), t = u.realmModel.scene.getObjectByName("base_kunai"), s = new rn, o = new pe(t.geometry, s, e.length), { x: n, y: a, z: r } = t.geometry.boundingBox.max;
             e.forEach((l, d)=>{
                 o.setMatrixAt(d, l.matrix);
-                const h = re.fixed().setTranslation(...l.position.toArray()).setRotation(l.quaternion).setUserData({
-                    type: j.Wood
-                }), m = D.world.createRigidBody(h), b = le.cuboid(n, a, r).setRestitution(.75);
-                D.world.createCollider(b, m);
+                const h = le.fixed().setTranslation(...l.position.toArray()).setRotation(l.quaternion).setUserData({
+                    type: K.Wood
+                }), m = B.world.createRigidBody(h), y = ce.cuboid(n, a, r).setRestitution(.75);
+                B.world.createCollider(y, m);
             }), M.scene.add(o);
         }
     }
-    class un extends $ {
+    class cn extends $ {
         constructor(){
-            super(), this.map = u.onePieceAtlas, this.side = Je;
+            super(), this.map = u.onePieceAtlas, this.side = Qe;
         }
     }
-    class hn {
+    class dn {
         constructor(){
             const e = u.realmModel.scene.getObjectByName("one_piece_posters");
-            e.material = new un, M.scene.add(e);
+            e.material = new cn, M.scene.add(e);
         }
     }
-    class mn {
+    class un {
         constructor(){
-            new nn, new hn, new an, new dn, new tn;
+            new sn, new dn, new on, new ln, new Qo;
         }
     }
-    const Lt = {
-        uBaseColor: g(new W),
-        uRandom: g(0)
+    const Et = {
+        uBaseColor: p(new W),
+        uRandom: p(0)
     };
-    class pn extends $ {
+    class hn extends $ {
         _uniforms;
         constructor(e){
             super(), this._uniforms = {
-                ...Lt,
+                ...Et,
                 ...e
             }, this.createMaterial();
         }
@@ -838,26 +838,26 @@ Promise.all([
         }
         createMaterial() {
             this.precision = "lowp", this.flatShading = !1;
-            const e = ie(R().mul(2).add(this._uniforms.uRandom)), { stoneDiffuse: t, stoneNormalAo: s } = u.atlasesCoords.stones, o = T.computeAtlasUv(P(...t.scale), P(...t.offset), e), n = x(u.stoneAtlas, o);
+            const e = re(R().mul(2).add(this._uniforms.uRandom)), { stoneDiffuse: t, stoneNormalAo: s } = u.atlasesCoords.stones, o = v.computeAtlasUv(E(...t.scale), E(...t.offset), e), n = x(u.stoneAtlas, o);
             this.colorNode = n.mul(1.5);
-            const a = T.computeAtlasUv(P(...s.scale), P(...s.offset), e), r = x(u.stoneAtlas, a);
-            this.normalNode = new ke(r.rgb, i(.5)), this.aoNode = r.a;
+            const a = v.computeAtlasUv(E(...s.scale), E(...s.offset), e), r = x(u.stoneAtlas, a);
+            this.normalNode = new Ge(r.rgb, i(.5)), this.aoNode = r.a;
         }
     }
-    class fn {
-        uniforms = Lt;
+    class mn {
+        uniforms = Et;
         constructor(){
-            const e = new pn(this.uniforms), t = u.realmModel.scene.children.filter(({ name: o })=>o.endsWith("_monument"));
+            const e = new hn(this.uniforms), t = u.realmModel.scene.children.filter(({ name: o })=>o.endsWith("_monument"));
             t.forEach((o, n)=>{
-                const a = Ke.seededRandom(n);
+                const a = Je.seededRandom(n);
                 o.material = e, o.receiveShadow = !0, o.onBeforeRender = (r, l, d, h, m)=>{
                     m.setRandomSeed(a);
                 };
             }), M.scene.add(...t), u.realmModel.scene.children.filter(({ name: o })=>o.startsWith("monument_collider")).forEach((o)=>{
-                const n = re.fixed().setTranslation(...o.position.toArray()).setRotation(o.quaternion).setUserData({
-                    type: j.Stone
-                }), a = D.world.createRigidBody(n), r = .5 * o.scale.x, l = .5 * o.scale.y, d = .5 * o.scale.z, h = le.cuboid(r, l, d).setRestitution(.75);
-                D.world.createCollider(h, a);
+                const n = le.fixed().setTranslation(...o.position.toArray()).setRotation(o.quaternion).setUserData({
+                    type: K.Stone
+                }), a = B.world.createRigidBody(n), r = .5 * o.scale.x, l = .5 * o.scale.y, d = .5 * o.scale.z, h = ce.cuboid(r, l, d).setRestitution(.75);
+                B.world.createCollider(h, a);
             }), this.debugMonuments();
         }
         debugMonuments() {
@@ -873,30 +873,33 @@ Promise.all([
             });
         }
     }
-    const N = {
-        uUvScale: g(3),
-        uRefractionStrength: g(.02),
-        uWaterColor: g(new W(0, .09, .09)),
-        uFresnelScale: g(.075),
-        uSpeed: g(.1),
-        uNoiseScrollDir: g(new Ie(.1, 0)),
-        uShiness: g(400),
-        uMinDist: g(10),
-        uMaxDist: g(50),
-        uFromSunDir: g(new v(0, -1, 0))
+    const _ = {
+        uUvScale: p(1.7),
+        uRefractionStrength: p(.01),
+        uWaterColor: p(new W(0, .09, .09)),
+        uFresnelScale: p(.075),
+        uSpeed: p(.1),
+        uNoiseScrollDir: p(new Le(.1, 0)),
+        uShiness: p(700),
+        uMinDist: p(10),
+        uMaxDist: p(50),
+        uFromSunDir: p(new D(0, -1, 0)),
+        uTworld: p(new D(1, 0, 0)),
+        uBworld: p(new D(0, 0, -1)),
+        uNworld: p(new D(0, 1, 0)),
+        uHighlightsFactor: p(2.5)
     };
-    class gn {
+    class pn {
         constructor(){
-            N.uFromSunDir.value.copy($e.sunDirection);
             const e = u.realmModel.scene.getObjectByName("water");
-            e.material = new wn, e.renderOrder = 100;
+            e.material = new fn, e.renderOrder = 100, _.uFromSunDir.value.copy(et.sunDirection), _.uTworld.value.applyNormalMatrix(e.normalMatrix).normalize(), _.uBworld.value.applyNormalMatrix(e.normalMatrix).normalize(), _.uNworld.value.applyNormalMatrix(e.normalMatrix).normalize();
             const s = e.geometry.boundingSphere;
             s.radius = s.radius * .75, M.scene.add(e), F.on("audio-ready", ()=>{
-                e.add(ae.lake);
+                e.add(ie.lake);
             });
         }
     }
-    class wn extends At {
+    class fn extends Lt {
         constructor(){
             super(), this.createMaterial(), this.debugWater();
         }
@@ -905,71 +908,73 @@ Promise.all([
                 title: "🌊 Water",
                 expanded: !1
             });
-            e.addBinding(N.uSpeed, "value", {
+            e.addBinding(_.uSpeed, "value", {
                 label: "Speed"
-            }), e.addBinding(N.uUvScale, "value", {
+            }), e.addBinding(_.uUvScale, "value", {
                 label: "UV scale"
-            }), e.addBinding(N.uRefractionStrength, "value", {
+            }), e.addBinding(_.uRefractionStrength, "value", {
                 label: "Refraction strength"
-            }), e.addBinding(N.uShiness, "value", {
+            }), e.addBinding(_.uShiness, "value", {
                 label: "Shiness"
-            }), e.addBinding(N.uFresnelScale, "value", {
+            }), e.addBinding(_.uFresnelScale, "value", {
                 label: "Fresnel scale"
-            }), e.addBinding(N.uMinDist, "value", {
+            }), e.addBinding(_.uMinDist, "value", {
                 label: "Opacity min dist"
-            }), e.addBinding(N.uMaxDist, "value", {
+            }), e.addBinding(_.uMaxDist, "value", {
                 label: "Opacity max dist"
-            }), e.addBinding(N.uWaterColor, "value", {
+            }), e.addBinding(_.uWaterColor, "value", {
                 label: "Water color",
                 view: "color",
                 color: {
                     type: "float"
                 }
+            }), e.addBinding(_.uHighlightsFactor, "value", {
+                label: "Highlights glow factor"
             });
         }
         createMaterial() {
             this.precision = "lowp";
-            const e = ee.mul(N.uSpeed), t = N.uNoiseScrollDir.mul(e), s = R().add(t).mul(N.uUvScale).fract(), o = x(u.waterNormal, s).mul(2).sub(1), n = R().sub(t).mul(N.uUvScale).fract(), a = x(u.waterNormal, n).mul(2).sub(1), r = o.add(a).rgb.normalize(), l = r.xy.mul(N.uRefractionStrength), d = dt(Ze).r, h = ut.element(3).element(2), m = ut.element(2).element(2), b = h.div(d.add(m)), w = Ms.z.negate(), S = I(w, b), y = Ze.add(l.mul(S)), O = dt(y).r, z = h.div(O.add(m)), G = I(w, z), H = Is(je.sub(X)), K = Ls.add(r).normalize(), se = _s(u.envMapTexture, K, 3), ue = Ps(Es(i(1).sub(K))), V = N.uFresnelScale.mul(ue), ce = B(N.uWaterColor, se, V), he = B(Ze, y, G), oe = Ts(he).rgb, Q = Ds(N.uFromSunDir, r.rbg), Y = Ue(ht(Q, H), 0), we = Xe(Y, N.uShiness), Le = L(we), _e = ht(X.xz.sub(je.xz), X.xz.sub(je.xz)), De = N.uMinDist, ve = N.uMaxDist, Ge = B(.05, .5, Z(De.mul(De), ve.mul(ve), _e)), He = B(oe, ce, Ge);
-            this.colorNode = He.add(Le);
+            const e = ee.mul(_.uSpeed), t = _.uNoiseScrollDir.mul(e), s = R().add(t).mul(_.uUvScale.mul(1.7)).fract(), o = x(u.waterNormal, s).mul(2).sub(1), n = R().sub(t).mul(_.uUvScale.mul(1.3)).fract(), a = x(u.waterNormal, n).mul(2).sub(1), r = C(o, a, .5).rgb.normalize(), l = r.xy.mul(_.uRefractionStrength), d = r.x.mul(_.uTworld).add(r.y.mul(_.uBworld)).add(r.z.mul(_.uNworld)).normalize(), h = mt(Ke).r, m = pt.element(3).element(2), y = pt.element(2).element(2), w = m.div(h.add(y)), b = Is.z.negate(), S = L(b, w), U = Ke.add(l.mul(S)), z = mt(U).r, G = m.div(z.add(y)), H = L(b, G), V = _s(qe.sub(X)), se = ft(V.negate(), d).normalize(), ue = Ps(u.envMapTexture, se), Z = Ee(Ye(d, V), 0), oe = i(.02), he = oe.add(i(1).sub(oe).mul(Oe(i(1).sub(Z), 5))), ne = C(_.uWaterColor, ue, he.mul(_.uFresnelScale)), Q = C(Ke, U, H), Y = Es(Q).rgb, we = ft(_.uFromSunDir, d), Ie = Ee(Ye(we, V), 0), _e = Oe(Ie, _.uShiness), He = I(_e).mul(_.uHighlightsFactor), ze = Ye(X.xz.sub(qe.xz), X.xz.sub(qe.xz)), De = _.uMinDist, Be = _.uMaxDist, We = C(.05, .5, j(De.mul(De), Be.mul(Be), ze)), tt = C(Y, ne, We);
+            this.colorNode = tt.add(He);
         }
     }
-    const wt = 20;
-    class yn extends $ {
+    const St = 20;
+    class gn extends $ {
         _noiseBuffer;
         constructor(){
-            super(), this._noiseBuffer = Ee(wt, "float"), this._noiseBuffer.setPBO(!0), ge.renderer.computeAsync(this.computeInit), this.precision = "lowp", this.flatShading = !1;
-            const e = k(A), t = this._noiseBuffer.element(A), s = I(.5, t), o = i(1).sub(s), n = ie(R().mul(3.6).add(e)), a = ie(R().mul(1.5).add(e)), r = n.mul(s).add(a.mul(o)), { stoneDiffuse: l, stoneNormalAo: d, stoneMossyDiffuse: h, stoneMossyNormalAo: m } = u.atlasesCoords.stones, b = P(...l.scale).mul(s), w = P(...h.scale).mul(o), S = b.add(w), y = P(...l.offset).mul(s), O = P(...h.offset).mul(o), z = y.add(O), G = T.computeAtlasUv(S, z, r);
+            super(), this._noiseBuffer = Te(St, "float"), this._noiseBuffer.setPBO(!0), ge.renderer.computeAsync(this.computeInit), this.precision = "lowp", this.flatShading = !1;
+            const e = k(A), t = this._noiseBuffer.element(A), s = L(.5, t), o = i(1).sub(s), n = re(R().mul(3.6).add(e)), a = re(R().mul(1.5).add(e)), r = n.mul(s).add(a.mul(o)), { stoneDiffuse: l, stoneNormalAo: d, stoneMossyDiffuse: h, stoneMossyNormalAo: m } = u.atlasesCoords.stones, y = E(...l.scale).mul(s), w = E(...h.scale).mul(o), b = y.add(w), S = E(...l.offset).mul(s), U = E(...h.offset).mul(o), z = S.add(U), G = v.computeAtlasUv(b, z, r);
             this.colorNode = x(u.stoneAtlas, G);
-            const H = P(...d.scale).mul(s), K = P(...m.scale).mul(o), se = H.add(K), ue = P(...d.offset).mul(s), V = P(...m.offset).mul(o), ce = ue.add(V), he = T.computeAtlasUv(se, ce, r), oe = x(u.stoneAtlas, he);
-            this.normalNode = new ke(oe.rgb, i(3)), this.normalScale = new Ie(1, -1), this.aoNode = oe.a;
+            const H = E(...d.scale).mul(s), V = E(...m.scale).mul(o), se = H.add(V), ue = E(...d.offset).mul(s), Z = E(...m.offset).mul(o), oe = ue.add(Z), he = v.computeAtlasUv(se, oe, r), ne = x(u.stoneAtlas, he);
+            this.normalNode = new Ge(ne.rgb, i(3)), this.normalScale = new Le(1, -1), this.aoNode = ne.a;
         }
-        computeInit = p(()=>{
-            const e = this._noiseBuffer.element(A), t = P(k(A), k(A).mul(21.63)).fract(), s = x(u.noiseTexture, t);
+        computeInit = f(()=>{
+            const e = this._noiseBuffer.element(A), t = E(k(A), k(A).mul(21.63)).fract(), s = x(u.noiseTexture, t);
             e.assign(s.r);
-        })().compute(wt);
+        })().compute(St);
     }
-    class bn {
+    class wn {
         constructor(){
-            const e = u.realmModel.scene.getObjectByName("stone"), t = u.realmModel.scene.children.filter(({ name: n })=>n.startsWith("stone_collider")), s = new yn, o = new pe(e.geometry, s, t.length);
+            const e = u.realmModel.scene.getObjectByName("stone"), t = u.realmModel.scene.children.filter(({ name: n })=>n.startsWith("stone_collider")), s = new gn, o = new pe(e.geometry, s, t.length);
             o.receiveShadow = !0, t.forEach((n, a)=>{
                 o.setMatrixAt(a, n.matrix);
-                const r = re.fixed().setTranslation(...n.position.toArray()).setRotation(n.quaternion).setUserData({
-                    type: j.Stone
-                }), l = D.world.createRigidBody(r);
+                const r = le.fixed().setTranslation(...n.position.toArray()).setRotation(n.quaternion).setUserData({
+                    type: K.Stone
+                }), l = B.world.createRigidBody(r);
                 n.geometry.computeBoundingBox();
-                const d = n.geometry.boundingBox.max.x * n.scale.x, h = le.ball(d).setRestitution(.75);
-                D.world.createCollider(h, l);
+                const d = n.geometry.boundingBox.max.x * n.scale.x, h = ce.ball(d).setRestitution(.75);
+                B.world.createCollider(h, l);
             }), M.scene.add(o);
         }
     }
-    const Sn = {
-        uGrassTerrainColor: g(new W().setRGB(.74, .51, 0)),
-        uWaterSandColor: g(new W().setRGB(.54, .39, .2)),
-        uPathSandColor: g(new W().setRGB(.65, .49, .27))
+    const yn = {
+        uGrassTerrainColor: p(new W().setRGB(.74, .51, 0)),
+        uWaterSandColor: p(new W().setRGB(.54, .39, .2)),
+        uPathSandColor: p(new W().setRGB(.65, .49, .27))
     };
-    class An extends $ {
+    class bn extends $ {
         _uniforms = {
-            ...Sn
+            ...yn
         };
         constructor(){
             super(), this.createMaterial(), this.debugTerrain();
@@ -998,23 +1003,23 @@ Promise.all([
                 }
             });
         }
-        computeCausticsDiffuse = p(([e = P(0, 0), t = i(0), s = L(0, 0, 0)])=>{
-            const o = ee.mul(.15), n = e.mul(17), a = ie(n.add(P(o, 0))), r = x(u.noiseTexture, a, 1).g, l = e.mul(33), d = ie(l.add(P(0, o.negate()))), h = x(u.noiseTexture, d, 3).g, m = r.add(h), b = Z(-1, 7.5, t), w = Xe(m, 3).mul(i(1).sub(b)), S = L(.6, .8, 1).mul(.5);
-            return B(s, S, w);
+        computeCausticsDiffuse = f(([e = E(0, 0), t = i(0), s = I(0, 0, 0)])=>{
+            const o = ee.mul(.15), n = e.mul(17), a = re(n.add(E(o, 0))), r = x(u.noiseTexture, a, 1).g, l = e.mul(33), d = re(l.add(E(0, o.negate()))), h = x(u.noiseTexture, d, 3).g, m = r.add(h), y = j(-1, 7.5, t), w = Oe(m, 3).mul(i(1).sub(y)), b = I(.6, .8, 1).mul(.5);
+            return C(s, b, w);
         });
-        computeWaterDiffuse = p(([e = i(0), t = P(0, 0)])=>{
-            const s = i(8), o = i(.001), n = Z(0, s.add(o), e), a = this._uniforms.uWaterSandColor, r = L(.35, .45, .55).mul(.65), l = this.computeCausticsDiffuse(t, e), d = Z(0, 1.5, e), h = L(1, .9, .7).mul(.1).mul(d);
-            return B(a, r, n).add(h).add(l);
+        computeWaterDiffuse = f(([e = i(0), t = E(0, 0)])=>{
+            const s = i(8), o = i(.001), n = j(0, s.add(o), e), a = this._uniforms.uWaterSandColor, r = I(.35, .45, .55).mul(.65), l = this.computeCausticsDiffuse(t, e), d = j(0, 1.5, e), h = I(1, .9, .7).mul(.1).mul(d);
+            return C(a, r, n).add(h).add(l);
         });
         createMaterial() {
             this.precision = "lowp", this.flatShading = !1;
-            const e = T.computeMapUvByPosition(X.xz), t = qe(e), s = x(u.terrainShadowAo, R().clamp());
+            const e = v.computeMapUvByPosition(X.xz), t = Xe(e), s = x(u.terrainShadowAo, R().clamp());
             this.aoNode = s.g;
-            const o = x(u.terrainTypeMap, t, 2.5), n = o.g, a = o.b, l = i(1).sub(n).sub(a), d = x(u.sandNormal, ie(t.mul(30))), h = ie(t.mul(30)), b = x(u.grassNormal, h).dot(d).mul(.65), w = x(u.grassDiffuse, h), S = i(1).sub(w.a), y = this._uniforms.uGrassTerrainColor.mul(S).add(w).mul(n).mul(.85), O = this._uniforms.uPathSandColor.mul(1.2).mul(l), z = qe(X.y.negate()), H = this.computeWaterDiffuse(z, t).mul(a), K = y.add(O.mul(b)).add(H.mul(b).mul(.5));
-            this.colorNode = K.mul(s.r);
+            const o = x(u.terrainTypeMap, t, 2.5), n = o.g, a = o.b, l = i(1).sub(n).sub(a), d = x(u.sandNormal, re(t.mul(30))), h = re(t.mul(30)), y = x(u.grassNormal, h).dot(d).mul(.65), w = x(u.grassDiffuse, h), b = i(1).sub(w.a), S = this._uniforms.uGrassTerrainColor.mul(b).add(w).mul(n).mul(.85), U = this._uniforms.uPathSandColor.mul(1.2).mul(l), z = Xe(X.y.negate()), H = this.computeWaterDiffuse(z, t).mul(a), V = S.add(U.mul(y)).add(H.mul(y).mul(.5));
+            this.colorNode = V.mul(s.r);
         }
     }
-    class xn {
+    class Sn {
         constructor(e){
             const t = this.createFloor();
             t.material = e, M.scene.add(t);
@@ -1028,8 +1033,8 @@ Promise.all([
             e.geometry.boundingBox || e.geometry.computeBoundingBox();
             const o = e.geometry.boundingBox, n = s.count, a = Math.sqrt(n), r = o.max.x, l = new Float32Array(n);
             for(let d = 0; d < n; d++){
-                const h = s.array[d * 3 + 0], m = s.array[d * 3 + 1], b = s.array[d * 3 + 2], w = Math.round((h / (r * 2) + .5) * (a - 1)), y = Math.round((b / (r * 2) + .5) * (a - 1)) + w * a;
-                l[y] = m;
+                const h = s.array[d * 3 + 0], m = s.array[d * 3 + 1], y = s.array[d * 3 + 2], w = Math.round((h / (r * 2) + .5) * (a - 1)), S = Math.round((y / (r * 2) + .5) * (a - 1)) + w * a;
+                l[S] = m;
             }
             return {
                 rowsCount: a,
@@ -1038,20 +1043,20 @@ Promise.all([
             };
         }
         createFloorPhysics() {
-            const e = this.getFloorDisplacementData(), { rowsCount: t, heights: s, displacement: o } = e, n = re.fixed().setTranslation(0, -o, 0).setUserData({
-                type: j.Terrain
-            }), a = D.world.createRigidBody(n), r = le.heightfield(t - 1, t - 1, s, {
+            const e = this.getFloorDisplacementData(), { rowsCount: t, heights: s, displacement: o } = e, n = le.fixed().setTranslation(0, -o, 0).setUserData({
+                type: K.Terrain
+            }), a = B.world.createRigidBody(n), r = ce.heightfield(t - 1, t - 1, s, {
                 x: J.MAP_SIZE,
                 y: 1,
                 z: J.MAP_SIZE
-            }, zs.FIX_INTERNAL_EDGES).setFriction(1).setRestitution(.2);
-            D.world.createCollider(r, a);
+            }, Gs.FIX_INTERNAL_EDGES).setFriction(1).setRestitution(.2);
+            B.world.createCollider(r, a);
         }
     }
-    class Mn {
+    class An {
         outerFloor;
         kintoun;
-        kintounPosition = new v;
+        kintounPosition = new D;
         constructor(e){
             this.outerFloor = this.createOuterFloorVisual(), this.outerFloor.material = e, this.kintoun = this.createKintoun(), M.scene.add(this.outerFloor), F.on("update", this.update.bind(this));
         }
@@ -1060,10 +1065,10 @@ Promise.all([
             return e.receiveShadow = !0, e;
         }
         createKintoun() {
-            const e = re.kinematicPositionBased().setTranslation(0, -20, 0).setUserData({
-                type: j.Terrain
-            }), t = D.world.createRigidBody(e), s = 2, o = le.cuboid(s, J.HALF_FLOOR_THICKNESS, s).setFriction(1).setRestitution(.2);
-            return D.world.createCollider(o, t), t;
+            const e = le.kinematicPositionBased().setTranslation(0, -20, 0).setUserData({
+                type: K.Terrain
+            }), t = B.world.createRigidBody(e), s = 2, o = ce.cuboid(s, J.HALF_FLOOR_THICKNESS, s).setFriction(1).setRestitution(.2);
+            return B.world.createCollider(o, t), t;
         }
         useKintoun(e) {
             this.kintounPosition.copy(e).setY(-J.HALF_FLOOR_THICKNESS), this.kintoun.setTranslation(this.kintounPosition, !0);
@@ -1075,13 +1080,13 @@ Promise.all([
             this.outerFloor.position.set(h * r, 0, m * d);
         }
     }
-    class In {
+    class xn {
         constructor(){
-            const e = new An;
-            new xn(e), new Mn(e);
+            const e = new bn;
+            new Sn(e), new An(e);
         }
     }
-    const Ln = ()=>({
+    const Mn = ()=>({
             BLADE_WIDTH: .1,
             BLADE_HEIGHT: 1.65,
             BLADE_BOUNDING_SPHERE_RADIUS: 1.65,
@@ -1091,138 +1096,138 @@ Promise.all([
             COUNT: 512 * 512,
             SPACING: 150 / 512,
             WORKGROUP_SIZE: 256
-        }), _ = Ln(), f = {
-        uPlayerPosition: g(new v(0, 0, 0)),
-        uCameraMatrix: g(new Oe),
-        uBladeMinScale: g(.5),
-        uBladeMaxScale: g(1.25),
-        uTrailGrowthRate: g(.004),
-        uTrailMinScale: g(.25),
-        uTrailRaius: g(.65),
-        uTrailRaiusSquared: g(.65 * .65),
-        uGlowRadius: g(2),
-        uGlowRadiusSquared: g(4),
-        uGlowFadeIn: g(.05),
-        uGlowFadeOut: g(.01),
-        uGlowColor: g(new W().setRGB(.39, .14, .02)),
-        uBladeMaxBendAngle: g(Math.PI * .15),
-        uWindStrength: g(.6),
-        uBaseColor: g(new W().setRGB(.07, .07, 0)),
-        uTipColor: g(new W().setRGB(.23, .11, .05)),
-        uDelta: g(new Ie(0, 0)),
-        uGlowMul: g(3),
-        uR0: g(20),
-        uR1: g(75),
-        uPMin: g(.05),
-        uWindSpeed: g(.25)
+        }), P = Mn(), g = {
+        uPlayerPosition: p(new D(0, 0, 0)),
+        uCameraMatrix: p(new ke),
+        uBladeMinScale: p(.5),
+        uBladeMaxScale: p(1.25),
+        uTrailGrowthRate: p(.004),
+        uTrailMinScale: p(.25),
+        uTrailRaius: p(.65),
+        uTrailRaiusSquared: p(.65 * .65),
+        uGlowRadius: p(2),
+        uGlowRadiusSquared: p(4),
+        uGlowFadeIn: p(.05),
+        uGlowFadeOut: p(.01),
+        uGlowColor: p(new W().setRGB(.39, .14, .02)),
+        uBladeMaxBendAngle: p(Math.PI * .15),
+        uWindStrength: p(.6),
+        uBaseColor: p(new W().setRGB(.07, .07, 0)),
+        uTipColor: p(new W().setRGB(.23, .11, .05)),
+        uDelta: p(new Le(0, 0)),
+        uGlowMul: p(3),
+        uR0: p(20),
+        uR1: p(75),
+        uPMin: p(.05),
+        uWindSpeed: p(.25)
     };
-    class _n {
+    class Ln {
         buffer;
         constructor(){
-            this.buffer = Ee(_.COUNT, "vec4"), this.computeUpdate.onInit(({ renderer: e })=>{
+            this.buffer = Te(P.COUNT, "vec4"), this.computeUpdate.onInit(({ renderer: e })=>{
                 e.computeAsync(this.computeInit);
             });
         }
         get computeBuffer() {
             return this.buffer;
         }
-        getYaw = p(([e = U(0)])=>T.unpackUnits(e.z, 0, 12, -Math.PI, Math.PI));
-        getBend = p(([e = U(0)])=>T.unpackUnits(e.z, 12, 12, -Math.PI, Math.PI));
-        getScale = p(([e = U(0)])=>T.unpackUnits(e.w, 0, 8, f.uBladeMinScale, f.uBladeMaxScale));
-        getOriginalScale = p(([e = U(0)])=>T.unpackUnits(e.w, 8, 8, f.uBladeMinScale, f.uBladeMaxScale));
-        getShadow = p(([e = U(0)])=>T.unpackFlag(e.w, 16));
-        getVisibility = p(([e = U(0)])=>T.unpackFlag(e.w, 17));
-        getGlow = p(([e = U(0)])=>T.unpackUnit(e.w, 18, 6));
-        setYaw = p(([e = U(0), t = i(0)])=>(e.z = T.packUnits(e.z, 0, 12, t, -Math.PI, Math.PI), e));
-        setBend = p(([e = U(0), t = i(0)])=>(e.z = T.packUnits(e.z, 12, 12, t, -Math.PI, Math.PI), e));
-        setScale = p(([e = U(0), t = i(0)])=>(e.w = T.packUnits(e.w, 0, 8, t, f.uBladeMinScale, f.uBladeMaxScale), e));
-        setOriginalScale = p(([e = U(0), t = i(0)])=>(e.w = T.packUnits(e.w, 8, 8, t, f.uBladeMinScale, f.uBladeMaxScale), e));
-        setShadow = p(([e = U(0), t = i(0)])=>(e.w = T.packFlag(e.w, 16, t), e));
-        setVisibility = p(([e = U(0), t = i(0)])=>(e.w = T.packFlag(e.w, 17, t), e));
-        setGlow = p(([e = U(0), t = i(0)])=>(e.w = T.packUnit(e.w, 18, 6, t), e));
-        computeInit = p(()=>{
-            const e = this.buffer.element(A), t = Se(i(A).div(_.BLADES_PER_SIDE)), s = i(A).mod(_.BLADES_PER_SIDE), o = k(A.add(4321)), n = k(A.add(1234)), a = s.mul(_.SPACING).sub(_.TILE_HALF_SIZE).add(o.mul(_.SPACING * .5)), r = t.mul(_.SPACING).sub(_.TILE_HALF_SIZE).add(n.mul(_.SPACING * .5)), l = L(a, 0, r).xz.add(_.TILE_HALF_SIZE).div(_.TILE_SIZE).abs(), d = x(u.noiseTexture, l), h = d.r.sub(.5).mul(17).fract(), m = d.b.sub(.5).mul(13).fract();
+        getYaw = f(([e = O(0)])=>v.unpackUnits(e.z, 0, 12, -Math.PI, Math.PI));
+        getBend = f(([e = O(0)])=>v.unpackUnits(e.z, 12, 12, -Math.PI, Math.PI));
+        getScale = f(([e = O(0)])=>v.unpackUnits(e.w, 0, 8, g.uBladeMinScale, g.uBladeMaxScale));
+        getOriginalScale = f(([e = O(0)])=>v.unpackUnits(e.w, 8, 8, g.uBladeMinScale, g.uBladeMaxScale));
+        getShadow = f(([e = O(0)])=>v.unpackFlag(e.w, 16));
+        getVisibility = f(([e = O(0)])=>v.unpackFlag(e.w, 17));
+        getGlow = f(([e = O(0)])=>v.unpackUnit(e.w, 18, 6));
+        setYaw = f(([e = O(0), t = i(0)])=>(e.z = v.packUnits(e.z, 0, 12, t, -Math.PI, Math.PI), e));
+        setBend = f(([e = O(0), t = i(0)])=>(e.z = v.packUnits(e.z, 12, 12, t, -Math.PI, Math.PI), e));
+        setScale = f(([e = O(0), t = i(0)])=>(e.w = v.packUnits(e.w, 0, 8, t, g.uBladeMinScale, g.uBladeMaxScale), e));
+        setOriginalScale = f(([e = O(0), t = i(0)])=>(e.w = v.packUnits(e.w, 8, 8, t, g.uBladeMinScale, g.uBladeMaxScale), e));
+        setShadow = f(([e = O(0), t = i(0)])=>(e.w = v.packFlag(e.w, 16, t), e));
+        setVisibility = f(([e = O(0), t = i(0)])=>(e.w = v.packFlag(e.w, 17, t), e));
+        setGlow = f(([e = O(0), t = i(0)])=>(e.w = v.packUnit(e.w, 18, 6, t), e));
+        computeInit = f(()=>{
+            const e = this.buffer.element(A), t = Se(i(A).div(P.BLADES_PER_SIDE)), s = i(A).mod(P.BLADES_PER_SIDE), o = k(A.add(4321)), n = k(A.add(1234)), a = s.mul(P.SPACING).sub(P.TILE_HALF_SIZE).add(o.mul(P.SPACING * .5)), r = t.mul(P.SPACING).sub(P.TILE_HALF_SIZE).add(n.mul(P.SPACING * .5)), l = I(a, 0, r).xz.add(P.TILE_HALF_SIZE).div(P.TILE_SIZE).abs(), d = x(u.noiseTexture, l), h = d.r.sub(.5).mul(17).fract(), m = d.b.sub(.5).mul(13).fract();
             e.x = a.add(h), e.y = r.add(m);
-            const b = d.b.sub(.5).mul(i(Math.PI * 2));
-            e.assign(this.setYaw(e, b));
-            const w = f.uBladeMaxScale.sub(f.uBladeMinScale), S = d.r.mul(w).add(f.uBladeMinScale);
-            e.assign(this.setScale(e, S)), e.assign(this.setOriginalScale(e, S));
-        })().compute(_.COUNT, [
-            _.WORKGROUP_SIZE
+            const y = d.b.sub(.5).mul(i(Math.PI * 2));
+            e.assign(this.setYaw(e, y));
+            const w = g.uBladeMaxScale.sub(g.uBladeMinScale), b = d.r.mul(w).add(g.uBladeMinScale);
+            e.assign(this.setScale(e, b)), e.assign(this.setOriginalScale(e, b));
+        })().compute(P.COUNT, [
+            P.WORKGROUP_SIZE
         ]);
-        computeStochasticKeep = p(([e = L(0)])=>{
-            const t = e.x.sub(f.uPlayerPosition.x), s = e.z.sub(f.uPlayerPosition.z), o = t.mul(t).add(s.mul(s)), n = f.uR0, a = f.uR1, r = f.uPMin, l = n.mul(n), d = a.mul(a), h = Ye(o.sub(l).div(Ue(d.sub(l), 1e-5)), 0, 1), m = B(1, r, h), b = k(i(A).mul(.73));
-            return I(b, m);
+        computeStochasticKeep = f(([e = I(0)])=>{
+            const t = e.x.sub(g.uPlayerPosition.x), s = e.z.sub(g.uPlayerPosition.z), o = t.mul(t).add(s.mul(s)), n = g.uR0, a = g.uR1, r = g.uPMin, l = n.mul(n), d = a.mul(a), h = $e(o.sub(l).div(Ee(d.sub(l), 1e-5)), 0, 1), m = C(1, r, h), y = k(i(A).mul(.73));
+            return L(y, m);
         });
-        computeVisibility = p(([e = L(0)])=>{
-            const t = f.uCameraMatrix.mul(U(e, 1)), s = t.xyz.div(t.w), o = _.BLADE_BOUNDING_SPHERE_RADIUS, n = i(1);
-            return I(n.negate().sub(o), s.x).mul(I(s.x, n.add(o))).mul(I(n.negate().sub(o), s.y)).mul(I(s.y, n.add(o))).mul(I(0, s.z)).mul(I(s.z, n));
+        computeVisibility = f(([e = I(0)])=>{
+            const t = g.uCameraMatrix.mul(O(e, 1)), s = t.xyz.div(t.w), o = P.BLADE_BOUNDING_SPHERE_RADIUS, n = i(1);
+            return L(n.negate().sub(o), s.x).mul(L(s.x, n.add(o))).mul(L(n.negate().sub(o), s.y)).mul(L(s.y, n.add(o))).mul(L(0, s.z)).mul(L(s.z, n));
         });
-        computeBending = p(([e = i(0), t = L(0)])=>{
-            const s = t.xz.add(ee.mul(f.uWindSpeed)).mul(.5).fract(), n = x(u.noiseTexture, s, 2).r.mul(f.uWindStrength);
+        computeBending = f(([e = i(0), t = I(0)])=>{
+            const s = t.xz.add(ee.mul(g.uWindSpeed)).mul(.5).fract(), n = x(u.noiseTexture, s, 2).r.mul(g.uWindStrength);
             return e.add(n.sub(e).mul(.1));
         });
-        computeAlpha = p(([e = L(0)])=>{
-            const t = T.computeMapUvByPosition(e.xz), s = x(u.terrainTypeMap, t).g;
-            return I(.25, s);
+        computeAlpha = f(([e = I(0)])=>{
+            const t = v.computeMapUvByPosition(e.xz), s = x(u.terrainTypeMap, t).g;
+            return L(.25, s);
         });
-        computeTrailScale = p(([e = i(0), t = i(0), s = i(0)])=>{
-            const o = t.add(f.uTrailGrowthRate), n = i(1).sub(s), a = f.uTrailMinScale.mul(s).add(o.mul(n));
-            return Bs(a, e);
+        computeTrailScale = f(([e = i(0), t = i(0), s = i(0)])=>{
+            const o = t.add(g.uTrailGrowthRate), n = i(1).sub(s), a = g.uTrailMinScale.mul(s).add(o.mul(n));
+            return vs(a, e);
         });
-        computeTrailGlow = p(([e = i(0), t = i(0), s = i(0), o = i(0)])=>{
-            const n = Z(f.uGlowRadiusSquared, i(0), t), a = 100, r = Se(mt(f.uDelta.x).mul(a)), l = Se(mt(f.uDelta.y).mul(a)), d = I(1, r.add(l)), h = n.mul(i(1).sub(s)).mul(o), m = Ue(d, e).mul(h), b = m.mul(f.uGlowFadeIn), w = i(1).sub(m).mul(f.uGlowFadeOut), S = i(1).sub(d).mul(f.uGlowFadeOut).mul(e);
-            return Ye(e.add(b).sub(w).sub(S), 0, 1);
+        computeTrailGlow = f(([e = i(0), t = i(0), s = i(0), o = i(0)])=>{
+            const n = j(g.uGlowRadiusSquared, i(0), t), a = 100, r = Se(gt(g.uDelta.x).mul(a)), l = Se(gt(g.uDelta.y).mul(a)), d = L(1, r.add(l)), h = n.mul(i(1).sub(s)).mul(o), m = Ee(d, e).mul(h), y = m.mul(g.uGlowFadeIn), w = i(1).sub(m).mul(g.uGlowFadeOut), b = i(1).sub(d).mul(g.uGlowFadeOut).mul(e);
+            return $e(e.add(y).sub(w).sub(b), 0, 1);
         });
-        computeShadow = p(([e = L(0)])=>{
-            const t = T.computeMapUvByPosition(e.xz), s = x(u.terrainShadowAo, t);
-            return I(.65, s.r);
+        computeShadow = f(([e = I(0)])=>{
+            const t = v.computeMapUvByPosition(e.xz), s = x(u.terrainShadowAo, t);
+            return L(.65, s.r);
         });
-        computeUpdate = p(()=>{
-            const e = this.buffer.element(A), t = Me(e.x.sub(f.uDelta.x).add(_.TILE_HALF_SIZE), _.TILE_SIZE).sub(_.TILE_HALF_SIZE), s = Me(e.y.sub(f.uDelta.y).add(_.TILE_HALF_SIZE), _.TILE_SIZE).sub(_.TILE_HALF_SIZE), o = L(t, 0, s);
+        computeUpdate = f(()=>{
+            const e = this.buffer.element(A), t = Me(e.x.sub(g.uDelta.x).add(P.TILE_HALF_SIZE), P.TILE_SIZE).sub(P.TILE_HALF_SIZE), s = Me(e.y.sub(g.uDelta.y).add(P.TILE_HALF_SIZE), P.TILE_SIZE).sub(P.TILE_HALF_SIZE), o = I(t, 0, s);
             e.x = t, e.y = s;
-            const n = o.add(f.uPlayerPosition), a = this.computeStochasticKeep(n), r = this.computeVisibility(n).mul(a);
-            e.assign(this.setVisibility(e, r)), xt(r, ()=>{
-                const l = P(f.uDelta.x, f.uDelta.y), d = o.xz.sub(l), h = d.dot(d), m = I(.1, i(1).sub(f.uPlayerPosition.y)), b = I(h, f.uTrailRaiusSquared).mul(m), w = this.getScale(e), S = this.getOriginalScale(e), y = this.computeTrailScale(S, w, b);
-                e.assign(this.setScale(e, y));
-                const O = this.computeAlpha(n);
-                e.assign(this.setVisibility(e, O));
+            const n = o.add(g.uPlayerPosition), a = this.computeStochasticKeep(n), r = this.computeVisibility(n).mul(a);
+            e.assign(this.setVisibility(e, r)), It(r, ()=>{
+                const l = E(g.uDelta.x, g.uDelta.y), d = o.xz.sub(l), h = d.dot(d), m = L(.1, i(1).sub(g.uPlayerPosition.y)), y = L(h, g.uTrailRaiusSquared).mul(m), w = this.getScale(e), b = this.getOriginalScale(e), S = this.computeTrailScale(b, w, y);
+                e.assign(this.setScale(e, S));
+                const U = this.computeAlpha(n);
+                e.assign(this.setVisibility(e, U));
                 const z = this.getBend(e), G = this.computeBending(z, n);
                 e.assign(this.setBend(e, G));
-                const H = this.getGlow(e), K = this.computeTrailGlow(H, h, b, m);
-                e.assign(this.setGlow(e, K));
+                const H = this.getGlow(e), V = this.computeTrailGlow(H, h, y, m);
+                e.assign(this.setGlow(e, V));
                 const se = this.computeShadow(n);
                 e.assign(this.setShadow(e, se));
             });
-        })().compute(_.COUNT, [
-            _.WORKGROUP_SIZE
+        })().compute(P.COUNT, [
+            P.WORKGROUP_SIZE
         ]);
     }
-    class Pn extends At {
+    class In extends Lt {
         ssbo;
         constructor(e){
             super(), this.ssbo = e, this.createGrassMaterial();
         }
-        computePosition = p(([e = i(0), t = i(0), s = i(0), o = i(0), n = i(0), a = i(0)])=>{
-            const r = L(e, 0, t), l = o.mul(R().y), h = pt(Te, L(l, 0, 0)).mul(L(1, n, 1)), m = pt(h, L(0, s, 0)), b = k(A).mul(be), w = fe(ee.mul(5).add(o).add(b)).mul(.1), S = R().y.mul(a), y = w.mul(S);
-            return m.add(r).add(L(y));
+        computePosition = f(([e = i(0), t = i(0), s = i(0), o = i(0), n = i(0), a = i(0)])=>{
+            const r = I(e, 0, t), l = o.mul(R().y), h = wt(ve, I(l, 0, 0)).mul(I(1, n, 1)), m = wt(h, I(0, s, 0)), y = k(A).mul(be), w = fe(ee.mul(5).add(o).add(y)).mul(.1), b = R().y.mul(a), S = w.mul(b);
+            return m.add(r).add(I(S));
         });
-        computeDiffuseColor = p(([e = i(0), t = i(1)])=>{
-            const s = B(f.uBaseColor, f.uTipColor, R().y), o = B(s, f.uGlowColor.mul(f.uGlowMul), e);
-            return B(o.mul(.5), o, t);
+        computeDiffuseColor = f(([e = i(0), t = i(1)])=>{
+            const s = C(g.uBaseColor, g.uTipColor, R().y), o = C(s, g.uGlowColor.mul(g.uGlowMul), e);
+            return C(o.mul(.5), o, t);
         });
         createGrassMaterial() {
-            this.precision = "lowp", this.side = Je;
+            this.precision = "lowp", this.side = Qe;
             const e = this.ssbo.computeBuffer.element(A), t = e.x, s = e.y, o = this.ssbo.getYaw(e), n = this.ssbo.getBend(e), a = this.ssbo.getScale(e), r = this.ssbo.getVisibility(e), l = this.ssbo.getGlow(e), d = this.ssbo.getShadow(e);
-            Cs(r.equal(0)), this.positionNode = this.computePosition(t, s, o, n, a, l), this.opacityNode = r, this.alphaTest = .5, this.colorNode = this.computeDiffuseColor(l, d);
+            Ds(r.equal(0)), this.positionNode = this.computePosition(t, s, o, n, a, l), this.opacityNode = r, this.alphaTest = .5, this.colorNode = this.computeDiffuseColor(l, d);
         }
     }
-    class En {
+    class _n {
         constructor(){
-            const e = new _n, t = this.createGeometry(3), s = new Pn(e), o = new pe(t, s, _.COUNT);
+            const e = new Ln, t = this.createGeometry(3), s = new In(e), o = new pe(t, s, P.COUNT);
             o.frustumCulled = !1, M.scene.add(o), F.on("update-throttle-2x", ({ player: n })=>{
                 const a = n.position.x - o.position.x, r = n.position.z - o.position.z;
-                f.uDelta.value.set(a, r), f.uPlayerPosition.value.copy(n.position), f.uCameraMatrix.value.copy(M.playerCamera.projectionMatrix).multiply(M.playerCamera.matrixWorldInverse), o.position.copy(n.position).setY(0), ge.renderer.computeAsync(e.computeUpdate);
+                g.uDelta.value.set(a, r), g.uPlayerPosition.value.copy(n.position), g.uCameraMatrix.value.copy(M.playerCamera.projectionMatrix).multiply(M.playerCamera.matrixWorldInverse), o.position.copy(n.position).setY(0), ge.renderer.computeAsync(e.computeUpdate);
             }), this.debugGrass();
         }
         debugGrass() {
@@ -1230,50 +1235,50 @@ Promise.all([
                 title: "🌱 Grass",
                 expanded: !1
             });
-            e.addBinding(f.uTipColor, "value", {
+            e.addBinding(g.uTipColor, "value", {
                 label: "Tip Color",
                 view: "color",
                 color: {
                     type: "float"
                 }
-            }), e.addBinding(f.uBaseColor, "value", {
+            }), e.addBinding(g.uBaseColor, "value", {
                 label: "Base Color",
                 view: "color",
                 color: {
                     type: "float"
                 }
-            }), e.addBinding(f.uGlowColor, "value", {
+            }), e.addBinding(g.uGlowColor, "value", {
                 label: "Glow Color",
                 view: "color",
                 color: {
                     type: "float"
                 }
-            }), e.addBinding(f.uWindStrength, "value", {
+            }), e.addBinding(g.uWindStrength, "value", {
                 label: "Wind strength",
                 min: 0,
                 max: Math.PI / 2,
                 step: .1
-            }), e.addBinding(f.uWindSpeed, "value", {
+            }), e.addBinding(g.uWindSpeed, "value", {
                 label: "Wind speed",
                 min: 0,
                 max: 5,
                 step: .01
-            }), e.addBinding(f.uGlowMul, "value", {
+            }), e.addBinding(g.uGlowMul, "value", {
                 label: "Glow bloom",
                 min: 1,
                 max: 20,
                 step: .01
-            }), e.addBinding(f.uR0, "value", {
+            }), e.addBinding(g.uR0, "value", {
                 label: "Inner ring",
                 min: 0,
-                max: _.TILE_SIZE,
+                max: P.TILE_SIZE,
                 step: .1
-            }), e.addBinding(f.uR1, "value", {
+            }), e.addBinding(g.uR1, "value", {
                 label: "Outer ring",
                 min: 0,
-                max: _.TILE_SIZE,
+                max: P.TILE_SIZE,
                 step: .1
-            }), e.addBinding(f.uPMin, "value", {
+            }), e.addBinding(g.uPMin, "value", {
                 label: "P Min",
                 min: 0,
                 max: 1,
@@ -1281,30 +1286,30 @@ Promise.all([
             });
         }
         createGeometry(e) {
-            const t = Math.max(1, Math.floor(e)), s = _.BLADE_HEIGHT, o = _.BLADE_WIDTH * .5, n = t, a = n * 2 + 1, l = Math.max(0, n - 1) * 6 + 3, d = new Float32Array(a * 3), h = new Float32Array(a * 2), m = new Uint8Array(l), b = new Float32Array(l * 3), w = (V)=>o * (1 - .7 * V);
-            let S = 0;
-            for(let V = 0; V < n; V++){
-                const ce = V / t, he = ce * s, oe = w(ce), Q = V * 2, Y = Q + 1;
-                if (d[3 * Q + 0] = -oe, d[3 * Q + 1] = he, d[3 * Q + 2] = 0, d[3 * Y + 0] = oe, d[3 * Y + 1] = he, d[3 * Y + 2] = 0, h[2 * Q + 0] = 0, h[2 * Q + 1] = ce, h[2 * Y + 0] = 1, h[2 * Y + 1] = ce, V > 0) {
-                    const we = (V - 1) * 2, Le = we + 1;
-                    m[S++] = we, m[S++] = Le, m[S++] = Y, m[S++] = we, m[S++] = Y, m[S++] = Q;
+            const t = Math.max(1, Math.floor(e)), s = P.BLADE_HEIGHT, o = P.BLADE_WIDTH * .5, n = t, a = n * 2 + 1, l = Math.max(0, n - 1) * 6 + 3, d = new Float32Array(a * 3), h = new Float32Array(a * 2), m = new Uint8Array(l), y = new Float32Array(l * 3), w = (Z)=>o * (1 - .7 * Z);
+            let b = 0;
+            for(let Z = 0; Z < n; Z++){
+                const oe = Z / t, he = oe * s, ne = w(oe), Q = Z * 2, Y = Q + 1;
+                if (d[3 * Q + 0] = -ne, d[3 * Q + 1] = he, d[3 * Q + 2] = 0, d[3 * Y + 0] = ne, d[3 * Y + 1] = he, d[3 * Y + 2] = 0, h[2 * Q + 0] = 0, h[2 * Q + 1] = oe, h[2 * Y + 0] = 1, h[2 * Y + 1] = oe, Z > 0) {
+                    const we = (Z - 1) * 2, Ie = we + 1;
+                    m[b++] = we, m[b++] = Ie, m[b++] = Y, m[b++] = we, m[b++] = Y, m[b++] = Q;
                 }
             }
-            const y = n * 2;
-            d[3 * y + 0] = 0, d[3 * y + 1] = s, d[3 * y + 2] = 0, h[2 * y + 0] = .5, h[2 * y + 1] = 1;
-            const O = (n - 1) * 2, z = O + 1;
-            m[S++] = O, m[S++] = z, m[S++] = y;
-            const G = new vs, H = new Ne(d, 3);
-            H.setUsage(Re), G.setAttribute("position", H);
-            const K = new Ne(h, 2);
-            K.setUsage(Re), G.setAttribute("uv", K);
-            const se = new Ne(m, 1);
-            se.setUsage(Re), G.setIndex(se);
-            const ue = new Ne(b, 3);
-            return ue.setUsage(Re), G.setAttribute("normal", ue), G;
+            const S = n * 2;
+            d[3 * S + 0] = 0, d[3 * S + 1] = s, d[3 * S + 2] = 0, h[2 * S + 0] = .5, h[2 * S + 1] = 1;
+            const U = (n - 1) * 2, z = U + 1;
+            m[b++] = U, m[b++] = z, m[b++] = S;
+            const G = new Ts, H = new Re(d, 3);
+            H.setUsage(Fe), G.setAttribute("position", H);
+            const V = new Re(h, 2);
+            V.setUsage(Fe), G.setAttribute("uv", V);
+            const se = new Re(m, 1);
+            se.setUsage(Fe), G.setIndex(se);
+            const ue = new Re(y, 3);
+            return ue.setUsage(Fe), G.setAttribute("normal", ue), G;
         }
     }
-    const Tn = ()=>({
+    const Pn = ()=>({
             FLOWER_WIDTH: .5,
             FLOWER_HEIGHT: 1,
             BLADE_BOUNDING_SPHERE_RADIUS: 1,
@@ -1313,72 +1318,72 @@ Promise.all([
             FLOWERS_PER_SIDE: 25,
             COUNT: 625,
             SPACING: 150 / 25
-        }), C = Tn();
-    class Dn {
+        }), N = Pn();
+    class En {
         flowerField;
         material;
         uniforms = {
-            ..._t,
-            uDelta: g(new Ie(0, 0)),
-            uPlayerPosition: g(new v(0, 0, 0)),
-            uCameraMatrix: g(new Oe)
+            ...Tt,
+            uDelta: p(new Le(0, 0)),
+            uPlayerPosition: p(new D(0, 0, 0)),
+            uCameraMatrix: p(new ke)
         };
         constructor(){
-            this.material = new vn(this.uniforms), this.flowerField = new pe(new yt(1, 1), this.material, C.COUNT), M.scene.add(this.flowerField), F.on("update", this.updateAsync.bind(this));
+            this.material = new Tn(this.uniforms), this.flowerField = new pe(new At(1, 1), this.material, N.COUNT), M.scene.add(this.flowerField), F.on("update", this.updateAsync.bind(this));
         }
         async updateAsync(e) {
             const { player: t } = e, s = t.position.x - this.flowerField.position.x, o = t.position.z - this.flowerField.position.z;
             this.uniforms.uDelta.value.set(s, o), this.uniforms.uPlayerPosition.value.copy(t.position), this.uniforms.uCameraMatrix.value.copy(M.playerCamera.projectionMatrix).multiply(M.playerCamera.matrixWorldInverse), this.flowerField.position.copy(t.position).setY(0), this.material.updateAsync();
         }
     }
-    const _t = {
-        uPlayerPosition: g(new v(0, 0, 0)),
-        uCameraMatrix: g(new Oe),
-        uDelta: g(new Ie(0, 0))
+    const Tt = {
+        uPlayerPosition: p(new D(0, 0, 0)),
+        uCameraMatrix: p(new ke),
+        uDelta: p(new Le(0, 0))
     };
-    class vn extends St {
+    class Tn extends Mt {
         _uniforms;
         _buffer1;
         constructor(e){
             super(), this._uniforms = {
-                ..._t,
+                ...Tt,
                 ...e
-            }, this._buffer1 = Ee(C.COUNT, "vec4"), this._buffer1.setPBO(!0), this.computeUpdate.onInit(({ renderer: t })=>{
+            }, this._buffer1 = Te(N.COUNT, "vec4"), this._buffer1.setPBO(!0), this.computeUpdate.onInit(({ renderer: t })=>{
                 t.computeAsync(this.computeInit);
             }), this.createMaterial();
         }
-        computeInit = p(()=>{
-            const e = this._buffer1.element(A), t = Se(i(A).div(C.FLOWERS_PER_SIDE)), s = i(A).mod(C.FLOWERS_PER_SIDE), o = k(A.add(4321)), n = k(A.add(1234)), a = s.mul(C.SPACING).sub(C.TILE_HALF_SIZE).add(o.mul(C.SPACING * .5)), r = t.mul(C.SPACING).sub(C.TILE_HALF_SIZE).add(n.mul(C.SPACING * .5)), l = L(a, 0, r).xz.add(C.TILE_HALF_SIZE).div(C.TILE_SIZE).abs(), h = x(u.noiseTexture, l).r, m = h.sub(.5).mul(100), b = h.clamp(.5, .75), w = h.sub(.5).mul(50);
-            e.x = a.add(m), e.y = b, e.z = r.add(w);
-        })().compute(C.COUNT);
-        computeVisibility = p(([e = L(0)])=>{
-            const t = this._uniforms.uCameraMatrix.mul(U(e, 1)), s = t.xyz.div(t.w), o = C.BLADE_BOUNDING_SPHERE_RADIUS, n = i(1);
-            return I(n.negate().sub(o), s.x).mul(I(s.x, n.add(o))).mul(I(n.negate().sub(o), s.y)).mul(I(s.y, n.add(o))).mul(I(0, s.z)).mul(I(s.z, n));
+        computeInit = f(()=>{
+            const e = this._buffer1.element(A), t = Se(i(A).div(N.FLOWERS_PER_SIDE)), s = i(A).mod(N.FLOWERS_PER_SIDE), o = k(A.add(4321)), n = k(A.add(1234)), a = s.mul(N.SPACING).sub(N.TILE_HALF_SIZE).add(o.mul(N.SPACING * .5)), r = t.mul(N.SPACING).sub(N.TILE_HALF_SIZE).add(n.mul(N.SPACING * .5)), l = I(a, 0, r).xz.add(N.TILE_HALF_SIZE).div(N.TILE_SIZE).abs(), h = x(u.noiseTexture, l).r, m = h.sub(.5).mul(100), y = h.clamp(.5, .75), w = h.sub(.5).mul(50);
+            e.x = a.add(m), e.y = y, e.z = r.add(w);
+        })().compute(N.COUNT);
+        computeVisibility = f(([e = I(0)])=>{
+            const t = this._uniforms.uCameraMatrix.mul(O(e, 1)), s = t.xyz.div(t.w), o = N.BLADE_BOUNDING_SPHERE_RADIUS, n = i(1);
+            return L(n.negate().sub(o), s.x).mul(L(s.x, n.add(o))).mul(L(n.negate().sub(o), s.y)).mul(L(s.y, n.add(o))).mul(L(0, s.z)).mul(L(s.z, n));
         });
-        computeAlpha = p(([e = L(0)])=>{
-            const t = T.computeMapUvByPosition(e.xz);
+        computeAlpha = f(([e = I(0)])=>{
+            const t = v.computeMapUvByPosition(e.xz);
             return x(u.terrainTypeMap, t).g;
         });
-        computeUpdate = p(()=>{
-            const e = this._buffer1.element(A), t = Me(e.x.sub(this._uniforms.uDelta.x).add(C.TILE_HALF_SIZE), C.TILE_SIZE).sub(C.TILE_HALF_SIZE), s = Me(e.z.sub(this._uniforms.uDelta.y).add(C.TILE_HALF_SIZE), C.TILE_SIZE).sub(C.TILE_HALF_SIZE);
+        computeUpdate = f(()=>{
+            const e = this._buffer1.element(A), t = Me(e.x.sub(this._uniforms.uDelta.x).add(N.TILE_HALF_SIZE), N.TILE_SIZE).sub(N.TILE_HALF_SIZE), s = Me(e.z.sub(this._uniforms.uDelta.y).add(N.TILE_HALF_SIZE), N.TILE_SIZE).sub(N.TILE_HALF_SIZE);
             e.x = t, e.z = s;
-            const n = L(e.x, 0, e.z).add(this._uniforms.uPlayerPosition), a = this.computeVisibility(n);
-            e.w = a, xt(a, ()=>{
+            const n = I(e.x, 0, e.z).add(this._uniforms.uPlayerPosition), a = this.computeVisibility(n);
+            e.w = a, It(a, ()=>{
                 e.w = this.computeAlpha(n);
             });
-        })().compute(C.COUNT);
+        })().compute(N.COUNT);
         createMaterial() {
             this.precision = "lowp";
             const e = this._buffer1.element(A), t = k(A.add(9234)), s = k(A.add(33.87)), o = ee.mul(2), n = fe(o.add(t.mul(100))).mul(.05);
-            this.positionNode = e.xyz.add(L(n, 0, n)), this.scaleNode = t.mul(.2).add(.3);
-            const a = I(.5, t).mul(.5), r = I(.5, s).mul(.5), d = R().mul(.5).add(P(a, r)), h = x(u.flowerAtlas, d);
+            this.positionNode = e.xyz.add(I(n, 0, n)), this.scaleNode = t.mul(.2).add(.3);
+            const a = L(.5, t).mul(.5), r = L(.5, s).mul(.5), d = R().mul(.5).add(E(a, r)), h = x(u.flowerAtlas, d);
             this.colorNode = h, this.opacityNode = e.w, this.alphaTest = .15;
         }
         async updateAsync() {
             ge.renderer.computeAsync(this.computeUpdate);
         }
     }
-    class Bn {
+    class vn {
         constructor(){
             const e = u.realmModel.scene.getObjectByName("water_lilies");
             e.material = this.createMaterial(), M.scene.add(e);
@@ -1386,46 +1391,46 @@ Promise.all([
         createMaterial() {
             const e = new $;
             e.precision = "lowp", e.transparent = !0, e.map = u.waterLiliesTexture, e.alphaTest = .5, e.alphaMap = u.waterLiliesAlphaTexture;
-            const t = ee.mul(5e-4), s = X.x.mul(.1), o = x(u.noiseTexture, ie(X.xz.add(t).mul(s))).b.mul(.5), n = fe(o);
-            return e.positionNode = Te.add(n), e;
+            const t = ee.mul(5e-4), s = X.x.mul(.1), o = x(u.noiseTexture, re(X.xz.add(t).mul(s))).b.mul(.5), n = fe(o);
+            return e.positionNode = ve.add(n), e;
         }
     }
-    class Cn extends $ {
+    class Dn extends $ {
         constructor(){
             super(), this.precision = "lowp", this.flatShading = !1;
-            const e = ie(R().mul(7)), t = x(u.barkDiffuse, e);
+            const e = re(R().mul(7)), t = x(u.barkDiffuse, e);
             this.colorNode = t.mul(2.5);
             const s = x(u.barkNormal, e);
-            this.normalNode = new ke(s);
+            this.normalNode = new Ge(s);
         }
     }
     const xe = {
-        uPrimaryColor: g(new W().setRGB(.889, .095, 0)),
-        uSecondaryColor: g(new W().setRGB(1, .162, .009)),
-        uMixFactor: g(.5)
+        uPrimaryColor: p(new W().setRGB(.889, .095, 0)),
+        uSecondaryColor: p(new W().setRGB(1, .162, .009)),
+        uMixFactor: p(.5)
     };
-    class Nn extends $ {
+    class Bn extends $ {
         constructor(){
-            super(), this.precision = "lowp", this.flatShading = !1, this.transparent = !0, this.side = Je;
-            const e = T.computeMapUvByPosition(X.xz), t = x(u.noiseTexture, e), s = x(u.canopyDiffuse, R()), o = B(xe.uPrimaryColor, xe.uSecondaryColor, xe.uMixFactor);
-            this.colorNode = U(B(s.rgb, o, t.b.mul(.4)).rgb, 1);
+            super(), this.precision = "lowp", this.flatShading = !1, this.transparent = !0, this.side = Qe;
+            const e = v.computeMapUvByPosition(X.xz), t = x(u.noiseTexture, e), s = x(u.canopyDiffuse, R()), o = C(xe.uPrimaryColor, xe.uSecondaryColor, xe.uMixFactor);
+            this.colorNode = O(C(s.rgb, o, t.b.mul(.4)).rgb, 1);
             const n = x(u.canopyNormal, R());
-            this.normalNode = new ke(n, i(1.25)), this.normalScale = new Ie(1, -1), this.opacityNode = I(.5, s.a), this.alphaTest = .1;
-            const a = ee.mul(t.r).add(Ns).mul(7.5), r = fe(a).mul(.015), l = bt(a.mul(.75)).mul(.01);
-            this.positionNode = Te.add(L(0, l, r));
+            this.normalNode = new Ge(n, i(1.25)), this.normalScale = new Le(1, -1), this.opacityNode = L(.5, s.a), this.alphaTest = .1;
+            const a = ee.mul(t.r).add(Bs).mul(7.5), r = fe(a).mul(.015), l = xt(a.mul(.75)).mul(.01);
+            this.positionNode = ve.add(I(0, l, r));
         }
     }
-    class Rn {
+    class Cn {
         constructor(){
-            const e = u.realmModel.scene.getObjectByName("tree"), t = u.realmModel.scene.children.filter(({ name: w })=>w.startsWith("tree_collider")), s = new Cn, o = new Nn, [n, a] = e.children, r = new pe(n.geometry, s, t.length);
+            const e = u.realmModel.scene.getObjectByName("tree"), t = u.realmModel.scene.children.filter(({ name: w })=>w.startsWith("tree_collider")), s = new Dn, o = new Bn, [n, a] = e.children, r = new pe(n.geometry, s, t.length);
             r.receiveShadow = !0;
-            const l = new pe(a.geometry, o, t.length), h = u.realmModel.scene.getObjectByName("base_tree_collider").geometry.boundingBox, m = h.max.x, b = h.max.y / 2;
-            t.forEach((w, S)=>{
-                r.setMatrixAt(S, w.matrix), l.setMatrixAt(S, w.matrix);
-                const y = re.fixed().setTranslation(...w.position.toArray()).setRotation(w.quaternion).setUserData({
-                    type: j.Wood
-                }), O = D.world.createRigidBody(y), z = m * w.scale.x, G = b * w.scale.y, H = le.capsule(G, z).setRestitution(.75);
-                D.world.createCollider(H, O);
+            const l = new pe(a.geometry, o, t.length), h = u.realmModel.scene.getObjectByName("base_tree_collider").geometry.boundingBox, m = h.max.x, y = h.max.y / 2;
+            t.forEach((w, b)=>{
+                r.setMatrixAt(b, w.matrix), l.setMatrixAt(b, w.matrix);
+                const S = le.fixed().setTranslation(...w.position.toArray()).setRotation(w.quaternion).setUserData({
+                    type: K.Wood
+                }), U = B.world.createRigidBody(S), z = m * w.scale.x, G = y * w.scale.y, H = ce.capsule(G, z).setRestitution(.75);
+                B.world.createCollider(H, U);
             }), M.scene.add(r, l), this.debugTrees();
         }
         debugTrees() {
@@ -1449,20 +1454,20 @@ Promise.all([
             });
         }
     }
-    class Fn {
+    class Nn {
         constructor(){
-            new En, new Bn, new Dn, new Rn;
+            new _n, new vn, new En, new Cn;
         }
     }
-    const Un = "/textures/hud/compass.webp", On = "/textures/hud/compassArrow.webp";
-    class kn {
+    const Rn = "/textures/hud/compass.webp", Fn = "/textures/hud/compassArrow.webp";
+    class Un {
         constructor(){
             const e = document.createElement("div");
             e.classList.add("compass-container");
             const t = document.createElement("img");
-            t.setAttribute("alt", "compass"), t.setAttribute("src", Un), t.classList.add("compass"), e.appendChild(t);
+            t.setAttribute("alt", "compass"), t.setAttribute("src", Rn), t.classList.add("compass"), e.appendChild(t);
             const s = document.createElement("img");
-            s.setAttribute("alt", "arrow"), s.setAttribute("src", On), s.classList.add("compass-arrow"), e.appendChild(s), document.body.appendChild(e);
+            s.setAttribute("alt", "arrow"), s.setAttribute("src", Fn), s.classList.add("compass-arrow"), e.appendChild(s), document.body.appendChild(e);
             const o = J.MAP_SIZE / 2;
             let n = 0;
             F.on("update-throttle-16x", ({ player: a })=>{
@@ -1477,67 +1482,67 @@ Promise.all([
             return e + ((s + Math.PI) % (2 * Math.PI) - Math.PI);
         }
     }
-    const Gn = ()=>Object.freeze({
+    const On = ()=>Object.freeze({
             MAP_SIZE: 256,
             HALF_MAP_SIZE: 256 / 2,
             KINTOUN_ACTIVATION_THRESHOLD: 2,
             HALF_FLOOR_THICKNESS: .3,
             OUTER_MAP_SIZE: 256 * 3,
             OUTER_HALF_MAP_SIZE: 256 * 1.5
-        }), J = Gn();
-    class Hn {
+        }), J = On();
+    class kn {
         constructor(){
-            new kn, new In, new fn, new gn, new Fn, new bn, new mn;
+            new Un, new xn, new mn, new pn, new Nn, new wn, new un;
         }
     }
-    class zn {
-        pow2 = p(([e = i(0)])=>Xe(i(2), e));
-        packF32 = p(([e = i(0), t = i(0), s = i(8), o = i(0), n = i(1), a = i(0)])=>{
-            const r = ne(this.pow2(s), 1), l = ne(o, a).div(Ue(n, 1e-20)), d = Ye(Rs(l), 0, r), h = this.pow2(t), m = this.pow2(s), b = Se(e.div(h)), w = Me(b, m).mul(h);
+    class Gn {
+        pow2 = f(([e = i(0)])=>Oe(i(2), e));
+        packF32 = f(([e = i(0), t = i(0), s = i(8), o = i(0), n = i(1), a = i(0)])=>{
+            const r = ae(this.pow2(s), 1), l = ae(o, a).div(Ee(n, 1e-20)), d = $e(Cs(l), 0, r), h = this.pow2(t), m = this.pow2(s), y = Se(e.div(h)), w = Me(y, m).mul(h);
             return e.sub(w).add(d.mul(h));
         });
-        unpackF32 = p(([e = i(0), t = i(0), s = i(8), o = i(1), n = i(0)])=>{
+        unpackF32 = f(([e = i(0), t = i(0), s = i(8), o = i(1), n = i(0)])=>{
             const a = this.pow2(t), r = this.pow2(s), l = Se(e.div(a));
             return Me(l, r).mul(o).add(n);
         });
-        packUnit = p(([e = i(0), t = i(0), s = i(8), o = i(0)])=>{
-            const n = i(1).div(ne(this.pow2(s), 1));
+        packUnit = f(([e = i(0), t = i(0), s = i(8), o = i(0)])=>{
+            const n = i(1).div(ae(this.pow2(s), 1));
             return this.packF32(e, t, s, o, n, i(0));
         });
-        unpackUnit = p(([e = i(0), t = i(0), s = i(8)])=>{
-            const o = i(1).div(ne(this.pow2(s), 1));
+        unpackUnit = f(([e = i(0), t = i(0), s = i(8)])=>{
+            const o = i(1).div(ae(this.pow2(s), 1));
             return this.unpackF32(e, t, s, o, i(0));
         });
-        packFlag = p(([e = i(0), t = i(0), s = i(0)])=>this.packF32(e, t, i(1), s, i(1), i(0)));
-        unpackFlag = p(([e = i(0), t = i(0)])=>this.unpackF32(e, t, i(1), i(1), i(0)));
-        packAngle = p(([e = i(0), t = i(0), s = i(9), o = i(0)])=>{
-            const n = ne(this.pow2(s), 1), a = be.div(n), r = o.sub(be.mul(Se(o.div(be))));
+        packFlag = f(([e = i(0), t = i(0), s = i(0)])=>this.packF32(e, t, i(1), s, i(1), i(0)));
+        unpackFlag = f(([e = i(0), t = i(0)])=>this.unpackF32(e, t, i(1), i(1), i(0)));
+        packAngle = f(([e = i(0), t = i(0), s = i(9), o = i(0)])=>{
+            const n = ae(this.pow2(s), 1), a = be.div(n), r = o.sub(be.mul(Se(o.div(be))));
             return this.packF32(e, t, s, r, a, i(0));
         });
-        unpackAngle = p(([e = i(0), t = i(0), s = i(9)])=>{
-            const o = be.div(ne(this.pow2(s), 1));
+        unpackAngle = f(([e = i(0), t = i(0), s = i(9)])=>{
+            const o = be.div(ae(this.pow2(s), 1));
             return this.unpackF32(e, t, s, o, i(0));
         });
-        packSigned = p(([e = i(0), t = i(0), s = i(8), o = i(0), n = i(1)])=>{
-            const a = ne(this.pow2(s), 1), r = n.mul(2).div(a), l = n.negate();
+        packSigned = f(([e = i(0), t = i(0), s = i(8), o = i(0), n = i(1)])=>{
+            const a = ae(this.pow2(s), 1), r = n.mul(2).div(a), l = n.negate();
             return this.packF32(e, t, s, o, r, l);
         });
-        unpackSigned = p(([e = i(0), t = i(0), s = i(8), o = i(1)])=>{
-            const n = o.mul(2).div(ne(this.pow2(s), 1)), a = o.negate();
+        unpackSigned = f(([e = i(0), t = i(0), s = i(8), o = i(1)])=>{
+            const n = o.mul(2).div(ae(this.pow2(s), 1)), a = o.negate();
             return this.unpackF32(e, t, s, n, a);
         });
-        packUnits = p(([e = i(0), t = i(0), s = i(8), o = i(0), n = i(0), a = i(1)])=>{
-            const r = ne(this.pow2(s), 1), l = a.sub(n).div(r);
+        packUnits = f(([e = i(0), t = i(0), s = i(8), o = i(0), n = i(0), a = i(1)])=>{
+            const r = ae(this.pow2(s), 1), l = a.sub(n).div(r);
             return this.packF32(e, t, s, o, l, n);
         });
-        unpackUnits = p(([e = i(0), t = i(0), s = i(8), o = i(0), n = i(1)])=>{
-            const a = n.sub(o).div(ne(this.pow2(s), 1));
+        unpackUnits = f(([e = i(0), t = i(0), s = i(8), o = i(0), n = i(1)])=>{
+            const a = n.sub(o).div(ae(this.pow2(s), 1));
             return this.unpackF32(e, t, s, a, o);
         });
-        computeMapUvByPosition = p(([e = P(0)])=>e.add(J.HALF_MAP_SIZE).div(J.MAP_SIZE));
-        computeAtlasUv = p(([e = P(0), t = P(0), s = P(0)])=>s.mul(e).add(t));
+        computeMapUvByPosition = f(([e = E(0)])=>e.add(J.HALF_MAP_SIZE).div(J.MAP_SIZE));
+        computeAtlasUv = f(([e = E(0), t = E(0), s = E(0)])=>s.mul(e).add(t));
     }
-    const T = new zn, Wn = ()=>({
+    const v = new Gn, Hn = ()=>({
             JUMP_BUFFER_DURATION_IN_SECONDS: .2,
             MAX_CONSECUTIVE_JUMPS: 2,
             JUMP_CUT_MULTIPLIER: .25,
@@ -1545,40 +1550,40 @@ Promise.all([
             MAX_UPWARD_VELOCITY: 6,
             LINEAR_DAMPING: .35,
             ANGULAR_DAMPING: .6,
-            JUMP_IMPULSE: new v(0, 75, 0),
+            JUMP_IMPULSE: new D(0, 75, 0),
             LIN_VEL_STRENGTH: 35,
             ANG_VEL_STRENGTH: 25,
             RADIUS: .5,
             MASS: .5,
-            PLAYER_INITIAL_POSITION: new v(0, 5, 0),
-            CAMERA_OFFSET: new v(0, 11, 17),
+            PLAYER_INITIAL_POSITION: new D(0, 5, 0),
+            CAMERA_OFFSET: new D(0, 11, 17),
             CAMERA_LERP_FACTOR: 7.5,
-            UP: new v(0, 1, 0),
-            DOWN: new v(0, -1, 0),
-            FORWARD: new v(0, 0, -1)
-        }), E = Wn();
-    class Vn {
+            UP: new D(0, 1, 0),
+            DOWN: new D(0, -1, 0),
+            FORWARD: new D(0, 0, -1)
+        }), T = Hn();
+    class zn {
         mesh;
         rigidBody;
-        smoothedCameraPosition = new v;
-        desiredCameraPosition = new v;
-        smoothedCameraTarget = new v;
-        desiredTargetPosition = new v;
+        smoothedCameraPosition = new D;
+        desiredCameraPosition = new D;
+        smoothedCameraTarget = new D;
+        desiredTargetPosition = new D;
         yawInRadians = 0;
         prevYawInRadians = -1;
-        yawQuaternion = new Fs;
-        newLinVel = new v;
-        newAngVel = new v;
-        torqueAxis = new v;
-        forwardVec = new v;
+        yawQuaternion = new Ns;
+        newLinVel = new D;
+        newAngVel = new D;
+        torqueAxis = new D;
+        forwardVec = new D;
         isOnGround = !1;
         jumpCount = 0;
         wasJumpHeld = !1;
         jumpBufferTimer = 0;
-        rayOrigin = new v;
-        ray = new Ws(this.rayOrigin, E.DOWN);
+        rayOrigin = new D;
+        ray = new Hs(this.rayOrigin, T.DOWN);
         constructor(){
-            this.mesh = this.createCharacterMesh(), M.scene.add(this.mesh), $e.setTarget(this.mesh), this.rigidBody = D.world.createRigidBody(this.createRigidBodyDesc()), D.world.createCollider(this.createColliderDesc(), this.rigidBody), F.on("update", this.update.bind(this)), F.on("update-throttle-64x", this.resetPlayerPosition.bind(this)), this.debugPlayer();
+            this.mesh = this.createCharacterMesh(), M.scene.add(this.mesh), et.setTarget(this.mesh), this.rigidBody = B.world.createRigidBody(this.createRigidBodyDesc()), B.world.createCollider(this.createColliderDesc(), this.rigidBody), F.on("update", this.update.bind(this)), F.on("update-throttle-64x", this.resetPlayerPosition.bind(this)), this.debugPlayer();
         }
         resetPlayerPosition(e) {
             const { player: t } = e;
@@ -1590,76 +1595,76 @@ Promise.all([
                 x: 0,
                 y: 0,
                 z: 0
-            }, !1), this.rigidBody.setTranslation(E.PLAYER_INITIAL_POSITION, !0), this.mesh.position.copy(E.PLAYER_INITIAL_POSITION));
+            }, !1), this.rigidBody.setTranslation(T.PLAYER_INITIAL_POSITION, !0), this.mesh.position.copy(T.PLAYER_INITIAL_POSITION));
         }
         debugPlayer() {
             const e = te.panel.addFolder({
                 title: "🪩 Player",
                 expanded: !1
             });
-            e.addBinding(E.CAMERA_OFFSET, "y", {
+            e.addBinding(T.CAMERA_OFFSET, "y", {
                 label: "Main camera height"
-            }), e.addBinding(E.CAMERA_OFFSET, "z", {
+            }), e.addBinding(T.CAMERA_OFFSET, "z", {
                 label: "Main camera distance"
             });
         }
         createCharacterMesh() {
             const e = u.realmModel.scene.getObjectByName("player");
-            return e.material = new Zn, e.castShadow = !0, e.position.copy(E.PLAYER_INITIAL_POSITION), e;
+            return e.material = new Wn, e.castShadow = !0, e.position.copy(T.PLAYER_INITIAL_POSITION), e;
         }
         createRigidBodyDesc() {
-            const { x: e, y: t, z: s } = E.PLAYER_INITIAL_POSITION;
-            return re.dynamic().setTranslation(e, t, s).setLinearDamping(E.LINEAR_DAMPING).setAngularDamping(E.ANGULAR_DAMPING).setUserData({
-                type: j.Player
+            const { x: e, y: t, z: s } = T.PLAYER_INITIAL_POSITION;
+            return le.dynamic().setTranslation(e, t, s).setLinearDamping(T.LINEAR_DAMPING).setAngularDamping(T.ANGULAR_DAMPING).setUserData({
+                type: K.Player
             });
         }
         createColliderDesc() {
-            return le.ball(E.RADIUS).setRestitution(.6).setFriction(1).setMass(E.MASS).setActiveEvents(Vs.COLLISION_EVENTS);
+            return ce.ball(T.RADIUS).setRestitution(.6).setFriction(1).setMass(T.MASS).setActiveEvents(zs.COLLISION_EVENTS);
         }
         update(e) {
             const { clock: t } = e, s = t.getDelta();
-            this.prevYawInRadians !== this.yawInRadians && (this.yawQuaternion.setFromAxisAngle(E.UP, this.yawInRadians), this.prevYawInRadians = this.yawInRadians), this.updateVerticalMovement(s), this.updateHorizontalMovement(s), this.updateCameraPosition(s);
+            this.prevYawInRadians !== this.yawInRadians && (this.yawQuaternion.setFromAxisAngle(T.UP, this.yawInRadians), this.prevYawInRadians = this.yawInRadians), this.updateVerticalMovement(s), this.updateHorizontalMovement(s), this.updateCameraPosition(s);
         }
         updateVerticalMovement(e) {
             const t = Pe.isJumpPressed();
-            this.isOnGround = this.checkIfGrounded(), this.isOnGround && (this.jumpCount = 0), t && !this.wasJumpHeld ? this.jumpBufferTimer = E.JUMP_BUFFER_DURATION_IN_SECONDS : this.jumpBufferTimer = Math.max(0, this.jumpBufferTimer - e), this.jumpBufferTimer > 0 && this.canJump() && (this.performJump(), this.jumpBufferTimer = 0);
+            this.isOnGround = this.checkIfGrounded(), this.isOnGround && (this.jumpCount = 0), t && !this.wasJumpHeld ? this.jumpBufferTimer = T.JUMP_BUFFER_DURATION_IN_SECONDS : this.jumpBufferTimer = Math.max(0, this.jumpBufferTimer - e), this.jumpBufferTimer > 0 && this.canJump() && (this.performJump(), this.jumpBufferTimer = 0);
             const o = this.rigidBody.linvel();
-            this.handleJumpCut(t, o), this.handleFastFall(e, o, D.world.gravity.y), this.clampUpwardVelocity(o), this.rigidBody.setLinvel(o, !0), this.wasJumpHeld = t;
+            this.handleJumpCut(t, o), this.handleFastFall(e, o, B.world.gravity.y), this.clampUpwardVelocity(o), this.rigidBody.setLinvel(o, !0), this.wasJumpHeld = t;
         }
         checkIfGrounded() {
-            this.rayOrigin.copy(this.rigidBody.translation()), this.rayOrigin.y -= E.RADIUS + .01;
-            const e = .2, t = D.world.castRay(this.ray, e, !0);
+            this.rayOrigin.copy(this.rigidBody.translation()), this.rayOrigin.y -= T.RADIUS + .01;
+            const e = .2, t = B.world.castRay(this.ray, e, !0);
             return t ? t.timeOfImpact * e < .01 : !1;
         }
         canJump() {
-            return this.isOnGround ? !0 : this.jumpCount < E.MAX_CONSECUTIVE_JUMPS;
+            return this.isOnGround ? !0 : this.jumpCount < T.MAX_CONSECUTIVE_JUMPS;
         }
         performJump() {
-            this.rigidBody.applyImpulse(E.JUMP_IMPULSE, !0), this.jumpCount += 1;
+            this.rigidBody.applyImpulse(T.JUMP_IMPULSE, !0), this.jumpCount += 1;
         }
         handleJumpCut(e, t) {
-            !(!e && this.wasJumpHeld) || t.y <= 0 || (t.y *= E.JUMP_CUT_MULTIPLIER);
+            !(!e && this.wasJumpHeld) || t.y <= 0 || (t.y *= T.JUMP_CUT_MULTIPLIER);
         }
         handleFastFall(e, t, s) {
             if (t.y >= 0) return;
-            const o = E.FALL_MULTIPLIER * Math.abs(s) * e;
+            const o = T.FALL_MULTIPLIER * Math.abs(s) * e;
             t.y -= o;
         }
         clampUpwardVelocity(e) {
-            e.y <= E.MAX_UPWARD_VELOCITY || (e.y = E.MAX_UPWARD_VELOCITY);
+            e.y <= T.MAX_UPWARD_VELOCITY || (e.y = T.MAX_UPWARD_VELOCITY);
         }
         updateHorizontalMovement(e) {
             const t = Pe.isForward(), s = Pe.isBackward(), o = Pe.isLeftward(), n = Pe.isRightward(), a = 2;
-            o && (this.yawInRadians += a * e), n && (this.yawInRadians -= a * e), this.forwardVec.copy(E.FORWARD).applyQuaternion(this.yawQuaternion), this.torqueAxis.crossVectors(E.UP, this.forwardVec).normalize(), this.newLinVel.copy(this.rigidBody.linvel()), this.newAngVel.copy(this.rigidBody.angvel());
-            const r = E.LIN_VEL_STRENGTH * e, l = E.ANG_VEL_STRENGTH * e;
+            o && (this.yawInRadians += a * e), n && (this.yawInRadians -= a * e), this.forwardVec.copy(T.FORWARD).applyQuaternion(this.yawQuaternion), this.torqueAxis.crossVectors(T.UP, this.forwardVec).normalize(), this.newLinVel.copy(this.rigidBody.linvel()), this.newAngVel.copy(this.rigidBody.angvel());
+            const r = T.LIN_VEL_STRENGTH * e, l = T.ANG_VEL_STRENGTH * e;
             t && (this.newLinVel.addScaledVector(this.forwardVec, r), this.newAngVel.addScaledVector(this.torqueAxis, l)), s && (this.newLinVel.addScaledVector(this.forwardVec, -r), this.newAngVel.addScaledVector(this.torqueAxis, -l)), this.rigidBody.setLinvel(this.newLinVel, !0), this.rigidBody.setAngvel(this.newAngVel, !0), this.syncMeshWithBody();
         }
         syncMeshWithBody() {
             this.mesh.position.copy(this.rigidBody.translation()), this.mesh.quaternion.copy(this.rigidBody.rotation());
         }
         updateCameraPosition(e) {
-            this.desiredCameraPosition.copy(E.CAMERA_OFFSET).applyQuaternion(this.yawQuaternion).add(this.mesh.position);
-            const t = E.CAMERA_LERP_FACTOR * e;
+            this.desiredCameraPosition.copy(T.CAMERA_OFFSET).applyQuaternion(this.yawQuaternion).add(this.mesh.position);
+            const t = T.CAMERA_LERP_FACTOR * e;
             this.smoothedCameraPosition.lerp(this.desiredCameraPosition, t), this.desiredTargetPosition.copy(this.mesh.position), this.desiredTargetPosition.y += 1, this.smoothedCameraTarget.lerp(this.desiredTargetPosition, t), M.playerCamera.position.copy(this.smoothedCameraPosition), M.playerCamera.lookAt(this.smoothedCameraTarget);
         }
         get position() {
@@ -1669,17 +1674,17 @@ Promise.all([
             return this.yawInRadians;
         }
     }
-    class Zn extends $ {
+    class Wn extends $ {
         constructor(){
             super(), this.createMaterial();
         }
         createMaterial() {
-            this.flatShading = !1, this.castShadowNode = L(.6);
-            const e = T.computeMapUvByPosition(X.xz), t = qe(e), s = $e.getTerrainShadowFactor(t), o = x(u.noiseTexture, ie(X.xz), 3).r, n = fe(ee.mul(2.5).add(o.mul(5))).mul(.05), a = i(-.45).add(n), r = i(1).sub(I(a, X.y)), l = i(1).sub(r), d = x(u.footballDiffuse, R()).mul(1.5), h = i(1).sub(Z(-1.5, 1, X.y).mul(r)), m = B(L(1), L(.6, .8, 1).mul(.75), h), b = d.mul(m).mul(r), S = d.mul(l).add(b);
-            this.colorNode = S.mul(s);
+            this.flatShading = !1, this.castShadowNode = I(.6);
+            const e = v.computeMapUvByPosition(X.xz), t = Xe(e), s = et.getTerrainShadowFactor(t), o = x(u.noiseTexture, re(X.xz), 3).r, n = fe(ee.mul(2.5).add(o.mul(5))).mul(.05), a = i(-.45).add(n), r = i(1).sub(L(a, X.y)), l = i(1).sub(r), d = x(u.footballDiffuse, R()).mul(1.5), h = i(1).sub(j(-1.5, 1, X.y).mul(r)), m = C(I(1), I(.6, .8, 1).mul(.75), h), y = d.mul(m).mul(r), b = d.mul(l).add(y);
+            this.colorNode = b.mul(s);
         }
     }
-    const jn = [
+    const Vn = [
         30,
         60,
         120,
@@ -1689,27 +1694,27 @@ Promise.all([
         170,
         180,
         240
-    ], Kn = (c)=>jn.reduce((e, t)=>Math.abs(t - c) < Math.abs(e - c) ? t : e), qn = async ()=>new Promise((c)=>{
+    ], Zn = (c)=>Vn.reduce((e, t)=>Math.abs(t - c) < Math.abs(e - c) ? t : e), jn = async ()=>new Promise((c)=>{
             const e = [];
             let t = performance.now(), s = t;
             function o(n) {
                 if (e.push(n - t), t = n, n - s < 1e3) requestAnimationFrame(o);
                 else {
                     e.sort((d, h)=>d - h);
-                    const r = 1e3 / (e[Math.floor(e.length / 2)] || 16.667), l = Kn(r);
+                    const r = 1e3 / (e[Math.floor(e.length / 2)] || 16.667), l = Zn(r);
                     c(l);
                 }
             }
             requestAnimationFrame(o);
         });
-    class Yn {
+    class Kn {
         player;
         ENABLE_CAP_FPS = !1;
         config = {
             halvenFPS: !1
         };
         constructor(){
-            this.player = new Vn, new Hn, this.debugGame();
+            this.player = new zn, new kn, this.debugGame();
         }
         debugGame() {
             te.panel.addFolder({
@@ -1730,7 +1735,7 @@ Promise.all([
         }
         async updateRefreshRate() {
             if (!this.ENABLE_CAP_FPS) return;
-            const e = await qn();
+            const e = await jn();
             this.config.halvenFPS = e >= 120;
         }
         onResize() {
@@ -1740,17 +1745,17 @@ Promise.all([
         async startLoop() {
             await this.updateRefreshRate();
             const t = {
-                clock: new Us(!0),
+                clock: new Rs(!0),
                 player: this.player
             };
             let s = !1;
             const o = ()=>{
-                D.update(), this.config.halvenFPS ? s = !s : s = !1, (s || !this.config.halvenFPS) && (F.emit("update", t), ge.renderAsync());
-            }, n = js(this.onResize.bind(this), 300);
+                B.update(), this.config.halvenFPS ? s = !s : s = !1, (s || !this.config.halvenFPS) && (F.emit("update", t), ge.renderAsync());
+            }, n = Vs(this.onResize.bind(this), 300);
             this.onResize(), new ResizeObserver(n).observe(document.body), ge.renderer.setAnimationLoop(o);
         }
     }
-    class Jn {
+    class qn {
         constructor(){}
         init() {
             this.initAudioButton(), this.initCreditsButton();
@@ -1762,8 +1767,8 @@ Promise.all([
             if (!e || !t) return;
             const s = "M1129.432 113v1694.148H903.545l-451.772-451.773V564.773L903.545 113h225.887Zm542.545 248.057C1832.017 521.097 1920 733.882 1920 960.107c0 226.226-87.983 438.898-248.023 598.938l-79.851-79.85c138.694-138.582 214.93-323.018 214.93-519.087 0-196.183-76.236-380.506-214.93-519.2ZM338.83 564.773v790.602H169.415C75.672 1355.375 0 1279.703 0 1185.96V734.187c0-93.742 75.672-169.414 169.415-169.414H338.83Zm1093.922 36.085c95.776 97.018 148.407 224.644 148.407 359.16 0 134.628-52.631 262.253-148.407 359.272l-80.303-79.174c74.656-75.897 115.767-175.4 115.767-280.099 0-104.585-41.111-204.088-115.767-279.986Z", o = "M1129.433 113v1694.15H903.547l-451.774-451.773V564.773L903.547 113h225.886ZM338.83 564.773v790.604H169.415c-92.806 0-167.9-74.166-169.392-166.609L0 1185.962V734.188c0-92.805 74.166-167.9 166.608-169.392l2.807-.023H338.83ZM1789.951 635 1920 764.926 1724.988 959.94 1920 1154.95 1789.951 1285l-194.89-195.012L1400.05 1285 1270 1154.951l195.012-195.012L1270 764.926 1400.049 635l195.012 195.012L1789.951 635Z";
             e.addEventListener("click", async (n)=>{
-                n.stopPropagation(), await ae.toggleMute();
-                const a = ae.isMute ? o : s;
+                n.stopPropagation(), await ie.toggleMute();
+                const a = ie.isMute ? o : s;
                 t.setAttribute("d", a);
             }), F.on("audio-ready", ()=>{
                 e.disabled = !1;
@@ -1786,8 +1791,8 @@ Promise.all([
             a.setAttribute("href", `mailto:${n}`), a.innerText = n, document.getElementById("email-placeholder")?.appendChild(a);
         }
     }
-    const Xn = new Jn, $n = new jo;
-    $n.initAsync().then(()=>{
-        Xn.init(), new Yn().startLoop();
+    const Yn = new qn, Jn = new Vo;
+    Jn.initAsync().then(()=>{
+        Yn.init(), new Kn().startLoop();
     });
 });
