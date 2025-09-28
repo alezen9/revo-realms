@@ -7,9 +7,7 @@ import {
   cameraProjectionMatrix,
   cubeTexture,
   dot,
-  exp2,
   float,
-  log2,
   max,
   mix,
   normalize,
@@ -17,7 +15,6 @@ import {
   positionWorld,
   pow,
   reflect,
-  reflectVector,
   screenUV,
   smoothstep,
   step,
@@ -35,16 +32,20 @@ import { audioManager } from "../systems/AudioManager";
 import { lighting } from "../systems/LightingSystem";
 
 const uniforms = {
-  uUvScale: uniform(3),
-  uRefractionStrength: uniform(0.02),
+  uUvScale: uniform(1.7),
+  uRefractionStrength: uniform(0.01),
   uWaterColor: uniform(new Color(0.0, 0.09, 0.09)),
   uFresnelScale: uniform(0.075),
   uSpeed: uniform(0.1),
   uNoiseScrollDir: uniform(new Vector2(0.1, 0)),
-  uShiness: uniform(400),
+  uShiness: uniform(700),
   uMinDist: uniform(10),
   uMaxDist: uniform(50),
   uFromSunDir: uniform(new Vector3(0, -1, 0)),
+  uTworld: uniform(new Vector3(1, 0, 0)),
+  uBworld: uniform(new Vector3(0, 0, -1)),
+  uNworld: uniform(new Vector3(0, 1, 0)),
+  uHighlightsFactor: uniform(2.5),
   // uFoamColor: uniform(new Color("white")),
   // uFoamDistance: uniform(0.125),
   // uDepthDistance: uniform(0.75),
@@ -53,12 +54,16 @@ const uniforms = {
 
 export default class Water {
   constructor() {
-    uniforms.uFromSunDir.value.copy(lighting.sunDirection);
     const water = assetManager.realmModel.scene.getObjectByName(
       "water",
     ) as Mesh;
     water.material = new WaterMaterial();
     water.renderOrder = 100;
+
+    uniforms.uFromSunDir.value.copy(lighting.sunDirection);
+    uniforms.uTworld.value.applyNormalMatrix(water.normalMatrix).normalize();
+    uniforms.uBworld.value.applyNormalMatrix(water.normalMatrix).normalize();
+    uniforms.uNworld.value.applyNormalMatrix(water.normalMatrix).normalize();
 
     const geom = water.geometry;
     const bsLocal = geom.boundingSphere!;
@@ -125,6 +130,9 @@ class WaterMaterial extends MeshBasicNodeMaterial {
     //   view: "color",
     //   color: { type: "float" },
     // });
+    folder.addBinding(uniforms.uHighlightsFactor, "value", {
+      label: "Highlights glow factor",
+    });
   }
 
   private createMaterial() {
@@ -133,12 +141,17 @@ class WaterMaterial extends MeshBasicNodeMaterial {
     // 0. distortion
     const speed = time.mul(uniforms.uSpeed);
     const frequency = uniforms.uNoiseScrollDir.mul(speed);
-    const nUV1 = uv().add(frequency).mul(uniforms.uUvScale).fract();
+    const nUV1 = uv().add(frequency).mul(uniforms.uUvScale.mul(1.7)).fract();
     const tsn1 = texture(assetManager.waterNormal, nUV1).mul(2).sub(1);
-    const nUV2 = uv().sub(frequency).mul(uniforms.uUvScale).fract();
+    const nUV2 = uv().sub(frequency).mul(uniforms.uUvScale.mul(1.3)).fract();
     const tsn2 = texture(assetManager.waterNormal, nUV2).mul(2).sub(1);
-    const tsn = tsn1.add(tsn2).rgb.normalize();
-    const distortion = tsn.xy.mul(uniforms.uRefractionStrength); // NOTE: xy not xz because z is up in the texture
+    const tsn = mix(tsn1, tsn2, 0.5).rgb.normalize();
+    const distortion = tsn.xy.mul(uniforms.uRefractionStrength); // NOTE: xy not xz because tangent space
+    const normal = tsn.x
+      .mul(uniforms.uTworld)
+      .add(tsn.y.mul(uniforms.uBworld))
+      .add(tsn.z.mul(uniforms.uNworld))
+      .normalize();
 
     // 1. depth
     const sceneDepth = viewportDepthTexture(screenUV).r;
@@ -168,15 +181,26 @@ class WaterMaterial extends MeshBasicNodeMaterial {
 
     // 4. reflection and fresnel
     const viewDir = normalize(cameraPosition.sub(positionWorld));
-    const reflection = reflectVector.add(tsn).normalize();
+    const reflectVector = reflect(viewDir.negate(), normal).normalize();
     const reflectedColor = cubeTexture(
       assetManager.envMapTexture,
-      reflection,
-      3,
+      reflectVector,
     );
-    const fresnel = exp2(log2(float(1.0).sub(reflection)));
-    const fresnelFactor = uniforms.uFresnelScale.mul(fresnel);
-    const waterColor = mix(uniforms.uWaterColor, reflectedColor, fresnelFactor);
+
+    // Schlick's Fresnel approx F0 + (1 - F0) (1 - cos(theta))^5
+    const NdotV = max(dot(normal, viewDir), 0.0); // view angle factor
+    const F0 = float(0.02); // base reflectivity at head-on view (2% for water)
+    const fresnelSchlick = F0.add(
+      float(1.0)
+        .sub(F0)
+        .mul(pow(float(1.0).sub(NdotV), 5.0)),
+    );
+    const waterColor = mix(
+      uniforms.uWaterColor,
+      reflectedColor,
+      fresnelSchlick.mul(uniforms.uFresnelScale),
+    );
+
     // const foamFactor = step(uniforms.uFoamDistance, waterDepthBeerFinal);
     // const waterColor = mix(uniforms.uFoamColor, waterColor1, foamFactor);
 
@@ -185,10 +209,10 @@ class WaterMaterial extends MeshBasicNodeMaterial {
     const screenColor = viewportTexture(safeScreenUv).rgb;
 
     // 6. surface highlights
-    const reflectedLight = reflect(uniforms.uFromSunDir, tsn.rbg); // NOTE: rbg and not rgb, same reason as above
+    const reflectedLight = reflect(uniforms.uFromSunDir, normal);
     const align = max(dot(reflectedLight, viewDir), 0.0);
     const spec = pow(align, uniforms.uShiness);
-    const sunGlint = vec3(spec);
+    const sunGlint = vec3(spec).mul(uniforms.uHighlightsFactor);
 
     // 7. opacity
     const distanceXZSquared = dot(

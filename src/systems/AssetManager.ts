@@ -189,7 +189,6 @@ class AssetManager {
     // Environment
     this.envMapTexture = res[1];
     this.envMapTexture.colorSpace = SRGBColorSpace;
-    this.envMapTexture.generateMipmaps = false;
     // Noise
     this.noiseTexture = res[2];
     // Terain
