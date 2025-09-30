@@ -66,6 +66,10 @@ class LightingSystem {
     this.debugLight();
   }
 
+  get sunColor() {
+    return this.directionalLight.color;
+  }
+
   // private setupAmbientLighting() {
   //   const ambientLight = new AmbientLight();
   //   ambientLight.intensity = 0.27;

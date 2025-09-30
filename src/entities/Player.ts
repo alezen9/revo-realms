@@ -9,20 +9,7 @@ import {
 } from "@dimforge/rapier3d";
 import { inputManager } from "../systems/InputManager";
 import { type State } from "../Game";
-import {
-  float,
-  fract,
-  mix,
-  positionWorld,
-  sin,
-  smoothstep,
-  step,
-  texture,
-  time,
-  uv,
-  varying,
-  vec3,
-} from "three/tsl";
+import { positionWorld, texture, uv, varying, vec3 } from "three/tsl";
 import { MeshLambertNodeMaterial } from "three/webgpu";
 import { assetManager } from "../systems/AssetManager";
 import { RevoColliderType } from "../types";
@@ -328,40 +315,8 @@ class PlayerMaterial extends MeshLambertNodeMaterial {
     const mapUv = tslUtils.computeMapUvByPosition(positionWorld.xz);
     const vMapUv = varying(mapUv);
     const shadowFactor = lighting.getTerrainShadowFactor(vMapUv);
-
-    const noiseValue = texture(
-      assetManager.noiseTexture,
-      fract(positionWorld.xz),
-      3,
-    ).r;
-
-    const timer = sin(time.mul(2.5).add(noiseValue.mul(5))).mul(0.05);
-
-    const waterLevel = float(-0.45).add(timer);
-
-    const underwaterFactor = float(1).sub(step(waterLevel, positionWorld.y));
-    const abovewaterFactor = float(1).sub(underwaterFactor);
-
     const baseColor = texture(assetManager.footballDiffuse, uv()).mul(1.5);
 
-    const tintStrength = float(1).sub(
-      smoothstep(-1.5, 1, positionWorld.y).mul(underwaterFactor),
-    );
-
-    // Underwater tint (soft blue-green, slightly darker)
-    const underwaterTint = mix(
-      vec3(1),
-      vec3(0.6, 0.8, 1.0).mul(0.75),
-      tintStrength,
-    );
-
-    // Blend base color with tint based on depth
-    const underwaterColor = baseColor.mul(underwaterTint).mul(underwaterFactor);
-    const aboveWaterColor = baseColor.mul(abovewaterFactor);
-
-    const tintedColor = aboveWaterColor.add(underwaterColor);
-
-    // Apply baked shadows
-    this.colorNode = tintedColor.mul(shadowFactor);
+    this.colorNode = baseColor.mul(shadowFactor);
   }
 }

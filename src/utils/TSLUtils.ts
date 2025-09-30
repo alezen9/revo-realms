@@ -10,6 +10,7 @@ import {
   max,
   PI2,
   round,
+  vec3,
 } from "three/tsl";
 import { realmConfig } from "../realms/PortfolioRealm";
 
@@ -165,6 +166,22 @@ class TSLUtils {
   });
   computeAtlasUv = Fn(([scale = vec2(0), offset = vec2(0), uv = vec2(0)]) => {
     return uv.mul(scale).add(offset);
+  });
+
+  // Inputs n1, n2 are tangent-space normals already unpacked to [-1..1] and normalized.
+  // (If you sampled from texture, do: n = tex.rgb * 2.0 - 1.0; normalize(n);)
+  blendRNM = Fn(([n1 = vec3(0), n2 = vec3(0)]) => {
+    const r = vec3(
+      n1.z.mul(n2.x).add(n1.x.mul(n2.z)),
+      n1.z.mul(n2.y).add(n1.y.mul(n2.z)),
+      n1.z.mul(n2.z).sub(n1.x.mul(n2.x).add(n1.y.mul(n2.y))),
+    );
+    return r.normalize();
+  });
+
+  // partial derivatives, n1, n2 are [-1..1]
+  blendUDN = Fn(([n1 = vec3(0), n2 = vec3(0)]) => {
+    return vec3(n1.xy.add(n2.xy), n1.z.mul(n2.z)).normalize();
   });
 }
 
