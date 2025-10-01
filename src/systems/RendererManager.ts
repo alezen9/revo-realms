@@ -12,6 +12,7 @@ const ENABLE_DEBUGGING = true;
 class RendererManager {
   renderer: WebGPURenderer;
   canvas: HTMLCanvasElement;
+  isWebGPU!: boolean;
   private prevFrame: Promise<any> | null = null;
   private monitoringManager: MonitoringManager;
   private postprocessingManager!: PostprocessingManager;
@@ -58,6 +59,7 @@ class RendererManager {
 
   async init() {
     sceneManager.init();
+    this.isWebGPU = !!(await navigator.gpu?.requestAdapter());
     this.postprocessingManager = new PostprocessingManager(this.renderer);
     if (this.IS_MONITORING_ENABLED)
       await this.monitoringManager.stats.init(this.renderer);

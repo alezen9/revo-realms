@@ -34,6 +34,7 @@ import { debugManager } from "../systems/DebugManager";
 import { audioManager } from "../systems/AudioManager";
 import { lighting } from "../systems/LightingSystem";
 import { tslUtils } from "../utils/TSLUtils";
+import { rendererManager } from "../systems/RendererManager";
 
 const uniforms = {
   uUvScale: uniform(2.7),
@@ -58,6 +59,7 @@ const uniforms = {
   uInscatterStrength: uniform(0.85),
   uAbsorptionScale: uniform(10),
   uMinOpacity: uniform(0.5),
+  uIsWebGPU: uniform(1),
 };
 
 export default class Water {
@@ -70,6 +72,7 @@ export default class Water {
     uniforms.uTworld.value.transformDirection(water.matrixWorld).normalize();
     uniforms.uBworld.value.transformDirection(water.matrixWorld).normalize();
     uniforms.uNworld.value.transformDirection(water.matrixWorld).normalize();
+    uniforms.uIsWebGPU.value = Number(rendererManager.isWebGPU);
 
     const geom = water.geometry;
     const bsLocal = geom.boundingSphere!;
@@ -93,7 +96,7 @@ class WaterMaterial extends MeshBasicNodeMaterial {
   private debugWater() {
     const folder = debugManager.panel.addFolder({
       title: "🌊 Water",
-      expanded: true,
+      expanded: false,
     });
 
     const waves = folder.addFolder({
@@ -206,7 +209,11 @@ class WaterMaterial extends MeshBasicNodeMaterial {
       .normalize();
 
     // 1. depth
-    const sceneDepth = viewportDepthTexture(screenUV).r;
+    const depth = viewportDepthTexture(screenUV).r;
+    const isWebGL = float(1).sub(uniforms.uIsWebGPU);
+    const webglDepth = depth.mul(2).sub(1).mul(isWebGL);
+    const webgpuDepth = depth.mul(uniforms.uIsWebGPU);
+    const sceneDepth = webglDepth.add(webgpuDepth);
     const p3z = cameraProjectionMatrix.element(3).element(2);
     const p2z = cameraProjectionMatrix.element(2).element(2);
     const sceneLinear = p3z.div(sceneDepth.add(p2z));
@@ -215,7 +222,7 @@ class WaterMaterial extends MeshBasicNodeMaterial {
     const fragmentDepth = sceneLinear.sub(fragLinear);
     const waterDepth = fragmentDepth.div(uniforms.uDepthDistance).clamp();
 
-    // 2. refracted UV
+    // 2. refraction
     const distortionStrength = mix(
       uniforms.uRefractionStrength,
       uniforms.uRefractionStrength.mul(1.5),
@@ -223,17 +230,18 @@ class WaterMaterial extends MeshBasicNodeMaterial {
     );
     const distortion = tsn.xy.mul(distortionStrength); // NOTE: xy not xz because tangent space
     const refractedScreenUv = screenUV.add(distortion.mul(isUnderWater));
-
-    // 3. refracted depth
     const depthRefr = viewportDepthTexture(refractedScreenUv).r;
-    const sceneLinearRefr = p3z.div(depthRefr.add(p2z));
+    const webglDepthRefr = depthRefr.mul(2).sub(1).mul(isWebGL);
+    const webgpuDepthRefr = depthRefr.mul(uniforms.uIsWebGPU);
+    const sceneDepthRefr = webglDepthRefr.add(webgpuDepthRefr);
+    const sceneLinearRefr = p3z.div(sceneDepthRefr.add(p2z));
     const isSafe = step(fragLinear, sceneLinearRefr);
     const fragmentDepthRefr = sceneLinearRefr.sub(fragLinear);
     const waterDepthRefr = fragmentDepthRefr
       .div(uniforms.uDepthDistance)
       .clamp();
 
-    // 4. reflection and fresnel
+    // 3. reflection
     const viewDir = normalize(cameraPosition.sub(positionWorld));
     const reflectVector = reflect(viewDir.negate(), normal);
     const reflectedColor = cubeTexture(
@@ -241,7 +249,7 @@ class WaterMaterial extends MeshBasicNodeMaterial {
       reflectVector,
     );
 
-    // Schlick's Fresnel approx F0 + (1 - F0) (1 - cos(theta))^5
+    // 4. fresnel - Schlick's Fresnel approx F0 + (1 - F0) (1 - cos(theta))^5
     const cosTheta = dot(normal, viewDir).clamp(); // view angle factor [0..1]
     const F0 = float(0.02); // base reflectivity at head-on view (2% for water)
     const grazingAngle = float(1.0).sub(cosTheta);
