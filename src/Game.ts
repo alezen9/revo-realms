@@ -21,9 +21,11 @@ export type Sizes = {
   aspect: number;
 };
 
+const ENABLE_CAP_FPS = true;
+
 export default class Game {
   private player: Player;
-  private ENABLE_CAP_FPS = false;
+  private readonly IS_CAP_FPS_ENABLED = import.meta.env.DEV && ENABLE_CAP_FPS;
   private config = {
     halvenFPS: false,
   };
@@ -31,8 +33,6 @@ export default class Game {
   constructor() {
     this.player = new Player();
     new PortfolioRealm();
-
-    this.debugGame();
   }
 
   private debugGame() {
@@ -57,9 +57,9 @@ export default class Game {
   }
 
   private async updateRefreshRate() {
-    if (!this.ENABLE_CAP_FPS) return;
+    if (!this.IS_CAP_FPS_ENABLED) return;
     const refreshRate = await getRefreshRate();
-    this.config.halvenFPS = refreshRate >= 120;
+    this.config.halvenFPS = refreshRate > 120;
   }
 
   private onResize() {
@@ -70,6 +70,7 @@ export default class Game {
 
   async startLoop() {
     await this.updateRefreshRate();
+    this.debugGame();
     const clock = new Clock(true);
 
     const state: State = { clock, player: this.player };
