@@ -179,7 +179,7 @@ class TSLUtils {
     return r.normalize();
   });
 
-  // partial derivatives, n1, n2 are [-1..1]
+  // partial derivatives, inputs n1, n2 are tangent-space normals already unpacked to [-1..1] and normalized.
   blendUDN = Fn(([n1 = vec3(0), n2 = vec3(0)]) => {
     return vec3(n1.xy.add(n2.xy), n1.z.mul(n2.z)).normalize();
   });
