@@ -240,8 +240,10 @@ class WaterMaterial extends MeshBasicNodeMaterial {
     const waterDepthRefr = fragmentDepthRefr
       .div(uniforms.uDepthDistance)
       .clamp();
+    const safeScreenUv = mix(screenUV, refractedScreenUv, isSafe);
+    const screenColor = viewportTexture(safeScreenUv).rgb;
 
-    // 3. reflection
+    // 3. reflections
     const viewDir = normalize(cameraPosition.sub(positionWorld));
     const reflectVector = reflect(viewDir.negate(), normal);
     const reflectedColor = cubeTexture(
@@ -262,11 +264,7 @@ class WaterMaterial extends MeshBasicNodeMaterial {
     const fresnelSchlick = F0.add(float(1.0).sub(F0).mul(grazingAnglePow5));
     const fresnelWeight = fresnelSchlick.mul(uniforms.uFresnelScale).clamp();
 
-    // 5. screen color
-    const safeScreenUv = mix(screenUV, refractedScreenUv, isSafe);
-    const screenColor = viewportTexture(safeScreenUv).rgb;
-
-    // 6. surface highlights
+    // 5. surface highlights
     const reflectedLight = reflect(uniforms.uSunDir, normal);
     const align = max(dot(reflectedLight, viewDir), 0.0);
     const spec = pow(align, uniforms.uShininess);
@@ -278,6 +276,17 @@ class WaterMaterial extends MeshBasicNodeMaterial {
     const sunGlint = uniforms.uSunColor.mul(
       spec.mul(uniforms.uHighlightsGlow).mul(fresnelSpecBoost),
     );
+
+    // 6. beer-lambert
+    const sigma = uniforms.uAbsorptionRGB.mul(uniforms.uAbsorptionScale);
+    const waterThickness = mix(waterDepth, waterDepthRefr, isSafe);
+    const transmittance = exp(sigma.negate().mul(waterThickness));
+
+    const absorbedColor = screenColor.mul(transmittance);
+    const fillColor = uniforms.uInscatterTint
+      .mul(float(1.0).sub(transmittance))
+      .mul(uniforms.uInscatterStrength);
+    const throughWater = absorbedColor.add(fillColor);
 
     // 7. opacity
     const distanceXZSquared = dot(
@@ -292,18 +301,7 @@ class WaterMaterial extends MeshBasicNodeMaterial {
       .add(uniforms.uMinOpacity)
       .clamp();
 
-    // 8. beer-lambert
-    const sigma = uniforms.uAbsorptionRGB.mul(uniforms.uAbsorptionScale);
-    const waterThickness = mix(waterDepth, waterDepthRefr, isSafe);
-    const transmittance = exp(sigma.negate().mul(waterThickness));
-
-    const absorbedColor = screenColor.mul(transmittance);
-    const fillColor = uniforms.uInscatterTint
-      .mul(float(1.0).sub(transmittance))
-      .mul(uniforms.uInscatterStrength);
-    const throughWater = absorbedColor.add(fillColor);
-
-    // 9. final color
+    // 8. final color
     const shadedWater = mix(throughWater, reflectedColor, fresnelWeight);
     const color = mix(screenColor, shadedWater, opacity);
     this.colorNode = color.add(sunGlint);
