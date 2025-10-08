@@ -253,7 +253,7 @@ class WaterMaterial extends MeshBasicNodeMaterial {
     const waterDepthRefr = fragmentDepthRefr
       .div(uniforms.uDepthDistance)
       .clamp();
-    const safeScreenUv = mix(screenUV, refractedScreenUv, isSafe);
+    const safeScreenUv = mix(screenUV, refractedScreenUv, isSafe).clamp();
     const screenColor = viewportTexture(safeScreenUv).rgb;
 
     // 3. reflections
