@@ -44,8 +44,8 @@ const uniforms = {
   uSpeed: uniform(0.1),
   uNoiseScrollDir: uniform(new Vector2(0.1, 0)),
   uShininess: uniform(500),
-  uMinDist: uniform(1),
-  uMaxDist: uniform(15),
+  uMinDist: uniform(0),
+  uMaxDist: uniform(0),
   uSunDir: uniform(lighting.sunDirection),
   uSunColor: uniform(lighting.sunColor.clone()),
   uTworld: uniform(new Vector3(1, 0, 0)),
@@ -57,7 +57,7 @@ const uniforms = {
   uAbsorptionRGB: uniform(new Vector3(0.35, 0.1, 0.08)), // absorption coeff per channel, red absorbs fastest -> pushes toward blue/green with depth
   uInscatterTint: uniform(new Color(0.0, 0.09, 0.09)),
   uInscatterStrength: uniform(0.85),
-  uAbsorptionScale: uniform(10),
+  uAbsorptionScale: uniform(15),
   uMinOpacity: uniform(0.5),
   uIsWebGPU: uniform(1),
   uHighlightsSpread: uniform(0.35),
@@ -222,17 +222,17 @@ class WaterMaterial extends MeshBasicNodeMaterial {
       .normalize();
 
     // 1. depth
-    const depth = viewportDepthTexture(screenUV).r;
+    const zNdc = viewportDepthTexture(screenUV).r;
     const isWebGL = float(1).sub(uniforms.uIsWebGPU);
-    const webglDepth = depth.mul(2).sub(1).mul(isWebGL);
-    const webgpuDepth = depth.mul(uniforms.uIsWebGPU);
-    const sceneDepth = webglDepth.add(webgpuDepth);
+    const webglZNdc = zNdc.mul(2).sub(1).mul(isWebGL);
+    const webgpuZNdc = zNdc.mul(uniforms.uIsWebGPU);
+    const zNdcCompatible = webglZNdc.add(webgpuZNdc);
     const p3z = cameraProjectionMatrix.element(3).element(2);
     const p2z = cameraProjectionMatrix.element(2).element(2);
-    const sceneLinear = p3z.div(sceneDepth.add(p2z));
+    const zLinear = p3z.div(zNdcCompatible.add(p2z));
     const fragLinear = positionView.z.negate();
-    const isUnderWater = step(fragLinear, sceneLinear);
-    const fragmentDepth = sceneLinear.sub(fragLinear);
+    const isUnderWater = step(fragLinear, zLinear);
+    const fragmentDepth = zLinear.sub(fragLinear);
     const waterDepth = fragmentDepth.div(uniforms.uDepthDistance).clamp();
 
     // 2. refraction
@@ -241,15 +241,15 @@ class WaterMaterial extends MeshBasicNodeMaterial {
       uniforms.uRefractionStrength.mul(1.5),
       waterDepth,
     );
-    const distortion = tsn.xy.mul(distortionStrength); // NOTE: xy not xz because tangent space
+    const distortion = tsn.xy.mul(distortionStrength); // tangent tilt, not outward, drives wobble
     const refractedScreenUv = screenUV.add(distortion.mul(isUnderWater));
-    const depthRefr = viewportDepthTexture(refractedScreenUv).r;
-    const webglDepthRefr = depthRefr.mul(2).sub(1).mul(isWebGL);
-    const webgpuDepthRefr = depthRefr.mul(uniforms.uIsWebGPU);
-    const sceneDepthRefr = webglDepthRefr.add(webgpuDepthRefr);
-    const sceneLinearRefr = p3z.div(sceneDepthRefr.add(p2z));
-    const isSafe = step(fragLinear, sceneLinearRefr);
-    const fragmentDepthRefr = sceneLinearRefr.sub(fragLinear);
+    const zNdcRefr = viewportDepthTexture(refractedScreenUv).r;
+    const webglZNdcRefr = zNdcRefr.mul(2).sub(1).mul(isWebGL);
+    const webgpuZNdcRefr = zNdcRefr.mul(uniforms.uIsWebGPU);
+    const zNdcCompatibleRefr = webglZNdcRefr.add(webgpuZNdcRefr);
+    const zLinearRefr = p3z.div(zNdcCompatibleRefr.add(p2z));
+    const isSafe = step(fragLinear, zLinearRefr);
+    const fragmentDepthRefr = zLinearRefr.sub(fragLinear);
     const waterDepthRefr = fragmentDepthRefr
       .div(uniforms.uDepthDistance)
       .clamp();
@@ -281,12 +281,8 @@ class WaterMaterial extends MeshBasicNodeMaterial {
     const sigma = uniforms.uAbsorptionRGB.mul(uniforms.uAbsorptionScale);
     const waterThickness = mix(waterDepth, waterDepthRefr, isSafe);
     const transmittance = exp(sigma.negate().mul(waterThickness));
-
-    const absorbedColor = screenColor.mul(transmittance);
-    const fillColor = uniforms.uInscatterTint
-      .mul(float(1).sub(transmittance))
-      .mul(uniforms.uInscatterStrength);
-    const throughWater = absorbedColor.add(fillColor);
+    const tintColor = uniforms.uInscatterTint.mul(uniforms.uInscatterStrength);
+    const throughWater = mix(tintColor, screenColor, transmittance);
 
     // 6. surface highlights
     const tsnHighlights = vec3(
@@ -302,7 +298,7 @@ class WaterMaterial extends MeshBasicNodeMaterial {
     const align = max(dot(reflectedLight, viewDir), 0);
     const spec = pow(align, uniforms.uShininess);
     const fresnelSpecBoost = mix(
-      float(1),
+      1,
       fresnelSchlick,
       uniforms.uHighlightFresnelInfluence,
     );
