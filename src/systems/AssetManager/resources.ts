@@ -246,6 +246,6 @@ export const manifest = [
   { name: "waterNormal", url: waterNormalUrl, type: "texture" },
 ] as const satisfies ResourceRaw[];
 
-export type Resources = {
+export type ExternalResources = {
   [R in (typeof manifest)[number] as R["name"]]: ResourceType[R["type"]];
 };
