@@ -10,7 +10,7 @@ import { Fn, texture, vec2 } from "three/tsl";
 import { debugManager } from "./DebugManager";
 import { sceneManager } from "./SceneManager";
 import { eventsManager } from "./EventsManager";
-import { assetManager } from "./AssetManager";
+import { assetManager } from "./AssetManager/AssetManager";
 
 const config = {
   LIGHT_POSITION_OFFSET: new Vector3(10, 10, 10),
@@ -119,7 +119,10 @@ class LightingSystem {
   }
 
   getTerrainShadowFactor = Fn(([mapUv = vec2(0)]) => {
-    const shadowAo = texture(assetManager.terrainShadowAo, mapUv);
+    const shadowAo = texture(
+      assetManager.resources.terrainShadowAoTexture,
+      mapUv,
+    );
     return shadowAo.r;
   });
 

@@ -1,4 +1,4 @@
-import { assetManager } from "./AssetManager";
+import { assetManager } from "./AssetManager/AssetManager";
 import { audioManager } from "./AudioManager";
 import { physicsManager } from "./PhysicsManager";
 import { rendererManager } from "./RendererManager";

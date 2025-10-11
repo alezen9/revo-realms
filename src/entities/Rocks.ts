@@ -17,7 +17,7 @@ import {
   NormalMapNode,
   Vector2,
 } from "three/webgpu";
-import { assetManager } from "../systems/AssetManager";
+import { assetManager } from "../systems/AssetManager/AssetManager";
 import { ColliderDesc, RigidBodyDesc } from "@dimforge/rapier3d";
 import { physicsManager } from "../systems/PhysicsManager";
 import { sceneManager } from "../systems/SceneManager";
@@ -71,7 +71,7 @@ class RockMaterial extends MeshLambertNodeMaterial {
     const offsetDiffuse = stoneDiffOffset.add(stoneMossyDiffOffset);
 
     const _uvDiff = tslUtils.computeAtlasUv(scaleDiffuse, offsetDiffuse, _uv);
-    this.colorNode = texture(assetManager.stoneAtlas, _uvDiff);
+    this.colorNode = texture(assetManager.resources.stoneAtlas, _uvDiff);
 
     // Normal
     // Scale
@@ -88,7 +88,7 @@ class RockMaterial extends MeshLambertNodeMaterial {
     const offsetNormal = stoneNorOffset.add(stoneMossyNorOffset);
 
     const _uvNor = tslUtils.computeAtlasUv(scaleNormal, offsetNormal, _uv);
-    const norAo = texture(assetManager.stoneAtlas, _uvNor);
+    const norAo = texture(assetManager.resources.stoneAtlas, _uvNor);
     this.normalNode = new NormalMapNode(norAo.rgb, float(3));
     this.normalScale = new Vector2(1, -1);
 
@@ -102,7 +102,7 @@ class RockMaterial extends MeshLambertNodeMaterial {
       hash(instanceIndex),
       hash(instanceIndex).mul(21.63),
     ).fract();
-    const noise = texture(assetManager.noiseTexture, _uv);
+    const noise = texture(assetManager.resources.noiseTexture, _uv);
     data.assign(noise.r);
   })().compute(COUNT);
 }
@@ -110,8 +110,10 @@ class RockMaterial extends MeshLambertNodeMaterial {
 export default class Rocks {
   constructor() {
     // Visual
-    const rock = assetManager.realmModel.scene.getObjectByName("stone") as Mesh;
-    const colliders = assetManager.realmModel.scene.children.filter(
+    const rock = assetManager.resources.realmModel.scene.getObjectByName(
+      "stone",
+    ) as Mesh;
+    const colliders = assetManager.resources.realmModel.scene.children.filter(
       ({ name }) => name.startsWith("stone_collider"),
     ) as Mesh[];
 

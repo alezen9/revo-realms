@@ -11,7 +11,7 @@ import { inputManager } from "../systems/InputManager";
 import { type State } from "../Game";
 import { positionWorld, texture, uv, varying, vec3 } from "three/tsl";
 import { MeshLambertNodeMaterial } from "three/webgpu";
-import { assetManager } from "../systems/AssetManager";
+import { assetManager } from "../systems/AssetManager/AssetManager";
 import { RevoColliderType } from "../types";
 import { physicsManager } from "../systems/PhysicsManager";
 import { sceneManager } from "../systems/SceneManager";
@@ -118,7 +118,7 @@ export default class Player {
   }
 
   private createCharacterMesh() {
-    const mesh = assetManager.realmModel.scene.getObjectByName(
+    const mesh = assetManager.resources.realmModel.scene.getObjectByName(
       "player",
     ) as Mesh;
     mesh.material = new PlayerMaterial();
@@ -315,7 +315,9 @@ class PlayerMaterial extends MeshLambertNodeMaterial {
     const mapUv = tslUtils.computeMapUvByPosition(positionWorld.xz);
     const vMapUv = varying(mapUv);
     const shadowFactor = lighting.getTerrainShadowFactor(vMapUv);
-    const baseColor = texture(assetManager.footballDiffuse, uv()).mul(1.5);
+    const baseColor = texture(assetManager.resources.footballDiffuse, uv()).mul(
+      1.5,
+    );
 
     this.colorNode = baseColor.mul(shadowFactor);
   }

@@ -1,0 +1,251 @@
+import { CubeTexture, SRGBColorSpace, Texture } from "three";
+import { GLTF } from "three/addons/loaders/GLTFLoader.js";
+// Model
+import realmModelUrl from "/models/realm.glb?url";
+// Environment
+import pxUrl from "/textures/environment/px.webp?url";
+import nxUrl from "/textures/environment/nx.webp?url";
+import pyUrl from "/textures/environment/py.webp?url";
+import nyUrl from "/textures/environment/ny.webp?url";
+import pzUrl from "/textures/environment/pz.webp?url";
+import nzUrl from "/textures/environment/nz.webp?url";
+// Noise
+import noiseUrl from "/textures/noise/noise.webp?url";
+// Terrain
+import terrainTypeUrl from "/textures/realm/terrainType.webp?url";
+import sandNormalUrl from "/textures/realm/sandNormal.webp?url";
+import grassNormalUrl from "/textures/realm/grassNormal.webp?url";
+import grassDiffuseUrl from "/textures/realm/grassDiffuse.webp?url";
+import waterNormalUrl from "/textures/realm/waterNormal.webp?url";
+// Shadowmap
+import terrainShadowAoUrl from "/textures/realm/terrainShadowAo.webp?url";
+// Water lilies
+import waterLiliesDiffuseUrl from "/textures/realm/waterLiliesDiffuse.webp?url";
+import waterLiliesAlphaUrl from "/textures/realm/waterLiliesAlpha.webp?url";
+// Flowers
+import flowerAtlasUrl from "/textures/realm/flowerAtlas.webp?url";
+// Stones
+import stoneAtlasUrl from "/textures/realm/stoneAtlas.webp?url";
+// Trees
+import treeBarkDiffuseUrl from "/textures/realm/barkDiffuse.webp?url";
+import treeBarkNormalUrl from "/textures/realm/barkNormal.webp?url";
+import treeCanopyDiffuseUrl from "/textures/realm/canopyDiffuse.webp?url";
+import treeCanopyNormalUrl from "/textures/realm/canopyNormal.webp?url";
+// God of War
+import axeDiffuseUrl from "/textures/realm/axeDiffuse.webp?url";
+import axeEmissiveUrl from "/textures/realm/axeEmissive.webp?url";
+import trunkDiffuseUrl from "/textures/realm/trunkDiffuse.webp?url";
+import trunkNormalUrl from "/textures/realm/trunkNormal.webp?url";
+// One Piece
+import onePieceAtlasUrl from "/textures/realm/onePieceAtlas.webp?url";
+// Naruto
+import kunaiDiffuseUrl from "/textures/realm/kunaiDiffuse.webp?url";
+import kunaiMRUrl from "/textures/realm/kunaiMR.webp?url";
+// Campfire
+import campfireDiffuseUrl from "/textures/realm/campfireDiffuse.webp?url";
+// Fire
+import fireSpritesUrl from "/textures/realm/fireSprites.webp?url";
+// Football (Player)
+import footballDiffuseUrl from "/textures/realm/footballDiffuse.webp?url";
+// Leaf
+import leafDiffuseUrl from "/textures/realm/leafDiffuse.webp?url";
+
+type ResourceType = {
+  texture: Texture;
+  gltf: GLTF;
+  cubeTexture: CubeTexture;
+};
+
+type TextureResourceRaw = {
+  name: string;
+  url: string;
+  type: "texture";
+  flipY?: boolean;
+  colorSpace?: string;
+};
+
+type GLTFResourceRaw = {
+  name: string;
+  url: string;
+  type: "gltf";
+};
+
+type CubeTextureResourceRaw = {
+  name: string;
+  urls: string[];
+  type: "cubeTexture";
+  colorSpace?: string;
+};
+
+export type ResourceRaw =
+  | TextureResourceRaw
+  | GLTFResourceRaw
+  | CubeTextureResourceRaw;
+
+export const manifest = [
+  // -----------------------------------------------
+  // Core
+  // -----------------------------------------------
+  { name: "realmModel", url: realmModelUrl, type: "gltf" },
+  { name: "noiseTexture", url: noiseUrl, type: "texture" },
+  {
+    name: "envMapTexture",
+    urls: [pxUrl, nxUrl, pyUrl, nyUrl, pzUrl, nzUrl],
+    type: "cubeTexture",
+    colorSpace: SRGBColorSpace,
+  },
+
+  // -----------------------------------------------
+  // Water lilies
+  // -----------------------------------------------
+  {
+    name: "waterLiliesTexture",
+    url: waterLiliesDiffuseUrl,
+    type: "texture",
+    flipY: false,
+  },
+  {
+    name: "waterLiliesAlphaTexture",
+    url: waterLiliesAlphaUrl,
+    type: "texture",
+    flipY: false,
+  },
+
+  // -----------------------------------------------
+  // Flowers
+  // -----------------------------------------------
+  { name: "flowerAtlas", url: flowerAtlasUrl, type: "texture", flipY: false },
+
+  // -----------------------------------------------
+  // Stones
+  // -----------------------------------------------
+  { name: "stoneAtlas", url: stoneAtlasUrl, type: "texture", flipY: false },
+
+  // -----------------------------------------------
+  // Trees
+  // -----------------------------------------------
+  {
+    name: "canopyDiffuse",
+    url: treeCanopyDiffuseUrl,
+    type: "texture",
+    flipY: false,
+  },
+  {
+    name: "canopyNormal",
+    url: treeCanopyNormalUrl,
+    type: "texture",
+    flipY: false,
+  },
+  {
+    name: "barkDiffuse",
+    url: treeBarkDiffuseUrl,
+    type: "texture",
+    flipY: false,
+    colorSpace: SRGBColorSpace,
+  },
+  { name: "barkNormal", url: treeBarkNormalUrl, type: "texture", flipY: false },
+
+  // -----------------------------------------------
+  // God of War
+  // -----------------------------------------------
+  { name: "axeDiffuse", url: axeDiffuseUrl, type: "texture", flipY: false },
+  { name: "axeEmissive", url: axeEmissiveUrl, type: "texture", flipY: false },
+  {
+    name: "trunkDiffuse",
+    url: trunkDiffuseUrl,
+    type: "texture",
+    flipY: false,
+    colorSpace: SRGBColorSpace,
+  },
+  { name: "trunkNormal", url: trunkNormalUrl, type: "texture", flipY: false },
+
+  // -----------------------------------------------
+  // One Piece
+  // -----------------------------------------------
+  {
+    name: "onePieceAtlas",
+    url: onePieceAtlasUrl,
+    type: "texture",
+    flipY: false,
+  },
+
+  // -----------------------------------------------
+  // Naruto
+  // -----------------------------------------------
+  {
+    name: "kunaiDiffuse",
+    url: kunaiDiffuseUrl,
+    type: "texture",
+    flipY: false,
+    colorSpace: SRGBColorSpace,
+  },
+  { name: "kunaiMR", url: kunaiMRUrl, type: "texture", flipY: false },
+
+  // -----------------------------------------------
+  // Campfire
+  // -----------------------------------------------
+  {
+    name: "campfireDiffuse",
+    url: campfireDiffuseUrl,
+    type: "texture",
+    flipY: false,
+    colorSpace: SRGBColorSpace,
+  },
+  { name: "fireSprites", url: fireSpritesUrl, type: "texture" },
+
+  // -----------------------------------------------
+  // Football (Player)
+  // -----------------------------------------------
+  {
+    name: "footballDiffuse",
+    url: footballDiffuseUrl,
+    type: "texture",
+    colorSpace: SRGBColorSpace,
+  },
+
+  // -----------------------------------------------
+  // Leaf
+  // -----------------------------------------------
+  {
+    name: "leafDiffuse",
+    url: leafDiffuseUrl,
+    type: "texture",
+    colorSpace: SRGBColorSpace,
+  },
+
+  // -----------------------------------------------
+  // Terrain
+  // -----------------------------------------------
+  { name: "sandNormal", url: sandNormalUrl, type: "texture" },
+  {
+    name: "grassNormal",
+    url: grassNormalUrl,
+    type: "texture",
+  },
+  {
+    name: "grassDiffuse", // linear on purpose
+    url: grassDiffuseUrl,
+    type: "texture",
+  },
+  {
+    name: "terrainTypeTexture",
+    url: terrainTypeUrl,
+    type: "texture",
+    flipY: false,
+  },
+  {
+    name: "terrainShadowAoTexture",
+    url: terrainShadowAoUrl,
+    type: "texture",
+    flipY: false,
+  },
+
+  // -----------------------------------------------
+  // Water
+  // -----------------------------------------------
+  { name: "waterNormal", url: waterNormalUrl, type: "texture" },
+] as const satisfies ResourceRaw[];
+
+export type Resources = {
+  [R in (typeof manifest)[number] as R["name"]]: ResourceType[R["type"]];
+};

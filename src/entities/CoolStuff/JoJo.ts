@@ -1,5 +1,5 @@
 import { InstancedMesh, Mesh } from "three";
-import { assetManager } from "../../systems/AssetManager";
+import { assetManager } from "../../systems/AssetManager/AssetManager";
 import { sceneManager } from "../../systems/SceneManager";
 import { MeshLambertNodeMaterial } from "three/webgpu";
 import {
@@ -18,13 +18,13 @@ import { tslUtils } from "../../utils/TSLUtils";
 
 export default class JoJo {
   constructor() {
-    const mask = assetManager.realmModel.scene.getObjectByName(
+    const mask = assetManager.resources.realmModel.scene.getObjectByName(
       "jojo_mask",
     ) as Mesh;
     mask.material = new MaskMaterial();
 
-    const symbols = assetManager.realmModel.scene.children.filter((child) =>
-      child.name.startsWith("jojo_symbol"),
+    const symbols = assetManager.resources.realmModel.scene.children.filter(
+      (child) => child.name.startsWith("jojo_symbol"),
     ) as Mesh[];
 
     const symbolMaterial = new SymbolMaterial();
@@ -56,7 +56,7 @@ class MaskMaterial extends MeshLambertNodeMaterial {
       vec2(...stoneDiffuse.offset),
       uv(),
     );
-    const diff = texture(assetManager.stoneAtlas, _uvDiff);
+    const diff = texture(assetManager.resources.stoneAtlas, _uvDiff);
     this.colorNode = diff;
   }
 }

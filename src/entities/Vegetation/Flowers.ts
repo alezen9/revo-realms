@@ -25,7 +25,7 @@ import {
   Vector2,
   Vector3,
 } from "three/webgpu";
-import { assetManager } from "../../systems/AssetManager";
+import { assetManager } from "../../systems/AssetManager/AssetManager";
 import { rendererManager } from "../../systems/RendererManager";
 import { sceneManager } from "../../systems/SceneManager";
 import { eventsManager } from "../../systems/EventsManager";
@@ -140,7 +140,7 @@ class FlowerMaterial extends SpriteNodeMaterial {
       .div(flowersConfig.TILE_SIZE)
       .abs();
 
-    const noise = texture(assetManager.noiseTexture, _uv);
+    const noise = texture(assetManager.resources.noiseTexture, _uv);
     const mixedNoise = noise.r;
 
     const noiseX = mixedNoise.sub(0.5).mul(100);
@@ -176,7 +176,7 @@ class FlowerMaterial extends SpriteNodeMaterial {
 
   private computeAlpha = Fn(([worldPos = vec3(0)]) => {
     const alphaUv = tslUtils.computeMapUvByPosition(worldPos.xz);
-    return texture(assetManager.terrainTypeMap, alphaUv).g;
+    return texture(assetManager.resources.terrainTypeMap, alphaUv).g;
   });
 
   private computeUpdate = Fn(() => {
@@ -226,7 +226,7 @@ class FlowerMaterial extends SpriteNodeMaterial {
 
     const baseUv = uv().mul(0.5);
     const flowerUv = baseUv.add(vec2(u, v));
-    const flower = texture(assetManager.flowerAtlas, flowerUv);
+    const flower = texture(assetManager.resources.flowerAtlas, flowerUv);
     this.colorNode = flower;
 
     // Opacity

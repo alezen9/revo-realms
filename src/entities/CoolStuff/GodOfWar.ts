@@ -1,4 +1,4 @@
-import { assetManager } from "../../systems/AssetManager";
+import { assetManager } from "../../systems/AssetManager/AssetManager";
 import { Color, Mesh } from "three";
 import { sceneManager } from "../../systems/SceneManager";
 import { MeshLambertNodeMaterial } from "three/webgpu";
@@ -12,9 +12,9 @@ class TrunkMaterial extends MeshLambertNodeMaterial {
     super();
     this.precision = "lowp";
     this.flatShading = false;
-    const diffuse = texture(assetManager.trunkDiffuse, uv());
+    const diffuse = texture(assetManager.resources.trunkDiffuse, uv());
     this.colorNode = diffuse.mul(1.75);
-    this.normalMap = assetManager.trunkNormal;
+    this.normalMap = assetManager.resources.trunkNormal;
   }
 }
 
@@ -23,8 +23,8 @@ class AxeMaterial extends MeshLambertNodeMaterial {
     super();
     this.precision = "lowp";
     this.flatShading = false;
-    this.map = assetManager.axeDiffuse;
-    this.emissiveMap = assetManager.axeEmissive;
+    this.map = assetManager.resources.axeDiffuse;
+    this.emissiveMap = assetManager.resources.axeEmissive;
     this.emissiveIntensity = 35;
     this.emissive = new Color("lightblue");
   }
@@ -33,19 +33,19 @@ class AxeMaterial extends MeshLambertNodeMaterial {
 export default class GodOfWar {
   constructor() {
     // Visual
-    const axe = assetManager.realmModel.scene.getObjectByName(
+    const axe = assetManager.resources.realmModel.scene.getObjectByName(
       "kratos_axe",
     ) as Mesh;
     axe.material = new AxeMaterial();
 
-    const trunk = assetManager.realmModel.scene.getObjectByName(
+    const trunk = assetManager.resources.realmModel.scene.getObjectByName(
       "tree_trunk",
     ) as Mesh;
     trunk.material = new TrunkMaterial();
     sceneManager.scene.add(axe, trunk);
 
     // Physics
-    const axeCollider = assetManager.realmModel.scene.getObjectByName(
+    const axeCollider = assetManager.resources.realmModel.scene.getObjectByName(
       "axe_collider",
     ) as Mesh;
     const rigidBodyDescAxe = RigidBodyDesc.fixed()
@@ -62,9 +62,10 @@ export default class GodOfWar {
     ).setRestitution(0.75);
     physicsManager.world.createCollider(colliderDescAxe, rigidBodyAxe);
 
-    const trunkCollider = assetManager.realmModel.scene.getObjectByName(
-      "trunk_collider",
-    ) as Mesh;
+    const trunkCollider =
+      assetManager.resources.realmModel.scene.getObjectByName(
+        "trunk_collider",
+      ) as Mesh;
     const { x, y } = trunkCollider.geometry.boundingBox!.max;
     const rigidBodyDescTrunk = RigidBodyDesc.fixed()
       .setTranslation(...trunkCollider.position.toArray())

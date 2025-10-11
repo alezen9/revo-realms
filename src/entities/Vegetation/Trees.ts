@@ -25,7 +25,7 @@ import {
   NormalMapNode,
   Vector2,
 } from "three/webgpu";
-import { assetManager } from "../../systems/AssetManager";
+import { assetManager } from "../../systems/AssetManager/AssetManager";
 import { ColliderDesc, RigidBodyDesc } from "@dimforge/rapier3d";
 import { physicsManager } from "../../systems/PhysicsManager";
 import { sceneManager } from "../../systems/SceneManager";
@@ -42,11 +42,11 @@ class BarkMaterial extends MeshLambertNodeMaterial {
     const _uv = fract(uv().mul(7));
 
     // Diffuse
-    const diff = texture(assetManager.barkDiffuse, _uv);
+    const diff = texture(assetManager.resources.barkDiffuse, _uv);
     this.colorNode = diff.mul(2.5);
 
     // Normal
-    const nor = texture(assetManager.barkNormal, _uv);
+    const nor = texture(assetManager.resources.barkNormal, _uv);
     this.normalNode = new NormalMapNode(nor);
   }
 }
@@ -66,10 +66,10 @@ class CanopyMaterial extends MeshLambertNodeMaterial {
     this.side = DoubleSide;
 
     const worlUv = tslUtils.computeMapUvByPosition(positionWorld.xz);
-    const noise = texture(assetManager.noiseTexture, worlUv);
+    const noise = texture(assetManager.resources.noiseTexture, worlUv);
 
     // Diffuse
-    const diff = texture(assetManager.canopyDiffuse, uv());
+    const diff = texture(assetManager.resources.canopyDiffuse, uv());
 
     const seasonalAmbience = mix(
       uniforms.uPrimaryColor,
@@ -83,7 +83,7 @@ class CanopyMaterial extends MeshLambertNodeMaterial {
     );
 
     // Normal
-    const nor = texture(assetManager.canopyNormal, uv());
+    const nor = texture(assetManager.resources.canopyNormal, uv());
     this.normalNode = new NormalMapNode(nor, float(1.25));
     this.normalScale = new Vector2(1, -1);
 
@@ -102,8 +102,10 @@ class CanopyMaterial extends MeshLambertNodeMaterial {
 export default class Trees {
   constructor() {
     // Visual
-    const tree = assetManager.realmModel.scene.getObjectByName("tree") as Group;
-    const colliders = assetManager.realmModel.scene.children.filter(
+    const tree = assetManager.resources.realmModel.scene.getObjectByName(
+      "tree",
+    ) as Group;
+    const colliders = assetManager.resources.realmModel.scene.children.filter(
       ({ name }) => name.startsWith("tree_collider"),
     ) as Mesh[];
 
@@ -125,9 +127,10 @@ export default class Trees {
       colliders.length,
     );
 
-    const baseCollider = assetManager.realmModel.scene.getObjectByName(
-      "base_tree_collider",
-    ) as Mesh;
+    const baseCollider =
+      assetManager.resources.realmModel.scene.getObjectByName(
+        "base_tree_collider",
+      ) as Mesh;
     const boundingBox = baseCollider.geometry.boundingBox!;
     const baseRadius = boundingBox.max.x;
     const baseHalfHeight = boundingBox.max.y / 2;

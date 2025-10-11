@@ -16,7 +16,7 @@ import {
 } from "three/tsl";
 import { RevoColliderType } from "../types";
 import { Color, Mesh, MeshLambertNodeMaterial, Vector3 } from "three/webgpu";
-import { assetManager } from "../systems/AssetManager";
+import { assetManager } from "../systems/AssetManager/AssetManager";
 import { realmConfig } from "../realms/PortfolioRealm";
 import {
   ColliderDesc,
@@ -74,10 +74,18 @@ class TerainMaterial extends MeshLambertNodeMaterial {
       const timer = time.mul(0.15);
       const scaledUvA = vUv.mul(17);
       const scaledCausticsUvA = fract(scaledUvA.add(vec2(timer, 0)));
-      const noiseA = texture(assetManager.noiseTexture, scaledCausticsUvA, 1).g;
+      const noiseA = texture(
+        assetManager.resources.noiseTexture,
+        scaledCausticsUvA,
+        1,
+      ).g;
       const scaledUvB = vUv.mul(33);
       const scaledCausticsUvB = fract(scaledUvB.add(vec2(0, timer.negate())));
-      const noiseB = texture(assetManager.noiseTexture, scaledCausticsUvB, 3).g;
+      const noiseB = texture(
+        assetManager.resources.noiseTexture,
+        scaledCausticsUvB,
+        3,
+      ).g;
       const caustics = noiseA.add(noiseB);
       const depthFalloff = smoothstep(-1, 7.5, vDepth);
       const adjustedCaustics = pow(caustics, 3).mul(float(1).sub(depthFalloff));
@@ -122,25 +130,38 @@ class TerainMaterial extends MeshLambertNodeMaterial {
     const _uv = tslUtils.computeMapUvByPosition(positionWorld.xz);
     const vUv = varying(_uv);
 
-    const shadowAo = texture(assetManager.terrainShadowAo, uv().clamp());
+    const shadowAo = texture(
+      assetManager.resources.terrainShadowAoTexture,
+      uv().clamp(),
+    );
     this.aoNode = shadowAo.g;
 
-    const factors = texture(assetManager.terrainTypeMap, vUv, 2.5);
+    const factors = texture(
+      assetManager.resources.terrainTypeTexture,
+      vUv,
+      2.5,
+    );
     const grassFactor = factors.g;
     const waterFactor = factors.b;
     const sandFactor = float(1).sub(grassFactor);
     const pathFactor = sandFactor.sub(waterFactor);
 
     // Fake Normal
-    const sandNormal = texture(assetManager.sandNormal, fract(vUv.mul(30)));
+    const sandNormal = texture(
+      assetManager.resources.sandNormal,
+      fract(vUv.mul(30)),
+    );
 
     const grassUv = fract(vUv.mul(30));
-    const grassNormal = texture(assetManager.grassNormal, grassUv);
+    const grassNormal = texture(assetManager.resources.grassNormal, grassUv);
     const terrainNoise = grassNormal.dot(sandNormal).mul(0.65);
 
     // Diffuse
     // Grass
-    const grassColorSample = texture(assetManager.grassDiffuse, grassUv);
+    const grassColorSample = texture(
+      assetManager.resources.grassDiffuse,
+      grassUv,
+    );
     const sandAlpha = float(1).sub(grassColorSample.a);
     const grassColor = this._uniforms.uGrassTerrainColor
       .mul(sandAlpha)
@@ -173,7 +194,7 @@ class InnerTerrain {
 
   private createFloor() {
     // Visual
-    const floor = assetManager.realmModel.scene.getObjectByName(
+    const floor = assetManager.resources.realmModel.scene.getObjectByName(
       "floor",
     ) as Mesh;
     floor.receiveShadow = true;
@@ -184,7 +205,7 @@ class InnerTerrain {
   }
 
   private getFloorDisplacementData() {
-    const mesh = assetManager.realmModel.scene.getObjectByName(
+    const mesh = assetManager.resources.realmModel.scene.getObjectByName(
       "heightfield",
     ) as Mesh;
     const displacement = mesh.geometry.attributes._displacement.array[0]; // they are all the same
@@ -263,7 +284,7 @@ class OuterTerrain {
   }
 
   private createOuterFloorVisual() {
-    const outerFloor = assetManager.realmModel.scene.getObjectByName(
+    const outerFloor = assetManager.resources.realmModel.scene.getObjectByName(
       "outer_world",
     ) as Mesh;
     outerFloor.receiveShadow = true;
