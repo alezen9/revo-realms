@@ -1,10 +1,8 @@
 import {
   float,
   Fn,
-  fract,
   mix,
   positionWorld,
-  pow,
   smoothstep,
   texture,
   time,
@@ -15,7 +13,17 @@ import {
   vec3,
 } from "three/tsl";
 import { RevoColliderType } from "../types";
-import { Color, Mesh, MeshLambertNodeMaterial, Vector3 } from "three/webgpu";
+import {
+  Color,
+  DataTexture,
+  FloatType,
+  LinearFilter,
+  Mesh,
+  MeshLambertNodeMaterial,
+  NoColorSpace,
+  RedFormat,
+  Vector3,
+} from "three/webgpu";
 import { assetManager } from "../systems/AssetManager/AssetManager";
 import { realmConfig } from "../realms/PortfolioRealm";
 import {
@@ -31,14 +39,13 @@ import { debugManager } from "../systems/DebugManager";
 import { eventsManager } from "../systems/EventsManager";
 import { tslUtils } from "../utils/TSLUtils";
 
-const defaultUniforms = {
+const uniforms = {
   uGrassTerrainColor: uniform(new Color().setRGB(0.74, 0.51, 0.0)),
   uWaterSandColor: uniform(new Color().setRGB(0.54, 0.39, 0.2)),
   uPathSandColor: uniform(new Color().setRGB(0.65, 0.49, 0.27)),
-} as const;
+};
 
 class TerainMaterial extends MeshLambertNodeMaterial {
-  private _uniforms = { ...defaultUniforms };
   constructor() {
     super();
     this.createMaterial();
@@ -46,81 +53,53 @@ class TerainMaterial extends MeshLambertNodeMaterial {
   }
 
   private debugTerrain() {
-    const terrainFolder = debugManager.panel.addFolder({ title: "⛰️ Terrain" });
-    terrainFolder.expanded = false;
-    terrainFolder.addBinding(this._uniforms.uPathSandColor, "value", {
+    const folder = debugManager.panel.addFolder({
+      title: "⛰️ Terrain",
+      expanded: false,
+    });
+    folder.addBinding(uniforms.uPathSandColor, "value", {
       label: "Path color",
       view: "color",
       color: { type: "float" },
     });
-    terrainFolder.addBinding(this._uniforms.uWaterSandColor, "value", {
+    folder.addBinding(uniforms.uWaterSandColor, "value", {
       label: "Water bed color",
       view: "color",
       color: { type: "float" },
     });
-    terrainFolder.addBinding(this._uniforms.uGrassTerrainColor, "value", {
+    folder.addBinding(uniforms.uGrassTerrainColor, "value", {
       label: "Grass terrain color",
       view: "color",
       color: { type: "float" },
     });
   }
 
-  private computeCausticsDiffuse = Fn(
-    ([
-      vUv = vec2(0, 0),
-      vDepth = float(0),
-      causticsShadowColor = vec3(0, 0, 0),
-    ]) => {
-      const timer = time.mul(0.15);
-      const scaledUvA = vUv.mul(17);
-      const scaledCausticsUvA = fract(scaledUvA.add(vec2(timer, 0)));
-      const noiseA = texture(
-        assetManager.resources.noiseTexture,
-        scaledCausticsUvA,
-        1,
-      ).g;
-      const scaledUvB = vUv.mul(33);
-      const scaledCausticsUvB = fract(scaledUvB.add(vec2(0, timer.negate())));
-      const noiseB = texture(
-        assetManager.resources.noiseTexture,
-        scaledCausticsUvB,
-        3,
-      ).g;
-      const caustics = noiseA.add(noiseB);
-      const depthFalloff = smoothstep(-1, 7.5, vDepth);
-      const adjustedCaustics = pow(caustics, 3).mul(float(1).sub(depthFalloff));
-
-      const causticsHighlightColor = vec3(0.6, 0.8, 1.0).mul(0.5);
-
-      const causticsColor = mix(
-        causticsShadowColor,
-        causticsHighlightColor,
-        adjustedCaustics,
-      );
-
-      return causticsColor;
-    },
-  );
+  private computeCausticsDiffuse = Fn(([vUv = vec2(0), vDepth = float(0)]) => {
+    const timer = time.mul(0.15);
+    const uv1 = vUv.mul(17).add(vec2(timer, 0)).fract();
+    const noiseA = texture(assetManager.resources.noiseTexture, uv1, 1).g;
+    const uv2 = vUv.mul(33).add(vec2(0, timer.negate())).fract();
+    const noiseB = texture(assetManager.resources.noiseTexture, uv2, 3).g;
+    const caustics = noiseA.add(noiseB);
+    const caustics3 = caustics.mul(caustics).mul(caustics);
+    const depthFalloff = smoothstep(-1, 7.5, vDepth);
+    const adjustedCaustics = caustics3.mul(float(1).sub(depthFalloff));
+    const causticsHighlightColor = vec3(0.3, 0.4, 0.5);
+    const causticsShadowColor = vec3(0, 0, 0);
+    return mix(causticsShadowColor, causticsHighlightColor, adjustedCaustics);
+  });
 
   private computeWaterDiffuse = Fn(([vDepth = float(0), vUv = vec2(0, 0)]) => {
-    const depth1 = float(8.0); // Transition depth
-    const epsilon = float(0.001); // Prevents precision issues
-
-    const blendFactor = smoothstep(0.0, depth1.add(epsilon), vDepth); // How much tint is applied
-
-    const sandColor = this._uniforms.uWaterSandColor; // Sand color
-
-    // const waterTint = vec3(0.4, 0.5, 0.45); // use in when plenty of vegetation and/or algae in lake
-    const waterTint = vec3(0.35, 0.45, 0.55).mul(0.65); // bit desaturated blue
-
+    const blendFactor = smoothstep(0, 8, vDepth);
+    const waterTint = vec3(0.35, 0.45, 0.55).mul(0.65);
     const causticsColor = this.computeCausticsDiffuse(vUv, vDepth);
-
     const shallowBoost = smoothstep(0.0, 1.5, vDepth);
     const sandHighlight = vec3(1.0, 0.9, 0.7).mul(0.1).mul(shallowBoost);
-    const waterBaseColor = mix(sandColor, waterTint, blendFactor).add(
-      sandHighlight,
-    );
-
+    const waterBaseColor = mix(
+      uniforms.uWaterSandColor,
+      waterTint,
+      blendFactor,
+    ).add(sandHighlight);
     return waterBaseColor.add(causticsColor);
   });
 
@@ -136,23 +115,17 @@ class TerainMaterial extends MeshLambertNodeMaterial {
     );
     this.aoNode = shadowAo.g;
 
-    const factors = texture(
-      assetManager.resources.terrainTypeTexture,
-      vUv,
-      2.5,
-    );
-    const grassFactor = factors.g;
-    const waterFactor = factors.b;
+    const type = texture(assetManager.resources.terrainTypeTexture, vUv, 2.5);
+    const grassFactor = type.g;
+    const waterFactor = type.b;
     const sandFactor = float(1).sub(grassFactor);
     const pathFactor = sandFactor.sub(waterFactor);
 
     // Fake Normal
-    const sandNormal = texture(
-      assetManager.resources.sandNormal,
-      fract(vUv.mul(30)),
-    );
+    const sandUv = vUv.mul(30).fract();
+    const sandNormal = texture(assetManager.resources.sandNormal, sandUv);
 
-    const grassUv = fract(vUv.mul(30));
+    const grassUv = vUv.mul(30).fract();
     const grassNormal = texture(assetManager.resources.grassNormal, grassUv);
     const terrainNoise = grassNormal.dot(sandNormal).mul(0.65);
 
@@ -163,13 +136,13 @@ class TerainMaterial extends MeshLambertNodeMaterial {
       grassUv,
     );
     const sandAlpha = float(1).sub(grassColorSample.a);
-    const grassColor = this._uniforms.uGrassTerrainColor
+    const grassColor = uniforms.uGrassTerrainColor
       .mul(sandAlpha)
       .add(grassColorSample)
       .mul(grassFactor)
       .mul(0.85);
 
-    const pathColor = this._uniforms.uPathSandColor.mul(1.2).mul(pathFactor);
+    const pathColor = uniforms.uPathSandColor.mul(1.2).mul(pathFactor);
 
     // Water
     const vDepth = varying(positionWorld.y.negate());
@@ -182,6 +155,17 @@ class TerainMaterial extends MeshLambertNodeMaterial {
       .add(waterColor.mul(terrainNoise).mul(0.5));
 
     this.colorNode = finalColor.mul(shadowAo.r);
+
+    // const height = texture(
+    //   assetManager.resources.terrainHeightMap,
+    //   vec2(vUv.x, float(1).sub(vUv.y)),
+    // ).r;
+
+    // this.positionNode = vec3(
+    //   positionLocal.x,
+    //   positionLocal.y.add(height),
+    //   positionLocal.z,
+    // );
   }
 }
 
@@ -242,9 +226,42 @@ class InnerTerrain {
     };
   }
 
+  private createDisplacementTexture(
+    rowsCount: number,
+    heights: Float32Array,
+    displacement: number,
+  ) {
+    const N = rowsCount;
+    const fixed = new Float32Array(heights.length);
+
+    for (let z = 0; z < N; z++) {
+      for (let x = 0; x < N; x++) {
+        const srcZ = N - 1 - z;
+        const srcX = x;
+        const srcIndex = srcZ + srcX * N;
+        const dstIndex = x + z * N;
+        fixed[dstIndex] = heights[srcIndex] - displacement;
+      }
+    }
+
+    const tex = new DataTexture(fixed, N, N, RedFormat, FloatType);
+    tex.colorSpace = NoColorSpace;
+    tex.magFilter = LinearFilter;
+    tex.minFilter = LinearFilter;
+    tex.generateMipmaps = false;
+    tex.needsUpdate = true;
+    return tex;
+  }
+
   private createFloorPhysics() {
     const displaceMentData = this.getFloorDisplacementData();
     const { rowsCount, heights, displacement } = displaceMentData;
+    const heightMap = this.createDisplacementTexture(
+      rowsCount,
+      heights,
+      displacement,
+    );
+    assetManager.resources.terrainHeightMap.copy(heightMap);
 
     const rigidBodyDesc = RigidBodyDesc.fixed()
       .setTranslation(0, -displacement, 0)
@@ -354,3 +371,101 @@ export default class Terrain {
     new OuterTerrain(terrainMaterial);
   }
 }
+
+// export default class Terrain {
+//   private group: Group;
+//   private nGrid = 7;
+//   private tileSize = 32;
+//   private tileSizeSq = this.tileSize * this.tileSize;
+
+//   constructor() {
+//     const terrainMaterial = new TerainMaterial();
+//     new InnerTerrain(terrainMaterial);
+//     new OuterTerrain(terrainMaterial);
+
+//     const geometries = [
+//       new PlaneGeometry(this.tileSize, this.tileSize, 64, 64),
+//       new PlaneGeometry(this.tileSize, this.tileSize, 32, 32),
+//       new PlaneGeometry(this.tileSize, this.tileSize, 16, 16),
+//     ];
+//     geometries.forEach((g) => {
+//       g.rotateX(-Math.PI / 2);
+//     });
+
+//     this.group = this.createGrid(terrainMaterial, geometries);
+//     sceneManager.scene.add(this.group);
+
+//     // snap the whole grid in integer tile steps; wrap tiles locally
+//     eventsManager.on("update-throttle-2x", ({ player }) => {
+//       const dx = player.position.x - this.group.position.x;
+//       const dz = player.position.z - this.group.position.z;
+
+//       // early out if we're well within the current center tile
+//       if (dx * dx + dz * dz < this.tileSizeSq) return;
+
+//       // how many whole tiles did we move since last snap?
+//       const stepX = Math.round(dx / this.tileSize);
+//       const stepZ = Math.round(dz / this.tileSize);
+//       if (stepX === 0 && stepZ === 0) return;
+
+//       // snap group origin by whole tiles
+//       this.group.position.x += stepX * this.tileSize;
+//       this.group.position.z += stepZ * this.tileSize;
+
+//       // shift tiles opposite to movement and wrap within the grid span
+//       this.wrapTiles(stepX, stepZ);
+//     });
+//   }
+
+//   private createGrid(material: TerainMaterial, geometries: PlaneGeometry[]) {
+//     const group = new Group();
+//     const half = Math.floor(this.nGrid / 2);
+
+//     for (let j = -half; j <= half; j++) {
+//       for (let i = -half; i <= half; i++) {
+//         const tile = this.createTile(material, geometries);
+//         tile.position.set(i * this.tileSize, 0, j * this.tileSize);
+//         group.add(tile);
+//       }
+//     }
+//     return group;
+//   }
+
+//   private createTile(material: TerainMaterial, geometries: PlaneGeometry[]) {
+//     const lod = new LOD();
+
+//     const meshHigh = new Mesh(geometries[0], material);
+//     meshHigh.receiveShadow = true;
+//     lod.addLevel(meshHigh, 0);
+
+//     const meshMid = new Mesh(geometries[1], material);
+//     meshMid.receiveShadow = true;
+//     lod.addLevel(meshMid, 50);
+
+//     const meshLow = new Mesh(geometries[2], material);
+//     meshLow.receiveShadow = true;
+//     lod.addLevel(meshLow, 100);
+
+//     // LOD itself doesn't receive; children do
+//     return lod;
+//   }
+
+//   private wrapTiles(stepX: number, stepZ: number) {
+//     const halfGrid = Math.floor(this.nGrid / 2);
+//     const limit = halfGrid * this.tileSize; // max |pos| in group space
+//     const span = this.nGrid * this.tileSize; // full grid width
+
+//     for (const tile of this.group.children) {
+//       // move opposite to player step
+//       tile.position.x -= stepX * this.tileSize;
+//       tile.position.z -= stepZ * this.tileSize;
+
+//       // single-pass wrap (O(1)); no while
+//       if (tile.position.x > limit) tile.position.x -= span;
+//       else if (tile.position.x < -limit) tile.position.x += span;
+
+//       if (tile.position.z > limit) tile.position.z -= span;
+//       else if (tile.position.z < -limit) tile.position.z += span;
+//     }
+//   }
+// }

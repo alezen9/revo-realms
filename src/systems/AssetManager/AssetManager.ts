@@ -1,5 +1,6 @@
 import {
   CubeTextureLoader,
+  DataTexture,
   LoadingManager,
   NoColorSpace,
   TextureLoader,
@@ -9,7 +10,13 @@ import { DRACOLoader } from "three/addons/loaders/DRACOLoader.js";
 import atlasesCoords from "../../atlases/atlases.json";
 import { Atlases } from "../../atlases/types";
 import { loadingManager } from "../LoadingManager";
-import { manifest, ResourceRaw, Resources } from "./resources";
+import { manifest, ResourceRaw, ExternalResources } from "./resources";
+
+type InternalResources = {
+  terrainHeightMap: DataTexture;
+};
+
+type Resources = ExternalResources & InternalResources;
 
 class AssetManager {
   // Atlas coords
@@ -20,7 +27,9 @@ class AssetManager {
   private gltfLoader: GLTFLoader;
   private cubeTextureLoader: CubeTextureLoader;
 
-  resources = {} as Resources;
+  resources = {
+    terrainHeightMap: new DataTexture(), // placeholder
+  } as Resources;
 
   constructor(manager: LoadingManager) {
     // Texture
