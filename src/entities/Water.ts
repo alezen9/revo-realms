@@ -1,7 +1,7 @@
 import { Color, Mesh, Vector2, Vector3 } from "three";
 import { sceneManager } from "../systems/SceneManager";
 import { MeshBasicNodeMaterial } from "three/webgpu";
-import { assetManager } from "../systems/AssetManager";
+import { assetManager } from "../systems/AssetManager/AssetManager";
 import {
   cameraPosition,
   cameraProjectionMatrix,
@@ -67,7 +67,7 @@ const uniforms = {
 
 export default class Water {
   constructor() {
-    const water = assetManager.realmModel.scene.getObjectByName(
+    const water = assetManager.resources.realmModel.scene.getObjectByName(
       "water",
     ) as Mesh;
     water.material = new WaterMaterial();
@@ -196,7 +196,7 @@ class WaterMaterial extends MeshBasicNodeMaterial {
   }
 
   private sampleNormal = Fn(([uv = vec2(0)]) => {
-    const tex = texture(assetManager.waterNormal, uv);
+    const tex = texture(assetManager.resources.waterNormal, uv);
     return tex.mul(2).sub(1).rgb.normalize();
   });
 
@@ -260,7 +260,7 @@ class WaterMaterial extends MeshBasicNodeMaterial {
     const viewDir = normalize(cameraPosition.sub(positionWorld));
     const reflectVector = reflect(viewDir.negate(), normal);
     const reflectedColor = cubeTexture(
-      assetManager.envMapTexture,
+      assetManager.resources.envMapTexture,
       reflectVector,
     );
 

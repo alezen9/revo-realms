@@ -38,7 +38,7 @@ import {
   time,
   PI2,
 } from "three/tsl";
-import { assetManager } from "../../systems/AssetManager";
+import { assetManager } from "../../systems/AssetManager/AssetManager";
 import { debugManager } from "../../systems/DebugManager";
 import { rendererManager } from "../../systems/RendererManager";
 import { sceneManager } from "../../systems/SceneManager";
@@ -232,7 +232,7 @@ class GrassSsbo {
       .div(config.TILE_SIZE)
       .abs();
 
-    const noise = texture(assetManager.noiseTexture, _uv);
+    const noise = texture(assetManager.resources.noiseTexture, _uv);
     const noiseX = noise.r.sub(0.5).mul(17).fract();
     const noiseZ = noise.b.sub(0.5).mul(13).fract();
 
@@ -301,7 +301,11 @@ class GrassSsbo {
         .mul(0.5)
         .fract();
 
-      const windStrength = texture(assetManager.noiseTexture, windUV, 2).r;
+      const windStrength = texture(
+        assetManager.resources.noiseTexture,
+        windUV,
+        2,
+      ).r;
 
       const targetBendAngle = windStrength.mul(uniforms.uWindStrength);
 
@@ -311,7 +315,7 @@ class GrassSsbo {
 
   private computeAlpha = Fn(([worldPos = vec3(0)]) => {
     const alphaUv = tslUtils.computeMapUvByPosition(worldPos.xz);
-    const alpha = texture(assetManager.terrainTypeMap, alphaUv).g;
+    const alpha = texture(assetManager.resources.terrainTypeTexture, alphaUv).g;
     const threshold = step(0.25, alpha);
     return threshold;
   });
@@ -376,7 +380,10 @@ class GrassSsbo {
 
   private computeShadow = Fn(([worldPos = vec3(0)]) => {
     const _uv = tslUtils.computeMapUvByPosition(worldPos.xz);
-    const shadowAo = texture(assetManager.terrainShadowAo, _uv);
+    const shadowAo = texture(
+      assetManager.resources.terrainShadowAoTexture,
+      _uv,
+    );
     return step(0.65, shadowAo.r);
   });
 

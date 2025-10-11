@@ -1,5 +1,5 @@
 import { Mesh, MeshBasicMaterial } from "three";
-import { assetManager } from "../../systems/AssetManager";
+import { assetManager } from "../../systems/AssetManager/AssetManager";
 import { sceneManager } from "../../systems/SceneManager";
 import { ColliderDesc, RigidBodyDesc } from "@dimforge/rapier3d";
 import { RevoColliderType } from "../../types";
@@ -9,11 +9,11 @@ import ParticleSystem from "../../utils/ParticleSystem";
 export default class Campfire {
   constructor() {
     // Visual
-    const campfire = assetManager.realmModel.scene.getObjectByName(
+    const campfire = assetManager.resources.realmModel.scene.getObjectByName(
       "campfire",
     ) as Mesh;
     campfire.material = new MeshBasicMaterial({
-      map: assetManager.campfireDiffuse,
+      map: assetManager.resources.campfireDiffuse,
     });
 
     const fire = new ParticleSystem({

@@ -41,7 +41,7 @@ import {
 } from "three/tsl";
 import { eventsManager } from "../../../systems/EventsManager";
 import { MeshBasicNodeMaterial } from "three/webgpu";
-import { assetManager } from "../../../systems/AssetManager";
+import { assetManager } from "../../../systems/AssetManager/AssetManager";
 import { tslUtils } from "../../../utils/TSLUtils";
 import { rendererManager } from "../../../systems/RendererManager";
 
@@ -164,7 +164,7 @@ class GrassMaterial extends MeshBasicNodeMaterial {
 
   private computeAlpha = Fn(() => {
     const alphaUv = tslUtils.computeMapUvByPosition(positionWorld.xz);
-    const alpha = texture(assetManager.terrainTypeMap, alphaUv).g;
+    const alpha = texture(assetManager.resources.terrainTypeMap, alphaUv).g;
     const threshold = step(0.25, alpha);
     return alpha.mul(threshold);
   });
@@ -309,7 +309,7 @@ class GrassSsbo {
       .div(config.TILE_SIZE)
       .abs();
 
-    const noise = texture(assetManager.noiseTexture, _uv);
+    const noise = texture(assetManager.resources.noiseTexture, _uv);
     const noiseX = noise.b.sub(0.5).mul(17);
     const noiseZ = noise.b.sub(0.5).mul(13);
 
@@ -335,7 +335,11 @@ class GrassSsbo {
         .mul(0.5)
         .fract();
 
-      const windStrength = texture(assetManager.noiseTexture, windUV, 2).r;
+      const windStrength = texture(
+        assetManager.resources.noiseTexture,
+        windUV,
+        2,
+      ).r;
 
       const targetBendAngle = windStrength.mul(uniforms.uWindStrength);
 
@@ -502,7 +506,7 @@ export default class GrassTiles {
 
         // // add text geometry label to tile with the incremental index
         // const textGeom = new TextGeometry(`${idx}`, {
-        //   font: assetManager.font,
+        //   font: assetManager.resources.font,
         //   size: 5,
         //   depth: 0.2,
         //   curveSegments: 12,

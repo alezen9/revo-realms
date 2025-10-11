@@ -29,7 +29,7 @@ import {
   PlaneGeometry,
   SpriteNodeMaterial,
 } from "three/webgpu";
-import { assetManager } from "../systems/AssetManager";
+import { assetManager } from "../systems/AssetManager/AssetManager";
 import { isMeshVisible } from "./isMeshVisible";
 
 type ParticleBuffer = ReturnType<typeof instancedArray>;
@@ -225,7 +225,7 @@ const getFirePresetConfig = (
 
   const baseUv = uv().mul(0.5);
   const fireUv = baseUv.add(vec2(u, v));
-  const sample = texture(assetManager.fireSprites, fireUv, detail);
+  const sample = texture(assetManager.resources.fireSprites, fireUv, detail);
 
   const baseDiffuse = vec3(0.72, 0.62, 0.08).mul(2).toConst(); // gold
   const midDiffuse = vec3(1, 0.1, 0).mul(4).toConst(); // darker red

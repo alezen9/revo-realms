@@ -9,11 +9,11 @@ import {
 } from "three/tsl";
 import { sceneManager } from "../../systems/SceneManager";
 import { MeshLambertNodeMaterial } from "three/webgpu";
-import { assetManager } from "../../systems/AssetManager";
+import { assetManager } from "../../systems/AssetManager/AssetManager";
 
 export class WaterLilies {
   constructor() {
-    const mesh = assetManager.realmModel.scene.getObjectByName(
+    const mesh = assetManager.resources.realmModel.scene.getObjectByName(
       "water_lilies",
     ) as Mesh;
     mesh.material = this.createMaterial();
@@ -24,15 +24,15 @@ export class WaterLilies {
     const node = new MeshLambertNodeMaterial();
     node.precision = "lowp";
     node.transparent = true;
-    node.map = assetManager.waterLiliesTexture;
+    node.map = assetManager.resources.waterLiliesTexture;
     node.alphaTest = 0.5;
-    node.alphaMap = assetManager.waterLiliesAlphaTexture;
+    node.alphaMap = assetManager.resources.waterLiliesAlphaTexture;
 
     const timer = time.mul(0.0005);
     const offset = positionWorld.x.mul(0.1);
 
     const noise = texture(
-      assetManager.noiseTexture,
+      assetManager.resources.noiseTexture,
       fract(positionWorld.xz.add(timer).mul(offset)),
     ).b.mul(0.5);
 

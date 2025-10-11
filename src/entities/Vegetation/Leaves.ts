@@ -37,7 +37,7 @@ import {
 } from "three/tsl";
 import { eventsManager } from "../../systems/EventsManager";
 import { rendererManager } from "../../systems/RendererManager";
-import { assetManager } from "../../systems/AssetManager";
+import { assetManager } from "../../systems/AssetManager/AssetManager";
 import { tslUtils } from "../../utils/TSLUtils";
 import { debugManager } from "../../systems/DebugManager";
 
@@ -213,7 +213,10 @@ class LeavesSsbo {
     const noiseScale = float(1.0 / 80.0);
     const scroll = float(0.02);
     const noiseUV = fract(worldXZ.mul(noiseScale).add(vec2(time.mul(scroll))));
-    const noiseSample = texture(assetManager.noiseTexture, noiseUV).rgb; // r=perlin, g=voronoi, b=random
+    const noiseSample = texture(
+      assetManager.resources.noiseTexture,
+      noiseUV,
+    ).rgb; // r=perlin, g=voronoi, b=random
 
     // gentle breathing and per-leaf variation from noise (no sharp changes)
     const breathing = float(0.85).add(
@@ -367,7 +370,7 @@ class LeafMaterial extends MeshBasicNodeMaterial {
   private createMaterial() {
     this.side = DoubleSide;
 
-    const diffuse = texture(assetManager.leafDiffuse, uv());
+    const diffuse = texture(assetManager.resources.leafDiffuse, uv());
     this.colorNode = mix(diffuse.rgb, color("darkgreen"), 0.6);
     this.opacityNode = diffuse.a;
     this.alphaTest = 0.1;

@@ -1,5 +1,5 @@
 import { InstancedMesh, Mesh } from "three";
-import { assetManager } from "../../systems/AssetManager";
+import { assetManager } from "../../systems/AssetManager/AssetManager";
 import { MeshStandardNodeMaterial } from "three/webgpu";
 import { ColliderDesc, RigidBodyDesc } from "@dimforge/rapier3d";
 import { RevoColliderType } from "../../types";
@@ -12,11 +12,11 @@ class KunaiMaterial extends MeshStandardNodeMaterial {
   constructor() {
     super();
     // Diffuse
-    const diffuse = texture(assetManager.kunaiDiffuse, uv());
+    const diffuse = texture(assetManager.resources.kunaiDiffuse, uv());
     this.colorNode = diffuse.mul(5);
 
     // Metalness / Roughness
-    const mr = texture(assetManager.kunaiMR, uv());
+    const mr = texture(assetManager.resources.kunaiMR, uv());
     this.metalnessNode = mr.b.mul(0.75);
     this.roughnessNode = mr.g;
   }
@@ -24,10 +24,10 @@ class KunaiMaterial extends MeshStandardNodeMaterial {
 
 export default class Naruto {
   constructor() {
-    const kunais = assetManager.realmModel.scene.children.filter(({ name }) =>
-      name.startsWith("kunai"),
+    const kunais = assetManager.resources.realmModel.scene.children.filter(
+      ({ name }) => name.startsWith("kunai"),
     ) as Mesh[];
-    const baseKunai = assetManager.realmModel.scene.getObjectByName(
+    const baseKunai = assetManager.resources.realmModel.scene.getObjectByName(
       "base_kunai",
     ) as Mesh;
 

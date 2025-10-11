@@ -7,7 +7,7 @@ import {
   NormalMapNode,
 } from "three/webgpu";
 import { RevoColliderType, UniformType } from "../types";
-import { assetManager } from "../systems/AssetManager";
+import { assetManager } from "../systems/AssetManager/AssetManager";
 import { ColliderDesc, RigidBodyDesc } from "@dimforge/rapier3d";
 import { physicsManager } from "../systems/PhysicsManager";
 import { sceneManager } from "../systems/SceneManager";
@@ -50,7 +50,7 @@ class StoneMaterial extends MeshLambertNodeMaterial {
       vec2(...stoneDiffuse.offset),
       _uv,
     );
-    const diff = texture(assetManager.stoneAtlas, _uvDiff);
+    const diff = texture(assetManager.resources.stoneAtlas, _uvDiff);
     this.colorNode = diff.mul(1.5);
 
     // Normal
@@ -59,7 +59,7 @@ class StoneMaterial extends MeshLambertNodeMaterial {
       vec2(...stoneNormalAo.offset),
       _uv,
     );
-    const norAo = texture(assetManager.stoneAtlas, _uvNor);
+    const norAo = texture(assetManager.resources.stoneAtlas, _uvNor);
     this.normalNode = new NormalMapNode(norAo.rgb, float(0.5));
 
     // AO
@@ -73,7 +73,7 @@ export default class Monuments {
   constructor() {
     // Visual
     const material = new StoneMaterial(this.uniforms);
-    const monuments = assetManager.realmModel.scene.children.filter(
+    const monuments = assetManager.resources.realmModel.scene.children.filter(
       ({ name }) => name.endsWith("_monument"),
     ) as Mesh[];
     monuments.forEach((monument, idx) => {
@@ -87,7 +87,7 @@ export default class Monuments {
     sceneManager.scene.add(...monuments);
 
     // Physics
-    const colliders = assetManager.realmModel.scene.children.filter(
+    const colliders = assetManager.resources.realmModel.scene.children.filter(
       ({ name }) => name.startsWith("monument_collider"),
     ) as Mesh[];
     colliders.forEach((colliderBox) => {
