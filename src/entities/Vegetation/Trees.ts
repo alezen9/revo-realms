@@ -52,9 +52,9 @@ class BarkMaterial extends MeshLambertNodeMaterial {
 }
 
 const uniforms = {
-  uPrimaryColor: uniform(new Color().setRGB(0.889, 0.095, 0)),
-  uSecondaryColor: uniform(new Color().setRGB(1, 0.162, 0.009)),
-  uMixFactor: uniform(0.5),
+  uPrimaryColor: uniform(new Color().setRGB(0.51, 0.49, 0.38)),
+  uSecondaryColor: uniform(new Color().setRGB(1.0, 0.15, 0.0)),
+  uMixFactor: uniform(2.6),
 };
 
 class CanopyMaterial extends MeshLambertNodeMaterial {

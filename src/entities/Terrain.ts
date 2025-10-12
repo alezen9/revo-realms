@@ -3,6 +3,7 @@ import {
   Fn,
   mix,
   positionWorld,
+  remap,
   smoothstep,
   texture,
   time,
@@ -40,7 +41,7 @@ import { eventsManager } from "../systems/EventsManager";
 import { tslUtils } from "../utils/TSLUtils";
 
 const uniforms = {
-  uGrassTerrainColor: uniform(new Color().setRGB(0.74, 0.51, 0.0)),
+  uGrassTerrainColor: uniform(new Color().setRGB(0.84, 0.62, 0.15)),
   uWaterSandColor: uniform(new Color().setRGB(0.54, 0.39, 0.2)),
   uPathSandColor: uniform(new Color().setRGB(0.65, 0.49, 0.27)),
 };
@@ -115,17 +116,17 @@ class TerainMaterial extends MeshLambertNodeMaterial {
     );
     this.aoNode = shadowAo.g;
 
-    const type = texture(assetManager.resources.terrainTypeTexture, vUv, 2.5);
+    const type = texture(assetManager.resources.terrainTypeTexture, vUv, 3.5);
     const grassFactor = type.g;
     const waterFactor = type.b;
     const sandFactor = float(1).sub(grassFactor);
     const pathFactor = sandFactor.sub(waterFactor);
 
     // Fake Normal
-    const sandUv = vUv.mul(30).fract();
+    const sandUv = vUv.mul(30);
     const sandNormal = texture(assetManager.resources.sandNormal, sandUv);
 
-    const grassUv = vUv.mul(30).fract();
+    const grassUv = vUv.mul(30);
     const grassNormal = texture(assetManager.resources.grassNormal, grassUv);
     const terrainNoise = grassNormal.dot(sandNormal).mul(0.65);
 
@@ -135,12 +136,21 @@ class TerainMaterial extends MeshLambertNodeMaterial {
       assetManager.resources.grassDiffuse,
       grassUv,
     );
-    const sandAlpha = float(1).sub(grassColorSample.a);
-    const grassColor = uniforms.uGrassTerrainColor
-      .mul(sandAlpha)
-      .add(grassColorSample)
-      .mul(grassFactor)
-      .mul(0.85);
+    // const sandAlpha = float(1).sub(grassColorSample.a);
+    // const grassColor = uniforms.uGrassTerrainColor
+    //   .mul(sandAlpha)
+    //   .add(grassColorSample)
+    //   .mul(grassFactor)
+    //   .mul(0.85);
+
+    const noise = texture(assetManager.resources.noise2, vUv);
+    const variation = remap(noise.r, 0, 1, 0.15, 1);
+    const base = mix(
+      uniforms.uGrassTerrainColor,
+      grassColorSample.rgb,
+      grassColorSample.a,
+    );
+    const grassColor = base.mul(variation).mul(2).mul(grassFactor);
 
     const pathColor = uniforms.uPathSandColor.mul(1.2).mul(pathFactor);
 

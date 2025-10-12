@@ -176,7 +176,7 @@ class FlowerMaterial extends SpriteNodeMaterial {
 
   private computeAlpha = Fn(([worldPos = vec3(0)]) => {
     const alphaUv = tslUtils.computeMapUvByPosition(worldPos.xz);
-    return texture(assetManager.resources.terrainTypeMap, alphaUv).g;
+    return texture(assetManager.resources.terrainTypeTexture, alphaUv).g;
   });
 
   private computeUpdate = Fn(() => {
