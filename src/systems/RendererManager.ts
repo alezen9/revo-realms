@@ -6,7 +6,7 @@ import { debugManager } from "./DebugManager";
 import { sceneManager } from "./SceneManager";
 import { eventsManager } from "./EventsManager";
 
-const ENABLE_MONITORING = false;
+const ENABLE_MONITORING = true;
 const ENABLE_DEBUGGING = true;
 
 class RendererManager {
@@ -49,7 +49,7 @@ class RendererManager {
     eventsManager.on("resize", (sizes) => {
       // reduce dpr to 85% if postprocessing enabled, min dpr = 1
       const dpr = Math.max(
-        this.IS_POSTPROCESSING_ENABLED ? sizes.dpr * 0.75 : sizes.dpr,
+        this.IS_POSTPROCESSING_ENABLED ? sizes.dpr * 0.85 : sizes.dpr,
         1,
       );
       renderer.setSize(sizes.width, sizes.height);

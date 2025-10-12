@@ -50,6 +50,8 @@ import footballDiffuseUrl from "/textures/realm/footballDiffuse.webp?url";
 // Leaf
 import leafDiffuseUrl from "/textures/realm/leafDiffuse.webp?url";
 
+import noise2Url from "/textures/noise/noise2.webp?url";
+
 type ResourceType = {
   texture: Texture;
   gltf: GLTF;
@@ -62,6 +64,7 @@ type TextureResourceRaw = {
   type: "texture";
   flipY?: boolean;
   colorSpace?: string;
+  wrap?: boolean;
 };
 
 type GLTFResourceRaw = {
@@ -216,16 +219,18 @@ export const manifest = [
   // -----------------------------------------------
   // Terrain
   // -----------------------------------------------
-  { name: "sandNormal", url: sandNormalUrl, type: "texture" },
+  { name: "sandNormal", url: sandNormalUrl, type: "texture", wrap: true },
   {
     name: "grassNormal",
     url: grassNormalUrl,
     type: "texture",
+    wrap: true,
   },
   {
     name: "grassDiffuse", // linear on purpose
     url: grassDiffuseUrl,
     type: "texture",
+    wrap: true,
   },
   {
     name: "terrainTypeTexture",
@@ -244,6 +249,7 @@ export const manifest = [
   // Water
   // -----------------------------------------------
   { name: "waterNormal", url: waterNormalUrl, type: "texture" },
+  { name: "noise2", url: noise2Url, type: "texture", wrap: true },
 ] as const satisfies ResourceRaw[];
 
 export type ExternalResources = {

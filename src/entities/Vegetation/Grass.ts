@@ -37,6 +37,7 @@ import {
   mod,
   time,
   PI2,
+  remap,
 } from "three/tsl";
 import { assetManager } from "../../systems/AssetManager/AssetManager";
 import { debugManager } from "../../systems/DebugManager";
@@ -50,7 +51,7 @@ const getConfig = () => {
   const BLADE_WIDTH = 0.1;
   const BLADE_HEIGHT = 1.65;
   const TILE_SIZE = 150;
-  const BLADES_PER_SIDE = 512; // power of 2
+  const BLADES_PER_SIDE = 512 + 128; // power of 2 is optimal, divisible by wg also good
   return {
     BLADE_WIDTH,
     BLADE_HEIGHT,
@@ -84,7 +85,7 @@ const uniforms = {
   uGlowColor: uniform(new Color().setRGB(0.39, 0.14, 0.02)),
   // Bending
   uBladeMaxBendAngle: uniform(Math.PI * 0.15),
-  uWindStrength: uniform(0.6),
+  uWindStrength: uniform(0.5),
   // Color
   uBaseColor: uniform(new Color().setRGB(0.07, 0.07, 0)), // Light
   uTipColor: uniform(new Color().setRGB(0.23, 0.11, 0.05)), // Light
@@ -94,11 +95,14 @@ const uniforms = {
   uDelta: uniform(new Vector2(0, 0)),
   uGlowMul: uniform(3),
 
-  uR0: uniform(20),
+  uR0: uniform(45),
   uR1: uniform(75),
-  uPMin: uniform(0.05),
+  uPMin: uniform(0.1),
 
-  uWindSpeed: uniform(0.25),
+  uWindSpeed: uniform(1.75),
+  uVariationScale: uniform(2),
+  uvWindScale: uniform(0.15),
+  uUvVariationScale: uniform(1),
 };
 
 class GrassSsbo {
@@ -230,7 +234,8 @@ class GrassSsbo {
     const _uv = vec3(offsetX, 0, offsetZ)
       .xz.add(config.TILE_HALF_SIZE)
       .div(config.TILE_SIZE)
-      .abs();
+      .abs()
+      .fract();
 
     const noise = texture(assetManager.resources.noiseTexture, _uv);
     const noiseX = noise.r.sub(0.5).mul(17).fract();
@@ -298,13 +303,12 @@ class GrassSsbo {
     ([prevBending = float(0), worldPos = vec3(0)]) => {
       const windUV = worldPos.xz
         .add(time.mul(uniforms.uWindSpeed))
-        .mul(0.5)
+        .mul(uniforms.uvWindScale)
         .fract();
 
       const windStrength = texture(
         assetManager.resources.noiseTexture,
         windUV,
-        2,
       ).r;
 
       const targetBendAngle = windStrength.mul(uniforms.uWindStrength);
@@ -501,10 +505,25 @@ class GrassMaterial extends MeshBasicNodeMaterial {
 
   private computeDiffuseColor = Fn(
     ([glowFactor = float(0), isShadow = float(1)]) => {
+      const row = floor(float(instanceIndex).div(config.BLADES_PER_SIDE));
+      const col = float(instanceIndex).mod(config.BLADES_PER_SIDE);
+      const u = col.mul(config.SPACING).sub(config.TILE_HALF_SIZE);
+      const v = row.mul(config.SPACING).sub(config.TILE_HALF_SIZE);
+      const worldUv = vec2(u, v)
+        .add(config.TILE_HALF_SIZE)
+        .div(config.TILE_SIZE)
+        .mul(uniforms.uUvVariationScale);
+      const noise = texture(assetManager.resources.noise2, worldUv);
+      const variation = remap(noise.r, 0, 1, 0.15, 1);
+
       const baseToTip = mix(uniforms.uBaseColor, uniforms.uTipColor, uv().y);
 
+      const withVariation = baseToTip
+        .mul(variation)
+        .mul(uniforms.uVariationScale);
+
       const withGlow = mix(
-        baseToTip,
+        withVariation,
         uniforms.uGlowColor.mul(uniforms.uGlowMul),
         glowFactor,
       );
@@ -539,7 +558,7 @@ class GrassMaterial extends MeshBasicNodeMaterial {
       glowFactor,
     );
     this.opacityNode = isVisible;
-    this.alphaTest = 0.5;
+    this.alphaTest = 0.25;
     this.colorNode = this.computeDiffuseColor(glowFactor, isShadow);
   }
 }
@@ -626,6 +645,18 @@ export default class Grass {
       label: "P Min",
       min: 0,
       max: 1,
+      step: 0.01,
+    });
+    folder.addBinding(uniforms.uvWindScale, "value", {
+      label: "UV wind scale",
+      step: 0.01,
+    });
+    folder.addBinding(uniforms.uVariationScale, "value", {
+      label: "Variation scale",
+      step: 0.01,
+    });
+    folder.addBinding(uniforms.uUvVariationScale, "value", {
+      label: "UV variation scale",
       step: 0.01,
     });
   }

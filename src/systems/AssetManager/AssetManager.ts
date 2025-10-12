@@ -3,6 +3,7 @@ import {
   DataTexture,
   LoadingManager,
   NoColorSpace,
+  RepeatWrapping,
   TextureLoader,
 } from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
@@ -51,6 +52,7 @@ class AssetManager {
         return this.textureLoader.loadAsync(resource.url).then((tex) => {
           tex.flipY = resource.flipY ?? true;
           tex.colorSpace = resource.colorSpace ?? NoColorSpace;
+          if (resource.wrap) tex.wrapS = tex.wrapT = RepeatWrapping;
           // @ts-ignore
           this.resources[resource.name] = tex;
         });
