@@ -103,6 +103,7 @@ const uniforms = {
   uVariationScale: uniform(2),
   uvWindScale: uniform(0.15),
   uUvVariationScale: uniform(1),
+  uAoScale: uniform(1),
 };
 
 class GrassSsbo {
@@ -249,8 +250,13 @@ class GrassSsbo {
     data.assign(this.setYaw(data, yaw));
 
     // Scale
-    const scaleRange = uniforms.uBladeMaxScale.sub(uniforms.uBladeMinScale);
-    const randomScale = noise.r.mul(scaleRange).add(uniforms.uBladeMinScale);
+    const randomScale = remap(
+      noise.r,
+      0,
+      1,
+      uniforms.uBladeMinScale,
+      uniforms.uBladeMaxScale,
+    );
 
     data.assign(this.setScale(data, randomScale));
     data.assign(this.setOriginalScale(data, randomScale));
@@ -503,7 +509,7 @@ class GrassMaterial extends MeshBasicNodeMaterial {
     },
   );
 
-  private computeDiffuseColor = Fn(
+  private computeDiffuse = Fn(
     ([glowFactor = float(0), isShadow = float(1)]) => {
       const row = floor(float(instanceIndex).div(config.BLADES_PER_SIDE));
       const col = float(instanceIndex).mod(config.BLADES_PER_SIDE);
@@ -534,6 +540,16 @@ class GrassMaterial extends MeshBasicNodeMaterial {
     },
   );
 
+  // private computeAO = Fn(() => {
+  //   const aoY = smoothstep(-0.25, 0.5, uv().y);
+  //   const aoX = smoothstep(-0.25, 0.5, uv().x).mul(
+  //     smoothstep(-0.25, 0.5, float(1).sub(uv().x)),
+  //   );
+  //   // const ao = aoX.mul(aoY);
+  //   const ao = mix(0, aoX, aoY);
+  //   return ao;
+  // });
+
   private createGrassMaterial() {
     this.precision = "lowp";
     this.side = DoubleSide;
@@ -559,7 +575,8 @@ class GrassMaterial extends MeshBasicNodeMaterial {
     );
     this.opacityNode = isVisible;
     this.alphaTest = 0.25;
-    this.colorNode = this.computeDiffuseColor(glowFactor, isShadow);
+    this.colorNode = this.computeDiffuse(glowFactor, isShadow);
+    // this.aoNode = this.computeAO();
   }
 }
 
@@ -621,6 +638,18 @@ export default class Grass {
       max: 5,
       step: 0.01,
     });
+    folder.addBinding(uniforms.uBladeMinScale, "value", {
+      label: "Min scale",
+      min: 0,
+      max: 5,
+      step: 0.01,
+    });
+    folder.addBinding(uniforms.uBladeMaxScale, "value", {
+      label: "Max scale",
+      min: 0,
+      max: 5,
+      step: 0.01,
+    });
 
     folder.addBinding(uniforms.uGlowMul, "value", {
       label: "Glow bloom",
@@ -657,6 +686,10 @@ export default class Grass {
     });
     folder.addBinding(uniforms.uUvVariationScale, "value", {
       label: "UV variation scale",
+      step: 0.01,
+    });
+    folder.addBinding(uniforms.uAoScale, "value", {
+      label: "AO scale",
       step: 0.01,
     });
   }

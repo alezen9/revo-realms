@@ -46,10 +46,10 @@ import { tslUtils } from "../../../utils/TSLUtils";
 import { rendererManager } from "../../../systems/RendererManager";
 
 const getConfig = () => {
-  const BLADE_WIDTH = 0.075;
+  const BLADE_WIDTH = 0.1;
   const BLADE_HEIGHT = 1.45;
   const TILE_SIZE = 40;
-  const BLADES_PER_SIDE = 100;
+  const BLADES_PER_SIDE = 256;
   const SEGMENTS = 7; // must be odd
 
   const boundingSphereCenter = new Vector3(TILE_SIZE / 2, 0, TILE_SIZE / 2);
@@ -65,6 +65,7 @@ const getConfig = () => {
     SPACING: TILE_SIZE / BLADES_PER_SIDE,
     SEGMENTS,
     BOUNDING_SPHERE: new Sphere(boundingSphereCenter, boundingSphereRadius),
+    WORKGROUP_SIZE: 256,
   };
 };
 const config = getConfig();
@@ -326,7 +327,7 @@ class GrassSsbo {
 
     data.assign(this.setScale(data, randomScale));
     data.assign(this.setOriginalScale(data, randomScale));
-  })().compute(config.COUNT);
+  })().compute(config.COUNT, [config.WORKGROUP_SIZE]);
 
   private computeBending = Fn(
     ([prevBending = float(0), worldPos = vec3(0)]) => {
@@ -452,12 +453,12 @@ class GrassSsbo {
     );
 
     data.assign(this.setGlow(data, newGlow));
-  })().compute(config.COUNT);
+  })().compute(config.COUNT, [config.WORKGROUP_SIZE]);
 }
 
 export default class GrassTiles {
   private group = new Group();
-  private nGrid = 5;
+  private nGrid = 7;
 
   constructor() {
     const ssbo = new GrassSsbo();
