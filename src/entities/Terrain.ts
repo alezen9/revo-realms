@@ -112,9 +112,8 @@ class TerainMaterial extends MeshLambertNodeMaterial {
 
     const shadowAo = texture(
       assetManager.resources.terrainShadowAoTexture,
-      uv().clamp(),
+      uv(),
     );
-    this.aoNode = shadowAo.g;
 
     const type = texture(assetManager.resources.terrainTypeTexture, vUv, 3.5);
     const grassFactor = type.g;
