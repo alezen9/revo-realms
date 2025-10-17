@@ -48,9 +48,8 @@ import { rendererManager } from "../../../systems/RendererManager";
 const getConfig = () => {
   const BLADE_WIDTH = 0.1;
   const BLADE_HEIGHT = 1.45;
-  const TILE_SIZE = 40;
-  const BLADES_PER_SIDE = 256;
-  const SEGMENTS = 7; // must be odd
+  const TILE_SIZE = 64;
+  const BLADES_PER_SIDE = 128;
 
   const boundingSphereCenter = new Vector3(TILE_SIZE / 2, 0, TILE_SIZE / 2);
   const boundingSphereRadius = TILE_SIZE * 1.5;
@@ -60,12 +59,12 @@ const getConfig = () => {
     BLADE_BOUNDING_SPHERE_RADIUS: BLADE_HEIGHT,
     TILE_SIZE,
     TILE_HALF_SIZE: TILE_SIZE / 2,
+    TILE_SIZE_SQUARED: TILE_SIZE * TILE_SIZE,
     BLADES_PER_SIDE,
     COUNT: BLADES_PER_SIDE * BLADES_PER_SIDE,
     SPACING: TILE_SIZE / BLADES_PER_SIDE,
-    SEGMENTS,
     BOUNDING_SPHERE: new Sphere(boundingSphereCenter, boundingSphereRadius),
-    WORKGROUP_SIZE: 256,
+    WORKGROUP_SIZE: 128,
   };
 };
 const config = getConfig();
@@ -458,20 +457,23 @@ class GrassSsbo {
 
 export default class GrassTiles {
   private group = new Group();
-  private nGrid = 7;
+  private nGrid = 5;
 
   constructor() {
     const ssbo = new GrassSsbo();
     const material = new GrassMaterial(ssbo);
 
     const geometries = [
-      this.createGeometry(5),
+      // this.createGeometry(5),
       this.createGeometry(3),
       this.createGeometry(1),
     ];
     this.group = this.createGrid(material, geometries);
     sceneManager.scene.add(this.group);
-    eventsManager.on("update-throttle-2x", ({ player }) => {
+    eventsManager.on("update", () => {
+      rendererManager.renderer.computeAsync(ssbo.computeUpdate);
+    });
+    eventsManager.on("update-throttle-4x", ({ player }) => {
       const dx = player.position.x - this.group.position.x;
       const dz = player.position.z - this.group.position.z;
       uniforms.uDelta.value.set(dx, dz);
@@ -482,14 +484,11 @@ export default class GrassTiles {
         .copy(sceneManager.playerCamera.projectionMatrix)
         .multiply(sceneManager.playerCamera.matrixWorldInverse);
 
-      rendererManager.renderer.computeAsync(ssbo.computeUpdate);
-
-      if (distSq < config.TILE_SIZE * config.TILE_SIZE) return; // don't move if within 1 tile
+      if (distSq < config.TILE_SIZE) return; // don't move if within 1 tile
       this.group.position.x =
         Math.round(player.position.x / config.TILE_SIZE) * config.TILE_SIZE;
       this.group.position.z =
         Math.round(player.position.z / config.TILE_SIZE) * config.TILE_SIZE;
-
       this.wrapTiles(dx, dz);
     });
   }
@@ -641,9 +640,9 @@ export default class GrassTiles {
     const meshMid = new InstancedMesh(geometries[1], material, config.COUNT);
     meshMid.boundingSphere = config.BOUNDING_SPHERE;
     lod.addLevel(meshMid, 50);
-    const meshLow = new InstancedMesh(geometries[2], material, config.COUNT);
-    meshLow.boundingSphere = config.BOUNDING_SPHERE;
-    lod.addLevel(meshLow, 100);
+    // const meshLow = new InstancedMesh(geometries[2], material, config.COUNT);
+    // meshLow.boundingSphere = config.BOUNDING_SPHERE;
+    // lod.addLevel(meshLow, 100);
     return lod;
   }
 }

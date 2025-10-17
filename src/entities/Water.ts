@@ -67,8 +67,8 @@ const uniforms = {
 
 export default class Water {
   constructor() {
-    const water = assetManager.resources.realmModel.scene.getObjectByName(
-      "water",
+    const water = assetManager.resources.worldModel.scene.getObjectByName(
+      "water-lake",
     ) as Mesh;
     water.material = new WaterMaterial();
     water.renderOrder = 100;

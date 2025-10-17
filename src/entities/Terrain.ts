@@ -2,6 +2,7 @@ import {
   float,
   Fn,
   mix,
+  normalMap,
   positionWorld,
   remap,
   smoothstep,
@@ -18,6 +19,7 @@ import {
   Color,
   DataTexture,
   FloatType,
+  Group,
   LinearFilter,
   Mesh,
   MeshLambertNodeMaterial,
@@ -44,6 +46,8 @@ const uniforms = {
   uGrassTerrainColor: uniform(new Color().setRGB(0.84, 0.62, 0.15)),
   uWaterSandColor: uniform(new Color().setRGB(0.54, 0.39, 0.2)),
   uPathSandColor: uniform(new Color().setRGB(0.65, 0.49, 0.27)),
+  uMinHeight: uniform(0),
+  uMaxHeight: uniform(0),
 };
 
 class TerainMaterial extends MeshLambertNodeMaterial {
@@ -106,7 +110,6 @@ class TerainMaterial extends MeshLambertNodeMaterial {
 
   private createMaterial() {
     this.precision = "lowp";
-    this.flatShading = false;
     const _uv = tslUtils.computeMapUvByPosition(positionWorld.xz);
     const vUv = varying(_uv);
 
@@ -159,54 +162,70 @@ class TerainMaterial extends MeshLambertNodeMaterial {
     const waterColor = waterBaseColor.mul(waterFactor);
 
     // Final diffuse
-    const finalColor = grassColor
-      .add(pathColor.mul(terrainNoise))
-      .add(waterColor.mul(terrainNoise).mul(0.5));
+    // const finalColor = grassColor
+    //   .add(pathColor.mul(terrainNoise))
+    //   .add(waterColor.mul(terrainNoise).mul(0.5));
 
-    this.colorNode = finalColor.mul(shadowAo.r);
+    // // this.colorNode = finalColor.mul(shadowAo.r);
 
     // const height = texture(
     //   assetManager.resources.terrainHeightMap,
     //   vec2(vUv.x, float(1).sub(vUv.y)),
     // ).r;
 
-    // this.positionNode = vec3(
-    //   positionLocal.x,
-    //   positionLocal.y.add(height),
-    //   positionLocal.z,
-    // );
+    const color = texture(assetManager.resources.uvChecker, vUv.mul(10));
+
+    this.colorNode = color.rgb;
+
+    const norAo = texture(assetManager.resources.normAoGrass, vUv.mul(81.7));
+
+    this.normalNode = normalMap(norAo.rgb);
+    this.aoNode = norAo.a;
   }
 }
 
 class InnerTerrain {
   constructor(material: TerainMaterial) {
-    const floor = this.createFloor();
-    floor.material = material;
-    sceneManager.scene.add(floor);
+    const innerMap = this.createFloor(material);
+    sceneManager.scene.add(innerMap);
   }
 
-  private createFloor() {
+  private createFloor(material: TerainMaterial) {
     // Visual
-    const floor = assetManager.resources.realmModel.scene.getObjectByName(
-      "floor",
-    ) as Mesh;
-    floor.receiveShadow = true;
+    const meshes = assetManager.resources.worldModel.scene.children.filter(
+      (obj) => obj.name.startsWith("terrain-") && obj.name !== "terrain-outer",
+    ) as Mesh[];
+
+    let heightfield: Mesh | undefined;
+    const innerMap = new Group();
+
+    for (const mesh of meshes) {
+      if (mesh.name === "terrain-heightfield") heightfield = mesh;
+      else {
+        mesh.material = material;
+        mesh.geometry.computeBoundingSphere();
+        mesh.geometry.computeBoundingBox();
+        mesh.receiveShadow = true;
+        innerMap.add(mesh);
+      }
+    }
+
+    if (!heightfield) throw new Error("No heightfield");
 
     // Physics
-    this.createFloorPhysics();
-    return floor;
+    this.createFloorPhysics(heightfield);
+    return innerMap;
   }
 
-  private getFloorDisplacementData() {
-    const mesh = assetManager.resources.realmModel.scene.getObjectByName(
-      "heightfield",
-    ) as Mesh;
+  private getFloorDisplacementData(mesh: Mesh) {
     const displacement = mesh.geometry.attributes._displacement.array[0]; // they are all the same
     const positionAttribute = mesh.geometry.attributes.position;
     if (!mesh.geometry.boundingBox) mesh.geometry.computeBoundingBox();
     const boundingBoxAttribute = mesh.geometry.boundingBox!;
     const totalCount = positionAttribute.count;
     const rowsCount = Math.sqrt(totalCount);
+
+    // console.log(totalCount, rowsCount);
 
     // half extent of the plane size, plane is a square centred at 0,0 in Blender <- IMPORTANT
     const halfExtent = boundingBoxAttribute.max.x;
@@ -262,8 +281,8 @@ class InnerTerrain {
     return tex;
   }
 
-  private createFloorPhysics() {
-    const displaceMentData = this.getFloorDisplacementData();
+  private createFloorPhysics(heightfield: Mesh) {
+    const displaceMentData = this.getFloorDisplacementData(heightfield);
     const { rowsCount, heights, displacement } = displaceMentData;
     const heightMap = this.createDisplacementTexture(
       rowsCount,
@@ -292,6 +311,8 @@ class InnerTerrain {
       .setRestitution(0.2);
 
     physicsManager.world.createCollider(colliderDesc, rigidBody);
+
+    return displacement;
   }
 }
 
@@ -310,11 +331,11 @@ class OuterTerrain {
   }
 
   private createOuterFloorVisual() {
-    const outerFloor = assetManager.resources.realmModel.scene.getObjectByName(
-      "outer_world",
+    const mesh = assetManager.resources.worldModel.scene.getObjectByName(
+      "terrain-outer",
     ) as Mesh;
-    outerFloor.receiveShadow = true;
-    return outerFloor;
+    mesh.frustumCulled = false;
+    return mesh;
   }
 
   private createKintoun() {

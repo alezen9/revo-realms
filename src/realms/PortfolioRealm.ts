@@ -7,7 +7,7 @@ import Vegetation from "../entities/Vegetation/Vegetation";
 import { Compass } from "../entities/Compass";
 
 const getConfig = () => {
-  const MAP_SIZE = 256;
+  const MAP_SIZE = 512;
   return Object.freeze({
     MAP_SIZE,
     HALF_MAP_SIZE: MAP_SIZE / 2,
@@ -24,10 +24,10 @@ export default class PortfolioRealm {
   constructor() {
     new Compass();
     new Terrain();
-    new Monuments();
+    // new Monuments();
     new Water();
-    new Vegetation();
-    new Rocks();
-    new CoolStuff();
+    // new Vegetation();
+    // new Rocks();
+    // new CoolStuff();
   }
 }

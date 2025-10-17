@@ -41,6 +41,7 @@ const getConfig = () => {
     UP: new Vector3(0, 1, 0),
     DOWN: new Vector3(0, -1, 0),
     FORWARD: new Vector3(0, 0, -1),
+    RESET_Y: -15,
   };
 };
 
@@ -97,7 +98,7 @@ export default class Player {
 
   private resetPlayerPosition(state: State) {
     const { player } = state;
-    if (player.position.y > -10) return;
+    if (player.position.y > config.RESET_Y) return;
     this.rigidBody.setLinvel({ x: 0, y: 0, z: 0 }, false);
     this.rigidBody.setAngvel({ x: 0, y: 0, z: 0 }, false);
     this.rigidBody.setTranslation(config.PLAYER_INITIAL_POSITION, true);
