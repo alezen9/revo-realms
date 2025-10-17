@@ -53,8 +53,10 @@ import leafDiffuseUrl from "/textures/realm/leafDiffuse.webp?url";
 import noise2Url from "/textures/noise/noise2.webp?url";
 import worldModelUrl from "/models/world.glb?url";
 
-import uvCheckerUrl from "/textures/debug/uvChecker_1k_uastc.ktx2?url";
-import normAoGrassUrl from "/textures/debug/gravel_normAO_1k_uastc.ktx2?url";
+import uvCheckerUrl from "/textures/new-world/debug/uvChecker_1k_uastc.ktx2?url";
+import normAoGravelUrl from "/textures/new-world/terrain/gravel_normAO_1k_uastc.ktx2?url";
+import normVeinWaterUrl from "/textures/new-world/water/water_normal_vein_uastc.ktx2?url";
+import noiseAtlasUrl from "/textures/new-world/noise/noise_atlas_uastc.ktx2?url";
 
 type ResourceType = {
   texture: Texture;
@@ -70,6 +72,7 @@ type TextureResourceRaw = {
   flipY?: boolean;
   colorSpace?: string;
   wrap?: boolean;
+  anisotropy?: number;
 };
 
 type GLTFResourceRaw = {
@@ -85,12 +88,8 @@ type CubeTextureResourceRaw = {
   colorSpace?: string;
 };
 
-type CompressedTextureResourceRaw = {
-  name: string;
-  url: string;
+type CompressedTextureResourceRaw = Omit<TextureResourceRaw, "type"> & {
   type: "ktx2";
-  colorSpace?: string;
-  wrap?: boolean;
 };
 
 export type ResourceRaw =
@@ -103,9 +102,9 @@ export const manifest = [
   // -----------------------------------------------
   // Core
   // -----------------------------------------------
+  { name: "realmModel", url: realmModelUrl, type: "gltf" }, // old
+  { name: "noiseTexture", url: noiseUrl, type: "texture" }, // old
   { name: "worldModel", url: worldModelUrl, type: "gltf" },
-  { name: "realmModel", url: realmModelUrl, type: "gltf" },
-  { name: "noiseTexture", url: noiseUrl, type: "texture" },
   {
     name: "uvChecker",
     url: uvCheckerUrl,
@@ -114,8 +113,21 @@ export const manifest = [
     colorSpace: SRGBColorSpace,
   },
   {
-    name: "normAoGrass",
-    url: normAoGrassUrl,
+    name: "normAoGravel",
+    url: normAoGravelUrl,
+    type: "ktx2",
+    wrap: true,
+    anisotropy: 4,
+  },
+  {
+    name: "normVeinWater",
+    url: normVeinWaterUrl,
+    type: "ktx2",
+    wrap: true,
+  },
+  {
+    name: "noiseAtlas",
+    url: noiseAtlasUrl,
     type: "ktx2",
     wrap: true,
   },

@@ -4,6 +4,7 @@ import {
   LoadingManager,
   NoColorSpace,
   RepeatWrapping,
+  Texture,
   TextureLoader,
 } from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
@@ -57,10 +58,14 @@ class AssetManager {
   private getResource = async (resource: ResourceRaw) => {
     switch (resource.type) {
       case "texture":
-        return this.textureLoader.loadAsync(resource.url).then((tex) => {
+      case "ktx2":
+        const loader =
+          resource.type === "ktx2" ? this.ktx2Loader : this.textureLoader;
+        return loader.loadAsync(resource.url).then((tex) => {
           tex.flipY = resource.flipY ?? true;
           tex.colorSpace = resource.colorSpace ?? NoColorSpace;
           if (resource.wrap) tex.wrapS = tex.wrapT = RepeatWrapping;
+          tex.anisotropy = resource.anisotropy ?? Texture.DEFAULT_ANISOTROPY;
           // @ts-ignore
           this.resources[resource.name] = tex;
         });
@@ -77,15 +82,6 @@ class AssetManager {
             // @ts-ignore
             this.resources[resource.name] = cubeTex;
           });
-      case "ktx2":
-        return this.ktx2Loader.loadAsync(resource.url).then((tex) => {
-          tex.colorSpace = resource.colorSpace ?? NoColorSpace;
-          if (resource.wrap) tex.wrapS = tex.wrapT = RepeatWrapping;
-          console.log(tex);
-          tex.anisotropy = 4;
-          // @ts-ignore
-          this.resources[resource.name] = tex;
-        });
       default:
         throw new Error(`Unsupported resource type: ${(resource as any).type}`);
     }

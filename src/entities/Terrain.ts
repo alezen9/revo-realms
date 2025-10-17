@@ -113,61 +113,6 @@ class TerainMaterial extends MeshLambertNodeMaterial {
     const _uv = tslUtils.computeMapUvByPosition(positionWorld.xz);
     const vUv = varying(_uv);
 
-    const shadowAo = texture(
-      assetManager.resources.terrainShadowAoTexture,
-      uv(),
-    );
-
-    const type = texture(assetManager.resources.terrainTypeTexture, vUv, 3.5);
-    const grassFactor = type.g;
-    const waterFactor = type.b;
-    const sandFactor = float(1).sub(grassFactor);
-    const pathFactor = sandFactor.sub(waterFactor);
-
-    // Fake Normal
-    const sandUv = vUv.mul(30);
-    const sandNormal = texture(assetManager.resources.sandNormal, sandUv);
-
-    const grassUv = vUv.mul(30);
-    const grassNormal = texture(assetManager.resources.grassNormal, grassUv);
-    const terrainNoise = grassNormal.dot(sandNormal).mul(0.65);
-
-    // Diffuse
-    // Grass
-    const grassColorSample = texture(
-      assetManager.resources.grassDiffuse,
-      grassUv,
-    );
-    // const sandAlpha = float(1).sub(grassColorSample.a);
-    // const grassColor = uniforms.uGrassTerrainColor
-    //   .mul(sandAlpha)
-    //   .add(grassColorSample)
-    //   .mul(grassFactor)
-    //   .mul(0.85);
-
-    const noise = texture(assetManager.resources.noise2, vUv);
-    const variation = remap(noise.r, 0, 1, 0.15, 1);
-    const base = mix(
-      uniforms.uGrassTerrainColor,
-      grassColorSample.rgb,
-      grassColorSample.a,
-    );
-    const grassColor = base.mul(variation).mul(2).mul(grassFactor);
-
-    const pathColor = uniforms.uPathSandColor.mul(1.2).mul(pathFactor);
-
-    // Water
-    const vDepth = varying(positionWorld.y.negate());
-    const waterBaseColor = this.computeWaterDiffuse(vDepth, vUv);
-    const waterColor = waterBaseColor.mul(waterFactor);
-
-    // Final diffuse
-    // const finalColor = grassColor
-    //   .add(pathColor.mul(terrainNoise))
-    //   .add(waterColor.mul(terrainNoise).mul(0.5));
-
-    // // this.colorNode = finalColor.mul(shadowAo.r);
-
     // const height = texture(
     //   assetManager.resources.terrainHeightMap,
     //   vec2(vUv.x, float(1).sub(vUv.y)),
@@ -177,7 +122,7 @@ class TerainMaterial extends MeshLambertNodeMaterial {
 
     this.colorNode = color.rgb;
 
-    const norAo = texture(assetManager.resources.normAoGrass, vUv.mul(81.7));
+    const norAo = texture(assetManager.resources.normAoGravel, vUv.mul(81.7));
 
     this.normalNode = normalMap(norAo.rgb);
     this.aoNode = norAo.a;
