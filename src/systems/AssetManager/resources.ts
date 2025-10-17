@@ -1,4 +1,4 @@
-import { CubeTexture, SRGBColorSpace, Texture } from "three";
+import { CompressedTexture, CubeTexture, SRGBColorSpace, Texture } from "three";
 import { GLTF } from "three/addons/loaders/GLTFLoader.js";
 // Model
 import realmModelUrl from "/models/realm.glb?url";
@@ -51,11 +51,16 @@ import footballDiffuseUrl from "/textures/realm/footballDiffuse.webp?url";
 import leafDiffuseUrl from "/textures/realm/leafDiffuse.webp?url";
 
 import noise2Url from "/textures/noise/noise2.webp?url";
+import worldModelUrl from "/models/world.glb?url";
+
+import uvCheckerUrl from "/textures/debug/uvChecker_1k_uastc.ktx2?url";
+import normAoGrassUrl from "/textures/debug/gravel_normAO_1k_uastc.ktx2?url";
 
 type ResourceType = {
   texture: Texture;
   gltf: GLTF;
   cubeTexture: CubeTexture;
+  ktx2: CompressedTexture;
 };
 
 type TextureResourceRaw = {
@@ -80,17 +85,40 @@ type CubeTextureResourceRaw = {
   colorSpace?: string;
 };
 
+type CompressedTextureResourceRaw = {
+  name: string;
+  url: string;
+  type: "ktx2";
+  colorSpace?: string;
+  wrap?: boolean;
+};
+
 export type ResourceRaw =
   | TextureResourceRaw
   | GLTFResourceRaw
-  | CubeTextureResourceRaw;
+  | CubeTextureResourceRaw
+  | CompressedTextureResourceRaw;
 
 export const manifest = [
   // -----------------------------------------------
   // Core
   // -----------------------------------------------
+  { name: "worldModel", url: worldModelUrl, type: "gltf" },
   { name: "realmModel", url: realmModelUrl, type: "gltf" },
   { name: "noiseTexture", url: noiseUrl, type: "texture" },
+  {
+    name: "uvChecker",
+    url: uvCheckerUrl,
+    type: "ktx2",
+    wrap: true,
+    colorSpace: SRGBColorSpace,
+  },
+  {
+    name: "normAoGrass",
+    url: normAoGrassUrl,
+    type: "ktx2",
+    wrap: true,
+  },
   {
     name: "envMapTexture",
     urls: [pxUrl, nxUrl, pyUrl, nyUrl, pzUrl, nzUrl],
