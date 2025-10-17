@@ -9,7 +9,6 @@ import {
   dot,
   exp,
   float,
-  Fn,
   max,
   mix,
   normalize,
@@ -24,7 +23,6 @@ import {
   time,
   uniform,
   uv,
-  vec2,
   vec3,
   viewportDepthTexture,
   viewportTexture,
@@ -195,11 +193,6 @@ class WaterMaterial extends MeshBasicNodeMaterial {
     });
   }
 
-  private sampleNormal = Fn(([uv = vec2(0)]) => {
-    const tex = texture(assetManager.resources.waterNormal, uv);
-    return tex.mul(2).sub(1).rgb.normalize();
-  });
-
   private createMaterial() {
     this.precision = "lowp";
 
@@ -207,9 +200,11 @@ class WaterMaterial extends MeshBasicNodeMaterial {
     const speed = time.mul(uniforms.uSpeed);
     const frequency = uniforms.uNoiseScrollDir.mul(speed);
     const nUV1 = uv().add(frequency).mul(uniforms.uUvScale.mul(1.37)).fract();
-    const tsn1 = this.sampleNormal(nUV1);
+    const tex1 = texture(assetManager.resources.normVeinWater, nUV1);
+    const tsn1 = tex1.rgb.mul(2).sub(1).normalize();
     const nUV2 = uv().sub(frequency).mul(uniforms.uUvScale.mul(0.73)).fract();
-    const tsn2 = this.sampleNormal(nUV2);
+    const tex2 = texture(assetManager.resources.normVeinWater, nUV2);
+    const tsn2 = tex2.rgb.mul(2).sub(1).normalize();
     const blendedTsn = tslUtils.blendRNM(tsn1, tsn2);
     const tsn = vec3(
       blendedTsn.xy.mul(uniforms.uNormalScale),
@@ -336,5 +331,10 @@ class WaterMaterial extends MeshBasicNodeMaterial {
     const shadedWater = mix(throughWater, reflectedColor, fresnelWeight);
     const color = mix(screenColor, shadedWater, opacity);
     this.colorNode = color.add(sunGlint);
+    // this.colorNode = mix(
+    //   color,
+    //   vec3(0.5, 0.75, 0.5),
+    //   smoothstep(0, 10, tex1.a.add(tex2.a)),
+    // ).add(sunGlint);
   }
 }
