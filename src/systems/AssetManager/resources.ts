@@ -126,7 +126,7 @@ export const manifest = [
     wrap: true,
   },
   {
-    name: "noiseAtlas",
+    name: "noiseAtlas", // super_noise_low / super_perlin / grainy / cracks
     url: noiseAtlasUrl,
     type: "ktx2",
     wrap: true,
