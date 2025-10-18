@@ -6,6 +6,7 @@ import {
   positionWorld,
   remap,
   smoothstep,
+  step,
   texture,
   time,
   uniform,
@@ -46,8 +47,13 @@ const uniforms = {
   uGrassTerrainColor: uniform(new Color().setRGB(0.84, 0.62, 0.15)),
   uWaterSandColor: uniform(new Color().setRGB(0.54, 0.39, 0.2)),
   uPathSandColor: uniform(new Color().setRGB(0.65, 0.49, 0.27)),
+  uGravelColor: uniform(new Color().setRGB(1.0, 0.79, 0.41)),
   uMinHeight: uniform(0),
   uMaxHeight: uniform(0),
+  uGrassNormalScale: uniform(0.1),
+  uGravelNormalScale: uniform(0.6),
+  uA: uniform(0),
+  uB: uniform(1),
 };
 
 class TerainMaterial extends MeshLambertNodeMaterial {
@@ -62,20 +68,38 @@ class TerainMaterial extends MeshLambertNodeMaterial {
       title: "⛰️ Terrain",
       expanded: false,
     });
-    folder.addBinding(uniforms.uPathSandColor, "value", {
-      label: "Path color",
+    folder.addBinding(uniforms.uGravelColor, "value", {
+      label: "Gravel color",
       view: "color",
       color: { type: "float" },
     });
-    folder.addBinding(uniforms.uWaterSandColor, "value", {
-      label: "Water bed color",
-      view: "color",
-      color: { type: "float" },
-    });
+    // folder.addBinding(uniforms.uWaterSandColor, "value", {
+    //   label: "Water bed color",
+    //   view: "color",
+    //   color: { type: "float" },
+    // });
     folder.addBinding(uniforms.uGrassTerrainColor, "value", {
       label: "Grass terrain color",
       view: "color",
       color: { type: "float" },
+    });
+    folder.addBinding(uniforms.uGrassNormalScale, "value", {
+      label: "Grass normal scale",
+    });
+    folder.addBinding(uniforms.uGravelNormalScale, "value", {
+      label: "Gravel normal scale",
+    });
+    folder.addBinding(uniforms.uA, "value", {
+      label: "A",
+      min: 0,
+      max: 1,
+      step: 0.001,
+    });
+    folder.addBinding(uniforms.uB, "value", {
+      label: "B",
+      min: 0,
+      max: 1,
+      step: 0.001,
     });
   }
 
@@ -110,21 +134,32 @@ class TerainMaterial extends MeshLambertNodeMaterial {
 
   private createMaterial() {
     this.precision = "lowp";
-    const _uv = tslUtils.computeMapUvByPosition(positionWorld.xz);
-    const vUv = varying(_uv);
+    const worldUv = tslUtils.computeMapUvByPosition(positionWorld.xz);
+    const vUv = varying(worldUv);
+    const noise = texture(assetManager.resources.noiseAtlas, vUv.mul(10));
+    const variation = remap(noise.r, 0, 1, 0.15, 1);
+
+    const alpha = texture(assetManager.resources.terrainTypeTexture, vUv).g;
+    const isGrass = smoothstep(uniforms.uA, uniforms.uB, alpha);
 
     // const height = texture(
     //   assetManager.resources.terrainHeightMap,
     //   vec2(vUv.x, float(1).sub(vUv.y)),
     // ).r;
 
-    const color = texture(assetManager.resources.uvChecker, vUv.mul(10));
-
-    this.colorNode = color.rgb;
+    // const checkerColor = texture(assetManager.resources.uvChecker, vUv.mul(10));
+    const grassColor = uniforms.uGrassTerrainColor.mul(variation).mul(2);
+    const color = mix(uniforms.uGravelColor, grassColor, isGrass);
+    this.colorNode = color;
 
     const norAo = texture(assetManager.resources.normAoGravel, vUv.mul(81.7));
 
-    this.normalNode = normalMap(norAo.rgb);
+    const normalScale = mix(
+      uniforms.uGravelNormalScale,
+      uniforms.uGrassNormalScale,
+      isGrass,
+    );
+    this.normalNode = normalMap(norAo.rgb, normalScale);
     this.aoNode = norAo.a;
   }
 }

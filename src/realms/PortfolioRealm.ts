@@ -26,7 +26,7 @@ export default class PortfolioRealm {
     new Terrain();
     // new Monuments();
     new Water();
-    // new Vegetation();
+    new Vegetation();
     // new Rocks();
     // new CoolStuff();
   }
