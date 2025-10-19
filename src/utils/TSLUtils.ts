@@ -58,7 +58,9 @@ class TSLUtils {
     },
   );
 
-  // [0..1] unit value
+  /**
+   * @description Packs a value with a range 0-1
+   */
   packUnit = Fn(
     ([
       packed = float(0),
@@ -70,12 +72,20 @@ class TSLUtils {
       return this.packF32(packed, offset, bits, x01, lsb, float(0));
     },
   );
+
+  /**
+   * @description Unpacks a value with a range 0-1
+   */
   unpackUnit = Fn(([packed = float(0), offset = float(0), bits = float(8)]) => {
     const lsb = float(1).div(sub(this.pow2(bits), 1.0));
     return this.unpackF32(packed, offset, bits, lsb, float(0));
   });
 
   // Boolean/flag (single bit 0/1) – uses packUnit with bits=1
+  /**
+   * @description Packs a value that can be either 0 or 1
+   * @bits 1
+   */
   packFlag = Fn(([packed = float(0), offset = float(0), flag01 = float(0)]) =>
     this.packF32(packed, offset, float(1), flag01, float(1), float(0)),
   );
