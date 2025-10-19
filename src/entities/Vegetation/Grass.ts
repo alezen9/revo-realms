@@ -2,7 +2,6 @@ import {
   BufferAttribute,
   BufferGeometry,
   Color,
-  DoubleSide,
   InstancedMesh,
   Matrix4,
   StaticDrawUsage,
@@ -17,17 +16,14 @@ import {
   instancedArray,
   instanceIndex,
   hash,
-  positionLocal,
   float,
   floor,
-  rotate,
   vec3,
   vec4,
   smoothstep,
   vec2,
   texture,
   step,
-  min,
   sin,
   abs,
   max,
@@ -38,7 +34,7 @@ import {
   time,
   PI2,
   remap,
-  positionWorld,
+  fract,
 } from "three/tsl";
 import { assetManager } from "../../systems/AssetManager/AssetManager";
 import { debugManager } from "../../systems/DebugManager";
@@ -49,10 +45,10 @@ import { tslUtils } from "../../utils/TSLUtils";
 import { SpriteNodeMaterial } from "three/webgpu";
 
 const getConfig = () => {
-  const BLADE_WIDTH = 0.1;
-  const BLADE_HEIGHT = 1.5;
+  const BLADE_WIDTH = 0.125;
+  const BLADE_HEIGHT = 2;
   const TILE_SIZE = 150;
-  const BLADES_PER_SIDE = 1024; // power of 2 is optimal, divisible by wg also good
+  const BLADES_PER_SIDE = 512 + 256; // power of 2 is optimal, divisible by wg also good
   return {
     BLADE_WIDTH,
     BLADE_HEIGHT,
@@ -70,51 +66,39 @@ const config = getConfig();
 const uniforms = {
   uPlayerPosition: uniform(new Vector3(0, 0, 0)),
   uCameraMatrix: uniform(new Matrix4()),
+  uPlayerDeltaXZ: uniform(new Vector2(0, 0)),
   // Scale
-  uBladeMinScale: uniform(0.5),
-  uBladeMaxScale: uniform(1.75),
+  uBladeMinScale: uniform(0.75),
+  uBladeMaxScale: uniform(1.25),
   // Trail
-  uTrailGrowthRate: uniform(0.004),
-  uTrailMinScale: uniform(0.1),
-  uTrailRaius: uniform(0.65),
-  uTrailRaiusSquared: uniform(0.65 * 0.65),
-  // Glow
-  uGlowRadius: uniform(2),
-  uGlowRadiusSquared: uniform(4),
-  uGlowFadeIn: uniform(0.05),
-  uGlowFadeOut: uniform(0.01),
-  uGlowColor: uniform(new Color().setRGB(0.39, 0.14, 0.02)),
-  // Bending
-  uBladeMaxBendAngle: uniform(Math.PI * 0.15),
-  uWindStrength: uniform(0.75),
-  uWindSpeed: uniform(5),
-  uvWindScale: uniform(0.05),
-  uWindDirection: uniform(new Vector2(1, 0)),
+  uTrailGrowthRate: uniform(0.04),
+  uTrailMinScale: uniform(0.5),
+  uTrailRaius: uniform(1),
+  uTrailRaiusSquared: uniform(1),
+  uKDown: uniform(0.8),
+  // Wind
+  uWindStrength: uniform(1.25),
+  uWindSpeed: uniform(0.2),
+  uvWindScale: uniform(0.025),
+  uWindDirection: uniform(new Vector2(0.5, 0.5)),
   // Color
-  uBaseColor: uniform(new Color().setRGB(0.07, 0.07, 0)), // Light
-  uTipColor: uniform(new Color().setRGB(0.23, 0.11, 0.05)), // Light
-  // uBaseColor: uniform(new Color().setRGB(0.0, 0.01, 0.01)), // Dark
-  // uTipColor: uniform(new Color().setRGB(0.0, 0.11, 0.06)), // Dark
-  // Updated externally
-  uDelta: uniform(new Vector2(0, 0)),
-  uGlowMul: uniform(3),
-
+  uBaseColor: uniform(new Color().setRGB(0.07, 0.07, 0)),
+  uTipColor: uniform(new Color().setRGB(0.23, 0.11, 0.05)),
+  uWindColorScale: uniform(1.5),
+  uAoScale: uniform(1.75),
+  uAoRimSmoothness: uniform(5),
+  uColorMixFactor: uniform(1),
+  // Stochastic keep
   uR0: uniform(45),
   uR1: uniform(75),
   uPMin: uniform(0.1),
-
-  uVariationScale: uniform(2),
-  uUvVariationScale: uniform(10),
-  uAoScale: uniform(1.5),
-
-  uColorMixScale: uniform(1),
 };
 
 class GrassSsbo {
   // x -> offsetX (0 unused)
   // y -> offsetZ (0 unused)
-  // z -> 0/12 yaw - 12/12 bend (0 unused)
-  // w -> 0/8 current scale - 8/8 original scale - 16/1 shadow - 17/1 visibility - 18/4 glow factor (0 unused)
+  // z -> 0/12 windX - 12/12 windZ (0 unused)
+  // w -> 0/8 current scale - 8/8 original scale - 16/1 shadow - 17/1 visibility - 18/4 wind noise factor (0 unused)
   private buffer: ReturnType<typeof instancedArray>;
 
   constructor() {
@@ -128,12 +112,10 @@ class GrassSsbo {
     return this.buffer;
   }
 
-  getYaw = Fn(([data = vec4(0)]) => {
-    return tslUtils.unpackUnits(data.z, 0, 12, -Math.PI, Math.PI);
-  });
-
-  getBend = Fn(([data = vec4(0)]) => {
-    return tslUtils.unpackUnits(data.z, 12, 12, -Math.PI, Math.PI);
+  getWind = Fn(([data = vec4(0)]) => {
+    const x = tslUtils.unpackUnits(data.z, 0, 12, -2, 2);
+    const z = tslUtils.unpackUnits(data.z, 12, 12, -2, 2);
+    return vec2(x, z);
   });
 
   getScale = Fn(([data = vec4(0)]) => {
@@ -141,7 +123,7 @@ class GrassSsbo {
       data.w,
       0,
       8,
-      uniforms.uBladeMinScale,
+      uniforms.uTrailMinScale,
       uniforms.uBladeMaxScale,
     );
   });
@@ -168,13 +150,9 @@ class GrassSsbo {
     return tslUtils.unpackUnit(data.w, 18, 6);
   });
 
-  private setYaw = Fn(([data = vec4(0), value = float(0)]) => {
-    data.z = tslUtils.packUnits(data.z, 0, 12, value, -Math.PI, Math.PI);
-    return data;
-  });
-
-  private setBend = Fn(([data = vec4(0), value = float(0)]) => {
-    data.z = tslUtils.packUnits(data.z, 12, 12, value, -Math.PI, Math.PI);
+  private setWind = Fn(([data = vec4(0), value = vec2(0)]) => {
+    data.z = tslUtils.packUnits(data.z, 0, 12, value.x, -2, 2);
+    data.z = tslUtils.packUnits(data.z, 12, 12, value.y, -2, 2);
     return data;
   });
 
@@ -184,7 +162,7 @@ class GrassSsbo {
       0,
       8,
       value,
-      uniforms.uBladeMinScale,
+      uniforms.uTrailMinScale,
       uniforms.uBladeMaxScale,
     );
     return data;
@@ -242,9 +220,6 @@ class GrassSsbo {
     const noiseZ = noise.b.sub(0.5).mul(13).fract();
     data.x = offsetX.add(noiseX);
     data.y = offsetZ.add(noiseZ);
-    // Yaw
-    const yaw = noise.b.sub(0.5).mul(float(Math.PI * 2)); // Map noise to [-PI, PI]
-    data.assign(this.setYaw(data, yaw));
     // Scale
     const randomScale = remap(
       noise.b,
@@ -300,16 +275,46 @@ class GrassSsbo {
     return visible;
   });
 
-  private computeWind = Fn(([prevBending = float(0), worldPos = vec3(0)]) => {
-    const scrolling = time
-      .mul(uniforms.uWindSpeed)
-      .mul(uniforms.uWindDirection.normalize());
-    const uv = worldPos.xz.add(scrolling).mul(uniforms.uvWindScale);
-    const noise = texture(assetManager.resources.noiseAtlas, uv);
+  private computeWind = Fn(([prevWindXZ = vec2(0), worldPos = vec3(0)]) => {
+    const dir = uniforms.uWindDirection.normalize();
 
-    const targetBendAngle = noise.g.mul(uniforms.uWindStrength.mul(noise.r));
-    const factor = noise.a.mul(0.2);
-    return prevBending.add(targetBendAngle.sub(prevBending).mul(factor));
+    // --- gentle per-instance speed jitter (±10 %)
+    const rand = fract(sin(float(instanceIndex).mul(91.7)).mul(43758.5453));
+    const speed = uniforms.uWindSpeed.mul(mix(0.9, 1.1, rand));
+
+    // base uv + scroll
+    const uvBase = worldPos.xz.mul(uniforms.uvWindScale);
+    const scroll = dir.mul(speed).mul(time);
+
+    // sample 1 — main noise
+    const uvA = uvBase.add(scroll);
+    const nA = texture(assetManager.resources.noiseAtlas, uvA)
+      .mul(2.0)
+      .sub(1.0);
+
+    // sample 2 — same texture, just different frequency & offset
+    const uvB = uvBase.mul(1.37).add(scroll.mul(1.11)).add(vec2(0.31, 0.73));
+    const nB = texture(assetManager.resources.noiseAtlas, uvB)
+      .mul(2.0)
+      .sub(1.0);
+
+    // mix them — random per instance + slow time wobble
+    const mixRand = fract(sin(float(instanceIndex).mul(12.9898)).mul(78.233));
+    const mixTime = sin(time.mul(0.4).add(float(instanceIndex).mul(0.1))).mul(
+      0.25,
+    );
+    const w = clamp(mixRand.add(mixTime), 0.2, 0.8);
+    const n = mix(nA, nB, w);
+
+    const baseMag = n.r.mul(uniforms.uWindStrength);
+    const gustMag = n.g.mul(uniforms.uWindStrength).mul(0.35);
+    const windFactor = baseMag.add(gustMag);
+
+    const target = dir.mul(windFactor);
+    const k = mix(0.08, 0.25, abs(n.b)); // smooth damping
+    const newWind = prevWindXZ.add(target.sub(prevWindXZ).mul(k));
+
+    return vec3(newWind, windFactor);
   });
 
   private computeAlpha = Fn(([worldPos = vec3(0)]) => {
@@ -320,60 +325,24 @@ class GrassSsbo {
   });
 
   private computeTrailScale = Fn(
-    ([
-      originalScale = float(0),
-      currentScale = float(0),
-      isBladeSteppedOn = float(0),
-    ]) => {
-      const growScale = currentScale.add(uniforms.uTrailGrowthRate);
-
-      const growScaleFactor = float(1).sub(isBladeSteppedOn);
-      const targetScale = uniforms.uTrailMinScale
-        .mul(isBladeSteppedOn)
-        .add(growScale.mul(growScaleFactor));
-
-      return min(targetScale, originalScale);
-    },
-  );
-
-  private computeTrailGlow = Fn(
-    ([
-      prevGlow = float(0),
-      distSq = float(0),
-      isBladeSteppedOn = float(0),
-      isPlayerGrounded = float(0),
-    ]) => {
-      const glowRadiusFactor = smoothstep(
-        uniforms.uGlowRadiusSquared, // Outer radius (low intensity)
-        float(0), // Inner radius (high intensity)
-        distSq, // Distance squared to player
+    (
+      [originalScale = float(0), currentScale = float(0), isStepped = float(0)], // isStepped in [0,1]
+    ) => {
+      // Upward relax toward original (no step)
+      const up = currentScale.add(
+        originalScale.sub(currentScale).mul(uniforms.uTrailGrowthRate),
       );
-      // Check if the player is moving (prevents constant glow when stationary)
-      const precision = 100.0;
-      const absDeltaX = floor(abs(uniforms.uDelta.x).mul(precision));
-      const absDeltaZ = floor(abs(uniforms.uDelta.y).mul(precision));
-      // Step function correctly returns 1 if sum > 0, else 0
-      const isPlayerMoving = step(1.0, absDeltaX.add(absDeltaZ));
-      // Base glow factor (only applies if within radius, not squished, and player grounded)
-      const baseGlowFactor = glowRadiusFactor
-        .mul(float(1).sub(isBladeSteppedOn))
-        .mul(isPlayerGrounded);
-      // If moving or glow was already active, apply glow effect
-      const isBladeAffected = max(isPlayerMoving, prevGlow).mul(baseGlowFactor);
-      // Compute fade-in when affected, fade-out when not affected
-      const fadeIn = isBladeAffected.mul(uniforms.uGlowFadeIn);
-      const fadeOut = float(1).sub(isBladeAffected).mul(uniforms.uGlowFadeOut);
-      // Force fade-out when **fully stationary**
-      const forceFadeOut = float(1)
-        .sub(isPlayerMoving)
-        .mul(uniforms.uGlowFadeOut)
-        .mul(prevGlow);
-      // Apply glow effect and ensure full fade-out when stationary
-      return clamp(
-        prevGlow.add(fadeIn).sub(fadeOut).sub(forceFadeOut),
-        0.0,
-        1.0,
+
+      // Downward crush toward min (when stepped)
+      const down = currentScale.add(
+        uniforms.uTrailMinScale.sub(currentScale).mul(uniforms.uKDown),
       );
+
+      // Blend by contact (branchless). If your isStepped is hard 0/1, this still works.
+      const blended = mix(up, down, isStepped);
+
+      // Safe range
+      return clamp(blended, uniforms.uTrailMinScale, originalScale);
     },
   );
 
@@ -391,12 +360,12 @@ class GrassSsbo {
 
     // Position
     const newOffsetX = mod(
-      data.x.sub(uniforms.uDelta.x).add(config.TILE_HALF_SIZE),
+      data.x.sub(uniforms.uPlayerDeltaXZ.x).add(config.TILE_HALF_SIZE),
       config.TILE_SIZE,
     ).sub(config.TILE_HALF_SIZE);
 
     const newOffsetZ = mod(
-      data.y.sub(uniforms.uDelta.y).add(config.TILE_HALF_SIZE),
+      data.y.sub(uniforms.uPlayerDeltaXZ.y).add(config.TILE_HALF_SIZE),
       config.TILE_SIZE,
     ).sub(config.TILE_HALF_SIZE);
     const pos = vec3(newOffsetX, 0, newOffsetZ);
@@ -414,19 +383,17 @@ class GrassSsbo {
     // Soft culling
     If(isVisible, () => {
       // Compute distance to player
-      const playerPos = vec2(uniforms.uDelta.x, uniforms.uDelta.y);
-      const diff = pos.xz.sub(playerPos);
+      const diff = worldPos.xz.sub(uniforms.uPlayerPosition.xz);
       const distSq = diff.dot(diff);
 
       // Check if the player is on the ground
       const isPlayerGrounded = step(
         0.1,
         float(1).sub(uniforms.uPlayerPosition.y),
-      ); // 1 if grounded, 0 if airborne
-
-      const isBladeSteppedOn = step(distSq, uniforms.uTrailRaiusSquared).mul(
-        isPlayerGrounded,
-      ); // 1 if stepped on, 0 if not
+      );
+      const contact = float(1)
+        .sub(smoothstep(0.0, uniforms.uTrailRaiusSquared, distSq))
+        .mul(isPlayerGrounded);
 
       // Trail
       const currentScale = this.getScale(data);
@@ -434,7 +401,7 @@ class GrassSsbo {
       const newScale = this.computeTrailScale(
         originalScale,
         currentScale,
-        isBladeSteppedOn,
+        contact,
       );
       data.assign(this.setScale(data, newScale));
 
@@ -443,24 +410,14 @@ class GrassSsbo {
       data.assign(this.setVisibility(data, alpha));
 
       // Wind
-      const prevBending = this.getBend(data);
-      const newBending = this.computeWind(prevBending, worldPos);
-      data.assign(this.setBend(data, newBending));
+      const prevWind = this.getWind(data);
+      const newWind = this.computeWind(prevWind, worldPos);
+      data.assign(this.setWind(data, newWind.xy)); // Wind displacement
+      data.assign(this.setGlow(data, newWind.z)); // Noise factor
 
-      // Glow
-      const prevGlow = this.getGlow(data);
-      const newGlow = this.computeTrailGlow(
-        prevGlow,
-        distSq,
-        isBladeSteppedOn,
-        isPlayerGrounded,
-      );
-
-      data.assign(this.setGlow(data, newGlow));
-
-      // Shadow
-      const isShadow = this.computeShadow(worldPos);
-      data.assign(this.setShadow(data, isShadow));
+      // // Shadow
+      // const isShadow = this.computeShadow(worldPos);
+      // data.assign(this.setShadow(data, isShadow));
     });
   })().compute(config.COUNT, [config.WORKGROUP_SIZE]);
 }
@@ -474,75 +431,100 @@ class GrassMaterial extends SpriteNodeMaterial {
   }
 
   private computeDiffuse = Fn(
-    ([glowFactor = float(0), isShadow = float(1)]) => {
-      const worldUv = tslUtils.computeMapUvByPosition(positionWorld.xz);
-      const noise = texture(
-        assetManager.resources.noiseAtlas,
-        worldUv.add(time.mul(0.01)).mul(uniforms.uUvVariationScale),
-      );
-      const variation = remap(noise.r, 0, 1, 0.25, 1);
-
+    ([windNoiseFactor = float(0), isShadow = float(1)]) => {
       const baseToTip = mix(
         uniforms.uBaseColor,
         uniforms.uTipColor,
-        uv().y.mul(uniforms.uColorMixScale).clamp(),
+        uv().y.mul(uniforms.uColorMixFactor).clamp(),
       );
+
+      const variation = float(1).sub(windNoiseFactor.remap(0, 1, 0.25, 0.75));
 
       const withVariation = baseToTip
         .mul(variation)
-        .mul(uniforms.uVariationScale);
+        .mul(uniforms.uWindColorScale);
 
-      // const withGlow = mix(
-      //   withVariation,
-      //   uniforms.uGlowColor.mul(uniforms.uGlowMul),
-      //   glowFactor,
-      // );
+      const withGlow = mix(baseToTip, withVariation, variation);
 
       // const withShadow = mix(withGlow.mul(0.5), withGlow, isShadow);
 
-      return withVariation;
+      return withGlow;
     },
   );
 
-  private computeAO = Fn(() => {
-    const aoY = smoothstep(-1.75, 0.5, uv().y);
-    const aoX = smoothstep(uniforms.uAoScale.negate(), 0.5, uv().x).mul(
-      smoothstep(uniforms.uAoScale.negate(), 0.5, float(1).sub(uv().x)),
+  private computeAO = Fn(([offsetX = float(0), offsetZ = float(0)]) => {
+    // --- near factor: squared distance, no sqrt ---
+    const dx = offsetX,
+      dz = offsetZ;
+    const r2 = dx.mul(dx).add(dz.mul(dz));
+    const R0 = float(12.0),
+      R1 = float(28.0);
+    const near = float(1).sub(smoothstep(R0.mul(R0), R1.mul(R1), r2));
+
+    // --- soft edge rim across blade width ---
+    const x = uv().x; // 0..1
+    const edge = abs(x.mul(2.0).sub(1.0)); // 0 center, 1 edge
+    const rim = smoothstep(
+      uniforms.uAoRimSmoothness.negate(),
+      uniforms.uAoRimSmoothness,
+      edge,
     );
-    // const ao = aoX.mul(aoY);
-    const ao = mix(0, aoX, aoY);
+
+    // --- height weighting (keep base clean) ---
+    const h = uv().y; // 0 base → 1 tip
+    const hWeight = float(1).sub(smoothstep(0.1, 0.85, h));
+
+    // --- AO strength controlled by uAoScale ---
+    const aoStrength = uniforms.uAoScale.mul(0.25); // scale intensity
+    const ao = float(1).sub(aoStrength.mul(near.mul(rim).mul(hWeight)));
+
     return ao;
   });
 
   private createGrassMaterial() {
     this.precision = "lowp";
+    this.transparent = false;
     const data = this.ssbo.computeBuffer.element(instanceIndex);
     this.alphaTest = 0.9;
 
     const offsetX = data.x;
     const offsetZ = data.y;
-    const yawAngle = this.ssbo.getYaw(data);
-    const bendingAngle = this.ssbo.getBend(data);
+    const windXZ = this.ssbo.getWind(data);
     const scale = this.ssbo.getScale(data);
     const isVisible = this.ssbo.getVisibility(data);
-    const glowFactor = this.ssbo.getGlow(data);
+    const windNoiseFactor = this.ssbo.getGlow(data);
     const isShadow = this.ssbo.getShadow(data);
     this.opacityNode = isVisible;
 
     Discard(isVisible.equal(0));
-    const bendAmount = bendingAngle.mul(uv().y);
-    this.rotationNode = bendAmount;
-    const rand = hash(instanceIndex).remap(0, 1, 0.25, 1);
-    this.scaleNode = vec3(rand, scale, 1);
-    const randomPhase = hash(instanceIndex).mul(PI2); // Random phase in range [0, 2π]
-    const swayAmount = sin(time.mul(5).add(bendingAngle).add(randomPhase)).mul(
-      0.1,
-    );
-    const swayFactor = uv().y.mul(glowFactor);
+    const rand = hash(instanceIndex.add(196.4356));
+    this.scaleNode = vec3(rand.remap(0, 1, 0.25, 1), scale, 1);
+    const rotation = rand.sub(0.5);
+    this.rotationNode = vec3(rotation.mul(0.5), 0, 0);
+    const randomPhase = rand.mul(PI2); // Random phase in range [0, 2π]
+    const swayAmount = sin(time.mul(5).add(randomPhase)).mul(0.15);
+    const swayFactor = uv().y.mul(windNoiseFactor);
     const swayOffset = swayAmount.mul(swayFactor);
-    this.positionNode = vec3(offsetX, 0, offsetZ).add(swayOffset);
-    // const ao = this.computeAO();
-    this.colorNode = this.computeDiffuse(glowFactor, isShadow);
+
+    const height = uv().y; // 0 at base → 1 at tip
+    const profile = height.mul(height).mul(height); // softer near base
+    const bendOffset = vec3(windXZ.x, 0.0, windXZ.y).mul(profile);
+
+    // optional tiny flutter perpendicular to wind (adds life without rotating the sprite)
+    const dirXZ = uniforms.uWindDirection.normalize();
+    const perp = vec2(dirXZ.y.negate(), dirXZ.x);
+    const phase = hash(instanceIndex).mul(PI2);
+    const flutter = sin(
+      time.mul(uniforms.uWindSpeed.mul(1.7)).add(phase.mul(1.3)),
+    )
+      .mul(0.06)
+      .mul(profile);
+    const flutterOff = vec3(perp.x, 0.0, perp.y).mul(flutter);
+    const pos = vec3(offsetX, 0, offsetZ);
+    this.positionNode = pos.add(bendOffset).add(flutterOff).add(swayOffset);
+    const ao = this.computeAO(offsetX, offsetZ);
+    const color = this.computeDiffuse(windNoiseFactor, isShadow);
+    this.colorNode = color.mul(ao);
   }
 }
 
@@ -558,7 +540,7 @@ export default class Grass {
     eventsManager.on("update-throttle-2x", ({ player }) => {
       const dx = player.position.x - grass.position.x;
       const dz = player.position.z - grass.position.z;
-      uniforms.uDelta.value.set(dx, dz);
+      uniforms.uPlayerDeltaXZ.value.set(dx, dz);
       uniforms.uPlayerPosition.value.copy(player.position);
       uniforms.uCameraMatrix.value
         .copy(sceneManager.playerCamera.projectionMatrix)
@@ -575,98 +557,128 @@ export default class Grass {
   private debugGrass() {
     const folder = debugManager.panel.addFolder({
       title: "🌱 Grass",
-      expanded: false,
+      expanded: true,
     });
-    folder.addBinding(uniforms.uTipColor, "value", {
-      label: "Tip Color",
+
+    const color = folder.addFolder({ title: "Color" });
+    color.addBinding(uniforms.uTipColor, "value", {
+      label: "Tip",
       view: "color",
       color: { type: "float" },
     });
-    folder.addBinding(uniforms.uBaseColor, "value", {
-      label: "Base Color",
+    color.addBinding(uniforms.uBaseColor, "value", {
+      label: "Base",
       view: "color",
       color: { type: "float" },
     });
-    folder.addBinding(uniforms.uGlowColor, "value", {
-      label: "Glow Color",
-      view: "color",
-      color: { type: "float" },
-    });
-    folder.addBinding(uniforms.uWindStrength, "value", {
-      label: "Wind strength",
-      min: -Math.PI,
-      max: Math.PI,
-      step: 0.01,
-    });
-    folder.addBinding(uniforms.uWindSpeed, "value", {
-      label: "Wind speed",
+    color.addBinding(uniforms.uColorMixFactor, "value", {
+      label: "Mix factor",
       min: 0,
-      max: 20,
+      max: 2,
       step: 0.01,
     });
-    folder.addBinding(uniforms.uBladeMinScale, "value", {
-      label: "Min scale",
+    color.addBinding(uniforms.uWindColorScale, "value", {
+      label: "Wind color scale",
       min: 0,
       max: 5,
       step: 0.01,
     });
-    folder.addBinding(uniforms.uBladeMaxScale, "value", {
-      label: "Max scale",
+    color.addBinding(uniforms.uAoScale, "value", {
+      label: "AO scale",
+      min: 0,
+      max: 5,
+      step: 0.01,
+    });
+    color.addBinding(uniforms.uAoRimSmoothness, "value", {
+      label: "AO rim smoothness",
       min: 0,
       max: 5,
       step: 0.01,
     });
 
-    folder.addBinding(uniforms.uGlowMul, "value", {
-      label: "Glow bloom",
-      min: 1,
-      max: 20,
+    const wind = folder.addFolder({ title: "Wind" });
+    wind.addBinding(uniforms.uWindStrength, "value", {
+      label: "Strength",
+      min: -Math.PI / 2,
+      max: Math.PI / 2,
       step: 0.01,
     });
+    wind.addBinding(uniforms.uWindSpeed, "value", {
+      label: "Speed",
+      min: 0,
+      max: 2,
+      step: 0.01,
+    });
+    wind.addBinding(uniforms.uvWindScale, "value", {
+      label: "UV scale",
+      step: 0.01,
+    });
+    wind.addBinding(uniforms.uWindDirection, "value", {
+      label: "Direction",
+    });
 
-    folder.addBinding(uniforms.uR0, "value", {
+    const stochastic = folder.addFolder({ title: "Stochastic keep" });
+    stochastic.addBinding(uniforms.uR0, "value", {
       label: "Inner ring",
       min: 0,
       max: config.TILE_SIZE,
       step: 0.1,
     });
-    folder.addBinding(uniforms.uR1, "value", {
+    stochastic.addBinding(uniforms.uR1, "value", {
       label: "Outer ring",
       min: 0,
       max: config.TILE_SIZE,
       step: 0.1,
     });
-    folder.addBinding(uniforms.uPMin, "value", {
+    stochastic.addBinding(uniforms.uPMin, "value", {
       label: "P Min",
       min: 0,
       max: 1,
       step: 0.01,
     });
-    folder.addBinding(uniforms.uvWindScale, "value", {
-      label: "UV wind scale",
+
+    const trail = folder.addFolder({ title: "Trail" });
+    trail.addBinding(uniforms.uTrailGrowthRate, "value", {
+      label: "Growth rate",
+      min: 0,
+      max: 0.1,
+      step: 0.001,
+    });
+    trail.addBinding(uniforms.uTrailMinScale, "value", {
+      label: "Min scale",
+      min: 0,
+      max: 1,
       step: 0.01,
     });
-    folder.addBinding(uniforms.uVariationScale, "value", {
-      label: "Variation scale",
-      step: 0.01,
-    });
-    folder.addBinding(uniforms.uUvVariationScale, "value", {
-      label: "UV variation scale",
-      step: 0.01,
-    });
-    folder.addBinding(uniforms.uAoScale, "value", {
-      label: "AO scale",
-      min: 0.5,
+    trail.addBinding(uniforms.uKDown, "value", {
+      label: "Crushing speed",
+      min: 0,
       max: 5,
       step: 0.01,
     });
-    folder.addBinding(uniforms.uWindDirection, "value", {
-      label: "Wind direction",
-    });
-    folder.addBinding(uniforms.uColorMixScale, "value", {
-      label: "Color mix scale",
+    trail
+      .addBinding(uniforms.uTrailRaius, "value", {
+        label: "Trail radius",
+        min: 0,
+        max: 2,
+        step: 0.01,
+      })
+      .on("change", ({ value }) => {
+        console.log(value);
+        uniforms.uTrailRaiusSquared.value = value * value;
+      });
+
+    const general = folder.addFolder({ title: "General" });
+    general.addBinding(uniforms.uBladeMinScale, "value", {
+      label: "Min scale",
       min: 0,
-      max: 1,
+      max: 5,
+      step: 0.01,
+    });
+    general.addBinding(uniforms.uBladeMaxScale, "value", {
+      label: "Max scale",
+      min: 0,
+      max: 5,
       step: 0.01,
     });
   }
