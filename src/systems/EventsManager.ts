@@ -4,7 +4,7 @@ import { Sizes, State } from "../Game";
 type UpdateEvent = (state: State) => void;
 type ResizeEvent = (sizes: Sizes) => void;
 
-const throttle = [2, 4, 16, 64] as const;
+const throttle = [2, 4, 8, 16, 64] as const;
 type ThrottledEvents = {
   [T in (typeof throttle)[number] as `update-throttle-${T}x`]: UpdateEvent;
 };
@@ -20,11 +20,14 @@ export const eventsManager = new EventEmitter<Events>();
 
 const updateThrottled = (n: (typeof throttle)[number]) => {
   let frame = 0;
-  eventsManager.on("update", (state) => {
+  let accDelta = 0;
+  eventsManager.on("update", ({ player, delta }) => {
+    accDelta += delta;
     frame++;
     if (frame < n) return;
+    eventsManager.emit(`update-throttle-${n}x`, { player, delta: accDelta });
     frame = 0;
-    eventsManager.emit(`update-throttle-${n}x`, state);
+    accDelta = 0;
   });
 };
 throttle.forEach((n) => updateThrottled(n));

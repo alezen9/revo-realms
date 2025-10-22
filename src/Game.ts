@@ -10,7 +10,7 @@ import { debugManager } from "./systems/DebugManager";
 import { getRefreshRate } from "./utils/getRefreshRate";
 
 export type State = {
-  clock: Clock;
+  delta: number;
   player: Player;
 };
 
@@ -73,7 +73,7 @@ export default class Game {
     this.debugGame();
     const clock = new Clock(true);
 
-    const state: State = { clock, player: this.player };
+    const state: State = { delta: clock.getDelta(), player: this.player };
 
     let flip = false;
 
@@ -83,6 +83,7 @@ export default class Game {
       else flip = false;
       if (flip || !this.config.halvenFPS) {
         if (import.meta.env.DEV) sceneManager.update();
+        state.delta = clock.getDelta();
         eventsManager.emit("update", state);
         rendererManager.renderAsync();
       }

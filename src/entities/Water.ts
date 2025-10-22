@@ -33,6 +33,7 @@ import { audioManager } from "../systems/AudioManager";
 import { lighting } from "../systems/LightingSystem";
 import { tslUtils } from "../utils/TSLUtils";
 import { rendererManager } from "../systems/RendererManager";
+import { systemState } from "../systems/SystemState/SystemState";
 
 const uniforms = {
   uUvScale: uniform(2.7),
@@ -80,6 +81,8 @@ export default class Water {
     bsLocal.radius = bsLocal.radius * 0.75;
 
     sceneManager.scene.add(water);
+
+    systemState.wind.addTarget("Lake", water.position, 100, 300);
 
     eventsManager.on("audio-ready", () => {
       water.add(audioManager.lake);

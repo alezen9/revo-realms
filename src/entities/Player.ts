@@ -146,9 +146,7 @@ export default class Player {
   }
 
   private update(state: State) {
-    const { clock } = state;
-
-    const delta = clock.getDelta();
+    const { delta } = state;
 
     if (this.prevYawInRadians !== this.yawInRadians) {
       this.yawQuaternion.setFromAxisAngle(config.UP, this.yawInRadians);
