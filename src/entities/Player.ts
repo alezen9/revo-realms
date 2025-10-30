@@ -74,6 +74,12 @@ export default class Player {
   private rayOrigin = new Vector3();
   private ray = new Ray(this.rayOrigin, config.DOWN);
 
+  // Squash & stretch (visual only)
+  // private ssCurrent = new Vector3(1, 1, 1); // current visual scale
+  // private ssTarget = new Vector3(1, 1, 1); // target visual scale
+  // private wasOnGround = false; // landing detection
+  // private prevVelY = 0; // impact speed measure
+
   constructor() {
     this.mesh = this.createCharacterMesh();
     sceneManager.scene.add(this.mesh);
@@ -145,6 +151,53 @@ export default class Player {
       .setActiveEvents(ActiveEvents.COLLISION_EVENTS);
   }
 
+  // private updateSquashStretch(delta: number) {
+  //   const vel = this.rigidBody.linvel();
+  //   const upward = Math.max(0, vel.y); // upward speed only
+  //   const maxUp = Math.max(0.0001, config.MAX_UPWARD_VELOCITY);
+
+  //   // --- Base target is neutral ---
+  //   this.ssTarget.set(1, 1, 1);
+
+  //   // --- Stretch while rising ---
+  //   // up to ~+20% on Y and ~-10% on XZ at peak upward speed
+  //   const riseT = Math.min(1, upward / maxUp);
+  //   if (riseT > 0) {
+  //     const yStretch = 1 + 0.4 * riseT;
+  //     const xzSquish = 1 - 0.2 * riseT;
+  //     this.ssTarget.set(xzSquish, yStretch, xzSquish);
+  //   }
+
+  //   // --- Squash on landing (first grounded frame) ---
+  //   if (!this.wasOnGround && this.isOnGround) {
+  //     // impact magnitude; tweak divisor to taste (larger = less squash)
+  //     const impact = Math.min(1, Math.abs(this.prevVelY) / 10);
+  //     // up to ~35% squash at big impacts
+  //     const squash = 0.35 * impact;
+
+  //     // Ensure landing squash “wins” this frame if stronger than rise stretch
+  //     const xz = Math.max(this.ssTarget.x, 1 + squash);
+  //     const y = Math.min(this.ssTarget.y, 1 - squash);
+  //     this.ssTarget.set(xz, y, xz);
+  //   }
+
+  //   // --- Ease current toward target (fast) ---
+  //   // quick response so it feels springy/snappy
+  //   const toTargetLerp = 10 * delta; // ~critically damped feel
+  //   this.ssCurrent.lerp(this.ssTarget, toTargetLerp);
+
+  //   // --- Gentle return to neutral over time ---
+  //   const backToOneLerp = 2 * delta;
+  //   this.ssCurrent.lerp(new Vector3(1, 1, 1), backToOneLerp);
+
+  //   // --- Apply scale to the mesh ---
+  //   this.mesh.scale.copy(this.ssCurrent);
+
+  //   // Save previous frame state for landing detection
+  //   this.wasOnGround = this.isOnGround;
+  //   this.prevVelY = vel.y;
+  // }
+
   private update(state: State) {
     const { delta } = state;
 
@@ -156,6 +209,7 @@ export default class Player {
     this.updateVerticalMovement(delta);
     this.updateHorizontalMovement(delta);
     this.updateCameraPosition(delta);
+    // this.updateSquashStretch(delta);
   }
 
   private updateVerticalMovement(delta: number) {
@@ -315,7 +369,7 @@ class PlayerMaterial extends MeshLambertNodeMaterial {
     const vMapUv = varying(mapUv);
     const shadowFactor = lighting.getTerrainShadowFactor(vMapUv);
     const baseColor = texture(assetManager.resources.footballDiffuse, uv()).mul(
-      1.5,
+      2.5,
     );
 
     this.colorNode = baseColor.mul(shadowFactor);
