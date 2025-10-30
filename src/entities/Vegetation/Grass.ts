@@ -79,9 +79,8 @@ const uniforms = {
   uKDown: uniform(0.8),
   // Wind
   uWindStrength: uniform(1.25),
-  uWindSpeed: uniform(0.15),
+  uWindSpeed: uniform(0.25),
   uvWindScale: uniform(1.75),
-  uWindIntensityFactor: uniform(1.25),
   // Color
   uBaseColor: uniform(new Color().setRGB(0.07, 0.07, 0)),
   uTipColor: uniform(new Color().setRGB(0.23, 0.11, 0.05)),
@@ -305,9 +304,8 @@ class GrassSsbo {
 
   private computeWind = Fn(
     ([prevWindXZ = vec2(0), worldPos = vec3(0), positionNoise = float(0)]) => {
-      const intensity = systemState.wind.uIntensity.mul(
-        uniforms.uWindIntensityFactor,
-      );
+      const intensity = smoothstep(0.2, 0.5, systemState.wind.uIntensity);
+      const dir = systemState.wind.uDirection.negate();
       const strength = uniforms.uWindStrength.add(intensity);
 
       // --- gentle per-instance speed jitter (±10 %)
@@ -317,7 +315,7 @@ class GrassSsbo {
 
       // base uv + scroll
       const uvBase = worldPos.xz.mul(0.01).mul(uniforms.uvWindScale);
-      const scroll = systemState.wind.uDirection.mul(speed).mul(time);
+      const scroll = dir.mul(speed).mul(time);
 
       // sample 1 — main noise
       const uvA = uvBase.add(scroll);
@@ -326,10 +324,7 @@ class GrassSsbo {
         .sub(1.0);
 
       // sample 2 — same texture, just different frequency & offset
-      const uvB = uvBase
-        .mul(1.37)
-        .add(scroll.mul(1.11))
-        .add(vec2(0.31, 0.73).mul(systemState.wind.uDirection));
+      const uvB = uvBase.mul(1.37).add(scroll.mul(1.11));
       const nB = texture(assetManager.resources.noiseAtlas, uvB)
         .mul(2.0)
         .sub(1.0);
@@ -342,9 +337,9 @@ class GrassSsbo {
 
       const baseMag = n.r.mul(strength);
       const gustMag = n.g.mul(strength).mul(0.35);
-      const windFactor = baseMag.add(gustMag).add(intensity.mul(0.25));
+      const windFactor = baseMag.add(gustMag);
 
-      const target = systemState.wind.uDirection.mul(windFactor);
+      const target = dir.mul(windFactor);
       const k = mix(0.08, 0.25, abs(n.b)); // smooth damping
       const newWind = prevWindXZ.add(target.sub(prevWindXZ).mul(k));
 
@@ -688,12 +683,6 @@ export default class Grass {
       step: 0.01,
       min: 0,
       max: 10,
-    });
-    wind.addBinding(uniforms.uWindIntensityFactor, "value", {
-      label: "Wind intensity factor",
-      step: 0.01,
-      min: 1,
-      max: 5,
     });
 
     const stochastic = folder.addFolder({ title: "Stochastic keep" });

@@ -82,7 +82,7 @@ export default class Water {
 
     sceneManager.scene.add(water);
 
-    systemState.wind.addTarget("Lake", water.position, 100, 300);
+    systemState.wind.registerTarget("Lake", water.position, 90);
 
     eventsManager.on("audio-ready", () => {
       water.add(audioManager.lake);
