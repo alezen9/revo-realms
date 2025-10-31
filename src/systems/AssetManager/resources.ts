@@ -57,7 +57,6 @@ import uvCheckerUrl from "/textures/new-world/debug/uvChecker_1k_uastc.ktx2?url"
 import normAoGravelUrl from "/textures/new-world/terrain/gravel_normAO_1k_uastc.ktx2?url";
 import normVeinWaterUrl from "/textures/new-world/water/water_normal_vein_uastc.ktx2?url";
 import noiseAtlasUrl from "/textures/new-world/noise/noise_atlas_uastc.ktx2?url";
-import albedoGravelUrl from "/textures/new-world/terrain/gravel_albedo.png?url";
 
 type ResourceType = {
   texture: Texture;
@@ -119,14 +118,6 @@ export const manifest = [
     type: "ktx2",
     wrap: true,
     anisotropy: 4,
-  },
-  {
-    name: "albedoGravel",
-    url: albedoGravelUrl,
-    type: "texture",
-    wrap: true,
-    anisotropy: 4,
-    colorSpace: SRGBColorSpace,
   },
   {
     name: "normVeinWater",

@@ -65,6 +65,26 @@ class UIManager {
     const placeholder = document.getElementById("email-placeholder");
     placeholder?.appendChild(link);
   }
+
+  fadeInWindIcon() {
+    const element = document.getElementById("wind-icon");
+    if (!element) return;
+    element.classList.remove(
+      "wind-icon-container-fade-out",
+      "wind-icon-container-fade-in",
+    );
+    element.classList.add("wind-icon-container-fade-in");
+  }
+
+  fadeOutWindIcon() {
+    const element = document.getElementById("wind-icon");
+    if (!element) return;
+    element.classList.remove(
+      "wind-icon-container-fade-out",
+      "wind-icon-container-fade-in",
+    );
+    element.classList.add("wind-icon-container-fade-out");
+  }
 }
 
 export const uiManager = new UIManager();

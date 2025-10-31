@@ -1,11 +1,11 @@
 import { debugManager } from "../DebugManager";
-import { WindState } from "./WindState";
+import { WindStateTsushima } from "./WindStateTsushima";
 
 class SystemState {
-  readonly wind: WindState;
+  readonly wind: WindStateTsushima;
   constructor() {
     const folder = debugManager.panel.addFolder({ title: "🧠 State" });
-    this.wind = new WindState(folder);
+    this.wind = new WindStateTsushima(folder);
   }
 }
 

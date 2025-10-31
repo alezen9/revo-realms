@@ -1,9 +1,10 @@
 import nipplejs from "nipplejs";
+import { eventsManager } from "./EventsManager";
 
 class KeyboardManager {
-  private keysPressed: Set<string>;
-  private keyDownListeners: Map<string, VoidFunction>;
-  private keyUpListeners: Map<string, VoidFunction>;
+  private keysPressed = new Set<string>();
+  private keyDownListeners = new Map<string, VoidFunction>();
+  private keyUpListeners = new Map<string, VoidFunction>();
 
   constructor() {
     this.keysPressed = new Set();
@@ -12,9 +13,18 @@ class KeyboardManager {
 
     this.handleKeyDown = this.handleKeyDown.bind(this);
     this.handleKeyUp = this.handleKeyUp.bind(this);
+    this.handleWheel = this.handleWheel.bind(this);
 
     window.addEventListener("keydown", this.handleKeyDown);
     window.addEventListener("keyup", this.handleKeyUp);
+    window.addEventListener("wheel", this.handleWheel, { passive: true });
+  }
+
+  private handleWheel(event: WheelEvent) {
+    event.stopPropagation();
+    if (event.deltaY <= 0 || Math.abs(event.deltaY) <= Math.abs(event.deltaX))
+      return;
+    eventsManager.emit("swipe-up");
   }
 
   private handleKeyDown(event: KeyboardEvent) {
@@ -47,6 +57,7 @@ class KeyboardManager {
   dispose() {
     window.removeEventListener("keydown", this.handleKeyDown);
     window.removeEventListener("keyup", this.handleKeyUp);
+    window.removeEventListener("wheel", this.handleWheel);
   }
 }
 

@@ -61,6 +61,7 @@ const getConfig = () => {
     WORKGROUP_SIZE: 256,
   };
 };
+
 const config = getConfig();
 
 const uniforms = {
@@ -69,8 +70,8 @@ const uniforms = {
   uPlayerDeltaXZ: uniform(new Vector2(0, 0)),
   uCameraForward: uniform(new Vector3(0, 0, 0)),
   // Scale
-  uBladeMinScale: uniform(0.75),
-  uBladeMaxScale: uniform(1.5),
+  uBladeMinScale: uniform(0.6),
+  uBladeMaxScale: uniform(2.25),
   // Trail
   uTrailGrowthRate: uniform(0.04),
   uTrailMinScale: uniform(0.5),
@@ -78,7 +79,7 @@ const uniforms = {
   uTrailRaiusSquared: uniform(1),
   uKDown: uniform(0.8),
   // Wind
-  uWindStrength: uniform(1.25),
+  uWindStrength: uniform(0.4),
   uWindSpeed: uniform(0.25),
   uvWindScale: uniform(1.75),
   // Color
@@ -304,9 +305,9 @@ class GrassSsbo {
 
   private computeWind = Fn(
     ([prevWindXZ = vec2(0), worldPos = vec3(0), positionNoise = float(0)]) => {
-      const intensity = smoothstep(0.2, 0.5, systemState.wind.uIntensity);
+      // const intensity = smoothstep(0.2, 0.5, systemState.wind.uIntensity);
       const dir = systemState.wind.uDirection.negate();
-      const strength = uniforms.uWindStrength.add(intensity);
+      const strength = uniforms.uWindStrength.add(systemState.wind.uIntensity);
 
       // --- gentle per-instance speed jitter (±10 %)
       const speed = uniforms.uWindSpeed.mul(
@@ -487,14 +488,14 @@ class GrassMaterial extends SpriteNodeMaterial {
     this.opacityNode = isVisible;
 
     // SCALE
-    const scaleX = positionNoise.add(0.25);
+    const scaleX = positionNoise.add(0.35);
     const bladeScale = vec3(scaleX, scaleY, 1);
     this.scaleNode = mix(vec3(0), bladeScale, isVisible);
 
     // ROTATION
+    const instanceNoise = hash(instanceIndex.add(196.4356)).sub(0.5).mul(0.25);
     const h = uv().y;
     const bendProfile = h.mul(h).mul(uniforms.uBaseBending);
-    const instanceNoise = hash(instanceIndex.add(196.4356)).sub(0.5).mul(0.25);
     const baseBending = positionNoise
       .sub(0.5)
       .mul(0.25)
