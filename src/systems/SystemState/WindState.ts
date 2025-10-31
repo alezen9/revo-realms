@@ -406,7 +406,7 @@ export class WindState {
   private actor = createActor(this.machine).start();
 
   constructor(private folder: FolderApi) {
-    this.folder = folder.addFolder({ title: "Wind" });
+    this.folder = folder.addFolder({ title: "Wind", expanded: false });
 
     // Optional live tuning
     this.folder.addBinding(this.config, "sleepTime", {

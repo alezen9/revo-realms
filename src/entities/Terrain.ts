@@ -5,7 +5,9 @@ import {
   normalMap,
   positionWorld,
   remap,
+  rotateUV,
   smoothstep,
+  step,
   texture,
   time,
   uniform,
@@ -42,7 +44,8 @@ import { eventsManager } from "../systems/EventsManager";
 import { tslUtils } from "../utils/TSLUtils";
 
 const uniforms = {
-  uGrassTerrainColor: uniform(new Color().setRGB(0.77, 0.84, 0.15)),
+  uGrassTerrainColor: uniform(new Color().setRGB(0.31, 0.25, 0.0)),
+  uGrassTerrainColor2: uniform(new Color().setRGB(0.75, 0.67, 0.19)),
   uWaterSandColor: uniform(new Color().setRGB(0.54, 0.39, 0.2)),
   uPathSandColor: uniform(new Color().setRGB(0.65, 0.49, 0.27)),
   uGravelColor: uniform(new Color().setRGB(1.0, 0.79, 0.41)),
@@ -51,7 +54,7 @@ const uniforms = {
   uGrassNormalScale: uniform(0.1),
   uGravelNormalScale: uniform(0.6),
   uA: uniform(0),
-  uB: uniform(1),
+  uB: uniform(0.2),
 };
 
 class TerainMaterial extends MeshLambertNodeMaterial {
@@ -78,6 +81,11 @@ class TerainMaterial extends MeshLambertNodeMaterial {
     // });
     folder.addBinding(uniforms.uGrassTerrainColor, "value", {
       label: "Grass terrain color",
+      view: "color",
+      color: { type: "float" },
+    });
+    folder.addBinding(uniforms.uGrassTerrainColor2, "value", {
+      label: "Grass terrain color 2",
       view: "color",
       color: { type: "float" },
     });
@@ -133,37 +141,35 @@ class TerainMaterial extends MeshLambertNodeMaterial {
   private createMaterial() {
     this.precision = "lowp";
     const worldUv = tslUtils.computeMapUvByPosition(positionWorld.xz);
-    // const noise = texture(assetManager.resources.noiseAtlas, worldUv.mul(10));
+    const noise = texture(assetManager.resources.noiseAtlas, worldUv.mul(10));
     const vUv = varying(worldUv);
-    // const variation = remap(noise.r, 0, 1, 0.15, 1);
+    const variation = remap(noise.r, 0, 1, 0.15, 1);
 
-    const alpha = texture(assetManager.resources.terrainTypeTexture, vUv).g;
-    const isGrass = smoothstep(uniforms.uA, uniforms.uB, alpha);
+    const type = texture(assetManager.resources.terrainTypeTexture, vUv);
+    const smoothIsGrass = smoothstep(
+      uniforms.uA,
+      uniforms.uB,
+      type.g.mul(noise.b),
+    );
 
     // const height = texture(
     //   assetManager.resources.terrainHeightMap,
     //   vec2(vUv.x, float(1).sub(vUv.y)),
     // ).r;
 
-    const checkerColor = texture(assetManager.resources.uvChecker, vUv.mul(5));
-    // const grassColor = uniforms.uGrassTerrainColor.mul(variation).mul(2);
-    // const c = texture(assetManager.resources.albedoGravel, vUv.mul(81.7));
-    // const color = mix(uniforms.uGravelColor, grassColor, isGrass);
-    // const gravelColor = mix(
-    //   uniforms.uGravelColor,
-    //   c.rgb,
-    //   float(1).sub(noise.a),
+    // const checkerColor = texture(assetManager.resources.uvChecker, vUv.mul(5));
+    // const grassColor = texture(
+    //   assetManager.resources.grassAlbedo,
+    //   vUv.mul(81.7),
     // );
-    // const grassColor = mix(
-    //   uniforms.uGrassTerrainColor.mul(variation).mul(2),
-    //   c.rgb,
-    //   noise.b,
-    // );
-    const final = mix(
-      vec3(checkerColor.a),
+    const grassColor = mix(
       uniforms.uGrassTerrainColor,
-      isGrass,
+      uniforms.uGrassTerrainColor2,
+      noise.b,
     );
+    const gravelColor = uniforms.uGravelColor;
+
+    const final = mix(gravelColor, grassColor, smoothIsGrass);
     this.colorNode = final;
 
     const norAo = texture(assetManager.resources.normAoGravel, vUv.mul(81.7));
@@ -171,7 +177,7 @@ class TerainMaterial extends MeshLambertNodeMaterial {
     const normalScale = mix(
       uniforms.uGravelNormalScale,
       uniforms.uGrassNormalScale,
-      isGrass,
+      smoothIsGrass,
     );
     this.normalNode = normalMap(norAo.rgb, normalScale);
     this.aoNode = norAo.a;

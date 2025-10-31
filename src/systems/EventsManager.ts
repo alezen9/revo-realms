@@ -14,6 +14,8 @@ type Events = {
   "audio-ready": VoidFunction;
   "camera-changed": VoidFunction;
   resize: ResizeEvent;
+  "swipe-up": VoidFunction;
+  "blow-wind": VoidFunction;
 } & ThrottledEvents;
 
 export const eventsManager = new EventEmitter<Events>();

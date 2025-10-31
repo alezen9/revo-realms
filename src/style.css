@@ -224,3 +224,46 @@ Compass
   will-change: transform;
   transition: transform 0.15s linear;
 }
+
+.wind-icon-container {
+  pointer-events: none;
+  z-index: 10;
+  display: grid;
+  place-content: center;
+  position: absolute;
+  top: 15%;
+  left: 50%;
+  transform: translate(-50%, 50%);
+  font-size: 7.5em;
+  color: rgba(255, 255, 255, 0.35);
+}
+
+@keyframes wind-fade-in {
+  from {
+    transform: translate(-50%, 50%);
+    opacity: 0;
+  }
+  to {
+    transform: translate(-50%, -15%);
+    opacity: 1;
+  }
+}
+
+@keyframes wind-fade-out {
+  from {
+    transform: translate(-50%, -15%);
+    opacity: 1;
+  }
+  to {
+    transform: translate(-50%, 50%);
+    opacity: 0;
+  }
+}
+
+.wind-icon-container-fade-in {
+  animation: wind-fade-in 0.5s forwards;
+}
+
+.wind-icon-container-fade-out {
+  animation: wind-fade-out 1s forwards;
+}
