@@ -1,5 +1,7 @@
 import { audioManager } from "./AudioManager";
 import { eventsManager } from "./EventsManager";
+import UiRoot from "../ui/index.svelte";
+import { mount, unmount } from "svelte";
 
 class UIManager {
   constructor() {}
@@ -7,6 +9,14 @@ class UIManager {
   init() {
     this.initAudioButton();
     this.initCreditsButton();
+    this.mountSvelte();
+  }
+
+  private mountSvelte() {
+    const ui = mount(UiRoot, { target: document.body });
+    import.meta.hot?.dispose(() => {
+      unmount(ui);
+    });
   }
 
   private initAudioButton() {

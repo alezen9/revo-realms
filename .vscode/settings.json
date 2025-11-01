@@ -1,0 +1,7 @@
+{
+  "wgsl.validateOnType": true,
+  "shader-validator.glsl.targetClient": "OpenGL450",
+  "[svelte]": {
+    "editor.defaultFormatter": "svelte.svelte-vscode"
+  }
+}
