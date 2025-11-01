@@ -25,13 +25,11 @@ import {
   NormalMapNode,
   Vector2,
 } from "three/webgpu";
-import { assetManager } from "../../systems/AssetManager/AssetManager";
+import { assetManager } from "../../systems";
 import { ColliderDesc, RigidBodyDesc } from "@dimforge/rapier3d";
-import { physicsManager } from "../../systems/PhysicsManager";
-import { sceneManager } from "../../systems/SceneManager";
 import { tslUtils } from "../../utils/TSLUtils";
 import { RevoColliderType } from "../../types";
-import { debugManager } from "../../systems/DebugManager";
+import { debugManager, sceneManager, physicsManager } from "../../systems";
 
 class BarkMaterial extends MeshLambertNodeMaterial {
   constructor() {

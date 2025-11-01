@@ -9,7 +9,6 @@ import {
   Vector2,
   Vector3,
 } from "three/webgpu";
-import { sceneManager } from "../../systems/SceneManager";
 import {
   Fn,
   hash,
@@ -36,10 +35,13 @@ import {
   deltaTime,
 } from "three/tsl";
 import { eventsManager } from "../../systems/EventsManager";
-import { rendererManager } from "../../systems/RendererManager";
-import { assetManager } from "../../systems/AssetManager/AssetManager";
+import {
+  assetManager,
+  rendererManager,
+  debugManager,
+  sceneManager,
+} from "../../systems";
 import { tslUtils } from "../../utils/TSLUtils";
-import { debugManager } from "../../systems/DebugManager";
 
 const getConfig = () => {
   const COUNT = 128;

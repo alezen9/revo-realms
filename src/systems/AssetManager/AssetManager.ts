@@ -10,11 +10,14 @@ import {
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { DRACOLoader } from "three/addons/loaders/DRACOLoader.js";
 import atlasesCoords from "../../atlases/atlases.json";
-import { Atlases } from "../../atlases/types";
-import { loadingManager } from "../LoadingManager";
-import { manifest, ResourceRaw, ExternalResources } from "./resources";
+import { type Atlases } from "../../atlases/types";
+import {
+  manifest,
+  type ResourceRaw,
+  type ExternalResources,
+} from "./resources";
 import { KTX2Loader } from "three/addons/loaders/KTX2Loader.js";
-import { rendererManager } from "../RendererManager";
+import { type RendererManager } from "../RendererManager/RendererManager";
 
 type InternalResources = {
   terrainHeightMap: DataTexture;
@@ -22,7 +25,7 @@ type InternalResources = {
 
 type Resources = ExternalResources & InternalResources;
 
-class AssetManager {
+export class AssetManager {
   // Atlas coords
   readonly atlasesCoords = atlasesCoords as Atlases;
 
@@ -87,11 +90,9 @@ class AssetManager {
     }
   };
 
-  async initAsync() {
+  async initAsync(rendererManager: RendererManager) {
     await this.ktx2Loader.detectSupportAsync(rendererManager.renderer);
     const promises = manifest.map((res) => this.getResource(res));
     await Promise.all(promises);
   }
 }
-
-export const assetManager = new AssetManager(loadingManager.manager);

@@ -1,15 +1,15 @@
 import { ACESFilmicToneMapping, PCFShadowMap } from "three";
 import { WebGPURenderer } from "three/webgpu";
-import MonitoringManager from "./MonitoringManager";
-import PostprocessingManager from "./PostprocessingManager";
-import { debugManager } from "./DebugManager";
-import { sceneManager } from "./SceneManager";
-import { eventsManager } from "./EventsManager";
+import { MonitoringManager } from "./MonitoringManager";
+import { PostprocessingManager } from "./PostprocessingManager";
+import { sceneManager } from "..";
+import { eventsManager } from "../EventsManager";
+import type { DebugManager } from "../DebugManager";
 
 const ENABLE_MONITORING = true;
 const ENABLE_DEBUGGING = true;
 
-class RendererManager {
+export class RendererManager {
   renderer: WebGPURenderer;
   canvas: HTMLCanvasElement;
   isWebGPU!: boolean;
@@ -22,7 +22,7 @@ class RendererManager {
   private readonly IS_DEBUGGING_ENABLED =
     import.meta.env.DEV && ENABLE_DEBUGGING;
 
-  constructor() {
+  constructor(debugManager: DebugManager) {
     const canvas = document.createElement("canvas");
     canvas.classList.add("revo-realms");
     document.body.appendChild(canvas);
@@ -58,7 +58,7 @@ class RendererManager {
   }
 
   async init() {
-    sceneManager.init();
+    sceneManager.init(this);
     this.isWebGPU = !!(await navigator.gpu?.requestAdapter());
     this.postprocessingManager = new PostprocessingManager(this.renderer);
     if (this.IS_MONITORING_ENABLED)
@@ -85,7 +85,7 @@ class RendererManager {
     // Consume last frame’s results now (they should be ready)
     this.prevFrame
       ?.then(() => {
-        this.monitoringManager.updateCustomPanels();
+        this.monitoringManager.updateCustomPanels(this);
         this.monitoringManager.stats.update();
       })
       .catch((err) => {
@@ -101,5 +101,3 @@ class RendererManager {
     else this.renderSceneAsync();
   }
 }
-
-export const rendererManager = new RendererManager();

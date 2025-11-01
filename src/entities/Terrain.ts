@@ -5,9 +5,7 @@ import {
   normalMap,
   positionWorld,
   remap,
-  rotateUV,
   smoothstep,
-  step,
   texture,
   time,
   uniform,
@@ -28,7 +26,6 @@ import {
   RedFormat,
   Vector3,
 } from "three/webgpu";
-import { assetManager } from "../systems/AssetManager/AssetManager";
 import { realmConfig } from "../realms/PortfolioRealm";
 import {
   ColliderDesc,
@@ -36,12 +33,15 @@ import {
   RigidBody,
   RigidBodyDesc,
 } from "@dimforge/rapier3d";
-import { physicsManager } from "../systems/PhysicsManager";
-import { State } from "../Game";
-import { sceneManager } from "../systems/SceneManager";
-import { debugManager } from "../systems/DebugManager";
+import { type State } from "../Game";
 import { eventsManager } from "../systems/EventsManager";
 import { tslUtils } from "../utils/TSLUtils";
+import {
+  assetManager,
+  debugManager,
+  sceneManager,
+  physicsManager,
+} from "../systems";
 
 const uniforms = {
   uGrassTerrainColor: uniform(new Color().setRGB(0.31, 0.25, 0.0)),

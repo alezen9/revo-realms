@@ -1,6 +1,6 @@
 import { LoadingManager as ThreeLoadingManager } from "three";
 
-class LoadingManager {
+export class LoadingManager {
   manager: ThreeLoadingManager;
   constructor() {
     this.manager = this.createLoadingManager();
@@ -48,5 +48,3 @@ class LoadingManager {
     return manager;
   }
 }
-
-export const loadingManager = new LoadingManager();

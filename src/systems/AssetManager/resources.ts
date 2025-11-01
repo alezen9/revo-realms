@@ -1,5 +1,5 @@
 import { CompressedTexture, CubeTexture, SRGBColorSpace, Texture } from "three";
-import { GLTF } from "three/addons/loaders/GLTFLoader.js";
+import { type GLTF } from "three/addons/loaders/GLTFLoader.js";
 // Model
 import realmModelUrl from "/models/realm.glb?url";
 // Environment

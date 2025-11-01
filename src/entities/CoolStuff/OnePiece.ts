@@ -1,6 +1,5 @@
 import { DoubleSide, Mesh } from "three";
-import { assetManager } from "../../systems/AssetManager/AssetManager";
-import { sceneManager } from "../../systems/SceneManager";
+import { assetManager, sceneManager } from "../../systems";
 import { MeshLambertNodeMaterial } from "three/webgpu";
 
 class PosterMaterial extends MeshLambertNodeMaterial {

@@ -1,7 +1,10 @@
-import { assetManager } from "./AssetManager/AssetManager";
-import { audioManager } from "./AudioManager";
-import { physicsManager } from "./PhysicsManager";
-import { rendererManager } from "./RendererManager";
+import {
+  assetManager,
+  audioManager,
+  physicsManager,
+  rendererManager,
+  uiManager,
+} from ".";
 
 export default class _SetupManager {
   constructor() {
@@ -11,8 +14,12 @@ export default class _SetupManager {
   }
 
   async initAsync() {
-    await Promise.all([physicsManager.initAsync(), assetManager.initAsync()]);
+    uiManager.init();
     await rendererManager.init();
+    await Promise.all([
+      physicsManager.initAsync(),
+      assetManager.initAsync(rendererManager),
+    ]);
     audioManager.initAsync(); // bg loading
   }
 }

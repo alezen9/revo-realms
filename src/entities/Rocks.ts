@@ -17,13 +17,11 @@ import {
   NormalMapNode,
   Vector2,
 } from "three/webgpu";
-import { assetManager } from "../systems/AssetManager/AssetManager";
 import { ColliderDesc, RigidBodyDesc } from "@dimforge/rapier3d";
-import { physicsManager } from "../systems/PhysicsManager";
-import { sceneManager } from "../systems/SceneManager";
-import { rendererManager } from "../systems/RendererManager";
+import { physicsManager, sceneManager } from "../systems";
 import { tslUtils } from "../utils/TSLUtils";
 import { RevoColliderType } from "../types";
+import { assetManager, rendererManager } from "../systems";
 
 const COUNT = 20; // Hardcoded, rocks are placed in blender and are less than 20
 

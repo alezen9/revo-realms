@@ -7,9 +7,8 @@ import {
   texture,
   time,
 } from "three/tsl";
-import { sceneManager } from "../../systems/SceneManager";
 import { MeshLambertNodeMaterial } from "three/webgpu";
-import { assetManager } from "../../systems/AssetManager/AssetManager";
+import { assetManager, sceneManager } from "../../systems";
 
 export class WaterLilies {
   constructor() {

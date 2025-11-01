@@ -1,6 +1,6 @@
 import { Pane } from "tweakpane";
 
-class DebugManager {
+export class DebugManager {
   panel: Pane;
 
   constructor() {
@@ -13,5 +13,3 @@ class DebugManager {
     this.panel.hidden = !visible;
   }
 }
-
-export const debugManager = new DebugManager();

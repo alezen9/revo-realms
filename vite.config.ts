@@ -4,7 +4,15 @@ import topLevelAwait from "vite-plugin-top-level-await";
 import { svelte } from "@sveltejs/vite-plugin-svelte";
 
 export default defineConfig({
-  plugins: [wasm(), topLevelAwait(), svelte()],
+  plugins: [
+    wasm(),
+    topLevelAwait(),
+    svelte({
+      compilerOptions: {
+        runes: true,
+      },
+    }),
+  ],
   base: "/",
   build: {
     target: "esnext",

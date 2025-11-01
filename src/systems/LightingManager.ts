@@ -7,10 +7,10 @@ import {
   Vector3,
 } from "three";
 import { Fn, texture, vec2 } from "three/tsl";
-import { debugManager } from "./DebugManager";
-import { sceneManager } from "./SceneManager";
 import { eventsManager } from "./EventsManager";
-import { assetManager } from "./AssetManager/AssetManager";
+import { assetManager } from ".";
+import type { SceneManager } from "./SceneManager";
+import type { DebugManager } from "./DebugManager";
 
 const config = {
   LIGHT_POSITION_OFFSET: new Vector3(10, 10, 10),
@@ -29,7 +29,7 @@ const config = {
   fogDensity: 0.0046, // Light
 };
 
-class LightingSystem {
+export class LightingManager {
   private directionalLight: DirectionalLight;
   // private ambientLight: AmbientLight;
   private hemisphereLight: HemisphereLight;
@@ -38,7 +38,7 @@ class LightingSystem {
 
   sunDirection = config.LIGHT_POSITION_OFFSET.clone().normalize().negate();
 
-  constructor() {
+  constructor(sceneManager: SceneManager, debugManager: DebugManager) {
     // this.emissive = new EmissiveIllumination();
 
     this.directionalLight = this.setupDirectionalLighting();
@@ -63,7 +63,7 @@ class LightingSystem {
         .add(config.LIGHT_POSITION_OFFSET);
     });
 
-    this.debugLight();
+    this.debugLight(debugManager);
   }
 
   get sunColor() {
@@ -126,7 +126,7 @@ class LightingSystem {
     return shadowAo.r;
   });
 
-  private debugLight() {
+  private debugLight(debugManager: DebugManager) {
     const lightFolder = debugManager.panel.addFolder({ title: "💡 Light" });
     lightFolder.expanded = false;
     lightFolder.addBinding(config.LIGHT_POSITION_OFFSET, "x", {
@@ -192,5 +192,3 @@ class LightingSystem {
     this.directionalLight.target = target;
   }
 }
-
-export const lighting = new LightingSystem();

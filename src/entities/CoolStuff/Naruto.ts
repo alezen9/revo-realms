@@ -1,10 +1,9 @@
 import { InstancedMesh, Mesh } from "three";
-import { assetManager } from "../../systems/AssetManager/AssetManager";
+import { assetManager } from "../../systems";
 import { MeshStandardNodeMaterial } from "three/webgpu";
 import { ColliderDesc, RigidBodyDesc } from "@dimforge/rapier3d";
 import { RevoColliderType } from "../../types";
-import { physicsManager } from "../../systems/PhysicsManager";
-import { sceneManager } from "../../systems/SceneManager";
+import { physicsManager, sceneManager } from "../../systems";
 import { texture, uniform, uv } from "three/tsl";
 
 class KunaiMaterial extends MeshStandardNodeMaterial {

@@ -1,9 +1,8 @@
-import { assetManager } from "../../systems/AssetManager/AssetManager";
+import { assetManager } from "../../systems";
 import { Color, Mesh } from "three";
-import { sceneManager } from "../../systems/SceneManager";
 import { MeshLambertNodeMaterial } from "three/webgpu";
 import { ColliderDesc, RigidBodyDesc } from "@dimforge/rapier3d";
-import { physicsManager } from "../../systems/PhysicsManager";
+import { physicsManager, sceneManager } from "../../systems";
 import { RevoColliderType } from "../../types";
 import { texture, uv } from "three/tsl";
 
