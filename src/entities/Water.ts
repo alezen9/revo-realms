@@ -1,7 +1,5 @@
 import { Color, Mesh, Vector2, Vector3 } from "three";
-import { sceneManager } from "../systems/SceneManager";
 import { MeshBasicNodeMaterial } from "three/webgpu";
-import { assetManager } from "../systems/AssetManager/AssetManager";
 import {
   cameraPosition,
   cameraProjectionMatrix,
@@ -28,48 +26,31 @@ import {
   viewportTexture,
 } from "three/tsl";
 import { eventsManager } from "../systems/EventsManager";
-import { debugManager } from "../systems/DebugManager";
-import { audioManager } from "../systems/AudioManager";
-import { lighting } from "../systems/LightingSystem";
 import { tslUtils } from "../utils/TSLUtils";
-import { rendererManager } from "../systems/RendererManager";
-import { systemState } from "../systems/SystemState/SystemState";
-
-const uniforms = {
-  uUvScale: uniform(2.7),
-  uNormalScale: uniform(0.05),
-  uRefractionStrength: uniform(0.1),
-  uFresnelScale: uniform(0.5),
-  uSpeed: uniform(0.1),
-  uNoiseScrollDir: uniform(new Vector2(0.1, 0)),
-  uShininess: uniform(500),
-  uMinDist: uniform(0),
-  uMaxDist: uniform(0),
-  uSunDir: uniform(lighting.sunDirection),
-  uSunColor: uniform(lighting.sunColor.clone()),
-  uTworld: uniform(new Vector3(1, 0, 0)),
-  uBworld: uniform(new Vector3(0, 0, -1)),
-  uNworld: uniform(new Vector3(0, 1, 0)),
-  uHighlightsGlow: uniform(4),
-  uHighlightFresnelInfluence: uniform(0.35),
-  uDepthDistance: uniform(20),
-  uAbsorptionRGB: uniform(new Vector3(0.35, 0.1, 0.08)), // absorption coeff per channel, red absorbs fastest -> pushes toward blue/green with depth
-  uInscatterTint: uniform(new Color(0.0, 0.09, 0.09)),
-  uInscatterStrength: uniform(0.85),
-  uAbsorptionScale: uniform(15),
-  uMinOpacity: uniform(0.5),
-  uIsWebGPU: uniform(1),
-  uHighlightsSpread: uniform(0.35),
-  uDepthOpacityScale: uniform(0.1),
-  uHighlightsDepthOpacityScale: uniform(0.05),
-};
+import {
+  assetManager,
+  audioManager,
+  lightingManager,
+  rendererManager,
+  debugManager,
+  sceneManager,
+  systemState,
+} from "../systems";
 
 export default class Water {
   constructor() {
     const water = assetManager.resources.worldModel.scene.getObjectByName(
       "water-lake",
     ) as Mesh;
-    water.material = new WaterMaterial();
+
+    const uniforms = {
+      uTworld: uniform(new Vector3(1, 0, 0)),
+      uBworld: uniform(new Vector3(0, 0, -1)),
+      uNworld: uniform(new Vector3(0, 1, 0)),
+      uIsWebGPU: uniform(1),
+    };
+
+    water.material = new WaterMaterial(uniforms);
     water.renderOrder = 100;
     uniforms.uTworld.value.transformDirection(water.matrixWorld).normalize();
     uniforms.uBworld.value.transformDirection(water.matrixWorld).normalize();
@@ -91,8 +72,37 @@ export default class Water {
 }
 
 class WaterMaterial extends MeshBasicNodeMaterial {
-  constructor() {
+  uniforms = {
+    uUvScale: uniform(2.7),
+    uNormalScale: uniform(0.05),
+    uRefractionStrength: uniform(0.1),
+    uFresnelScale: uniform(0.5),
+    uSpeed: uniform(0.1),
+    uNoiseScrollDir: uniform(new Vector2(0.1, 0)),
+    uShininess: uniform(500),
+    uMinDist: uniform(0),
+    uMaxDist: uniform(0),
+    uSunDir: uniform(lightingManager.sunDirection),
+    uSunColor: uniform(lightingManager.sunColor.clone()),
+    uTworld: uniform(new Vector3(1, 0, 0)),
+    uBworld: uniform(new Vector3(0, 0, -1)),
+    uNworld: uniform(new Vector3(0, 1, 0)),
+    uHighlightsGlow: uniform(4),
+    uHighlightFresnelInfluence: uniform(0.35),
+    uDepthDistance: uniform(20),
+    uAbsorptionRGB: uniform(new Vector3(0.35, 0.1, 0.08)), // absorption coeff per channel, red absorbs fastest -> pushes toward blue/green with depth
+    uInscatterTint: uniform(new Color(0.0, 0.09, 0.09)),
+    uInscatterStrength: uniform(0.85),
+    uAbsorptionScale: uniform(15),
+    uMinOpacity: uniform(0.5),
+    uIsWebGPU: uniform(1),
+    uHighlightsSpread: uniform(0.35),
+    uDepthOpacityScale: uniform(0.1),
+    uHighlightsDepthOpacityScale: uniform(0.05),
+  };
+  constructor(_uniforms = {}) {
     super();
+    this.uniforms = { ...this.uniforms, ..._uniforms };
     this.createMaterial();
     this.debugWater();
   }
@@ -108,13 +118,13 @@ class WaterMaterial extends MeshBasicNodeMaterial {
       expanded: true,
     });
 
-    waves.addBinding(uniforms.uSpeed, "value", {
+    waves.addBinding(this.uniforms.uSpeed, "value", {
       label: "Speed",
     });
-    waves.addBinding(uniforms.uNormalScale, "value", {
+    waves.addBinding(this.uniforms.uNormalScale, "value", {
       label: "Normal scale",
     });
-    waves.addBinding(uniforms.uUvScale, "value", {
+    waves.addBinding(this.uniforms.uUvScale, "value", {
       label: "UV scale",
     });
 
@@ -123,24 +133,24 @@ class WaterMaterial extends MeshBasicNodeMaterial {
       expanded: true,
     });
 
-    highlights.addBinding(uniforms.uShininess, "value", {
+    highlights.addBinding(this.uniforms.uShininess, "value", {
       label: "Shininess",
     });
-    highlights.addBinding(uniforms.uHighlightsGlow, "value", {
+    highlights.addBinding(this.uniforms.uHighlightsGlow, "value", {
       label: "Glow",
     });
-    highlights.addBinding(uniforms.uHighlightFresnelInfluence, "value", {
+    highlights.addBinding(this.uniforms.uHighlightFresnelInfluence, "value", {
       label: "Fresnel influence",
     });
-    highlights.addBinding(uniforms.uSunColor, "value", {
+    highlights.addBinding(this.uniforms.uSunColor, "value", {
       label: "Sun color",
       view: "color",
       color: { type: "float" },
     });
-    highlights.addBinding(uniforms.uHighlightsSpread, "value", {
+    highlights.addBinding(this.uniforms.uHighlightsSpread, "value", {
       label: "Highlights spread",
     });
-    highlights.addBinding(uniforms.uHighlightsDepthOpacityScale, "value", {
+    highlights.addBinding(this.uniforms.uHighlightsDepthOpacityScale, "value", {
       label: "Shoreline opacity",
       step: 0.001,
     });
@@ -149,10 +159,14 @@ class WaterMaterial extends MeshBasicNodeMaterial {
       title: "Reflections / Refraction",
       expanded: true,
     });
-    reflectionsAndRefraction.addBinding(uniforms.uRefractionStrength, "value", {
-      label: "Refraction strength",
-    });
-    reflectionsAndRefraction.addBinding(uniforms.uFresnelScale, "value", {
+    reflectionsAndRefraction.addBinding(
+      this.uniforms.uRefractionStrength,
+      "value",
+      {
+        label: "Refraction strength",
+      },
+    );
+    reflectionsAndRefraction.addBinding(this.uniforms.uFresnelScale, "value", {
       label: "Fresnel scale",
     });
 
@@ -160,18 +174,18 @@ class WaterMaterial extends MeshBasicNodeMaterial {
       title: "Beer-Lambert",
       expanded: true,
     });
-    beerLambert.addBinding(uniforms.uInscatterStrength, "value", {
+    beerLambert.addBinding(this.uniforms.uInscatterStrength, "value", {
       label: "Inscatter strength",
     });
-    beerLambert.addBinding(uniforms.uInscatterTint, "value", {
+    beerLambert.addBinding(this.uniforms.uInscatterTint, "value", {
       label: "Inscatter tint",
       view: "color",
       color: { type: "float" },
     });
-    beerLambert.addBinding(uniforms.uAbsorptionRGB, "value", {
+    beerLambert.addBinding(this.uniforms.uAbsorptionRGB, "value", {
       label: "Absorption coeff",
     });
-    beerLambert.addBinding(uniforms.uAbsorptionScale, "value", {
+    beerLambert.addBinding(this.uniforms.uAbsorptionScale, "value", {
       label: "Absorption scale",
     });
 
@@ -179,19 +193,19 @@ class WaterMaterial extends MeshBasicNodeMaterial {
       title: "General",
       expanded: true,
     });
-    general.addBinding(uniforms.uMinOpacity, "value", {
+    general.addBinding(this.uniforms.uMinOpacity, "value", {
       label: "Min opacity",
     });
-    general.addBinding(uniforms.uMinDist, "value", {
+    general.addBinding(this.uniforms.uMinDist, "value", {
       label: "Min opacity distance",
     });
-    general.addBinding(uniforms.uMaxDist, "value", {
+    general.addBinding(this.uniforms.uMaxDist, "value", {
       label: "Max opacity distance",
     });
-    general.addBinding(uniforms.uDepthDistance, "value", {
+    general.addBinding(this.uniforms.uDepthDistance, "value", {
       label: "Depth distance",
     });
-    general.addBinding(uniforms.uDepthOpacityScale, "value", {
+    general.addBinding(this.uniforms.uDepthOpacityScale, "value", {
       label: "Depth opacity scale",
     });
   }
@@ -200,30 +214,36 @@ class WaterMaterial extends MeshBasicNodeMaterial {
     this.precision = "lowp";
 
     // 0. normal
-    const speed = time.mul(uniforms.uSpeed);
-    const frequency = uniforms.uNoiseScrollDir.mul(speed);
-    const nUV1 = uv().add(frequency).mul(uniforms.uUvScale.mul(1.37)).fract();
+    const speed = time.mul(this.uniforms.uSpeed);
+    const frequency = this.uniforms.uNoiseScrollDir.mul(speed);
+    const nUV1 = uv()
+      .add(frequency)
+      .mul(this.uniforms.uUvScale.mul(1.37))
+      .fract();
     const tex1 = texture(assetManager.resources.normVeinWater, nUV1);
     const tsn1 = tex1.rgb.mul(2).sub(1).normalize();
-    const nUV2 = uv().sub(frequency).mul(uniforms.uUvScale.mul(0.73)).fract();
+    const nUV2 = uv()
+      .sub(frequency)
+      .mul(this.uniforms.uUvScale.mul(0.73))
+      .fract();
     const tex2 = texture(assetManager.resources.normVeinWater, nUV2);
     const tsn2 = tex2.rgb.mul(2).sub(1).normalize();
     const blendedTsn = tslUtils.blendRNM(tsn1, tsn2);
     const tsn = vec3(
-      blendedTsn.xy.mul(uniforms.uNormalScale),
+      blendedTsn.xy.mul(this.uniforms.uNormalScale),
       blendedTsn.z,
     ).normalize();
     const normal = tsn.x
-      .mul(uniforms.uTworld)
-      .add(tsn.y.mul(uniforms.uBworld))
-      .add(tsn.z.mul(uniforms.uNworld))
+      .mul(this.uniforms.uTworld)
+      .add(tsn.y.mul(this.uniforms.uBworld))
+      .add(tsn.z.mul(this.uniforms.uNworld))
       .normalize();
 
     // 1. depth
     const zNdc = viewportDepthTexture(screenUV).r;
-    const isWebGL = float(1).sub(uniforms.uIsWebGPU);
+    const isWebGL = float(1).sub(this.uniforms.uIsWebGPU);
     const webglZNdc = zNdc.mul(2).sub(1).mul(isWebGL);
-    const webgpuZNdc = zNdc.mul(uniforms.uIsWebGPU);
+    const webgpuZNdc = zNdc.mul(this.uniforms.uIsWebGPU);
     const zNdcCompatible = webglZNdc.add(webgpuZNdc);
     const p3z = cameraProjectionMatrix.element(3).element(2);
     const p2z = cameraProjectionMatrix.element(2).element(2);
@@ -231,25 +251,25 @@ class WaterMaterial extends MeshBasicNodeMaterial {
     const fragLinear = positionView.z.negate();
     const isUnderWater = step(fragLinear, zLinear);
     const fragmentDepth = zLinear.sub(fragLinear);
-    const waterDepth = fragmentDepth.div(uniforms.uDepthDistance).clamp();
+    const waterDepth = fragmentDepth.div(this.uniforms.uDepthDistance).clamp();
 
     // 2. refraction
     const distortionStrength = mix(
-      uniforms.uRefractionStrength,
-      uniforms.uRefractionStrength.mul(1.5),
+      this.uniforms.uRefractionStrength,
+      this.uniforms.uRefractionStrength.mul(1.5),
       waterDepth,
     );
     const distortion = tsn.xy.mul(distortionStrength); // tangent tilt, not outward, drives wobble
     const refractedScreenUv = screenUV.add(distortion.mul(isUnderWater));
     const zNdcRefr = viewportDepthTexture(refractedScreenUv).r;
     const webglZNdcRefr = zNdcRefr.mul(2).sub(1).mul(isWebGL);
-    const webgpuZNdcRefr = zNdcRefr.mul(uniforms.uIsWebGPU);
+    const webgpuZNdcRefr = zNdcRefr.mul(this.uniforms.uIsWebGPU);
     const zNdcCompatibleRefr = webglZNdcRefr.add(webgpuZNdcRefr);
     const zLinearRefr = p3z.div(zNdcCompatibleRefr.add(p2z));
     const isSafe = step(fragLinear, zLinearRefr);
     const fragmentDepthRefr = zLinearRefr.sub(fragLinear);
     const waterDepthRefr = fragmentDepthRefr
-      .div(uniforms.uDepthDistance)
+      .div(this.uniforms.uDepthDistance)
       .clamp();
     const safeScreenUv = mix(screenUV, refractedScreenUv, isSafe).clamp();
     const screenColor = viewportTexture(safeScreenUv).rgb;
@@ -273,40 +293,46 @@ class WaterMaterial extends MeshBasicNodeMaterial {
       .mul(grazingAngle)
       .mul(grazingAngle);
     const fresnelSchlick = F0.add(float(1).sub(F0).mul(grazingAnglePow5));
-    const fresnelWeight = fresnelSchlick.mul(uniforms.uFresnelScale).clamp();
+    const fresnelWeight = fresnelSchlick
+      .mul(this.uniforms.uFresnelScale)
+      .clamp();
 
     // 5. beer-lambert
-    const sigma = uniforms.uAbsorptionRGB.mul(uniforms.uAbsorptionScale);
+    const sigma = this.uniforms.uAbsorptionRGB.mul(
+      this.uniforms.uAbsorptionScale,
+    );
     const waterThickness = mix(waterDepth, waterDepthRefr, isSafe);
     const transmittance = exp(sigma.negate().mul(waterThickness));
-    const tintColor = uniforms.uInscatterTint.mul(uniforms.uInscatterStrength);
+    const tintColor = this.uniforms.uInscatterTint.mul(
+      this.uniforms.uInscatterStrength,
+    );
     const throughWater = mix(tintColor, screenColor, transmittance);
 
     // 6. surface highlights
     const tsnHighlights = vec3(
-      blendedTsn.xy.mul(uniforms.uHighlightsSpread),
+      blendedTsn.xy.mul(this.uniforms.uHighlightsSpread),
       blendedTsn.z,
     ).normalize();
     const normalHighlights = tsnHighlights.x
-      .mul(uniforms.uTworld)
-      .add(tsnHighlights.y.mul(uniforms.uBworld))
-      .add(tsnHighlights.z.mul(uniforms.uNworld))
+      .mul(this.uniforms.uTworld)
+      .add(tsnHighlights.y.mul(this.uniforms.uBworld))
+      .add(tsnHighlights.z.mul(this.uniforms.uNworld))
       .normalize();
-    const reflectedLight = reflect(uniforms.uSunDir, normalHighlights);
+    const reflectedLight = reflect(this.uniforms.uSunDir, normalHighlights);
     const align = max(dot(reflectedLight, viewDir), 0);
-    const spec = pow(align, uniforms.uShininess);
+    const spec = pow(align, this.uniforms.uShininess);
     const fresnelSpecBoost = mix(
       1,
       fresnelSchlick,
-      uniforms.uHighlightFresnelInfluence,
+      this.uniforms.uHighlightFresnelInfluence,
     );
     const highlightsDepthOpacity = smoothstep(
       0,
-      uniforms.uHighlightsDepthOpacityScale,
+      this.uniforms.uHighlightsDepthOpacityScale,
       waterThickness,
     );
-    const sunGlint = uniforms.uSunColor
-      .mul(spec.mul(uniforms.uHighlightsGlow).mul(fresnelSpecBoost))
+    const sunGlint = this.uniforms.uSunColor
+      .mul(spec.mul(this.uniforms.uHighlightsGlow).mul(fresnelSpecBoost))
       .mul(highlightsDepthOpacity);
 
     // 7. opacity
@@ -315,16 +341,16 @@ class WaterMaterial extends MeshBasicNodeMaterial {
       positionWorld.xz.sub(cameraPosition.xz),
     );
 
-    const min2 = uniforms.uMinDist.mul(uniforms.uMinDist);
-    const max2 = uniforms.uMaxDist.mul(uniforms.uMaxDist);
+    const min2 = this.uniforms.uMinDist.mul(this.uniforms.uMinDist);
+    const max2 = this.uniforms.uMaxDist.mul(this.uniforms.uMaxDist);
 
     const distOpacity = smoothstep(min2, max2, distanceXZSquared)
-      .add(uniforms.uMinOpacity)
+      .add(this.uniforms.uMinOpacity)
       .clamp();
 
     const depthOpacity = smoothstep(
       0,
-      uniforms.uDepthOpacityScale,
+      this.uniforms.uDepthOpacityScale,
       waterThickness,
     );
 

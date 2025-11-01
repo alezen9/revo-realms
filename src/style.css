@@ -21,7 +21,7 @@ body {
 #ui {
   position: fixed;
   top: 1rem;
-  right: 1rem;
+  right: 10rem;
   display: flex;
   gap: 1rem;
   z-index: 1;

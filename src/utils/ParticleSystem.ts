@@ -19,7 +19,6 @@ import {
   vec4,
 } from "three/tsl";
 import { eventsManager } from "../systems/EventsManager";
-import { rendererManager } from "../systems/RendererManager";
 import {
   AddEquation,
   CustomBlending,
@@ -29,8 +28,8 @@ import {
   PlaneGeometry,
   SpriteNodeMaterial,
 } from "three/webgpu";
-import { assetManager } from "../systems/AssetManager/AssetManager";
 import { isMeshVisible } from "./isMeshVisible";
+import { assetManager, rendererManager } from "../systems";
 
 type ParticleBuffer = ReturnType<typeof instancedArray>;
 

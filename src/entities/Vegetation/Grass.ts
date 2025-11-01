@@ -35,14 +35,16 @@ import {
   remap,
   fract,
 } from "three/tsl";
-import { assetManager } from "../../systems/AssetManager/AssetManager";
-import { debugManager } from "../../systems/DebugManager";
-import { rendererManager } from "../../systems/RendererManager";
-import { sceneManager } from "../../systems/SceneManager";
+import {
+  assetManager,
+  sceneManager,
+  rendererManager,
+  debugManager,
+} from "../../systems";
 import { eventsManager } from "../../systems/EventsManager";
 import { tslUtils } from "../../utils/TSLUtils";
 import { SpriteNodeMaterial } from "three/webgpu";
-import { systemState } from "../../systems/SystemState/SystemState";
+import { systemState } from "../../systems";
 
 const getConfig = () => {
   const BLADE_WIDTH = 0.125;

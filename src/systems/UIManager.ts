@@ -1,9 +1,9 @@
-import { audioManager } from "./AudioManager";
 import { eventsManager } from "./EventsManager";
 import UiRoot from "../ui/index.svelte";
 import { mount, unmount } from "svelte";
+import { audioManager } from ".";
 
-class UIManager {
+export class UIManager {
   constructor() {}
 
   init() {
@@ -96,5 +96,3 @@ class UIManager {
     element.classList.add("wind-icon-container-fade-out");
   }
 }
-
-export const uiManager = new UIManager();

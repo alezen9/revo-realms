@@ -1,10 +1,8 @@
 import { Mesh, MeshBasicMaterial } from "three";
-import { assetManager } from "../../systems/AssetManager/AssetManager";
-import { sceneManager } from "../../systems/SceneManager";
 import { ColliderDesc, RigidBodyDesc } from "@dimforge/rapier3d";
 import { RevoColliderType } from "../../types";
-import { physicsManager } from "../../systems/PhysicsManager";
 import ParticleSystem from "../../utils/ParticleSystem";
+import { assetManager, sceneManager, physicsManager } from "../../systems";
 
 export default class Campfire {
   constructor() {

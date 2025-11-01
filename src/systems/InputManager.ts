@@ -117,7 +117,7 @@ class JoystickManager {
 
 const joystickManager = new JoystickManager();
 
-class InputManager {
+export class InputManager {
   isForward(): boolean {
     return (
       keyboardManager.isKeyPressed("KeyW") ||
@@ -154,5 +154,3 @@ class InputManager {
     return keyboardManager.isKeyPressed("Space");
   }
 }
-
-export const inputManager = new InputManager();

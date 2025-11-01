@@ -25,13 +25,11 @@ import {
   Vector2,
   Vector3,
 } from "three/webgpu";
-import { assetManager } from "../../systems/AssetManager/AssetManager";
-import { rendererManager } from "../../systems/RendererManager";
-import { sceneManager } from "../../systems/SceneManager";
 import { eventsManager } from "../../systems/EventsManager";
-import { UniformType } from "../../types";
-import { State } from "../../Game";
+import { type UniformType } from "../../types";
+import { type State } from "../../Game";
 import { tslUtils } from "../../utils/TSLUtils";
+import { assetManager, rendererManager, sceneManager } from "../../systems";
 
 const getConfig = () => {
   const FLOWER_WIDTH = 0.5;

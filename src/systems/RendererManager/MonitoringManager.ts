@@ -1,12 +1,12 @@
 import Stats from "stats-gl";
-import { rendererManager } from "./RendererManager";
+import { type RendererManager } from "./RendererManager";
 
-export default class MonitoringManager {
+export class MonitoringManager {
   stats: Stats;
   private lastSecond = performance.now();
 
-  private drawCallsPanel: Stats.Panel;
-  private trianglesPanel: Stats.Panel;
+  private drawCallsPanel: ReturnType<typeof this.createNumberPanel>;
+  private trianglesPanel: ReturnType<typeof this.createNumberPanel>;
   constructor(enabled: boolean) {
     const stats = new Stats({
       trackGPU: true,
@@ -71,7 +71,7 @@ export default class MonitoringManager {
     return panel;
   }
 
-  updateCustomPanels() {
+  updateCustomPanels(rendererManager: RendererManager) {
     const now = performance.now();
     if (now - this.lastSecond < 1000) return;
     const { render } = rendererManager.renderer.info;

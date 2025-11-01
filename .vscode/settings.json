@@ -3,5 +3,10 @@
   "shader-validator.glsl.targetClient": "OpenGL450",
   "[svelte]": {
     "editor.defaultFormatter": "svelte.svelte-vscode"
-  }
+  },
+  "typescript.tsdk": "node_modules/typescript/lib",
+  "svelte.enable-ts-plugin": true,
+  "svelte.plugin.typescript.enable": true,
+
+  "typescript.preferences.preferTypeOnlyAutoImports": false
 }

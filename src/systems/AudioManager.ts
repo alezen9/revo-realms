@@ -5,16 +5,15 @@ import {
   LoadingManager,
   PositionalAudio,
 } from "three";
-import { sceneManager } from "./SceneManager";
-import { loadingManager } from "./LoadingManager";
 
 import ambientUrl from "/audio/ambient/ambient.mp3?url";
 import lakeUrl from "/audio/ambient/lake.mp3?url";
 import hitWoodUrl from "/audio/collisions/hitWood.mp3?url";
 import hitStoneUrl from "/audio/collisions/hitStone.mp3?url";
 import { eventsManager } from "./EventsManager";
+import { type SceneManager } from "./SceneManager";
 
-class AudioManager {
+export class AudioManager {
   // Loaders
   private audioLoader: AudioLoader;
   private audioListener: AudioListener;
@@ -29,7 +28,7 @@ class AudioManager {
   hitWood!: Audio;
   hitStone!: Audio;
 
-  constructor(manager: LoadingManager) {
+  constructor(manager: LoadingManager, sceneManager: SceneManager) {
     this.audioLoader = new AudioLoader(manager);
     this.audioListener = new AudioListener();
     sceneManager.playerCamera.add(this.audioListener);
@@ -91,5 +90,3 @@ class AudioManager {
     eventsManager.emit("audio-ready");
   }
 }
-
-export const audioManager = new AudioManager(loadingManager.manager);

@@ -1,10 +1,10 @@
 import { CameraHelper, PerspectiveCamera, Scene } from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-import { debugManager } from "./DebugManager";
-import { rendererManager } from "./RendererManager";
+import { debugManager } from ".";
+import { type RendererManager } from "./RendererManager/RendererManager";
 import { eventsManager } from "./EventsManager";
 
-class SceneManager {
+export class SceneManager {
   scene: Scene;
   playerCamera: PerspectiveCamera;
   renderCamera: PerspectiveCamera;
@@ -51,7 +51,7 @@ class SceneManager {
       });
   }
 
-  init() {
+  init(rendererManager: RendererManager) {
     if (!import.meta.env.DEV) return;
     const cameraHelper = new CameraHelper(this.playerCamera);
     cameraHelper.visible = false;
@@ -80,5 +80,3 @@ class SceneManager {
     if (this.controls?.enabled) this.controls.update();
   }
 }
-
-export const sceneManager = new SceneManager();

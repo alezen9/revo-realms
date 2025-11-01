@@ -4,21 +4,22 @@ import {
   RigidBody,
   RigidBodyDesc,
   Ray,
-  Vector,
+  type Vector,
   ActiveEvents,
 } from "@dimforge/rapier3d";
-import { inputManager } from "../systems/InputManager";
 import { type State } from "../Game";
 import { positionWorld, texture, uv, varying, vec3 } from "three/tsl";
 import { MeshLambertNodeMaterial } from "three/webgpu";
-import { assetManager } from "../systems/AssetManager/AssetManager";
 import { RevoColliderType } from "../types";
-import { physicsManager } from "../systems/PhysicsManager";
-import { sceneManager } from "../systems/SceneManager";
-import { lighting } from "../systems/LightingSystem";
+import { physicsManager, sceneManager } from "../systems";
 import { eventsManager } from "../systems/EventsManager";
 import { tslUtils } from "../utils/TSLUtils";
-import { debugManager } from "../systems/DebugManager";
+import {
+  assetManager,
+  lightingManager,
+  debugManager,
+  inputManager,
+} from "../systems";
 
 const getConfig = () => {
   const jumpImpulse = 75;
@@ -84,7 +85,7 @@ export default class Player {
     this.mesh = this.createCharacterMesh();
     sceneManager.scene.add(this.mesh);
 
-    lighting.setTarget(this.mesh);
+    lightingManager.setTarget(this.mesh);
 
     this.rigidBody = physicsManager.world.createRigidBody(
       this.createRigidBodyDesc(),
@@ -367,7 +368,7 @@ class PlayerMaterial extends MeshLambertNodeMaterial {
 
     const mapUv = tslUtils.computeMapUvByPosition(positionWorld.xz);
     const vMapUv = varying(mapUv);
-    const shadowFactor = lighting.getTerrainShadowFactor(vMapUv);
+    const shadowFactor = lightingManager.getTerrainShadowFactor(vMapUv);
     const baseColor = texture(assetManager.resources.footballDiffuse, uv()).mul(
       2.5,
     );

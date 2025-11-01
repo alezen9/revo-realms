@@ -1,5 +1,5 @@
 import { EventEmitter } from "tseep/lib/ee-safe";
-import { Sizes, State } from "../Game";
+import { type Sizes, type State } from "../Game";
 
 type UpdateEvent = (state: State) => void;
 type ResizeEvent = (sizes: Sizes) => void;

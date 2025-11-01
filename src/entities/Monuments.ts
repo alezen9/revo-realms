@@ -6,13 +6,15 @@ import {
   MeshLambertNodeMaterial,
   NormalMapNode,
 } from "three/webgpu";
-import { RevoColliderType, UniformType } from "../types";
-import { assetManager } from "../systems/AssetManager/AssetManager";
+import { RevoColliderType, type UniformType } from "../types";
 import { ColliderDesc, RigidBodyDesc } from "@dimforge/rapier3d";
-import { physicsManager } from "../systems/PhysicsManager";
-import { sceneManager } from "../systems/SceneManager";
-import { debugManager } from "../systems/DebugManager";
 import { tslUtils } from "../utils/TSLUtils";
+import {
+  assetManager,
+  debugManager,
+  physicsManager,
+  sceneManager,
+} from "../systems";
 
 type StoneMaterialUniforms = {
   uBaseColor: UniformType<Color>;

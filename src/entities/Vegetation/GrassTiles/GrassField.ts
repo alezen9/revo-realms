@@ -12,7 +12,6 @@ import {
   Vector2,
   Vector3,
 } from "three";
-import { sceneManager } from "../../../systems/SceneManager";
 import {
   float,
   floor,
@@ -46,10 +45,13 @@ import {
 } from "three/tsl";
 import { eventsManager } from "../../../systems/EventsManager";
 import { SpriteNodeMaterial } from "three/webgpu";
-import { assetManager } from "../../../systems/AssetManager/AssetManager";
 import { tslUtils } from "../../../utils/TSLUtils";
-import { rendererManager } from "../../../systems/RendererManager";
-import { systemState } from "../../../systems/SystemState/SystemState";
+import {
+  assetManager,
+  rendererManager,
+  sceneManager,
+  systemState,
+} from "../../../systems";
 
 const getConfig = () => {
   const BLADE_WIDTH = 0.1;

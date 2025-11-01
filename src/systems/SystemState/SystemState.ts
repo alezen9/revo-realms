@@ -1,12 +1,10 @@
-import { debugManager } from "../DebugManager";
+import { type DebugManager } from "../DebugManager";
 import { WindStateTsushima } from "./WindStateTsushima";
 
-class SystemState {
+export class SystemState {
   readonly wind: WindStateTsushima;
-  constructor() {
+  constructor(debugManager: DebugManager) {
     const folder = debugManager.panel.addFolder({ title: "🧠 State" });
     this.wind = new WindStateTsushima(folder);
   }
 }
-
-export const systemState = new SystemState();

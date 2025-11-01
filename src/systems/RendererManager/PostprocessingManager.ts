@@ -1,11 +1,10 @@
 import { PostProcessing, WebGPURenderer } from "three/webgpu";
 import { pass, renderOutput } from "three/tsl";
-import { sceneManager } from "./SceneManager";
-import { eventsManager } from "./EventsManager";
+import { eventsManager } from "../EventsManager";
 import { bloom } from "three/addons/tsl/display/BloomNode.js";
-import { debugManager } from "./DebugManager";
+import { debugManager, sceneManager } from "..";
 
-export default class PostprocessingManager extends PostProcessing {
+export class PostprocessingManager extends PostProcessing {
   private scenePass: ReturnType<typeof pass>;
   private debugFolder = debugManager.panel.addFolder({
     title: "⭐️ Postprocessing",

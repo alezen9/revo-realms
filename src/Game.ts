@@ -1,13 +1,15 @@
 import { Clock } from "three";
 import Player from "./entities/Player";
 import PortfolioRealm from "./realms/PortfolioRealm";
-import { sceneManager } from "./systems/SceneManager";
-import { physicsManager } from "./systems/PhysicsManager";
-import { rendererManager } from "./systems/RendererManager";
 import { eventsManager } from "./systems/EventsManager";
 import { debounce } from "lodash-es";
-import { debugManager } from "./systems/DebugManager";
 import { getRefreshRate } from "./utils/getRefreshRate";
+import {
+  debugManager,
+  physicsManager,
+  rendererManager,
+  sceneManager,
+} from "./systems";
 
 export type State = {
   delta: number;

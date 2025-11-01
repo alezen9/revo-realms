@@ -1,10 +1,13 @@
 {
+  "extends": ["@tsconfig/svelte/tsconfig.json"],
   "compilerOptions": {
     "target": "ESNext",
     "useDefineForClassFields": true,
     "module": "ESNext",
     "lib": ["ESNext", "DOM", "DOM.Iterable"],
     "skipLibCheck": true,
+
+    "noImplicitAny": false,
 
     /* Bundler mode */
     "moduleResolution": "bundler",
@@ -15,10 +18,12 @@
 
     /* Linting */
     "strict": true,
-    "noUnusedLocals": true,
+    "noUnusedLocals": false,
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
-    "noUncheckedSideEffectImports": true
+    "noUncheckedSideEffectImports": true,
+
+    "types": ["svelte"]
   },
-  "include": ["src", "types", "svelte"]
+  "include": ["src/**/*.ts", "src/**/*.svelte", "src/**/*.d.ts", "types"]
 }

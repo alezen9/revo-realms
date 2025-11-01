@@ -3,7 +3,7 @@ import { eventsManager } from "../EventsManager";
 import { atan2, positionLocal, rotate, uniform, vec3 } from "three/tsl";
 import { FolderApi } from "tweakpane";
 import { MeshLambertNodeMaterial } from "three/webgpu";
-import { sceneManager } from "../SceneManager";
+import { sceneManager } from "..";
 
 type WindTarget = {
   id: string;
