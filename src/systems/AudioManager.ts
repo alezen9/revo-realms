@@ -34,7 +34,7 @@ export class AudioManager {
       const percentage = Math.ceil((100 / itemsTotal) * itemsLoaded);
       eventsManager.emit(
         "engine-loading-audio-progress",
-        Math.min(percentage, 100),
+        Math.min(percentage, 99),
       );
     };
     this.audioLoader = new AudioLoader(manager);
@@ -94,5 +94,6 @@ export class AudioManager {
     this.hitStone = this.newAudio(res[3], 0, false);
 
     this.isReady = true;
+    eventsManager.emit("engine-loading-audio-progress", 100);
   }
 }
