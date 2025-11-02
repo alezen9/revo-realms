@@ -18,7 +18,6 @@ import {
   vec3,
   vec4,
 } from "three/tsl";
-import { eventsManager } from "../systems/EventsManager";
 import {
   AddEquation,
   CustomBlending,
@@ -29,7 +28,7 @@ import {
   SpriteNodeMaterial,
 } from "three/webgpu";
 import { isMeshVisible } from "./isMeshVisible";
-import { assetManager, rendererManager } from "../systems";
+import { assetManager, rendererManager, eventsManager } from "../systems";
 
 type ParticleBuffer = ReturnType<typeof instancedArray>;
 
@@ -107,7 +106,7 @@ export default class ParticleSystem extends InstancedMesh {
       });
     }
 
-    eventsManager.on("update", () => {
+    eventsManager.on("engine-update", () => {
       if (!isMeshVisible(this)) return;
       rendererManager.renderer.computeAsync(computeUpdate);
     });

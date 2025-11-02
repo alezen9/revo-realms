@@ -43,7 +43,6 @@ import {
   PI2,
   fract,
 } from "three/tsl";
-import { eventsManager } from "../../../systems/EventsManager";
 import { SpriteNodeMaterial } from "three/webgpu";
 import { tslUtils } from "../../../utils/TSLUtils";
 import {
@@ -51,6 +50,7 @@ import {
   rendererManager,
   sceneManager,
   systemState,
+  eventsManager,
 } from "../../../systems";
 
 const getConfig = () => {
@@ -580,7 +580,7 @@ export default class GrassTiles {
     ];
     this.group = this.createGrid(material, geometries);
     sceneManager.scene.add(this.group);
-    eventsManager.on("update-throttle-4x", ({ player }) => {
+    eventsManager.on("engine-update-throttle-4x", ({ player }) => {
       rendererManager.renderer.computeAsync(ssbo.computeUpdate);
 
       const dx = player.position.x - this.group.position.x;

@@ -34,13 +34,13 @@ import {
   RigidBodyDesc,
 } from "@dimforge/rapier3d";
 import { type State } from "../Game";
-import { eventsManager } from "../systems/EventsManager";
 import { tslUtils } from "../utils/TSLUtils";
 import {
   assetManager,
   debugManager,
   sceneManager,
   physicsManager,
+  eventsManager,
 } from "../systems";
 
 const uniforms = {
@@ -327,7 +327,7 @@ class OuterTerrain {
     this.kintoun = this.createKintoun();
     sceneManager.scene.add(this.outerFloor);
 
-    eventsManager.on("update", this.update.bind(this));
+    eventsManager.on("engine-update", this.update.bind(this));
   }
 
   private createOuterFloorVisual() {

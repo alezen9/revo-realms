@@ -1,5 +1,5 @@
 import nipplejs from "nipplejs";
-import { eventsManager } from "./EventsManager";
+import { eventsManager } from ".";
 
 class KeyboardManager {
   private keysPressed = new Set<string>();

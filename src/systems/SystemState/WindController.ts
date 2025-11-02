@@ -1,7 +1,7 @@
 import { Vector2, Vector3 } from "three";
 import { uniform } from "three/tsl";
 import { FolderApi } from "tweakpane";
-import { eventsManager } from "../EventsManager";
+import { eventsManager } from "..";
 
 /** Bind these in your materials. */
 const windUniforms = {
@@ -52,7 +52,7 @@ export class WindController {
   constructor(folder: FolderApi) {
     windUniforms.uIntensity.value = clamp(config.ambientIntensity);
 
-    eventsManager.on("update-throttle-4x", ({ delta, player }) => {
+    eventsManager.on("engine-update-throttle-4x", ({ delta, player }) => {
       this.update(delta, player.position);
     });
 

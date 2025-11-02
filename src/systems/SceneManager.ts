@@ -2,7 +2,7 @@ import { CameraHelper, PerspectiveCamera, Scene } from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { debugManager } from ".";
 import { type RendererManager } from "./RendererManager/RendererManager";
-import { eventsManager } from "./EventsManager";
+import { type EventsManager } from "./EventsManager";
 
 export class SceneManager {
   scene: Scene;
@@ -12,7 +12,7 @@ export class SceneManager {
   private controls?: OrbitControls;
   private orbitControlsCamera?: PerspectiveCamera;
 
-  constructor() {
+  constructor(eventsManager: EventsManager) {
     // Scene
     const scene = new Scene();
     this.scene = scene;
@@ -30,13 +30,16 @@ export class SceneManager {
     // Default render camera
     this.renderCamera = camera;
 
-    eventsManager.on("resize", (sizes) => {
+    eventsManager.on("engine-render-target-resize", (sizes) => {
       this.playerCamera.aspect = sizes.aspect;
       this.playerCamera.updateProjectionMatrix();
     });
+
+    // Debug
+    this.debugScene(eventsManager);
   }
 
-  private debugScene() {
+  private debugScene(eventsManager: EventsManager) {
     if (!this.controls) return;
     const folder = debugManager.panel.addFolder({ title: "🎥 View", index: 0 });
     folder
@@ -47,7 +50,7 @@ export class SceneManager {
           ? this.orbitControlsCamera
           : this.playerCamera;
         this.cameraHelper.visible = isEnabled;
-        eventsManager.emit("camera-changed");
+        eventsManager.emit("engine-camera-change");
       });
   }
 
@@ -71,9 +74,6 @@ export class SceneManager {
     controls.maxPolarAngle = Math.PI / 2.05;
     controls.enabled = false;
     this.controls = controls;
-
-    // Debug
-    this.debugScene();
   }
 
   update() {

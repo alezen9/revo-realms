@@ -10,7 +10,7 @@ import ambientUrl from "/audio/ambient/ambient.mp3?url";
 import lakeUrl from "/audio/ambient/lake.mp3?url";
 import hitWoodUrl from "/audio/collisions/hitWood.mp3?url";
 import hitStoneUrl from "/audio/collisions/hitStone.mp3?url";
-import { eventsManager } from "./EventsManager";
+import { eventsManager } from ".";
 import { type SceneManager } from "./SceneManager";
 
 export class AudioManager {

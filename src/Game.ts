@@ -1,7 +1,6 @@
 import { Clock } from "three";
 import Player from "./entities/Player";
 import PortfolioRealm from "./realms/PortfolioRealm";
-import { eventsManager } from "./systems/EventsManager";
 import { debounce } from "lodash-es";
 import { getRefreshRate } from "./utils/getRefreshRate";
 import {
@@ -9,6 +8,7 @@ import {
   physicsManager,
   rendererManager,
   sceneManager,
+  eventsManager,
 } from "./systems";
 
 export type State = {
@@ -66,7 +66,7 @@ export default class Game {
 
   private onResize() {
     const sizes = this.getSizes();
-    eventsManager.emit("resize", sizes);
+    eventsManager.emit("engine-render-target-resize", sizes);
     this.updateRefreshRate();
   }
 
@@ -86,7 +86,7 @@ export default class Game {
       if (flip || !this.config.halvenFPS) {
         if (import.meta.env.DEV) sceneManager.update();
         state.delta = clock.getDelta();
-        eventsManager.emit("update", state);
+        eventsManager.emit("engine-update", state);
         rendererManager.renderAsync();
       }
     };

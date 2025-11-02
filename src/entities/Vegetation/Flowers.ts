@@ -25,11 +25,15 @@ import {
   Vector2,
   Vector3,
 } from "three/webgpu";
-import { eventsManager } from "../../systems/EventsManager";
 import { type UniformType } from "../../types";
 import { type State } from "../../Game";
 import { tslUtils } from "../../utils/TSLUtils";
-import { assetManager, rendererManager, sceneManager } from "../../systems";
+import {
+  assetManager,
+  rendererManager,
+  sceneManager,
+  eventsManager,
+} from "../../systems";
 
 const getConfig = () => {
   const FLOWER_WIDTH = 0.5;
@@ -67,7 +71,7 @@ export default class Flowers {
       flowersConfig.COUNT,
     );
     sceneManager.scene.add(this.flowerField);
-    eventsManager.on("update", this.updateAsync.bind(this));
+    eventsManager.on("engine-update", this.updateAsync.bind(this));
   }
 
   private async updateAsync(state: State) {

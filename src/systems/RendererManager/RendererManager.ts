@@ -3,8 +3,8 @@ import { WebGPURenderer } from "three/webgpu";
 import { MonitoringManager } from "./MonitoringManager";
 import { PostprocessingManager } from "./PostprocessingManager";
 import { sceneManager } from "..";
-import { eventsManager } from "../EventsManager";
-import type { DebugManager } from "../DebugManager";
+import { type DebugManager } from "../DebugManager";
+import { type EventsManager } from "../EventsManager";
 
 const ENABLE_MONITORING = true;
 const ENABLE_DEBUGGING = true;
@@ -22,7 +22,7 @@ export class RendererManager {
   private readonly IS_DEBUGGING_ENABLED =
     import.meta.env.DEV && ENABLE_DEBUGGING;
 
-  constructor(debugManager: DebugManager) {
+  constructor(debugManager: DebugManager, eventsManager: EventsManager) {
     const canvas = document.createElement("canvas");
     canvas.classList.add("revo-realms");
     document.body.appendChild(canvas);
@@ -46,7 +46,7 @@ export class RendererManager {
     this.monitoringManager = new MonitoringManager(this.IS_MONITORING_ENABLED);
     debugManager.setVisibility(this.IS_DEBUGGING_ENABLED);
 
-    eventsManager.on("resize", (sizes) => {
+    eventsManager.on("engine-render-target-resize", (sizes) => {
       // reduce dpr to 85% if postprocessing enabled, min dpr = 1
       const dpr = Math.max(
         this.IS_POSTPROCESSING_ENABLED ? sizes.dpr * 0.85 : sizes.dpr,

@@ -41,10 +41,9 @@ import {
   rendererManager,
   debugManager,
 } from "../../systems";
-import { eventsManager } from "../../systems/EventsManager";
 import { tslUtils } from "../../utils/TSLUtils";
 import { SpriteNodeMaterial } from "three/webgpu";
-import { systemState } from "../../systems";
+import { systemState, eventsManager } from "../../systems";
 
 const getConfig = () => {
   const BLADE_WIDTH = 0.125;
@@ -577,7 +576,7 @@ export default class Grass {
     grass.frustumCulled = false;
     sceneManager.scene.add(grass);
 
-    eventsManager.on("update-throttle-2x", ({ player }) => {
+    eventsManager.on("engine-update-throttle-2x", ({ player }) => {
       const dx = player.position.x - grass.position.x;
       const dz = player.position.z - grass.position.z;
       uniforms.uPlayerDeltaXZ.value.set(dx, dz);
