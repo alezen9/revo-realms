@@ -18,6 +18,7 @@ import {
 } from "./resources";
 import { KTX2Loader } from "three/addons/loaders/KTX2Loader.js";
 import { type RendererManager } from "../RendererManager/RendererManager";
+import { eventsManager } from "..";
 
 type InternalResources = {
   terrainHeightMap: DataTexture;
@@ -39,7 +40,16 @@ export class AssetManager {
     terrainHeightMap: new DataTexture(), // placeholder
   } as Resources;
 
-  constructor(manager: LoadingManager) {
+  constructor() {
+    const manager = new LoadingManager();
+    manager.onProgress = (_, itemsLoaded, itemsTotal) => {
+      const percentage = Math.ceil((100 / itemsTotal) * itemsLoaded);
+      eventsManager.emit(
+        "engine-loading-resources-progress",
+        Math.min(percentage, 100),
+      );
+    };
+
     // Texture
     this.textureLoader = new TextureLoader(manager);
 

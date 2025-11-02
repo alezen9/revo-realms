@@ -1,9 +1,9 @@
 import {
   assetManager,
   audioManager,
+  eventsManager,
   physicsManager,
   rendererManager,
-  uiManager,
 } from ".";
 
 export default class _SetupManager {
@@ -14,12 +14,13 @@ export default class _SetupManager {
   }
 
   async initAsync() {
-    uiManager.init();
+    eventsManager.emit("engine-loading-core-progress", 0);
     await rendererManager.init();
     await Promise.all([
       physicsManager.initAsync(),
       assetManager.initAsync(rendererManager),
     ]);
+    eventsManager.emit("engine-loading-core-progress", 100);
     audioManager.initAsync(); // bg loading
   }
 }

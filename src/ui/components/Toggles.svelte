@@ -25,8 +25,8 @@
 	}
 
 	onMount(() => {
-		eventsManager.on("audio-ready", () => {
-			isAudioReady = true
+		eventsManager.on("engine-loading-audio-progress", p => {
+			isAudioReady = p === 100
 		})
 	})
 </script>
