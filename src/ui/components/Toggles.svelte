@@ -1,18 +1,38 @@
 <script lang="ts">
+	import { onMount } from "svelte"
 	import Button from "./Button.svelte"
+	import { audioManager, eventsManager } from "../../systems"
+	import CreditsDialog from "./CreditsDialog.svelte"
 
 	let isAudioActive = $state(false)
 	let isAudioReady = $state(false)
+	let isCreditsDialogOpen = $state(false)
 
-	const onShowCredits = () => {}
-
-	const onToggleAudio = () => {
-		isAudioActive = !isAudioActive
+	const onCreditsClick = (e: MouseEvent) => {
+		e.stopPropagation()
+		isCreditsDialogOpen = !isCreditsDialogOpen
 	}
+
+	const onAudioToggle = async (e: MouseEvent) => {
+		e.stopPropagation()
+		isAudioActive = !isAudioActive
+		await audioManager.toggleMute()
+	}
+
+	const onDialogClick = (e: MouseEvent) => {
+		e.stopPropagation()
+		isCreditsDialogOpen = (e.target as HTMLElement).tagName !== "DIALOG"
+	}
+
+	onMount(() => {
+		eventsManager.on("audio-ready", () => {
+			isAudioReady = true
+		})
+	})
 </script>
 
 <div class="toggles">
-	<Button title="Show credits">
+	<Button title="Show credits" onclick={onCreditsClick}>
 		<svg
 			viewBox="0 0 24 24"
 			height="1em"
@@ -33,8 +53,9 @@
 		</svg>
 	</Button>
 	<Button
-		onclick={onToggleAudio}
+		onclick={onAudioToggle}
 		title={isAudioActive ? "Mute" : "Turn audio ON"}
+		disabled={!isAudioReady}
 	>
 		<svg
 			fill="currentColor"
@@ -57,6 +78,7 @@
 			{/if}
 		</svg>
 	</Button>
+	<CreditsDialog isShown={isCreditsDialogOpen} onclick={onDialogClick} />
 </div>
 
 <style>
