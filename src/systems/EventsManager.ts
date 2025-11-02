@@ -13,19 +13,23 @@ type EngineEvents = {
   "engine-update": UpdateEvent;
   "engine-camera-change": VoidFunction;
   "engine-render-target-resize": ResizeEvent;
+  "engine-loading-resources-progress": (percentage: number) => void;
+  "engine-loading-audio-progress": (percentage: number) => void;
+  "engine-loading-core-progress": (percentage: number) => void;
 } & ThrottledEvents;
-
-type AudioEvents = {
-  "audio-ready": VoidFunction;
-};
 
 type InputEvents = {
   "swipe-up": VoidFunction;
 };
 
+type GameEvents = {
+  "game-wind-start": VoidFunction;
+  "game-wind-end": VoidFunction;
+};
+
 type Events = EngineEvents &
-  AudioEvents &
-  InputEvents & {
+  InputEvents &
+  GameEvents & {
     "blow-wind": VoidFunction;
   };
 

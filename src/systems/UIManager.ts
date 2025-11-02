@@ -2,9 +2,7 @@ import UiRoot from "../ui/index.svelte";
 import { mount, unmount } from "svelte";
 
 export class UIManager {
-  constructor() {}
-
-  init() {
+  constructor() {
     this.mountSvelte();
   }
 
@@ -13,25 +11,5 @@ export class UIManager {
     import.meta.hot?.dispose(() => {
       unmount(ui);
     });
-  }
-
-  fadeInWindIcon() {
-    const element = document.getElementById("wind-icon");
-    if (!element) return;
-    element.classList.remove(
-      "wind-icon-container-fade-out",
-      "wind-icon-container-fade-in",
-    );
-    element.classList.add("wind-icon-container-fade-in");
-  }
-
-  fadeOutWindIcon() {
-    const element = document.getElementById("wind-icon");
-    if (!element) return;
-    element.classList.remove(
-      "wind-icon-container-fade-out",
-      "wind-icon-container-fade-in",
-    );
-    element.classList.add("wind-icon-container-fade-out");
   }
 }

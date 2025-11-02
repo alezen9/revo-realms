@@ -65,8 +65,8 @@ export default class Water {
 
     systemState.wind.registerTarget("Lake", water.position, 90);
 
-    eventsManager.on("audio-ready", () => {
-      water.add(audioManager.lake);
+    eventsManager.on("engine-loading-audio-progress", (p) => {
+      if (p === 100) water.add(audioManager.lake);
     });
   }
 }

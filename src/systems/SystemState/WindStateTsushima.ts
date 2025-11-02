@@ -2,7 +2,7 @@ import { ConeGeometry, Mesh, Vector2, Vector3 } from "three";
 import { atan, positionLocal, rotate, uniform, vec3 } from "three/tsl";
 import { FolderApi } from "tweakpane";
 import { MeshLambertNodeMaterial } from "three/webgpu";
-import { sceneManager, uiManager } from "..";
+import { eventsManager, sceneManager, uiManager } from "..";
 import { type State } from "../../Game";
 import type { EventsManager } from "../EventsManager";
 
@@ -13,7 +13,7 @@ type WindTarget = {
   radiusSq: number;
 };
 
-type Phase = "idle" | "direction" | "ramp" | "hold" | "decay";
+type Phase = "idle" | "direction" | "start" | "ramp" | "hold" | "end" | "decay";
 
 const ENABLE_DEBUGGING = false;
 
@@ -43,10 +43,7 @@ export class WindStateTsushima {
   private playerPositionXZ = new Vector2(0, 0);
   private toTargetDir = new Vector2(0, 0);
 
-  private iconFadeoutTimerId?: number;
-
   private HOLD_INTENSITY_TIME_S = 3;
-  private SWIPING_IDLE_TIME_MS = this.HOLD_INTENSITY_TIME_S * 1000 + 3000;
   private accTimer = 0;
 
   constructor(folder: FolderApi, eventsManager: EventsManager) {
@@ -64,12 +61,6 @@ export class WindStateTsushima {
   private handleSwipeUp() {
     if (!this.target || this.phase !== "idle") return;
     this.phase = "direction";
-    uiManager.fadeInWindIcon();
-    clearTimeout(this.iconFadeoutTimerId);
-    this.iconFadeoutTimerId = setTimeout(() => {
-      uiManager.fadeOutWindIcon();
-      clearTimeout(this.iconFadeoutTimerId);
-    }, this.SWIPING_IDLE_TIME_MS - 1000);
   }
 
   private directionPhase(player: State["player"]) {
@@ -86,14 +77,7 @@ export class WindStateTsushima {
     const invLen = 1 / Math.sqrt(lenSq);
     this.toTargetDir.multiplyScalar(invLen);
     this.uDirection.value.copy(this.toTargetDir);
-    this.phase = "ramp";
-  }
-
-  private holdPhase(delta: number) {
-    this.accTimer += delta;
-    if (this.accTimer < this.HOLD_INTENSITY_TIME_S) return;
-    this.phase = "decay";
-    this.accTimer = 0;
+    this.phase = "start";
   }
 
   private rampPhase(delta: number) {
@@ -105,6 +89,13 @@ export class WindStateTsushima {
     if (this._uIntensity.value === this.MAX_INTENSITY) this.phase = "hold";
   }
 
+  private holdPhase(delta: number) {
+    this.accTimer += delta;
+    if (this.accTimer < this.HOLD_INTENSITY_TIME_S) return;
+    this.phase = "end";
+    this.accTimer = 0;
+  }
+
   private decayPhase(delta: number) {
     this._uIntensity.value -= delta * this.DECAY_RATE;
     this._uIntensity.value = Math.max(
@@ -114,11 +105,23 @@ export class WindStateTsushima {
     if (this._uIntensity.value === this.AMBIENT_INTENSITY) this.phase = "idle";
   }
 
+  private startPhase() {
+    eventsManager.emit("game-wind-start");
+    this.phase = "ramp";
+  }
+
+  private endPhase() {
+    eventsManager.emit("game-wind-end");
+    this.phase = "decay";
+  }
+
   private handleWindBlowing({ player, delta }: State) {
     if (!this.target) return;
     if (this.phase === "direction") return this.directionPhase(player);
+    if (this.phase === "start") return this.startPhase();
     if (this.phase === "ramp") return this.rampPhase(delta);
     if (this.phase === "hold") return this.holdPhase(delta);
+    if (this.phase === "end") return this.endPhase();
     if (this.phase === "decay") return this.decayPhase(delta);
   }
 

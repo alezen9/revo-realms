@@ -28,7 +28,15 @@ export class AudioManager {
   hitWood!: Audio;
   hitStone!: Audio;
 
-  constructor(manager: LoadingManager, sceneManager: SceneManager) {
+  constructor(sceneManager: SceneManager) {
+    const manager = new LoadingManager();
+    manager.onProgress = (_, itemsLoaded, itemsTotal) => {
+      const percentage = Math.ceil((100 / itemsTotal) * itemsLoaded);
+      eventsManager.emit(
+        "engine-loading-audio-progress",
+        Math.min(percentage, 100),
+      );
+    };
     this.audioLoader = new AudioLoader(manager);
     this.audioListener = new AudioListener();
     sceneManager.playerCamera.add(this.audioListener);
@@ -86,7 +94,5 @@ export class AudioManager {
     this.hitStone = this.newAudio(res[3], 0, false);
 
     this.isReady = true;
-
-    eventsManager.emit("audio-ready");
   }
 }
