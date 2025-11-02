@@ -1,10 +1,10 @@
 import { ConeGeometry, Mesh, Vector2, Vector3 } from "three";
-import { eventsManager } from "../EventsManager";
 import { atan, positionLocal, rotate, uniform, vec3 } from "three/tsl";
 import { FolderApi } from "tweakpane";
 import { MeshLambertNodeMaterial } from "three/webgpu";
 import { sceneManager, uiManager } from "..";
 import { type State } from "../../Game";
+import type { EventsManager } from "../EventsManager";
 
 type WindTarget = {
   id: string;
@@ -49,13 +49,16 @@ export class WindStateTsushima {
   private SWIPING_IDLE_TIME_MS = this.HOLD_INTENSITY_TIME_S * 1000 + 3000;
   private accTimer = 0;
 
-  constructor(folder: FolderApi) {
+  constructor(folder: FolderApi, eventsManager: EventsManager) {
     this.folder = folder.addFolder({ title: "Wind" });
 
-    this.IS_DEBUGGING_ENABLED && this.debug();
+    this.IS_DEBUGGING_ENABLED && this.debug(eventsManager);
 
     eventsManager.on("swipe-up", this.handleSwipeUp.bind(this));
-    eventsManager.on("update-throttle-4x", this.handleWindBlowing.bind(this));
+    eventsManager.on(
+      "engine-update-throttle-4x",
+      this.handleWindBlowing.bind(this),
+    );
   }
 
   private handleSwipeUp() {
@@ -119,7 +122,7 @@ export class WindStateTsushima {
     if (this.phase === "decay") return this.decayPhase(delta);
   }
 
-  private debug() {
+  private debug(eventsManager: EventsManager) {
     const material = new MeshLambertNodeMaterial();
     material.colorNode = vec3(this._uIntensity);
     const angle = atan(this._uDirection.x, this._uDirection.y.negate());
@@ -130,7 +133,7 @@ export class WindStateTsushima {
 
     sceneManager.scene.add(mesh);
 
-    eventsManager.on("update", ({ player }) => {
+    eventsManager.on("engine-update", ({ player }) => {
       mesh.position.copy(player.position).setY(5);
     });
   }

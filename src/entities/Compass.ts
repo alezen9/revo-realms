@@ -1,4 +1,4 @@
-import { eventsManager } from "../systems/EventsManager";
+import { eventsManager } from "../systems";
 import compassUrl from "/textures/hud/compass.webp?url";
 import arrowUrl from "/textures/hud/compassArrow.webp?url";
 import { realmConfig } from "../realms/PortfolioRealm";
@@ -25,7 +25,7 @@ export class Compass {
     const distanceThreshold = realmConfig.MAP_SIZE / 2;
     let relativeAngle = 0;
 
-    eventsManager.on("update-throttle-16x", ({ player }) => {
+    eventsManager.on("engine-update-throttle-16x", ({ player }) => {
       const isFarX = Math.abs(player.position.x) > distanceThreshold;
       const isFarZ = Math.abs(player.position.z) > distanceThreshold;
       const isFar = isFarX || isFarZ;

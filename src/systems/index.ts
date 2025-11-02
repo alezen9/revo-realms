@@ -1,6 +1,7 @@
 import { AssetManager } from "./AssetManager/AssetManager";
 import { AudioManager } from "./AudioManager";
 import { DebugManager } from "./DebugManager";
+import { EventsManager } from "./EventsManager";
 import { InputManager } from "./InputManager";
 import { LightingManager } from "./LightingManager";
 import { LoadingManager } from "./LoadingManager";
@@ -11,18 +12,24 @@ import { SystemState } from "./SystemState/SystemState";
 import { UIManager } from "./UIManager";
 
 const init = () => {
-  const sceneManager = new SceneManager();
+  const eventsManager = new EventsManager();
+  const sceneManager = new SceneManager(eventsManager);
   const { manager } = new LoadingManager();
   const assetManager = new AssetManager(manager);
   const audioManager = new AudioManager(manager, sceneManager);
   const debugManager = new DebugManager();
-  const rendererManager = new RendererManager(debugManager);
+  const rendererManager = new RendererManager(debugManager, eventsManager);
   const inputManager = new InputManager();
   const physicsManager = new PhysicsManager();
   const uiManager = new UIManager();
-  const systemState = new SystemState(debugManager);
-  const lightingManager = new LightingManager(sceneManager, debugManager);
+  const systemState = new SystemState(debugManager, eventsManager);
+  const lightingManager = new LightingManager(
+    sceneManager,
+    debugManager,
+    eventsManager,
+  );
   return {
+    eventsManager,
     lightingManager,
     sceneManager,
     rendererManager,
@@ -37,6 +44,7 @@ const init = () => {
 };
 
 export const {
+  eventsManager,
   lightingManager,
   sceneManager,
   rendererManager,

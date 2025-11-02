@@ -7,10 +7,10 @@ import {
   Vector3,
 } from "three";
 import { Fn, texture, vec2 } from "three/tsl";
-import { eventsManager } from "./EventsManager";
 import { assetManager } from ".";
-import type { SceneManager } from "./SceneManager";
-import type { DebugManager } from "./DebugManager";
+import { type SceneManager } from "./SceneManager";
+import { type DebugManager } from "./DebugManager";
+import { type EventsManager } from "./EventsManager";
 
 const config = {
   LIGHT_POSITION_OFFSET: new Vector3(10, 10, 10),
@@ -38,7 +38,11 @@ export class LightingManager {
 
   sunDirection = config.LIGHT_POSITION_OFFSET.clone().normalize().negate();
 
-  constructor(sceneManager: SceneManager, debugManager: DebugManager) {
+  constructor(
+    sceneManager: SceneManager,
+    debugManager: DebugManager,
+    eventsManager: EventsManager,
+  ) {
     // this.emissive = new EmissiveIllumination();
 
     this.directionalLight = this.setupDirectionalLighting();
@@ -57,7 +61,7 @@ export class LightingManager {
     //   sceneManager.scene.fog = sceneManager.scene.fog ? null : this.fog;
     // });
 
-    eventsManager.on("update", ({ player }) => {
+    eventsManager.on("engine-update", ({ player }) => {
       this.directionalLight.position
         .copy(player.position)
         .add(config.LIGHT_POSITION_OFFSET);

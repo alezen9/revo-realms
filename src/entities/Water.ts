@@ -25,7 +25,6 @@ import {
   viewportDepthTexture,
   viewportTexture,
 } from "three/tsl";
-import { eventsManager } from "../systems/EventsManager";
 import { tslUtils } from "../utils/TSLUtils";
 import {
   assetManager,
@@ -35,6 +34,7 @@ import {
   debugManager,
   sceneManager,
   systemState,
+  eventsManager,
 } from "../systems";
 
 export default class Water {

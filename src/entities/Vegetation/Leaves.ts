@@ -34,12 +34,12 @@ import {
   color,
   deltaTime,
 } from "three/tsl";
-import { eventsManager } from "../../systems/EventsManager";
 import {
   assetManager,
   rendererManager,
   debugManager,
   sceneManager,
+  eventsManager,
 } from "../../systems";
 import { tslUtils } from "../../utils/TSLUtils";
 
@@ -283,7 +283,7 @@ export default class Leaves {
 
     this.debugLeaves();
 
-    eventsManager.on("update", ({ player }) => {
+    eventsManager.on("engine-update", ({ player }) => {
       const dx = player.position.x - leaves.position.x;
       const dz = player.position.z - leaves.position.z;
       uniforms.uDelta.value.set(dx, dz);

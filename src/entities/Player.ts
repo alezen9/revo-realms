@@ -11,8 +11,7 @@ import { type State } from "../Game";
 import { positionWorld, texture, uv, varying, vec3 } from "three/tsl";
 import { MeshLambertNodeMaterial } from "three/webgpu";
 import { RevoColliderType } from "../types";
-import { physicsManager, sceneManager } from "../systems";
-import { eventsManager } from "../systems/EventsManager";
+import { physicsManager, sceneManager, eventsManager } from "../systems";
 import { tslUtils } from "../utils/TSLUtils";
 import {
   assetManager,
@@ -95,9 +94,9 @@ export default class Player {
       this.rigidBody,
     );
 
-    eventsManager.on("update", this.update.bind(this));
+    eventsManager.on("engine-update", this.update.bind(this));
     eventsManager.on(
-      "update-throttle-64x",
+      "engine-update-throttle-64x",
       this.resetPlayerPosition.bind(this),
     );
     this.debugPlayer();

@@ -1,7 +1,6 @@
-import { eventsManager } from "./EventsManager";
 import UiRoot from "../ui/index.svelte";
 import { mount, unmount } from "svelte";
-import { audioManager } from ".";
+import { audioManager, eventsManager } from ".";
 
 export class UIManager {
   constructor() {}

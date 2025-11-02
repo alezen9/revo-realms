@@ -1,8 +1,7 @@
 import { PostProcessing, WebGPURenderer } from "three/webgpu";
 import { pass, renderOutput } from "three/tsl";
-import { eventsManager } from "../EventsManager";
 import { bloom } from "three/addons/tsl/display/BloomNode.js";
-import { debugManager, sceneManager } from "..";
+import { debugManager, sceneManager, eventsManager } from "..";
 
 export class PostprocessingManager extends PostProcessing {
   private scenePass: ReturnType<typeof pass>;
@@ -18,7 +17,7 @@ export class PostprocessingManager extends PostProcessing {
     const passes = this.makeGraph();
     this.outputNode = passes;
 
-    eventsManager.on("camera-changed", () => {
+    eventsManager.on("engine-camera-change", () => {
       this.scenePass.camera = sceneManager.renderCamera;
       this.scenePass.needsUpdate = true;
     });
