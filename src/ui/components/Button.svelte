@@ -1,9 +1,7 @@
 <script lang="ts">
-	import { type HTMLAttributes } from "svelte/elements"
+	import { type HTMLButtonAttributes } from "svelte/elements"
 
-	type ButtonProps = HTMLAttributes<HTMLButtonElement>
-
-	const { children, ...rest }: ButtonProps = $props()
+	const { children, ...rest }: HTMLButtonAttributes = $props()
 </script>
 
 <button {...rest}>
@@ -11,6 +9,10 @@
 </button>
 
 <style>
+	/**
+Credits to Temani Afif
+https://codepen.io/t_afif/pen/VwxbdpV
+**/
 	button {
 		--border-thickness: 1px;
 		--corner-size: 0.15em;
