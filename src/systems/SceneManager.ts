@@ -1,7 +1,6 @@
 import { CameraHelper, PerspectiveCamera, Scene } from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-import { debugManager } from ".";
-import { type RendererManager } from "./RendererManager/RendererManager";
+import { debugManager, eventsManager, rendererManager } from ".";
 import { type EventsManager } from "./EventsManager";
 
 export class SceneManager {
@@ -34,12 +33,9 @@ export class SceneManager {
       this.playerCamera.aspect = sizes.aspect;
       this.playerCamera.updateProjectionMatrix();
     });
-
-    // Debug
-    this.debugScene(eventsManager);
   }
 
-  private debugScene(eventsManager: EventsManager) {
+  private debugScene() {
     if (!this.controls) return;
     const folder = debugManager.panel.addFolder({ title: "🎥 View", index: 0 });
     folder
@@ -54,7 +50,7 @@ export class SceneManager {
       });
   }
 
-  init(rendererManager: RendererManager) {
+  init() {
     if (!import.meta.env.DEV) return;
     const cameraHelper = new CameraHelper(this.playerCamera);
     cameraHelper.visible = false;
@@ -74,6 +70,9 @@ export class SceneManager {
     controls.maxPolarAngle = Math.PI / 2.05;
     controls.enabled = false;
     this.controls = controls;
+
+    // Debug
+    this.debugScene();
   }
 
   update() {

@@ -58,7 +58,7 @@ export class RendererManager {
   }
 
   async init() {
-    sceneManager.init(this);
+    sceneManager.init();
     this.isWebGPU = !!(await navigator.gpu?.requestAdapter());
     this.postprocessingManager = new PostprocessingManager(this.renderer);
     if (this.IS_MONITORING_ENABLED)

@@ -58,6 +58,8 @@ import normAoGravelUrl from "/textures/new-world/terrain/gravel_normAO_1k_uastc.
 import normVeinWaterUrl from "/textures/new-world/water/water_normal_vein_uastc.ktx2?url";
 import noiseAtlasUrl from "/textures/new-world/noise/noise_atlas_uastc.ktx2?url";
 
+import grassMapUrl from "/textures/new-world/terrain/grass-map.png?url";
+
 type ResourceType = {
   texture: Texture;
   gltf: GLTF;
@@ -111,6 +113,12 @@ export const manifest = [
     type: "ktx2",
     wrap: true,
     colorSpace: SRGBColorSpace,
+  },
+  {
+    name: "grassMap",
+    url: grassMapUrl,
+    type: "texture",
+    flipY: false,
   },
   {
     name: "normAoGravel",

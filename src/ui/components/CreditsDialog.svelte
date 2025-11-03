@@ -369,6 +369,7 @@
 
 <style>
 	dialog {
+		margin: auto;
 		position: fixed;
 		inset: 0;
 		overflow: auto;
