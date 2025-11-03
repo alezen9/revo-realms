@@ -34,6 +34,8 @@ import {
   PI2,
   remap,
   fract,
+  EPSILON,
+  INFINITY,
 } from "three/tsl";
 import {
   assetManager,
@@ -46,7 +48,7 @@ import { SpriteNodeMaterial } from "three/webgpu";
 import { systemState, eventsManager } from "../../systems";
 
 const getConfig = () => {
-  const BLADE_WIDTH = 0.125;
+  const BLADE_WIDTH = 0.075;
   const BLADE_HEIGHT = 1.75;
   const TILE_SIZE = 150;
   const BLADES_PER_SIDE = 512 + 256; // power of 2 is optimal, divisible by wg also good
@@ -66,41 +68,46 @@ const getConfig = () => {
 const config = getConfig();
 
 const uniforms = {
+  // culling
+  uCameraMatrix: uniform(new Matrix4()), // MVP = Projection * View
+  uFx: uniform(1.0),
+  uFy: uniform(1.0),
+  uCullPadNDC: uniform(0.075), // small padding to hide rotation lag
+  // other
   uPlayerPosition: uniform(new Vector3(0, 0, 0)),
-  uCameraMatrix: uniform(new Matrix4()),
   uPlayerDeltaXZ: uniform(new Vector2(0, 0)),
   uCameraForward: uniform(new Vector3(0, 0, 0)),
   // Scale
   uBladeMinScale: uniform(0.6),
-  uBladeMaxScale: uniform(2.25),
+  uBladeMaxScale: uniform(1.75),
   // Trail
   uTrailGrowthRate: uniform(0.04),
-  uTrailMinScale: uniform(0.5),
+  uTrailMinScale: uniform(0.25),
   uTrailRaius: uniform(1),
   uTrailRaiusSquared: uniform(1),
-  uKDown: uniform(0.8),
+  uKDown: uniform(0.4),
   // Wind
   uWindStrength: uniform(0.4),
   uWindSpeed: uniform(0.25),
   uvWindScale: uniform(1.75),
   // Color
-  uBaseColor: uniform(new Color().setRGB(0.07, 0.07, 0)),
-  uTipColor: uniform(new Color().setRGB(0.07, 0.16, 0.04)),
-  uAoScale: uniform(1.5),
+  uBaseColor: uniform(new Color().setRGB(0.02, 0.05, 0.01)),
+  uTipColor: uniform(new Color().setRGB(0.47, 0.25, 0.04)),
+  uColorMixFactor: uniform(0.15),
+  uColorVariationStrength: uniform(4.6),
+  uAoScale: uniform(1.25),
   uAoRimSmoothness: uniform(5),
-  uAoRadius: uniform(20),
-  uAoRadiusSquared: uniform(20 * 20),
-  uColorMixFactor: uniform(1),
-  uColorVariationStrength: uniform(1.6),
+  uAoRadius: uniform(50),
+  uAoRadiusSquared: uniform(50 * 50),
   uWindColorStrength: uniform(0.6),
-  uBaseWindShade: uniform(0.4),
-  uBaseShadeHeight: uniform(1.25),
+  uBaseWindShade: uniform(0.75),
+  uBaseShadeHeight: uniform(1),
   // Stochastic keep
   uR0: uniform(45),
   uR1: uniform(75),
   uPMin: uniform(0.1),
   // Rotation
-  uBaseBending: uniform(1.25),
+  uBaseBending: uniform(2),
 };
 
 class GrassSsbo {
@@ -287,28 +294,42 @@ class GrassSsbo {
   });
 
   private computeVisibility = Fn(([worldPos = vec3(0)]) => {
-    const clipPos = uniforms.uCameraMatrix.mul(vec4(worldPos, 1.0));
-    // Convert to normalized device coordinates
-    const ndc = clipPos.xyz.div(clipPos.w);
-    // Compute an approximate threshold for the blade's radius in NDC space.
-    const radiusNDC = config.BLADE_BOUNDING_SPHERE_RADIUS;
-    // Check if the sphere (centered at ndc with "radiusNDC") is at least partially within the clip volume:
+    const clip = uniforms.uCameraMatrix.mul(vec4(worldPos, 1.0));
+    const invW = float(1).div(clip.w);
+    const ndc = clip.xyz.mul(invW);
+
+    // works for WebGL and WebGPU
+    const eyeDepthAbs = abs(clip.w).max(EPSILON); // epsilon only to avoid div-by-zero, not to inflate radius
+
+    const rNdcX = uniforms.uFx
+      .mul(config.BLADE_BOUNDING_SPHERE_RADIUS)
+      .div(eyeDepthAbs)
+      .add(uniforms.uCullPadNDC);
+    const rNdcY = uniforms.uFy
+      .mul(config.BLADE_BOUNDING_SPHERE_RADIUS)
+      .div(eyeDepthAbs)
+      .add(uniforms.uCullPadNDC);
+
     const one = float(1);
-    const visible = step(one.negate().sub(radiusNDC), ndc.x)
-      .mul(step(ndc.x, one.add(radiusNDC)))
-      .mul(step(one.negate().sub(radiusNDC), ndc.y))
-      .mul(step(ndc.y, one.add(radiusNDC)))
-      .mul(step(0.0, ndc.z)) // Ensure it's in front of the near plane
-      .mul(step(ndc.z, one)); // Ensure it's inside the far plane
-    // visible will be 1 if inside, 0 if outside.
-    return visible;
+    const visX = step(one.negate().sub(rNdcX), ndc.x).mul(
+      step(ndc.x, one.add(rNdcX)),
+    );
+    const visY = step(one.negate().sub(rNdcY), ndc.y).mul(
+      step(ndc.y, one.add(rNdcY)),
+    );
+    const visZ = step(-1, ndc.z).mul(step(ndc.z, 1)); // no Z padding
+
+    return visX.mul(visY).mul(visZ);
   });
 
   private computeWind = Fn(
     ([prevWindXZ = vec2(0), worldPos = vec3(0), positionNoise = float(0)]) => {
-      // const intensity = smoothstep(0.2, 0.5, systemState.wind.uIntensity);
       const dir = systemState.wind.uDirection.negate();
-      const strength = uniforms.uWindStrength.add(systemState.wind.uIntensity);
+      const strength = mix(
+        uniforms.uWindStrength,
+        1.5,
+        systemState.wind.uIntensity,
+      );
 
       // --- gentle per-instance speed jitter (±10 %)
       const speed = uniforms.uWindSpeed.mul(
@@ -351,7 +372,7 @@ class GrassSsbo {
 
   private computeAlpha = Fn(([worldPos = vec3(0)]) => {
     const alphaUv = tslUtils.computeMapUvByPosition(worldPos.xz);
-    const alpha = texture(assetManager.resources.terrainTypeTexture, alphaUv).g;
+    const alpha = texture(assetManager.resources.grassMap, alphaUv).g;
     const threshold = step(0.25, alpha);
     return threshold;
   });
@@ -373,8 +394,7 @@ class GrassSsbo {
       // Blend by contact (branchless). If your isStepped is hard 0/1, this still works.
       const blended = mix(up, down, isStepped);
 
-      // Safe range
-      return clamp(blended, uniforms.uTrailMinScale, originalScale);
+      return blended;
     },
   );
 
@@ -489,7 +509,8 @@ class GrassMaterial extends SpriteNodeMaterial {
     this.opacityNode = isVisible;
 
     // SCALE
-    const scaleX = positionNoise.add(0.35);
+    // const scaleX = positionNoise.add(0.75);
+    const scaleX = positionNoise.remap(0, 1, 0.5, 1.5);
     const bladeScale = vec3(scaleX, scaleY, 1);
     this.scaleNode = mix(vec3(0), bladeScale, isVisible);
 
@@ -507,7 +528,7 @@ class GrassMaterial extends SpriteNodeMaterial {
     // POSITION
     // fragment cull
     const offscreenOffset = uniforms.uCameraForward
-      .mul(1e6)
+      .mul(INFINITY)
       .mul(float(1).sub(isVisible));
     // base offset
     const bladePosition = vec3(offsetX, 0, offsetZ);
@@ -563,6 +584,7 @@ class GrassMaterial extends SpriteNodeMaterial {
       float(1).sub(uniforms.uBaseWindShade),
       baseMask.mul(smoothstep(0.0, 1.0, swayFactor)),
     );
+
     this.colorNode = baseToTip.mul(windAo).mul(ao);
   }
 }
@@ -581,15 +603,16 @@ export default class Grass {
       const dz = player.position.z - grass.position.z;
       uniforms.uPlayerDeltaXZ.value.set(dx, dz);
       uniforms.uPlayerPosition.value.copy(player.position);
+      const proj = sceneManager.playerCamera.projectionMatrix;
+      uniforms.uFx.value = proj.elements[0];
+      uniforms.uFy.value = proj.elements[5];
       uniforms.uCameraMatrix.value
-        .copy(sceneManager.playerCamera.projectionMatrix)
+        .copy(proj)
         .multiply(sceneManager.playerCamera.matrixWorldInverse);
       sceneManager.playerCamera.getWorldDirection(
         uniforms.uCameraForward.value,
       );
-
       grass.position.copy(player.position).setY(0);
-
       rendererManager.renderer.computeAsync(ssbo.computeUpdate);
     });
 
@@ -756,12 +779,12 @@ export default class Grass {
       max: 5,
       step: 0.01,
     });
-
-    general
-      .addButton({ label: "Wind direction", title: "To lake" })
-      .on("click", () => {
-        console.log("clicked");
-      });
+    general.addBinding(uniforms.uCullPadNDC, "value", {
+      label: "Cull pad",
+      min: 0,
+      max: 0.5,
+      step: 0.001,
+    });
   }
 
   private createGeometry(nSegments: number) {
@@ -778,7 +801,7 @@ export default class Grass {
     const positions = new Float32Array(vertexCount * 3);
     const uvs = new Float32Array(vertexCount * 2);
     const indices = new Uint8Array(indexCount);
-    const normals = new Float32Array(indexCount * 3);
+    const normals = new Float32Array(vertexCount * 3);
 
     // simple taper: ~linear → narrower toward tip; tweak as you like
     const taper = (t: number) => halfWidthBase * (1.0 - 0.7 * t); // t in [0..1]

@@ -27,7 +27,7 @@ export class WindStateTsushima {
 
   private phase: Phase = "idle";
   private readonly AMBIENT_INTENSITY = 0.1;
-  private readonly MAX_INTENSITY = 2;
+  private readonly MAX_INTENSITY = 1;
   private readonly RAMP_RATE = 1.5;
   private readonly DECAY_RATE = 0.85;
 
