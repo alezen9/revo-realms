@@ -44,8 +44,8 @@ import {
 } from "../systems";
 
 const uniforms = {
-  uGrassTerrainColor: uniform(new Color().setRGB(0.55, 0.89, 0.27)),
-  uGrassTerrainColor2: uniform(new Color().setRGB(0.42, 0.64, 0.16)),
+  uGrassTerrainColor: uniform(new Color().setRGB(0.16, 0.26, 0.08)),
+  uGrassTerrainColor2: uniform(new Color().setRGB(0.32, 0.49, 0.13)),
   uWaterSandColor: uniform(new Color().setRGB(0.54, 0.39, 0.2)),
   uPathSandColor: uniform(new Color().setRGB(0.65, 0.49, 0.27)),
   uGravelColor: uniform(new Color().setRGB(1.0, 0.79, 0.41)),
