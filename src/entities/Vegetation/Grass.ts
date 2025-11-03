@@ -78,8 +78,8 @@ const uniforms = {
   uPlayerDeltaXZ: uniform(new Vector2(0, 0)),
   uCameraForward: uniform(new Vector3(0, 0, 0)),
   // Scale
-  uBladeMinScale: uniform(0.6),
-  uBladeMaxScale: uniform(1.75),
+  uBladeMinScale: uniform(0.25),
+  uBladeMaxScale: uniform(2.25),
   // Trail
   uTrailGrowthRate: uniform(0.04),
   uTrailMinScale: uniform(0.25),
@@ -93,9 +93,9 @@ const uniforms = {
   // Color
   uBaseColor: uniform(new Color().setRGB(0.02, 0.05, 0.01)),
   uTipColor: uniform(new Color().setRGB(0.47, 0.25, 0.04)),
-  uColorMixFactor: uniform(0.15),
-  uColorVariationStrength: uniform(4.6),
-  uAoScale: uniform(1.25),
+  uColorMixFactor: uniform(0.075),
+  uColorVariationStrength: uniform(2.3),
+  uAoScale: uniform(2.25),
   uAoRimSmoothness: uniform(5),
   uAoRadius: uniform(50),
   uAoRadiusSquared: uniform(50 * 50),
