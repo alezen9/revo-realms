@@ -26,15 +26,12 @@ import {
   step,
   sin,
   abs,
-  max,
   clamp,
   If,
-  mod,
   time,
   PI2,
   remap,
   fract,
-  EPSILON,
   INFINITY,
 } from "three/tsl";
 import {
@@ -46,6 +43,7 @@ import {
 import { tslUtils } from "../../utils/TSLUtils";
 import { SpriteNodeMaterial } from "three/webgpu";
 import { systemState, eventsManager } from "../../systems";
+import { VegetationSsboUtils } from "./ssboUtils";
 
 const getConfig = () => {
   const BLADE_WIDTH = 0.075;
@@ -78,8 +76,8 @@ const uniforms = {
   uPlayerDeltaXZ: uniform(new Vector2(0, 0)),
   uCameraForward: uniform(new Vector3(0, 0, 0)),
   // Scale
-  uBladeMinScale: uniform(0.25),
-  uBladeMaxScale: uniform(2.25),
+  uBladeMinScale: uniform(0.5),
+  uBladeMaxScale: uniform(2.5),
   // Trail
   uTrailGrowthRate: uniform(0.04),
   uTrailMinScale: uniform(0.25),
@@ -93,7 +91,7 @@ const uniforms = {
   // Color
   uBaseColor: uniform(new Color().setRGB(0.02, 0.05, 0.01)),
   uTipColor: uniform(new Color().setRGB(0.47, 0.25, 0.04)),
-  uColorMixFactor: uniform(0.075),
+  uColorMixFactor: uniform(0.1),
   uColorVariationStrength: uniform(2.3),
   uAoScale: uniform(2.25),
   uAoRimSmoothness: uniform(5),
@@ -268,60 +266,6 @@ class GrassSsbo {
     data1.assign(this.setOriginalScale(data1, randomScale));
   })().compute(config.COUNT, [config.WORKGROUP_SIZE]);
 
-  private computeStochasticKeep = Fn(([worldPos = vec3(0)]) => {
-    // world-space radial thinning (no sqrt)
-    const dx = worldPos.x.sub(uniforms.uPlayerPosition.x);
-    const dz = worldPos.z.sub(uniforms.uPlayerPosition.z);
-    const distSq = dx.mul(dx).add(dz.mul(dz));
-
-    const R0 = uniforms.uR0,
-      R1 = uniforms.uR1,
-      pMin = uniforms.uPMin;
-    const R0Sq = R0.mul(R0),
-      R1Sq = R1.mul(R1);
-
-    // 0 inside R0, 1 at/after R1
-    const t = clamp(distSq.sub(R0Sq).div(max(R1Sq.sub(R0Sq), 1e-5)), 0.0, 1.0);
-
-    // keep probability from 1 → pMin
-    const p = mix(1.0, pMin, t);
-
-    // deterministic RNG per blade (stable under wrap)
-    const rnd = hash(float(instanceIndex).mul(0.73));
-
-    const keep = step(rnd, p);
-    return keep;
-  });
-
-  private computeVisibility = Fn(([worldPos = vec3(0)]) => {
-    const clip = uniforms.uCameraMatrix.mul(vec4(worldPos, 1.0));
-    const invW = float(1).div(clip.w);
-    const ndc = clip.xyz.mul(invW);
-
-    // works for WebGL and WebGPU
-    const eyeDepthAbs = abs(clip.w).max(EPSILON); // epsilon only to avoid div-by-zero, not to inflate radius
-
-    const rNdcX = uniforms.uFx
-      .mul(config.BLADE_BOUNDING_SPHERE_RADIUS)
-      .div(eyeDepthAbs)
-      .add(uniforms.uCullPadNDC);
-    const rNdcY = uniforms.uFy
-      .mul(config.BLADE_BOUNDING_SPHERE_RADIUS)
-      .div(eyeDepthAbs)
-      .add(uniforms.uCullPadNDC);
-
-    const one = float(1);
-    const visX = step(one.negate().sub(rNdcX), ndc.x).mul(
-      step(ndc.x, one.add(rNdcX)),
-    );
-    const visY = step(one.negate().sub(rNdcY), ndc.y).mul(
-      step(ndc.y, one.add(rNdcY)),
-    );
-    const visZ = step(-1, ndc.z).mul(step(ndc.z, 1)); // no Z padding
-
-    return visX.mul(visY).mul(visZ);
-  });
-
   private computeWind = Fn(
     ([prevWindXZ = vec2(0), worldPos = vec3(0), positionNoise = float(0)]) => {
       const dir = systemState.wind.uDirection.negate();
@@ -370,13 +314,6 @@ class GrassSsbo {
     },
   );
 
-  private computeAlpha = Fn(([worldPos = vec3(0)]) => {
-    const alphaUv = tslUtils.computeMapUvByPosition(worldPos.xz);
-    const alpha = texture(assetManager.resources.grassMap, alphaUv).g;
-    const threshold = step(0.25, alpha);
-    return threshold;
-  });
-
   private computeTrailScale = Fn(
     (
       [originalScale = float(0), currentScale = float(0), isStepped = float(0)], // isStepped in [0,1]
@@ -411,25 +348,32 @@ class GrassSsbo {
     const data1 = this.buffer1.element(instanceIndex);
 
     // Position
-    const newOffsetX = mod(
-      data1.x.sub(uniforms.uPlayerDeltaXZ.x).add(config.TILE_HALF_SIZE),
+    const pos = VegetationSsboUtils.wrapPosition(
+      vec2(data1.x, data1.y),
+      uniforms.uPlayerDeltaXZ,
       config.TILE_SIZE,
-    ).sub(config.TILE_HALF_SIZE);
-
-    const newOffsetZ = mod(
-      data1.y.sub(uniforms.uPlayerDeltaXZ.y).add(config.TILE_HALF_SIZE),
-      config.TILE_SIZE,
-    ).sub(config.TILE_HALF_SIZE);
-    const pos = vec3(newOffsetX, 0, newOffsetZ);
-
-    data1.x = newOffsetX;
-    data1.y = newOffsetZ;
+    );
+    data1.x = pos.x;
+    data1.y = pos.z;
 
     const worldPos = pos.add(uniforms.uPlayerPosition);
 
     // Visibility
-    const stochasticKeep = this.computeStochasticKeep(worldPos);
-    const isVisible = this.computeVisibility(worldPos).mul(stochasticKeep);
+    const stochasticKeep = VegetationSsboUtils.computeStochasticKeep(
+      worldPos,
+      uniforms.uPlayerPosition,
+      uniforms.uR0,
+      uniforms.uR1,
+      uniforms.uPMin,
+    );
+    const isVisible = VegetationSsboUtils.computeVisibility(
+      worldPos,
+      uniforms.uCameraMatrix,
+      uniforms.uFx,
+      uniforms.uFy,
+      config.BLADE_BOUNDING_SPHERE_RADIUS,
+      uniforms.uCullPadNDC,
+    ).mul(stochasticKeep);
     data1.assign(this.setVisibility(data1, isVisible));
 
     // Soft culling
@@ -463,7 +407,7 @@ class GrassSsbo {
       data1.assign(this.setScale(data1, newScale));
 
       // Alpha
-      const alpha = this.computeAlpha(worldPos);
+      const alpha = VegetationSsboUtils.computeAlpha(worldPos);
       data1.assign(this.setVisibility(data1, alpha));
 
       // Wind
@@ -548,7 +492,11 @@ class GrassMaterial extends SpriteNodeMaterial {
       .mul(bendProfile);
     const flutterOffset = vec3(perp.x, 0.0, perp.y).mul(flutter);
     // wind offset
-    const windOffset = vec3(windXZ.x, 0.0, windXZ.y).mul(bendProfile);
+    const windY = float(1)
+      .sub(h.mul(h))
+      .mul(systemState.wind.uIntensity)
+      .mul(0.25);
+    const windOffset = vec3(windXZ.x, windY, windXZ.y).mul(bendProfile);
 
     const pos = bladePosition
       .add(offscreenOffset)

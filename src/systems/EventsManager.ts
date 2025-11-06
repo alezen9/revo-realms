@@ -37,6 +37,10 @@ export class EventsManager extends EventEmitter<Events> {
   constructor() {
     super();
     throttle.forEach((n) => this.updateThrottled(n));
+
+    import.meta.hot?.dispose(() => {
+      this.removeAllListeners();
+    });
   }
 
   private updateThrottled(n: (typeof throttle)[number]) {
