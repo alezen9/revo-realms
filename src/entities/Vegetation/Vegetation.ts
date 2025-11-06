@@ -8,7 +8,7 @@ export default class Vegetation {
   constructor() {
     new Grass();
     // new WaterLilies();
-    // new Flowers();
+    new Flowers();
     // new Trees();
     // new Leaves(); // not ready yet but pretty good already
   }

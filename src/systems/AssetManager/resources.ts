@@ -165,7 +165,13 @@ export const manifest = [
   // -----------------------------------------------
   // Flowers
   // -----------------------------------------------
-  { name: "flowerAtlas", url: flowerAtlasUrl, type: "texture", flipY: false },
+  {
+    name: "flowerAtlas",
+    url: flowerAtlasUrl,
+    type: "texture",
+    flipY: false,
+    colorSpace: SRGBColorSpace,
+  },
 
   // -----------------------------------------------
   // Stones

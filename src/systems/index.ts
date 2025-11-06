@@ -11,9 +11,9 @@ import { SystemState } from "./SystemState/SystemState";
 import { UIManager } from "./UIManager";
 
 const init = () => {
+  const assetManager = new AssetManager();
   const eventsManager = new EventsManager();
   const sceneManager = new SceneManager(eventsManager);
-  const assetManager = new AssetManager();
   const audioManager = new AudioManager(sceneManager);
   const debugManager = new DebugManager();
   const rendererManager = new RendererManager(debugManager, eventsManager);
