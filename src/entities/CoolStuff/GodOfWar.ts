@@ -14,9 +14,9 @@ class TrunkMaterial extends MeshLambertNodeMaterial {
     super();
     this.precision = "lowp";
     this.flatShading = false;
-    const diffuse = texture(assetManager.resources.trunkDiffuse, uv());
+    const diffuse = texture(assetManager.resources.godOfWarTrunkDiffuse, uv());
     this.colorNode = diffuse.mul(1.75);
-    this.normalMap = assetManager.resources.trunkNormal;
+    this.normalMap = assetManager.resources.godOfWarTrunkNormal;
   }
 }
 

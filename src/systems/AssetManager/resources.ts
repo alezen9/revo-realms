@@ -1,7 +1,8 @@
 import { CompressedTexture, CubeTexture, SRGBColorSpace, Texture } from "three";
 import { type GLTF } from "three/addons/loaders/GLTFLoader.js";
 // Model
-import realmModelUrl from "/models/realm.glb?url";
+import realmModelUrl from "/models/realm.glb?url"; // old
+import worldModelUrl from "/models/world.glb?url"; // new
 // Environment
 import pxUrl from "/textures/environment/px.webp?url";
 import nxUrl from "/textures/environment/nx.webp?url";
@@ -13,9 +14,6 @@ import nzUrl from "/textures/environment/nz.webp?url";
 import noiseUrl from "/textures/noise/noise.webp?url";
 // Terrain
 import terrainTypeUrl from "/textures/realm/terrainType.webp?url";
-import sandNormalUrl from "/textures/realm/sandNormal.webp?url";
-import grassNormalUrl from "/textures/realm/grassNormal.webp?url";
-import grassDiffuseUrl from "/textures/realm/grassDiffuse.webp?url";
 import waterNormalUrl from "/textures/realm/waterNormal.webp?url";
 // Shadowmap
 import terrainShadowAoUrl from "/textures/realm/terrainShadowAo.webp?url";
@@ -32,10 +30,10 @@ import treeBarkNormalUrl from "/textures/realm/barkNormal.webp?url";
 import treeCanopyDiffuseUrl from "/textures/realm/canopyDiffuse.webp?url";
 import treeCanopyNormalUrl from "/textures/realm/canopyNormal.webp?url";
 // God of War
-import axeDiffuseUrl from "/textures/realm/axeDiffuse.webp?url";
-import axeEmissiveUrl from "/textures/realm/axeEmissive.webp?url";
-import trunkDiffuseUrl from "/textures/realm/trunkDiffuse.webp?url";
-import trunkNormalUrl from "/textures/realm/trunkNormal.webp?url";
+import godOfWarAxeDiffuseUrl from "/textures/new-world/cool-stuff/god-of-war/axe_diff_emissive_1k.ktx2?url";
+import godOfWarTrunkDiffuseUrl from "/textures/new-world/cool-stuff/god-of-war/trunk_diffuse_512.ktx2?url";
+import godOfWarTrunkNormalUrl from "/textures/new-world/cool-stuff/god-of-war/trunk_normal_512.ktx2?url";
+
 // One Piece
 import onePieceAtlasUrl from "/textures/realm/onePieceAtlas.webp?url";
 // Naruto
@@ -46,21 +44,16 @@ import campfireDiffuseUrl from "/textures/new-world/cool-stuff/campfire/diffuse_
 import campfireNormalUrl from "/textures/new-world/cool-stuff/campfire/normal_512.ktx2?url";
 // Fire
 import fireSpritesUrl from "/textures/new-world/cool-stuff/fire/fireSprites_128_etc1s.ktx2?url";
-// Football (Player)
-import footballDiffuseUrl from "/textures/realm/footballDiffuse.webp?url";
+// Player (Football)
+import playerDiffuseUrl from "/textures/new-world/player/diffuse_256.ktx2?url";
+import playerNormalUrl from "/textures/new-world/player/normal_256.ktx2?url";
 // Leaf
 import leafDiffuseUrl from "/textures/realm/leafDiffuse.webp?url";
-
-import noise2Url from "/textures/noise/noise2.webp?url";
-import worldModelUrl from "/models/world.glb?url";
 
 import uvCheckerUrl from "/textures/new-world/debug/uvChecker_1k_uastc.ktx2?url";
 import normAoGravelUrl from "/textures/new-world/terrain/gravel_normAO_1k_uastc.ktx2?url";
 import normVeinWaterUrl from "/textures/new-world/water/water_normal_vein_uastc.ktx2?url";
 import noiseAtlasUrl from "/textures/new-world/noise/noise_atlas_uastc.ktx2?url";
-import godOfWarAxeDiffuseUrl from "/textures/new-world/cool-stuff/god-of-war/diff_emissive_1k.ktx2?url";
-import playerDiffuseUrl from "/textures/new-world/player/diffuse_256.ktx2?url";
-import playerNormalUrl from "/textures/new-world/player/normal_256.ktx2?url";
 
 import grassMapUrl from "/textures/new-world/terrain/grass-map.png?url";
 
@@ -130,6 +123,7 @@ export const manifest = [
     wrap: true,
     colorSpace: SRGBColorSpace,
   },
+
   // -----------------------------------------------
   // Terrain
   // -----------------------------------------------
@@ -152,6 +146,12 @@ export const manifest = [
     type: "ktx2",
     wrap: true,
   },
+
+  // -----------------------------------------------
+  // Water
+  // -----------------------------------------------
+  { name: "waterNormal", url: waterNormalUrl, type: "texture" },
+
   // -----------------------------------------------
   // Campfire
   // -----------------------------------------------
@@ -168,6 +168,7 @@ export const manifest = [
     flipY: false,
   },
   { name: "fireSprites", url: fireSpritesUrl, type: "ktx2" },
+
   // -----------------------------------------------
   // God of War
   // -----------------------------------------------
@@ -177,15 +178,20 @@ export const manifest = [
     type: "ktx2",
     flipY: false,
   },
-
   {
-    name: "trunkDiffuse", // old
-    url: trunkDiffuseUrl,
-    type: "texture",
+    name: "godOfWarTrunkDiffuse",
+    url: godOfWarTrunkDiffuseUrl,
+    type: "ktx2",
     flipY: false,
     colorSpace: SRGBColorSpace,
   },
-  { name: "trunkNormal", url: trunkNormalUrl, type: "texture", flipY: false }, // old
+
+  {
+    name: "godOfWarTrunkNormal",
+    url: godOfWarTrunkNormalUrl,
+    type: "ktx2",
+    flipY: false,
+  },
 
   // -----------------------------------------------
   // Player (Football)
@@ -307,12 +313,6 @@ export const manifest = [
     type: "texture",
     flipY: false,
   },
-
-  // -----------------------------------------------
-  // Water
-  // -----------------------------------------------
-  { name: "waterNormal", url: waterNormalUrl, type: "texture" },
-  { name: "noise2", url: noise2Url, type: "texture", wrap: true },
 ] as const satisfies ResourceRaw[];
 
 export type ExternalResources = {
