@@ -13,6 +13,7 @@ import {
   step,
   texture,
   time,
+  uniform,
   uv,
   vec2,
   vec3,
@@ -28,7 +29,12 @@ import {
   SpriteNodeMaterial,
 } from "three/webgpu";
 import { isMeshVisible } from "./isMeshVisible";
-import { assetManager, rendererManager, eventsManager } from "../systems";
+import {
+  assetManager,
+  rendererManager,
+  eventsManager,
+  debugManager,
+} from "../systems";
 
 type ParticleBuffer = ReturnType<typeof instancedArray>;
 
@@ -52,6 +58,7 @@ type FirePresetParams = BaseParams & {
   scale?: number;
   detail?: number;
   coneFactor?: number;
+  bloom?: number;
 };
 
 type CustomParams = BaseParams & {
@@ -126,8 +133,9 @@ const getFirePresetConfig = (
     height: fireHeight = 1,
     lifetime: fireLifetime = 1,
     scale = 1,
-    detail = 4,
+    detail = undefined,
     coneFactor = 1,
+    bloom = 1,
   } = params;
   const sparkHeight = fireHeight * 1.5;
   const sparkLifetime = fireLifetime * 0.75;
@@ -240,14 +248,14 @@ const getFirePresetConfig = (
   const blendFactor1 = step(0.65, rand2);
   const blendFactor = blendFactor1.mul(blendFactor2);
   const alphaScale = float(0.5).toConst();
-  const alphaBlend = sample.a.mul(blendFactor).mul(alphaScale);
+  const alphaBlend = sample.r.mul(blendFactor).mul(alphaScale);
   material.colorNode = mix(fireColor, midDiffuse, isSpark)
     .mul(alphaBlend)
-    .mul(1.5); // a bit of bloom
+    .mul(bloom); // a bit of bloom
   material.alphaTest = 0.1;
 
   // Opacity
-  material.opacityNode = data.w.mul(sample.a).mul(alphaScale);
+  material.opacityNode = data.w.mul(sample.r).mul(alphaScale);
 
   return {
     material,

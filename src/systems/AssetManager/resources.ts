@@ -42,9 +42,10 @@ import onePieceAtlasUrl from "/textures/realm/onePieceAtlas.webp?url";
 import kunaiDiffuseUrl from "/textures/realm/kunaiDiffuse.webp?url";
 import kunaiMRUrl from "/textures/realm/kunaiMR.webp?url";
 // Campfire
-import campfireDiffuseUrl from "/textures/realm/campfireDiffuse.webp?url";
+import campfireDiffuseUrl from "/textures/new-world/cool-stuff/campfire/diffuse_512_etc1s.ktx2?url";
+import campfireNormalUrl from "/textures/new-world/cool-stuff/campfire/normal_512.ktx2?url";
 // Fire
-import fireSpritesUrl from "/textures/realm/fireSprites.webp?url";
+import fireSpritesUrl from "/textures/new-world/cool-stuff/fire/fireSprites_128_etc1s.ktx2?url";
 // Football (Player)
 import footballDiffuseUrl from "/textures/realm/footballDiffuse.webp?url";
 // Leaf
@@ -57,6 +58,9 @@ import uvCheckerUrl from "/textures/new-world/debug/uvChecker_1k_uastc.ktx2?url"
 import normAoGravelUrl from "/textures/new-world/terrain/gravel_normAO_1k_uastc.ktx2?url";
 import normVeinWaterUrl from "/textures/new-world/water/water_normal_vein_uastc.ktx2?url";
 import noiseAtlasUrl from "/textures/new-world/noise/noise_atlas_uastc.ktx2?url";
+import godOfWarAxeDiffuseUrl from "/textures/new-world/cool-stuff/god-of-war/diff_emissive_1k.ktx2?url";
+import playerDiffuseUrl from "/textures/new-world/player/diffuse_256.ktx2?url";
+import playerNormalUrl from "/textures/new-world/player/normal_256.ktx2?url";
 
 import grassMapUrl from "/textures/new-world/terrain/grass-map.png?url";
 
@@ -108,12 +112,27 @@ export const manifest = [
   { name: "noiseTexture", url: noiseUrl, type: "texture" }, // old
   { name: "worldModel", url: worldModelUrl, type: "gltf" },
   {
-    name: "uvChecker",
+    name: "noiseAtlas", // super_noise_low / super_perlin / grainy / cracks
+    url: noiseAtlasUrl,
+    type: "ktx2",
+    wrap: true,
+  },
+  {
+    name: "envMapTexture",
+    urls: [pxUrl, nxUrl, pyUrl, nyUrl, pzUrl, nzUrl],
+    type: "cubeTexture",
+    colorSpace: SRGBColorSpace,
+  },
+  {
+    name: "uvChecker", // only for debug
     url: uvCheckerUrl,
     type: "ktx2",
     wrap: true,
     colorSpace: SRGBColorSpace,
   },
+  // -----------------------------------------------
+  // Terrain
+  // -----------------------------------------------
   {
     name: "grassMap",
     url: grassMapUrl,
@@ -133,17 +152,57 @@ export const manifest = [
     type: "ktx2",
     wrap: true,
   },
+  // -----------------------------------------------
+  // Campfire
+  // -----------------------------------------------
   {
-    name: "noiseAtlas", // super_noise_low / super_perlin / grainy / cracks
-    url: noiseAtlasUrl,
+    name: "campfireDiffuse",
+    url: campfireDiffuseUrl,
+    flipY: false,
     type: "ktx2",
-    wrap: true,
   },
   {
-    name: "envMapTexture",
-    urls: [pxUrl, nxUrl, pyUrl, nyUrl, pzUrl, nzUrl],
-    type: "cubeTexture",
+    name: "campfireNormal",
+    url: campfireNormalUrl,
+    type: "ktx2",
+    flipY: false,
+  },
+  { name: "fireSprites", url: fireSpritesUrl, type: "ktx2" },
+  // -----------------------------------------------
+  // God of War
+  // -----------------------------------------------
+  {
+    name: "godOfWarAxeDiffuse",
+    url: godOfWarAxeDiffuseUrl,
+    type: "ktx2",
+    flipY: false,
+  },
+
+  {
+    name: "trunkDiffuse", // old
+    url: trunkDiffuseUrl,
+    type: "texture",
+    flipY: false,
     colorSpace: SRGBColorSpace,
+  },
+  { name: "trunkNormal", url: trunkNormalUrl, type: "texture", flipY: false }, // old
+
+  // -----------------------------------------------
+  // Player (Football)
+  // -----------------------------------------------
+  {
+    name: "playerDiffuse",
+    url: playerDiffuseUrl,
+    type: "ktx2",
+    flipY: false,
+    colorSpace: SRGBColorSpace,
+  },
+
+  {
+    name: "playerNormal",
+    url: playerNormalUrl,
+    type: "ktx2",
+    flipY: false,
   },
 
   // -----------------------------------------------
@@ -201,21 +260,6 @@ export const manifest = [
     colorSpace: SRGBColorSpace,
   },
   { name: "barkNormal", url: treeBarkNormalUrl, type: "texture", flipY: false },
-
-  // -----------------------------------------------
-  // God of War
-  // -----------------------------------------------
-  { name: "axeDiffuse", url: axeDiffuseUrl, type: "texture", flipY: false },
-  { name: "axeEmissive", url: axeEmissiveUrl, type: "texture", flipY: false },
-  {
-    name: "trunkDiffuse",
-    url: trunkDiffuseUrl,
-    type: "texture",
-    flipY: false,
-    colorSpace: SRGBColorSpace,
-  },
-  { name: "trunkNormal", url: trunkNormalUrl, type: "texture", flipY: false },
-
   // -----------------------------------------------
   // One Piece
   // -----------------------------------------------
@@ -239,28 +283,6 @@ export const manifest = [
   { name: "kunaiMR", url: kunaiMRUrl, type: "texture", flipY: false },
 
   // -----------------------------------------------
-  // Campfire
-  // -----------------------------------------------
-  {
-    name: "campfireDiffuse",
-    url: campfireDiffuseUrl,
-    type: "texture",
-    flipY: false,
-    colorSpace: SRGBColorSpace,
-  },
-  { name: "fireSprites", url: fireSpritesUrl, type: "texture" },
-
-  // -----------------------------------------------
-  // Football (Player)
-  // -----------------------------------------------
-  {
-    name: "footballDiffuse",
-    url: footballDiffuseUrl,
-    type: "texture",
-    colorSpace: SRGBColorSpace,
-  },
-
-  // -----------------------------------------------
   // Leaf
   // -----------------------------------------------
   {
@@ -273,19 +295,6 @@ export const manifest = [
   // -----------------------------------------------
   // Terrain
   // -----------------------------------------------
-  { name: "sandNormal", url: sandNormalUrl, type: "texture", wrap: true },
-  {
-    name: "grassNormal",
-    url: grassNormalUrl,
-    type: "texture",
-    wrap: true,
-  },
-  {
-    name: "grassDiffuse", // linear on purpose
-    url: grassDiffuseUrl,
-    type: "texture",
-    wrap: true,
-  },
   {
     name: "terrainTypeTexture",
     url: terrainTypeUrl,
