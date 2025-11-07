@@ -28,6 +28,6 @@ export default class PortfolioRealm {
     new Water();
     new Vegetation();
     // new Rocks();
-    // new CoolStuff();
+    new CoolStuff();
   }
 }

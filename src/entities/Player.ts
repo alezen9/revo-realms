@@ -8,7 +8,15 @@ import {
   ActiveEvents,
 } from "@dimforge/rapier3d";
 import { type State } from "../Game";
-import { positionWorld, texture, uv, varying, vec3 } from "three/tsl";
+import {
+  float,
+  normalMap,
+  positionWorld,
+  texture,
+  uv,
+  varying,
+  vec3,
+} from "three/tsl";
 import { MeshLambertNodeMaterial } from "three/webgpu";
 import { RevoColliderType } from "../types";
 import { physicsManager, sceneManager, eventsManager } from "../systems";
@@ -35,7 +43,7 @@ const getConfig = () => {
     ANG_VEL_STRENGTH: 25,
     RADIUS: 0.5,
     MASS: 0.5,
-    PLAYER_INITIAL_POSITION: new Vector3(-220, 0.5, -220),
+    PLAYER_INITIAL_POSITION: new Vector3(80, 0.5, 124),
     CAMERA_OFFSET: new Vector3(0, 11, 17),
     CAMERA_LERP_FACTOR: 7.5,
     UP: new Vector3(0, 1, 0),
@@ -125,7 +133,7 @@ export default class Player {
   }
 
   private createCharacterMesh() {
-    const mesh = assetManager.resources.realmModel.scene.getObjectByName(
+    const mesh = assetManager.resources.worldModel.scene.getObjectByName(
       "player",
     ) as Mesh;
     mesh.material = new PlayerMaterial();
@@ -368,10 +376,13 @@ class PlayerMaterial extends MeshLambertNodeMaterial {
     const mapUv = tslUtils.computeMapUvByPosition(positionWorld.xz);
     const vMapUv = varying(mapUv);
     const shadowFactor = lightingManager.getTerrainShadowFactor(vMapUv);
-    const baseColor = texture(assetManager.resources.footballDiffuse, uv()).mul(
-      2.5,
+    const baseColor = texture(assetManager.resources.playerDiffuse, uv()).mul(
+      2,
     );
 
     this.colorNode = baseColor.mul(shadowFactor);
+
+    const normal = texture(assetManager.resources.playerNormal, uv());
+    this.normalNode = normalMap(normal, float(3.5));
   }
 }

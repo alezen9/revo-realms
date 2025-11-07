@@ -7,9 +7,9 @@ import OnePiece from "./OnePiece";
 export default class CoolStuff {
   constructor() {
     new GodOfWar();
-    new OnePiece();
-    new JoJo();
-    new Naruto();
+    // new OnePiece();
+    // new JoJo();
+    // new Naruto();
     new Campfire();
   }
 }

@@ -89,7 +89,7 @@ const uniforms = {
   uWindSpeed: uniform(0.25),
   uvWindScale: uniform(1.75),
   // Color
-  uBaseColor: uniform(new Color().setRGB(0.02, 0.05, 0.01)),
+  uBaseColor: uniform(new Color().setRGB(0.03, 0.05, 0.01)),
   uTipColor: uniform(new Color().setRGB(0.47, 0.25, 0.04)),
   uColorMixFactor: uniform(0.1),
   uColorVariationStrength: uniform(2.3),

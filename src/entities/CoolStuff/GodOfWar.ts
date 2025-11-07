@@ -1,10 +1,13 @@
 import { assetManager } from "../../systems";
-import { Color, Mesh } from "three";
-import { MeshLambertNodeMaterial } from "three/webgpu";
+import { Mesh } from "three";
+import {
+  MeshLambertNodeMaterial,
+  MeshStandardNodeMaterial,
+} from "three/webgpu";
 import { ColliderDesc, RigidBodyDesc } from "@dimforge/rapier3d";
 import { physicsManager, sceneManager } from "../../systems";
 import { RevoColliderType } from "../../types";
-import { texture, uv } from "three/tsl";
+import { color, texture, uv } from "three/tsl";
 
 class TrunkMaterial extends MeshLambertNodeMaterial {
   constructor() {
@@ -17,15 +20,16 @@ class TrunkMaterial extends MeshLambertNodeMaterial {
   }
 }
 
-class AxeMaterial extends MeshLambertNodeMaterial {
+class AxeMaterial extends MeshStandardNodeMaterial {
   constructor() {
     super();
     this.precision = "lowp";
     this.flatShading = false;
-    this.map = assetManager.resources.axeDiffuse;
-    this.emissiveMap = assetManager.resources.axeEmissive;
-    this.emissiveIntensity = 35;
-    this.emissive = new Color("lightblue");
+    const sample = texture(assetManager.resources.godOfWarAxeDiffuse, uv());
+    const diffuse = sample.rgb;
+    const emissive = color("lightblue").mul(55).mul(sample.a);
+    this.colorNode = diffuse;
+    this.emissiveNode = emissive;
   }
 }
 
