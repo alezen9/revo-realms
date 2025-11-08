@@ -70,7 +70,8 @@ const uniforms = {
   uCameraMatrix: uniform(new Matrix4()), // MVP = Projection * View
   uFx: uniform(1.0),
   uFy: uniform(1.0),
-  uCullPadNDC: uniform(0.075), // small padding to hide rotation lag
+  uCullPadNDCX: uniform(0.075), // small padding to hide rotation lag
+  uCullPadNDCY: uniform(0.75), // small padding to avoid near clipping
   // other
   uPlayerPosition: uniform(new Vector3(0, 0, 0)),
   uPlayerDeltaXZ: uniform(new Vector2(0, 0)),
@@ -380,7 +381,8 @@ class GrassSsbo {
       uniforms.uFx,
       uniforms.uFy,
       config.BLADE_BOUNDING_SPHERE_RADIUS,
-      uniforms.uCullPadNDC,
+      uniforms.uCullPadNDCX,
+      uniforms.uCullPadNDCY,
     ).mul(stochasticKeep);
     data1.assign(this.setVisibility(data1, isVisible));
 
@@ -739,10 +741,16 @@ export default class Grass {
       max: 5,
       step: 0.01,
     });
-    general.addBinding(uniforms.uCullPadNDC, "value", {
-      label: "Cull pad",
+    general.addBinding(uniforms.uCullPadNDCX, "value", {
+      label: "Cull pad X",
       min: 0,
       max: 0.5,
+      step: 0.001,
+    });
+    general.addBinding(uniforms.uCullPadNDCY, "value", {
+      label: "Cull pad Y",
+      min: 0,
+      max: 1,
       step: 0.001,
     });
   }
