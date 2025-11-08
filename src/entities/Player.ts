@@ -28,6 +28,11 @@ import {
   inputManager,
 } from "../systems";
 
+const POSITIONS = {
+  center: [0, 0.5, 0],
+  berserk: [180, 0.5, -150],
+};
+
 const getConfig = () => {
   const jumpImpulse = 75;
   return {
@@ -43,7 +48,7 @@ const getConfig = () => {
     ANG_VEL_STRENGTH: 25,
     RADIUS: 0.5,
     MASS: 0.5,
-    PLAYER_INITIAL_POSITION: new Vector3(80, 0.5, 124),
+    PLAYER_INITIAL_POSITION: new Vector3(...POSITIONS.berserk),
     CAMERA_OFFSET: new Vector3(0, 11, 17),
     CAMERA_LERP_FACTOR: 7.5,
     UP: new Vector3(0, 1, 0),

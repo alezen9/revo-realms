@@ -33,7 +33,9 @@ import treeCanopyNormalUrl from "/textures/realm/canopyNormal.webp?url";
 import godOfWarAxeDiffuseUrl from "/textures/new-world/cool-stuff/god-of-war/axe_diff_emissive_1k.ktx2?url";
 import godOfWarTrunkDiffuseUrl from "/textures/new-world/cool-stuff/god-of-war/trunk_diffuse_512.ktx2?url";
 import godOfWarTrunkNormalUrl from "/textures/new-world/cool-stuff/god-of-war/trunk_normal_512.ktx2?url";
-
+// Berserk
+import berserkDiffuseUrl from "/textures/new-world/cool-stuff/berserk/diffuse_1k.ktx2?url";
+import berserkNormalRoughnessUrl from "/textures/new-world/cool-stuff/berserk/normalRough_2k.ktx2?url";
 // One Piece
 import onePieceAtlasUrl from "/textures/realm/onePieceAtlas.webp?url";
 // Naruto
@@ -189,6 +191,23 @@ export const manifest = [
   {
     name: "godOfWarTrunkNormal",
     url: godOfWarTrunkNormalUrl,
+    type: "ktx2",
+    flipY: false,
+  },
+
+  // -----------------------------------------------
+  // Berserk
+  // -----------------------------------------------
+  {
+    name: "berserkDiffuse",
+    url: berserkDiffuseUrl,
+    type: "ktx2",
+    flipY: false,
+    colorSpace: SRGBColorSpace,
+  },
+  {
+    name: "berserkNormalRoughness",
+    url: berserkNormalRoughnessUrl,
     type: "ktx2",
     flipY: false,
   },

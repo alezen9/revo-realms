@@ -36,19 +36,19 @@ class AxeMaterial extends MeshStandardNodeMaterial {
 export default class GodOfWar {
   constructor() {
     // Visual
-    const axe = assetManager.resources.realmModel.scene.getObjectByName(
+    const axe = assetManager.resources.worldModel.scene.getObjectByName(
       "kratos_axe",
     ) as Mesh;
     axe.material = new AxeMaterial();
 
-    const trunk = assetManager.resources.realmModel.scene.getObjectByName(
+    const trunk = assetManager.resources.worldModel.scene.getObjectByName(
       "tree_trunk",
     ) as Mesh;
     trunk.material = new TrunkMaterial();
     sceneManager.scene.add(axe, trunk);
 
     // Physics
-    const axeCollider = assetManager.resources.realmModel.scene.getObjectByName(
+    const axeCollider = assetManager.resources.worldModel.scene.getObjectByName(
       "axe_collider",
     ) as Mesh;
     const rigidBodyDescAxe = RigidBodyDesc.fixed()
@@ -66,7 +66,7 @@ export default class GodOfWar {
     physicsManager.world.createCollider(colliderDescAxe, rigidBodyAxe);
 
     const trunkCollider =
-      assetManager.resources.realmModel.scene.getObjectByName(
+      assetManager.resources.worldModel.scene.getObjectByName(
         "trunk_collider",
       ) as Mesh;
     const { x, y } = trunkCollider.geometry.boundingBox!.max;

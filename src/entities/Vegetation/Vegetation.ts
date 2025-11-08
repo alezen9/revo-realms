@@ -2,6 +2,7 @@ import Grass from "./Grass";
 import Flowers from "./Flowers";
 import { WaterLilies } from "./WaterLilies";
 import Trees from "./Trees";
+import { BigTree } from "./BigTree";
 // import Leaves from "./Leaves";
 
 export default class Vegetation {
@@ -11,5 +12,6 @@ export default class Vegetation {
     new Flowers();
     // new Trees();
     // new Leaves(); // not ready yet but pretty good already
+    new BigTree();
   }
 }
