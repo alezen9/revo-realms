@@ -31,6 +31,7 @@ import {
 const POSITIONS = {
   center: [0, 0.5, 0],
   berserk: [180, 0.5, -150],
+  hill: [-100, 0.5, 240],
 };
 
 const getConfig = () => {
@@ -48,7 +49,7 @@ const getConfig = () => {
     ANG_VEL_STRENGTH: 25,
     RADIUS: 0.5,
     MASS: 0.5,
-    PLAYER_INITIAL_POSITION: new Vector3(...POSITIONS.berserk),
+    PLAYER_INITIAL_POSITION: new Vector3(...POSITIONS.hill),
     CAMERA_OFFSET: new Vector3(0, 11, 17),
     CAMERA_LERP_FACTOR: 7.5,
     UP: new Vector3(0, 1, 0),

@@ -114,7 +114,7 @@ class GrassSsbo {
   // z -> 0/12 windX - 12/12 windZ (0 unused)
   // w -> 0/8 current scale - 8/8 original scale - 16/1 shadow - 17/1 visibility - 18/4 wind noise factor (0 unused)
   private buffer1: ReturnType<typeof instancedArray>;
-  // x -> 0/4 position based noise (20 unused)
+  // x -> 0/4 position based noise - 4/20 offsetY (0 unused)
   private buffer2: ReturnType<typeof instancedArray>;
 
   constructor() {
@@ -132,6 +132,10 @@ class GrassSsbo {
   get computeBuffer2() {
     return this.buffer2;
   }
+
+  getYOffset = Fn(([data = float(0)]) => {
+    return tslUtils.unpackUnits(data, 4, 20, 0, 10);
+  });
 
   getWind = Fn(([data = vec4(0)]) => {
     const x = tslUtils.unpackUnits(data.z, 0, 12, -2, 2);
@@ -173,6 +177,10 @@ class GrassSsbo {
 
   getPositionNoise = Fn(([data = float(0)]) => {
     return tslUtils.unpackUnit(data, 0, 4);
+  });
+
+  private setYOffset = Fn(([data = float(0), value = float(0)]) => {
+    return tslUtils.packUnits(data, 4, 20, value, 0, 10);
   });
 
   private setWind = Fn(([data = vec4(0), value = vec2(0)]) => {
@@ -380,6 +388,10 @@ class GrassSsbo {
     If(isVisible, () => {
       const data2 = this.buffer2.element(instanceIndex);
 
+      // Y offset
+      const yOffset = VegetationSsboUtils.computeYOffset(worldPos);
+      data2.assign(this.setYOffset(data2, yOffset));
+
       // Compute distance to player
       const diff = worldPos.xz.sub(uniforms.uPlayerPosition.xz);
       const distSq = diff.dot(diff);
@@ -387,7 +399,7 @@ class GrassSsbo {
       // Check if the player is on the ground
       const isPlayerGrounded = step(
         0.1,
-        float(1).sub(uniforms.uPlayerPosition.y),
+        float(1).sub(uniforms.uPlayerPosition.y.sub(yOffset)),
       );
 
       const inner = uniforms.uTrailRaiusSquared.mul(0.35);
@@ -441,6 +453,7 @@ class GrassMaterial extends SpriteNodeMaterial {
     const data1 = this.ssbo.computeBuffer1.element(instanceIndex);
     const data2 = this.ssbo.computeBuffer2.element(instanceIndex);
     const offsetX = data1.x;
+    const offsetY = this.ssbo.getYOffset(data2);
     const offsetZ = data1.y;
     const windXZ = this.ssbo.getWind(data1);
     const scaleY = this.ssbo.getScale(data1);
@@ -453,7 +466,6 @@ class GrassMaterial extends SpriteNodeMaterial {
     this.opacityNode = isVisible;
 
     // SCALE
-    // const scaleX = positionNoise.add(0.75);
     const scaleX = positionNoise.remap(0, 1, 0.5, 1.5);
     const bladeScale = vec3(scaleX, scaleY, 1);
     this.scaleNode = mix(vec3(0), bladeScale, isVisible);
@@ -475,7 +487,7 @@ class GrassMaterial extends SpriteNodeMaterial {
       .mul(INFINITY)
       .mul(float(1).sub(isVisible));
     // base offset
-    const bladePosition = vec3(offsetX, 0, offsetZ);
+    const bladePosition = vec3(offsetX, offsetY, offsetZ);
     // sway effect
     const randomPhase = positionNoise.mul(PI2);
     const swayAmount = sin(time.mul(5).add(randomPhase)).mul(0.15);
@@ -503,7 +515,7 @@ class GrassMaterial extends SpriteNodeMaterial {
       .add(swayOffset)
       .add(flutterOffset)
       .add(windOffset);
-    this.positionNode = pos;
+    this.positionNode = bladePosition;
 
     // COLOR + AO
     // ao

@@ -155,7 +155,7 @@ class TerainMaterial extends MeshLambertNodeMaterial {
     );
 
     // const height = texture(
-    //   assetManager.resources.terrainHeightMap,
+    //   assetManager.resources.heightmap,
     //   vec2(vUv.x, float(1).sub(vUv.y)),
     // ).r;
 
@@ -291,7 +291,7 @@ class InnerTerrain {
       heights,
       displacement,
     );
-    assetManager.resources.terrainHeightMap.copy(heightMap);
+    assetManager.resources.heightmap.copy(heightMap);
 
     const rigidBodyDesc = RigidBodyDesc.fixed()
       .setTranslation(0, -displacement, 0)
