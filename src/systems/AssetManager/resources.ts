@@ -21,7 +21,7 @@ import terrainShadowAoUrl from "/textures/realm/terrainShadowAo.webp?url";
 import waterLiliesDiffuseUrl from "/textures/realm/waterLiliesDiffuse.webp?url";
 import waterLiliesAlphaUrl from "/textures/realm/waterLiliesAlpha.webp?url";
 // Flowers
-import flowerAtlasUrl from "/textures/realm/flowerAtlas.webp?url";
+import flowerAtlasUrl from "/textures/new-world/terrain/flowerAtlas.ktx2?url";
 // Stones
 import stoneAtlasUrl from "/textures/realm/stoneAtlas.webp?url";
 // Trees
@@ -250,10 +250,9 @@ export const manifest = [
   // Flowers
   // -----------------------------------------------
   {
-    name: "flowerAtlas",
+    name: "flowers",
     url: flowerAtlasUrl,
-    type: "texture",
-    flipY: false,
+    type: "ktx2",
     colorSpace: SRGBColorSpace,
   },
 
