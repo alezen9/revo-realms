@@ -65,7 +65,8 @@ export class VegetationSsboUtils {
    * @param fX float
    * @param fY float
    * @param r float
-   * @param padNdc float
+   * @param padNdcX float (affects both left and right)
+   * @param padNdcY float (affects only near)
    * @returns `int` Flag inside/outside camera frustum
    */
   static computeVisibility = Fn(
@@ -75,7 +76,8 @@ export class VegetationSsboUtils {
       fX = float(0),
       fY = float(0),
       r = float(0),
-      padNdc = float(0),
+      padNdcX = float(0),
+      padNdcY = float(0),
     ]) => {
       const clip = cameraMatrix.mul(vec4(worldPos, 1.0));
       const invW = float(1).div(clip.w);
@@ -84,16 +86,19 @@ export class VegetationSsboUtils {
       // works for WebGL and WebGPU
       const eyeDepthAbs = clip.w.abs().max(EPSILON); // epsilon only to avoid div-by-zero, not to inflate radius
 
-      const rNdcX = fX.mul(r).div(eyeDepthAbs).add(padNdc);
-      const rNdcY = fY.mul(r).div(eyeDepthAbs).add(padNdc);
+      const rNdcX = fX.mul(r).div(eyeDepthAbs).add(padNdcX);
+      const rNdcY = fY.mul(r).div(eyeDepthAbs).add(padNdcY);
 
       const one = float(1);
-      const visX = step(one.negate().sub(rNdcX), ndc.x).mul(
-        step(ndc.x, one.add(rNdcX)),
-      );
-      const visY = step(one.negate().sub(rNdcY), ndc.y).mul(
-        step(ndc.y, one.add(rNdcY)),
-      );
+
+      const visLeft = step(one.negate().sub(rNdcX), ndc.x);
+      const visRight = step(ndc.x, one.add(rNdcX));
+      const visX = visLeft.mul(visRight);
+
+      const visNear = step(one.negate().sub(rNdcY), ndc.y);
+      const visFar = step(ndc.y, one);
+      const visY = visNear.mul(visFar);
+
       const visZ = step(-1, ndc.z).mul(step(ndc.z, 1)); // no Z padding
 
       return visX.mul(visY).mul(visZ);
