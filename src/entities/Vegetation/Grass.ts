@@ -517,7 +517,7 @@ class GrassMaterial extends SpriteNodeMaterial {
       .add(swayOffset)
       .add(flutterOffset)
       .add(windOffset);
-    this.positionNode = bladePosition;
+    this.positionNode = pos;
 
     // COLOR + AO
     // ao
