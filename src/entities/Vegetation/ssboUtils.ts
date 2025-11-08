@@ -105,10 +105,21 @@ export class VegetationSsboUtils {
    * @returns `float` Alpha based on grassMap
    */
   static computeAlpha = Fn(([worldPos = vec3(0)]) => {
-    const alphaUv = tslUtils.computeMapUvByPosition(worldPos.xz);
-    const alpha = texture(assetManager.resources.grassMap, alphaUv).g;
+    const uv = tslUtils.computeMapUvByPosition(worldPos.xz);
+    const alpha = texture(assetManager.resources.grassMap, uv).g;
     const threshold = step(0.25, alpha);
     return threshold;
+  });
+
+  /**
+   * @param worldPos vec3
+   * @returns `float` Height based on terrain heightmap
+   */
+  static computeYOffset = Fn(([worldPos = vec3(0)]) => {
+    const uv = tslUtils.computeMapUvByPosition(worldPos.xz);
+    const fixedUv = vec2(uv.x, float(1).sub(uv.y));
+    const height = texture(assetManager.resources.heightmap, fixedUv).r;
+    return height;
   });
 
   /**

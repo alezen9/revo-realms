@@ -21,7 +21,7 @@ import { type RendererManager } from "../RendererManager/RendererManager";
 import { eventsManager } from "..";
 
 type InternalResources = {
-  terrainHeightMap: DataTexture;
+  heightmap: DataTexture;
 };
 
 type Resources = ExternalResources & InternalResources;
@@ -37,7 +37,7 @@ export class AssetManager {
   private ktx2Loader: KTX2Loader;
 
   resources = {
-    terrainHeightMap: new DataTexture(), // placeholder
+    heightmap: new DataTexture(), // placeholder
   } as Resources;
 
   constructor() {
