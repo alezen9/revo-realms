@@ -42,7 +42,7 @@ import onePieceAtlasUrl from "/textures/realm/onePieceAtlas.webp?url";
 import kunaiDiffuseUrl from "/textures/realm/kunaiDiffuse.webp?url";
 import kunaiMRUrl from "/textures/realm/kunaiMR.webp?url";
 // Campfire
-import campfireDiffuseUrl from "/textures/new-world/campfire/diffuse_512_etc1s.ktx2?url";
+import campfireDiffuseUrl from "/textures/new-world/campfire/diffuse_512.ktx2?url";
 import campfireNormalUrl from "/textures/new-world/campfire/normal_512.ktx2?url";
 // Log
 import logNormalUrl from "/textures/new-world/log/normal_1k.ktx2?url";
