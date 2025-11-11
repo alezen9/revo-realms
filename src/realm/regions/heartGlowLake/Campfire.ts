@@ -1,4 +1,4 @@
-import { Mesh } from "three";
+import { Mesh, PointLight } from "three";
 import { ColliderDesc, RigidBodyDesc } from "@dimforge/rapier3d";
 import { RevoColliderType } from "../../../types";
 import ParticleSystem from "../../../utils/ParticleSystem";
@@ -24,6 +24,9 @@ export class Campfire {
       "campfire",
     ) as Mesh;
     campfire.material = new CampfireMaterial();
+
+    // const pointLight = new PointLight("darkorange", 3, 2);
+    // pointLight.position.copy(campfire.position).setY(0.15);
 
     const fire = new ParticleSystem({
       preset: "fire",
