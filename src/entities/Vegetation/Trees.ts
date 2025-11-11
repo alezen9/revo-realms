@@ -27,7 +27,7 @@ import {
 } from "three/webgpu";
 import { assetManager } from "../../systems";
 import { ColliderDesc, RigidBodyDesc } from "@dimforge/rapier3d";
-import { tslUtils } from "../../utils/TSLUtils";
+import { TSLUtils } from "../../utils/TSLUtils";
 import { RevoColliderType } from "../../types";
 import { debugManager, sceneManager, physicsManager } from "../../systems";
 
@@ -63,7 +63,7 @@ class CanopyMaterial extends MeshLambertNodeMaterial {
     this.transparent = true;
     this.side = DoubleSide;
 
-    const worlUv = tslUtils.computeMapUvByPosition(positionWorld.xz);
+    const worlUv = TSLUtils.computeMapUvByPosition(positionWorld.xz);
     const noise = texture(assetManager.resources.noiseTexture, worlUv);
 
     // Diffuse

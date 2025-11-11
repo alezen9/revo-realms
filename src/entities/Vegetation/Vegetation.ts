@@ -12,6 +12,6 @@ export default class Vegetation {
     new Flowers();
     // new Trees();
     // new Leaves(); // not ready yet but pretty good already
-    new BigTree();
+    // new BigTree();
   }
 }

@@ -5,6 +5,7 @@ import {
   physicsManager,
   rendererManager,
 } from ".";
+import { Utils } from "../utils/Utils";
 
 export default class _SetupManager {
   constructor() {
@@ -22,5 +23,6 @@ export default class _SetupManager {
     ]);
     eventsManager.emit("engine-loading-core-progress", 100);
     audioManager.initAsync(); // bg loading
+    Utils.init();
   }
 }

@@ -1,7 +1,7 @@
 import { eventsManager } from "../systems";
 import compassUrl from "/textures/hud/compass.webp?url";
 import arrowUrl from "/textures/hud/compassArrow.webp?url";
-import { realmConfig } from "../realms/PortfolioRealm";
+import { realmConfig } from "../realm/RevoRealm";
 
 export class Compass {
   constructor() {

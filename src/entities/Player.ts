@@ -20,7 +20,7 @@ import {
 import { MeshLambertNodeMaterial } from "three/webgpu";
 import { RevoColliderType } from "../types";
 import { physicsManager, sceneManager, eventsManager } from "../systems";
-import { tslUtils } from "../utils/TSLUtils";
+import { TSLUtils } from "../utils/TSLUtils";
 import {
   assetManager,
   lightingManager,
@@ -29,9 +29,10 @@ import {
 } from "../systems";
 
 const POSITIONS = {
-  center: [0, 0.5, 0],
+  center: [0, 0.5, 10],
   berserk: [180, 0.5, -150],
   hill: [-100, 0.5, 240],
+  campfire: [-170, 0.5, 180],
 };
 
 const getConfig = () => {
@@ -49,7 +50,7 @@ const getConfig = () => {
     ANG_VEL_STRENGTH: 25,
     RADIUS: 0.5,
     MASS: 0.5,
-    PLAYER_INITIAL_POSITION: new Vector3(...POSITIONS.hill),
+    PLAYER_INITIAL_POSITION: new Vector3(...POSITIONS.center),
     CAMERA_OFFSET: new Vector3(0, 11, 17),
     CAMERA_LERP_FACTOR: 7.5,
     UP: new Vector3(0, 1, 0),
@@ -379,7 +380,7 @@ class PlayerMaterial extends MeshLambertNodeMaterial {
 
     this.castShadowNode = vec3(0.6);
 
-    const mapUv = tslUtils.computeMapUvByPosition(positionWorld.xz);
+    const mapUv = TSLUtils.computeMapUvByPosition(positionWorld.xz);
     const vMapUv = varying(mapUv);
     const shadowFactor = lightingManager.getTerrainShadowFactor(vMapUv);
     const baseColor = texture(assetManager.resources.playerDiffuse, uv()).mul(

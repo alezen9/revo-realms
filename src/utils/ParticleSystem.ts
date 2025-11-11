@@ -13,7 +13,6 @@ import {
   step,
   texture,
   time,
-  uniform,
   uv,
   vec2,
   vec3,
@@ -28,13 +27,8 @@ import {
   PlaneGeometry,
   SpriteNodeMaterial,
 } from "three/webgpu";
-import { isMeshVisible } from "./isMeshVisible";
-import {
-  assetManager,
-  rendererManager,
-  eventsManager,
-  debugManager,
-} from "../systems";
+import { assetManager, rendererManager, eventsManager } from "../systems";
+import { Utils } from "./Utils";
 
 type ParticleBuffer = ReturnType<typeof instancedArray>;
 
@@ -114,7 +108,7 @@ export default class ParticleSystem extends InstancedMesh {
     }
 
     eventsManager.on("engine-update", () => {
-      if (!isMeshVisible(this)) return;
+      if (!Utils.isMeshVisible(this)) return;
       rendererManager.renderer.computeAsync(computeUpdate);
     });
   }

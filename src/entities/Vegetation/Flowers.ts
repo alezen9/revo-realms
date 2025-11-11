@@ -36,7 +36,7 @@ import {
   systemState,
 } from "../../systems";
 import { VegetationSsboUtils } from "./ssboUtils";
-import { tslUtils } from "../../utils/TSLUtils";
+import { TSLUtils } from "../../utils/TSLUtils";
 
 const getConfig = () => {
   const FLOWER_WIDTH = 0.5;
@@ -116,19 +116,19 @@ class FlowerMaterial extends SpriteNodeMaterial {
   }
 
   private getYBase = Fn(([data = vec4(0)]) => {
-    return tslUtils.unpackUnits(data.y, 0, 6, 0.5, 1.25);
+    return TSLUtils.unpackUnits(data.y, 0, 6, 0.5, 1.25);
   });
 
   private getYOffset = Fn(([data = vec4(0)]) => {
-    return tslUtils.unpackUnits(data.y, 6, 18, 0, 10);
+    return TSLUtils.unpackUnits(data.y, 6, 18, 0, 10);
   });
 
   private setYBase = Fn(([data = vec4(0), value = float(0)]) => {
-    return tslUtils.packUnits(data.y, 0, 6, value, 0.5, 1.25);
+    return TSLUtils.packUnits(data.y, 0, 6, value, 0.5, 1.25);
   });
 
   private setYOffset = Fn(([data = vec4(0), value = float(0)]) => {
-    return tslUtils.packUnits(data.y, 6, 18, value, 0, 10);
+    return TSLUtils.packUnits(data.y, 6, 18, value, 0, 10);
   });
 
   private computeInit = Fn(() => {

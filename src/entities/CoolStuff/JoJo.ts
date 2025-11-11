@@ -13,7 +13,7 @@ import {
   uv,
   vec2,
 } from "three/tsl";
-import { tslUtils } from "../../utils/TSLUtils";
+import { TSLUtils } from "../../utils/TSLUtils";
 
 export default class JoJo {
   constructor() {
@@ -50,7 +50,7 @@ class MaskMaterial extends MeshLambertNodeMaterial {
     const { stoneDiffuse } = assetManager.atlasesCoords.stones;
 
     // Diffuse
-    const _uvDiff = tslUtils.computeAtlasUv(
+    const _uvDiff = TSLUtils.computeAtlasUv(
       vec2(...stoneDiffuse.scale),
       vec2(...stoneDiffuse.offset),
       uv(),

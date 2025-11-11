@@ -14,7 +14,7 @@ import {
   vec3,
   vec4,
 } from "three/tsl";
-import { tslUtils } from "../../utils/TSLUtils";
+import { TSLUtils } from "../../utils/TSLUtils";
 import { assetManager } from "../../systems";
 
 export class VegetationSsboUtils {
@@ -110,7 +110,7 @@ export class VegetationSsboUtils {
    * @returns `float` Alpha based on grassMap
    */
   static computeAlpha = Fn(([worldPos = vec3(0)]) => {
-    const uv = tslUtils.computeMapUvByPosition(worldPos.xz);
+    const uv = TSLUtils.computeMapUvByPosition(worldPos.xz);
     const alpha = texture(assetManager.resources.grassMap, uv).g;
     const threshold = step(0.25, alpha);
     return threshold;
@@ -121,7 +121,7 @@ export class VegetationSsboUtils {
    * @returns `float` Height based on terrain heightmap
    */
   static computeYOffset = Fn(([worldPos = vec3(0)]) => {
-    const uv = tslUtils.computeMapUvByPosition(worldPos.xz);
+    const uv = TSLUtils.computeMapUvByPosition(worldPos.xz);
     const fixedUv = vec2(uv.x, float(1).sub(uv.y));
     const height = texture(assetManager.resources.heightmap, fixedUv).r;
     return height;

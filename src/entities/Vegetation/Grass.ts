@@ -40,7 +40,7 @@ import {
   rendererManager,
   debugManager,
 } from "../../systems";
-import { tslUtils } from "../../utils/TSLUtils";
+import { TSLUtils } from "../../utils/TSLUtils";
 import { SpriteNodeMaterial } from "three/webgpu";
 import { systemState, eventsManager } from "../../systems";
 import { VegetationSsboUtils } from "./ssboUtils";
@@ -135,17 +135,17 @@ class GrassSsbo {
   }
 
   getYOffset = Fn(([data = float(0)]) => {
-    return tslUtils.unpackUnits(data, 4, 20, 0, 10);
+    return TSLUtils.unpackUnits(data, 4, 20, 0, 10);
   });
 
   getWind = Fn(([data = vec4(0)]) => {
-    const x = tslUtils.unpackUnits(data.z, 0, 12, -2, 2);
-    const z = tslUtils.unpackUnits(data.z, 12, 12, -2, 2);
+    const x = TSLUtils.unpackUnits(data.z, 0, 12, -2, 2);
+    const z = TSLUtils.unpackUnits(data.z, 12, 12, -2, 2);
     return vec2(x, z);
   });
 
   getScale = Fn(([data = vec4(0)]) => {
-    return tslUtils.unpackUnits(
+    return TSLUtils.unpackUnits(
       data.w,
       0,
       8,
@@ -155,7 +155,7 @@ class GrassSsbo {
   });
 
   getOriginalScale = Fn(([data = vec4(0)]) => {
-    return tslUtils.unpackUnits(
+    return TSLUtils.unpackUnits(
       data.w,
       8,
       8,
@@ -165,33 +165,33 @@ class GrassSsbo {
   });
 
   getShadow = Fn(([data = vec4(0)]) => {
-    return tslUtils.unpackFlag(data.w, 16);
+    return TSLUtils.unpackFlag(data.w, 16);
   });
 
   getVisibility = Fn(([data = vec4(0)]) => {
-    return tslUtils.unpackFlag(data.w, 17);
+    return TSLUtils.unpackFlag(data.w, 17);
   });
 
   getWindNoise = Fn(([data = vec4(0)]) => {
-    return tslUtils.unpackUnit(data.w, 18, 6);
+    return TSLUtils.unpackUnit(data.w, 18, 6);
   });
 
   getPositionNoise = Fn(([data = float(0)]) => {
-    return tslUtils.unpackUnit(data, 0, 4);
+    return TSLUtils.unpackUnit(data, 0, 4);
   });
 
   private setYOffset = Fn(([data = float(0), value = float(0)]) => {
-    return tslUtils.packUnits(data, 4, 20, value, 0, 10);
+    return TSLUtils.packUnits(data, 4, 20, value, 0, 10);
   });
 
   private setWind = Fn(([data = vec4(0), value = vec2(0)]) => {
-    data.z = tslUtils.packUnits(data.z, 0, 12, value.x, -2, 2);
-    data.z = tslUtils.packUnits(data.z, 12, 12, value.y, -2, 2);
+    data.z = TSLUtils.packUnits(data.z, 0, 12, value.x, -2, 2);
+    data.z = TSLUtils.packUnits(data.z, 12, 12, value.y, -2, 2);
     return data;
   });
 
   private setScale = Fn(([data = vec4(0), value = float(0)]) => {
-    data.w = tslUtils.packUnits(
+    data.w = TSLUtils.packUnits(
       data.w,
       0,
       8,
@@ -203,7 +203,7 @@ class GrassSsbo {
   });
 
   private setOriginalScale = Fn(([data = vec4(0), value = float(0)]) => {
-    data.w = tslUtils.packUnits(
+    data.w = TSLUtils.packUnits(
       data.w,
       8,
       8,
@@ -215,22 +215,22 @@ class GrassSsbo {
   });
 
   private setShadow = Fn(([data = vec4(0), value = float(0)]) => {
-    data.w = tslUtils.packFlag(data.w, 16, value);
+    data.w = TSLUtils.packFlag(data.w, 16, value);
     return data;
   });
 
   private setVisibility = Fn(([data = vec4(0), value = float(0)]) => {
-    data.w = tslUtils.packFlag(data.w, 17, value);
+    data.w = TSLUtils.packFlag(data.w, 17, value);
     return data;
   });
 
   private setWindNoise = Fn(([data = vec4(0), value = float(0)]) => {
-    data.w = tslUtils.packUnit(data.w, 18, 6, value);
+    data.w = TSLUtils.packUnit(data.w, 18, 6, value);
     return data;
   });
 
   private setPositionNoise = Fn(([data = float(0), value = float(0)]) => {
-    return tslUtils.packUnit(data, 0, 4, value);
+    return TSLUtils.packUnit(data, 0, 4, value);
   });
 
   private computeInit = Fn(() => {
@@ -345,7 +345,7 @@ class GrassSsbo {
   );
 
   private computeShadow = Fn(([worldPos = vec3(0)]) => {
-    const _uv = tslUtils.computeMapUvByPosition(worldPos.xz);
+    const _uv = TSLUtils.computeMapUvByPosition(worldPos.xz);
     const shadowAo = texture(
       assetManager.resources.terrainShadowAoTexture,
       _uv,

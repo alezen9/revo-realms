@@ -41,7 +41,7 @@ import {
   sceneManager,
   eventsManager,
 } from "../../systems";
-import { tslUtils } from "../../utils/TSLUtils";
+import { TSLUtils } from "../../utils/TSLUtils";
 
 const getConfig = () => {
   const COUNT = 128;
@@ -89,11 +89,11 @@ class LeavesSsbo {
   }
 
   getRotation = Fn(([data = vec4(0)]) => {
-    return tslUtils.unpackAngle(data.w, 0, 12);
+    return TSLUtils.unpackAngle(data.w, 0, 12);
   });
 
   setRotation = Fn(([data = vec4(0), value = float(0)]) => {
-    data.w = tslUtils.packAngle(data.w, 0, 12, value);
+    data.w = TSLUtils.packAngle(data.w, 0, 12, value);
     return data;
   });
 
