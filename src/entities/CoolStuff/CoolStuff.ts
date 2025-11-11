@@ -1,5 +1,4 @@
 import Berserk from "./Berserk";
-import Campfire from "./Campfire";
 import GodOfWar from "./GodOfWar";
 import JoJo from "./JoJo";
 import Naruto from "./Naruto";
@@ -12,6 +11,5 @@ export default class CoolStuff {
     // new OnePiece();
     // new JoJo();
     // new Naruto();
-    new Campfire();
   }
 }

@@ -1,8 +1,7 @@
 import { Clock } from "three";
 import Player from "./entities/Player";
-import PortfolioRealm from "./realms/PortfolioRealm";
+import RevoRealm from "./realm/RevoRealm";
 import { debounce } from "lodash-es";
-import { getRefreshRate } from "./utils/getRefreshRate";
 import {
   debugManager,
   physicsManager,
@@ -10,6 +9,7 @@ import {
   sceneManager,
   eventsManager,
 } from "./systems";
+import { Utils } from "./utils/Utils";
 
 export type State = {
   delta: number;
@@ -34,7 +34,7 @@ export default class Game {
 
   constructor() {
     this.player = new Player();
-    new PortfolioRealm();
+    new RevoRealm();
   }
 
   private debugGame() {
@@ -60,7 +60,7 @@ export default class Game {
 
   private async updateRefreshRate() {
     if (!this.IS_CAP_FPS_ENABLED) return;
-    const refreshRate = await getRefreshRate();
+    const refreshRate = await Utils.getRefreshRate();
     this.config.halvenFPS = refreshRate > 120;
   }
 

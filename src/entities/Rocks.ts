@@ -19,7 +19,7 @@ import {
 } from "three/webgpu";
 import { ColliderDesc, RigidBodyDesc } from "@dimforge/rapier3d";
 import { physicsManager, sceneManager } from "../systems";
-import { tslUtils } from "../utils/TSLUtils";
+import { TSLUtils } from "../utils/TSLUtils";
 import { RevoColliderType } from "../types";
 import { assetManager, rendererManager } from "../systems";
 
@@ -68,7 +68,7 @@ class RockMaterial extends MeshLambertNodeMaterial {
     );
     const offsetDiffuse = stoneDiffOffset.add(stoneMossyDiffOffset);
 
-    const _uvDiff = tslUtils.computeAtlasUv(scaleDiffuse, offsetDiffuse, _uv);
+    const _uvDiff = TSLUtils.computeAtlasUv(scaleDiffuse, offsetDiffuse, _uv);
     this.colorNode = texture(assetManager.resources.stoneAtlas, _uvDiff);
 
     // Normal
@@ -85,7 +85,7 @@ class RockMaterial extends MeshLambertNodeMaterial {
     );
     const offsetNormal = stoneNorOffset.add(stoneMossyNorOffset);
 
-    const _uvNor = tslUtils.computeAtlasUv(scaleNormal, offsetNormal, _uv);
+    const _uvNor = TSLUtils.computeAtlasUv(scaleNormal, offsetNormal, _uv);
     const norAo = texture(assetManager.resources.stoneAtlas, _uvNor);
     this.normalNode = new NormalMapNode(norAo.rgb, float(3));
     this.normalScale = new Vector2(1, -1);

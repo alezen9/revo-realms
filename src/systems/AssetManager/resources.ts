@@ -42,18 +42,21 @@ import onePieceAtlasUrl from "/textures/realm/onePieceAtlas.webp?url";
 import kunaiDiffuseUrl from "/textures/realm/kunaiDiffuse.webp?url";
 import kunaiMRUrl from "/textures/realm/kunaiMR.webp?url";
 // Campfire
-import campfireDiffuseUrl from "/textures/new-world/cool-stuff/campfire/diffuse_512_etc1s.ktx2?url";
-import campfireNormalUrl from "/textures/new-world/cool-stuff/campfire/normal_512.ktx2?url";
+import campfireDiffuseUrl from "/textures/new-world/campfire/diffuse_512_etc1s.ktx2?url";
+import campfireNormalUrl from "/textures/new-world/campfire/normal_512.ktx2?url";
+// Log
+import logNormalUrl from "/textures/new-world/log/normal_1k.ktx2?url";
+import logDiffuseUrl from "/textures/new-world/log/diffuse_512.ktx2?url";
 // Fire
 import fireSpritesUrl from "/textures/new-world/cool-stuff/fire/fireSprites_128_etc1s.ktx2?url";
-// Player (Football)
-import playerDiffuseUrl from "/textures/new-world/player/diffuse_256.ktx2?url";
-import playerNormalUrl from "/textures/new-world/player/normal_256.ktx2?url";
+// Player
+import playerDiffuseUrl from "/textures/new-world/player/football/diffuse_512.ktx2?url";
+import playerNormalUrl from "/textures/new-world/player/football/normal_512.ktx2?url";
 // Leaf
 import leafDiffuseUrl from "/textures/realm/leafDiffuse.webp?url";
 
 import uvCheckerUrl from "/textures/new-world/debug/uvChecker_1k_uastc.ktx2?url";
-import normAoGravelUrl from "/textures/new-world/terrain/gravel_normAO_1k_uastc.ktx2?url";
+import terrainNormAoUrl from "/textures/new-world/terrain/groundNormalAO_1k.ktx2?url";
 import normVeinWaterUrl from "/textures/new-world/water/water_normal_vein_uastc.ktx2?url";
 import noiseAtlasUrl from "/textures/new-world/noise/noise_atlas_uastc.ktx2?url";
 
@@ -136,8 +139,8 @@ export const manifest = [
     flipY: false,
   },
   {
-    name: "normAoGravel",
-    url: normAoGravelUrl,
+    name: "terrainNormAo",
+    url: terrainNormAoUrl,
     type: "ktx2",
     wrap: true,
     anisotropy: 4,
@@ -169,6 +172,24 @@ export const manifest = [
     type: "ktx2",
     flipY: false,
   },
+
+  // -----------------------------------------------
+  // Log
+  // -----------------------------------------------
+  {
+    name: "logDiffuse",
+    url: logDiffuseUrl,
+    type: "ktx2",
+    colorSpace: SRGBColorSpace,
+  },
+  {
+    name: "logNormal",
+    url: logNormalUrl,
+    type: "ktx2",
+  },
+  // -----------------------------------------------
+  // Fire
+  // -----------------------------------------------
   { name: "fireSprites", url: fireSpritesUrl, type: "ktx2" },
 
   // -----------------------------------------------
@@ -213,7 +234,7 @@ export const manifest = [
   },
 
   // -----------------------------------------------
-  // Player (Football)
+  // Player
   // -----------------------------------------------
   {
     name: "playerDiffuse",

@@ -26,7 +26,7 @@ import {
   RedFormat,
   Vector3,
 } from "three/webgpu";
-import { realmConfig } from "../realms/PortfolioRealm";
+import { realmConfig } from "../realm/RevoRealm";
 import {
   ColliderDesc,
   HeightFieldFlags,
@@ -34,7 +34,7 @@ import {
   RigidBodyDesc,
 } from "@dimforge/rapier3d";
 import { type State } from "../Game";
-import { tslUtils } from "../utils/TSLUtils";
+import { TSLUtils } from "../utils/TSLUtils";
 import {
   assetManager,
   debugManager,
@@ -44,15 +44,15 @@ import {
 } from "../systems";
 
 const uniforms = {
-  uGrassTerrainColor: uniform(new Color().setRGB(0.16, 0.26, 0.08)),
+  uGrassTerrainColor1: uniform(new Color().setRGB(0.16, 0.26, 0.08)),
   uGrassTerrainColor2: uniform(new Color().setRGB(0.32, 0.49, 0.13)),
   uWaterSandColor: uniform(new Color().setRGB(0.54, 0.39, 0.2)),
   uPathSandColor: uniform(new Color().setRGB(0.65, 0.49, 0.27)),
-  uGravelColor: uniform(new Color().setRGB(1.0, 0.79, 0.41)),
+  uTerrainColor: uniform(new Color().setRGB(1.0, 0.79, 0.41)),
+  uTerrainNormalScale: uniform(0.6),
   uMinHeight: uniform(0),
   uMaxHeight: uniform(0),
   uGrassNormalScale: uniform(0.1),
-  uGravelNormalScale: uniform(0.6),
   uA: uniform(0),
   uB: uniform(0.2),
 };
@@ -69,8 +69,13 @@ class TerainMaterial extends MeshLambertNodeMaterial {
       title: "⛰️ Terrain",
       expanded: false,
     });
-    folder.addBinding(uniforms.uGravelColor, "value", {
-      label: "Gravel color",
+    folder.addBinding(uniforms.uTerrainColor, "value", {
+      label: "Terrain color",
+      view: "color",
+      color: { type: "float" },
+    });
+    folder.addBinding(uniforms.uTerrainNormalScale, "value", {
+      label: "Terrain normal scale",
       view: "color",
       color: { type: "float" },
     });
@@ -79,8 +84,8 @@ class TerainMaterial extends MeshLambertNodeMaterial {
     //   view: "color",
     //   color: { type: "float" },
     // });
-    folder.addBinding(uniforms.uGrassTerrainColor, "value", {
-      label: "Grass terrain color",
+    folder.addBinding(uniforms.uGrassTerrainColor1, "value", {
+      label: "Grass terrain color 1",
       view: "color",
       color: { type: "float" },
     });
@@ -92,8 +97,8 @@ class TerainMaterial extends MeshLambertNodeMaterial {
     folder.addBinding(uniforms.uGrassNormalScale, "value", {
       label: "Grass normal scale",
     });
-    folder.addBinding(uniforms.uGravelNormalScale, "value", {
-      label: "Gravel normal scale",
+    folder.addBinding(uniforms.uTerrainNormalScale, "value", {
+      label: "Terrain normal scale",
     });
     folder.addBinding(uniforms.uA, "value", {
       label: "A",
@@ -140,7 +145,7 @@ class TerainMaterial extends MeshLambertNodeMaterial {
 
   private createMaterial() {
     this.precision = "lowp";
-    const worldUv = tslUtils.computeMapUvByPosition(positionWorld.xz);
+    const worldUv = TSLUtils.computeMapUvByPosition(positionWorld.xz);
     const noise = texture(assetManager.resources.noiseAtlas, worldUv.mul(10));
     const vUv = varying(worldUv);
     const variation = remap(noise.r, 0, 1, 0.15, 1);
@@ -165,19 +170,19 @@ class TerainMaterial extends MeshLambertNodeMaterial {
     //   vUv.mul(81.7),
     // );
     const grassColor = mix(
-      uniforms.uGrassTerrainColor,
+      uniforms.uGrassTerrainColor1,
       uniforms.uGrassTerrainColor2,
       noise.b,
     );
-    const gravelColor = uniforms.uGravelColor;
+    const terrainColor = uniforms.uTerrainColor;
 
-    const final = mix(gravelColor, grassColor, smoothIsGrass);
+    const final = mix(terrainColor, grassColor, smoothIsGrass);
     this.colorNode = final;
 
-    const norAo = texture(assetManager.resources.normAoGravel, vUv.mul(81.7));
+    const norAo = texture(assetManager.resources.terrainNormAo, vUv.mul(41.7));
 
     const normalScale = mix(
-      uniforms.uGravelNormalScale,
+      uniforms.uTerrainNormalScale,
       uniforms.uGrassNormalScale,
       smoothIsGrass,
     );
@@ -403,101 +408,3 @@ export default class Terrain {
     new OuterTerrain(terrainMaterial);
   }
 }
-
-// export default class Terrain {
-//   private group: Group;
-//   private nGrid = 7;
-//   private tileSize = 32;
-//   private tileSizeSq = this.tileSize * this.tileSize;
-
-//   constructor() {
-//     const terrainMaterial = new TerainMaterial();
-//     new InnerTerrain(terrainMaterial);
-//     new OuterTerrain(terrainMaterial);
-
-//     const geometries = [
-//       new PlaneGeometry(this.tileSize, this.tileSize, 64, 64),
-//       new PlaneGeometry(this.tileSize, this.tileSize, 32, 32),
-//       new PlaneGeometry(this.tileSize, this.tileSize, 16, 16),
-//     ];
-//     geometries.forEach((g) => {
-//       g.rotateX(-Math.PI / 2);
-//     });
-
-//     this.group = this.createGrid(terrainMaterial, geometries);
-//     sceneManager.scene.add(this.group);
-
-//     // snap the whole grid in integer tile steps; wrap tiles locally
-//     eventsManager.on("update-throttle-2x", ({ player }) => {
-//       const dx = player.position.x - this.group.position.x;
-//       const dz = player.position.z - this.group.position.z;
-
-//       // early out if we're well within the current center tile
-//       if (dx * dx + dz * dz < this.tileSizeSq) return;
-
-//       // how many whole tiles did we move since last snap?
-//       const stepX = Math.round(dx / this.tileSize);
-//       const stepZ = Math.round(dz / this.tileSize);
-//       if (stepX === 0 && stepZ === 0) return;
-
-//       // snap group origin by whole tiles
-//       this.group.position.x += stepX * this.tileSize;
-//       this.group.position.z += stepZ * this.tileSize;
-
-//       // shift tiles opposite to movement and wrap within the grid span
-//       this.wrapTiles(stepX, stepZ);
-//     });
-//   }
-
-//   private createGrid(material: TerainMaterial, geometries: PlaneGeometry[]) {
-//     const group = new Group();
-//     const half = Math.floor(this.nGrid / 2);
-
-//     for (let j = -half; j <= half; j++) {
-//       for (let i = -half; i <= half; i++) {
-//         const tile = this.createTile(material, geometries);
-//         tile.position.set(i * this.tileSize, 0, j * this.tileSize);
-//         group.add(tile);
-//       }
-//     }
-//     return group;
-//   }
-
-//   private createTile(material: TerainMaterial, geometries: PlaneGeometry[]) {
-//     const lod = new LOD();
-
-//     const meshHigh = new Mesh(geometries[0], material);
-//     meshHigh.receiveShadow = true;
-//     lod.addLevel(meshHigh, 0);
-
-//     const meshMid = new Mesh(geometries[1], material);
-//     meshMid.receiveShadow = true;
-//     lod.addLevel(meshMid, 50);
-
-//     const meshLow = new Mesh(geometries[2], material);
-//     meshLow.receiveShadow = true;
-//     lod.addLevel(meshLow, 100);
-
-//     // LOD itself doesn't receive; children do
-//     return lod;
-//   }
-
-//   private wrapTiles(stepX: number, stepZ: number) {
-//     const halfGrid = Math.floor(this.nGrid / 2);
-//     const limit = halfGrid * this.tileSize; // max |pos| in group space
-//     const span = this.nGrid * this.tileSize; // full grid width
-
-//     for (const tile of this.group.children) {
-//       // move opposite to player step
-//       tile.position.x -= stepX * this.tileSize;
-//       tile.position.z -= stepZ * this.tileSize;
-
-//       // single-pass wrap (O(1)); no while
-//       if (tile.position.x > limit) tile.position.x -= span;
-//       else if (tile.position.x < -limit) tile.position.x += span;
-
-//       if (tile.position.z > limit) tile.position.z -= span;
-//       else if (tile.position.z < -limit) tile.position.z += span;
-//     }
-//   }
-// }

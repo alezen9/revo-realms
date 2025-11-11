@@ -8,7 +8,7 @@ import {
 } from "three/webgpu";
 import { RevoColliderType, type UniformType } from "../types";
 import { ColliderDesc, RigidBodyDesc } from "@dimforge/rapier3d";
-import { tslUtils } from "../utils/TSLUtils";
+import { TSLUtils } from "../utils/TSLUtils";
 import {
   assetManager,
   debugManager,
@@ -47,7 +47,7 @@ class StoneMaterial extends MeshLambertNodeMaterial {
     const { stoneDiffuse, stoneNormalAo } = assetManager.atlasesCoords.stones;
 
     // Diffuse
-    const _uvDiff = tslUtils.computeAtlasUv(
+    const _uvDiff = TSLUtils.computeAtlasUv(
       vec2(...stoneDiffuse.scale),
       vec2(...stoneDiffuse.offset),
       _uv,
@@ -56,7 +56,7 @@ class StoneMaterial extends MeshLambertNodeMaterial {
     this.colorNode = diff.mul(1.5);
 
     // Normal
-    const _uvNor = tslUtils.computeAtlasUv(
+    const _uvNor = TSLUtils.computeAtlasUv(
       vec2(...stoneNormalAo.scale),
       vec2(...stoneNormalAo.offset),
       _uv,
