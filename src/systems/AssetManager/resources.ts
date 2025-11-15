@@ -33,9 +33,14 @@ import treeCanopyNormalUrl from "/textures/realm/canopyNormal.webp?url";
 import godOfWarAxeDiffuseUrl from "/textures/new-world/cool-stuff/god-of-war/axe_diff_emissive_1k.ktx2?url";
 import godOfWarTrunkDiffuseUrl from "/textures/new-world/cool-stuff/god-of-war/trunk_diffuse_512.ktx2?url";
 import godOfWarTrunkNormalUrl from "/textures/new-world/cool-stuff/god-of-war/trunk_normal_512.ktx2?url";
+
+import leviathanDiffuseEmissiveUrl from "/textures/new-world/cool-stuff/leviathan/diffuse_emissive_1k.ktx2?url";
+import leviathanNormalUrl from "/textures/new-world/cool-stuff/leviathan/normal_512.ktx2?url";
+import leviathanORMUrl from "/textures/new-world/cool-stuff/leviathan/orm_512.ktx2?url";
 // Berserk
 import berserkDiffuseUrl from "/textures/new-world/cool-stuff/berserk/diffuse_1k.ktx2?url";
-import berserkNormalRoughnessUrl from "/textures/new-world/cool-stuff/berserk/normalRough_2k.ktx2?url";
+import berserkNormalUrl from "/textures/new-world/cool-stuff/berserk/normal_1k.ktx2?url";
+import berserkORMUrl from "/textures/new-world/cool-stuff/berserk/orm_512.ktx2?url";
 // One Piece
 import onePieceAtlasUrl from "/textures/realm/onePieceAtlas.webp?url";
 // Naruto
@@ -216,6 +221,26 @@ export const manifest = [
     flipY: false,
   },
 
+  {
+    name: "leviathanDiffuseEmissive",
+    url: leviathanDiffuseEmissiveUrl,
+    type: "ktx2",
+    flipY: false,
+    colorSpace: SRGBColorSpace,
+  },
+  {
+    name: "leviathanNormal",
+    url: leviathanNormalUrl,
+    type: "ktx2",
+    flipY: false,
+  },
+  {
+    name: "leviathanORM",
+    url: leviathanORMUrl,
+    type: "ktx2",
+    flipY: false,
+  },
+
   // -----------------------------------------------
   // Berserk
   // -----------------------------------------------
@@ -227,8 +252,14 @@ export const manifest = [
     colorSpace: SRGBColorSpace,
   },
   {
-    name: "berserkNormalRoughness",
-    url: berserkNormalRoughnessUrl,
+    name: "berserkNormal",
+    url: berserkNormalUrl,
+    type: "ktx2",
+    flipY: false,
+  },
+  {
+    name: "berserkORM",
+    url: berserkORMUrl,
     type: "ktx2",
     flipY: false,
   },
