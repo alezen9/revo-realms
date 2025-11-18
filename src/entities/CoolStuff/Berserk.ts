@@ -63,7 +63,7 @@ export default class Berserk {
   constructor() {
     // Visual
     const sword = assetManager.resources.worldModel.scene.getObjectByName(
-      "dragon_slayer_optimized",
+      "dragon_slayer",
     ) as Mesh;
     sword.material = new DragonSlayerMaterial();
     sceneManager.scene.add(sword);

@@ -52,7 +52,7 @@ const getConfig = () => {
     RADIUS: 0.5,
     MASS: 0.5,
     PLAYER_INITIAL_POSITION: new Vector3(...POSITIONS.center),
-    CAMERA_OFFSET: new Vector3(0, 11, 17),
+    CAMERA_OFFSET: new Vector3(0, 19, 23),
     CAMERA_LERP_FACTOR: 7.5,
     UP: new Vector3(0, 1, 0),
     DOWN: new Vector3(0, -1, 0),
