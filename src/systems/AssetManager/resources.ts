@@ -69,9 +69,10 @@ import _treeBarkNormalUrl from "/textures/new-world/tree/bark_normal_512_uastc.k
 import uvCheckerUrl from "/textures/new-world/debug/uvChecker_1k_uastc.ktx2?url";
 import terrainNormAoUrl from "/textures/new-world/terrain/groundNormalAO_1k.ktx2?url";
 import normVeinWaterUrl from "/textures/new-world/water/water_normal_vein_uastc.ktx2?url";
-import noiseAtlasUrl from "/textures/new-world/noise/noise_atlas_uastc.ktx2?url";
+import noiseAtlasUrl from "/textures/new-world/noise/noise_atlas.ktx2?url";
 
 import grassMapUrl from "/textures/new-world/terrain/grass-map.png?url";
+import waterMapUrl from "/textures/new-world/terrain/water-map.png?url";
 
 type ResourceType = {
   texture: Texture;
@@ -146,6 +147,12 @@ export const manifest = [
   {
     name: "grassMap",
     url: grassMapUrl,
+    type: "texture",
+    flipY: false,
+  },
+  {
+    name: "waterMap",
+    url: waterMapUrl,
     type: "texture",
     flipY: false,
   },
