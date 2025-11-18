@@ -77,7 +77,8 @@ export class VegetationSsboUtils {
       fY = float(0),
       r = float(0),
       padNdcX = float(0),
-      padNdcY = float(0),
+      padNdcYNear = float(0),
+      padNdcYFar = float(0),
     ]) => {
       const clip = cameraMatrix.mul(vec4(worldPos, 1.0));
       const invW = float(1).div(clip.w);
@@ -87,7 +88,9 @@ export class VegetationSsboUtils {
       const eyeDepthAbs = clip.w.abs().max(EPSILON); // epsilon only to avoid div-by-zero, not to inflate radius
 
       const rNdcX = fX.mul(r).div(eyeDepthAbs).add(padNdcX);
-      const rNdcY = fY.mul(r).div(eyeDepthAbs).add(padNdcY);
+      const rNdcY = fY.mul(r).div(eyeDepthAbs);
+      const rNdcYNear = rNdcY.add(padNdcYNear);
+      const rNdcYFar = rNdcY.sub(padNdcYFar);
 
       const one = float(1);
 
@@ -95,8 +98,8 @@ export class VegetationSsboUtils {
       const visRight = step(ndc.x, one.add(rNdcX));
       const visX = visLeft.mul(visRight);
 
-      const visNear = step(one.negate().sub(rNdcY), ndc.y);
-      const visFar = step(ndc.y, one);
+      const visNear = step(one.negate().sub(rNdcYNear), ndc.y);
+      const visFar = step(ndc.y.add(rNdcYFar), one);
       const visY = visNear.mul(visFar);
 
       const visZ = step(-1, ndc.z).mul(step(ndc.z, 1)); // no Z padding

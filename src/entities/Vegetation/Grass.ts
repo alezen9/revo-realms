@@ -33,6 +33,7 @@ import {
   remap,
   fract,
   INFINITY,
+  int,
 } from "three/tsl";
 import {
   assetManager,
@@ -46,7 +47,7 @@ import { systemState, eventsManager } from "../../systems";
 import { VegetationSsboUtils } from "./ssboUtils";
 
 const getConfig = () => {
-  const BLADE_WIDTH = 0.075;
+  const BLADE_WIDTH = 0.125;
   const BLADE_HEIGHT = 1.75;
   const TILE_SIZE = 150;
   const BLADES_PER_SIDE = 512 + 256; // power of 2 is optimal, divisible by wg also good
@@ -71,7 +72,8 @@ const uniforms = {
   uFx: uniform(1.0),
   uFy: uniform(1.0),
   uCullPadNDCX: uniform(0.075), // small padding to hide rotation lag
-  uCullPadNDCY: uniform(0.75), // small padding to avoid near clipping
+  uCullPadNDCYNear: uniform(0.75), // small padding to avoid near clipping
+  uCullPadNDCYFar: uniform(0.2), // small padding to avoid far clipping
   // other
   uPlayerPosition: uniform(new Vector3(0, 0, 0)),
   uPlayerDeltaXZ: uniform(new Vector2(0, 0)),
@@ -135,7 +137,13 @@ class GrassSsbo {
   }
 
   getYOffset = Fn(([data = float(0)]) => {
-    return TSLUtils.unpackUnits(data, 4, 20, 0, 10);
+    return TSLUtils.unpackUnits(
+      data,
+      4,
+      20,
+      0,
+      Math.ceil(assetManager.resources.heightmap.userData.max),
+    );
   });
 
   getWind = Fn(([data = vec4(0)]) => {
@@ -181,7 +189,14 @@ class GrassSsbo {
   });
 
   private setYOffset = Fn(([data = float(0), value = float(0)]) => {
-    return TSLUtils.packUnits(data, 4, 20, value, 0, 10);
+    return TSLUtils.packUnits(
+      data,
+      4,
+      20,
+      value,
+      0,
+      Math.ceil(assetManager.resources.heightmap.userData.max),
+    );
   });
 
   private setWind = Fn(([data = vec4(0), value = vec2(0)]) => {
@@ -375,6 +390,7 @@ class GrassSsbo {
       uniforms.uR1,
       uniforms.uPMin,
     );
+
     const isVisible = VegetationSsboUtils.computeVisibility(
       worldPos,
       uniforms.uCameraMatrix,
@@ -382,7 +398,8 @@ class GrassSsbo {
       uniforms.uFy,
       config.BLADE_BOUNDING_SPHERE_RADIUS,
       uniforms.uCullPadNDCX,
-      uniforms.uCullPadNDCY,
+      uniforms.uCullPadNDCYNear,
+      uniforms.uCullPadNDCYFar,
     ).mul(stochasticKeep);
     data1.assign(this.setVisibility(data1, isVisible));
 
@@ -554,7 +571,7 @@ class GrassMaterial extends SpriteNodeMaterial {
 export default class Grass {
   constructor() {
     const ssbo = new GrassSsbo();
-    const geometry = this.createGeometry(5);
+    const geometry = this.createGeometry(3);
     const material = new GrassMaterial(ssbo);
     const grass = new InstancedMesh(geometry, material, config.COUNT);
     grass.frustumCulled = false;
@@ -747,10 +764,16 @@ export default class Grass {
       max: 0.5,
       step: 0.001,
     });
-    general.addBinding(uniforms.uCullPadNDCY, "value", {
-      label: "Cull pad Y",
+    general.addBinding(uniforms.uCullPadNDCYNear, "value", {
+      label: "Cull pad Y (near)",
       min: 0,
       max: 1,
+      step: 0.001,
+    });
+    general.addBinding(uniforms.uCullPadNDCYFar, "value", {
+      label: "Cull pad Y (far)",
+      min: 0,
+      max: 0.2,
       step: 0.001,
     });
   }

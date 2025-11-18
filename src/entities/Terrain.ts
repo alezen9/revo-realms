@@ -48,7 +48,7 @@ const uniforms = {
   uGrassTerrainColor2: uniform(new Color().setRGB(0.32, 0.49, 0.13)),
   uWaterSandColor: uniform(new Color().setRGB(0.54, 0.39, 0.2)),
   uPathSandColor: uniform(new Color().setRGB(0.65, 0.49, 0.27)),
-  uTerrainColor: uniform(new Color().setRGB(1.0, 0.79, 0.41)),
+  uTerrainColor: uniform(new Color().setRGB(0.7, 0.55, 0.29)),
   uTerrainNormalScale: uniform(0.6),
   uMinHeight: uniform(0),
   uMaxHeight: uniform(0),
@@ -269,13 +269,19 @@ class InnerTerrain {
     const N = rowsCount;
     const fixed = new Float32Array(heights.length);
 
+    let min = 0;
+    let max = 0;
+
     for (let z = 0; z < N; z++) {
       for (let x = 0; x < N; x++) {
         const srcZ = N - 1 - z;
         const srcX = x;
         const srcIndex = srcZ + srcX * N;
         const dstIndex = x + z * N;
-        fixed[dstIndex] = heights[srcIndex] - displacement;
+        const h = heights[srcIndex] - displacement;
+        fixed[dstIndex] = h;
+        if (h < min) min = h;
+        if (h > max) max = h;
       }
     }
 
@@ -285,6 +291,7 @@ class InnerTerrain {
     tex.minFilter = LinearFilter;
     tex.generateMipmaps = false;
     tex.needsUpdate = true;
+    tex.userData = { min, max };
     return tex;
   }
 

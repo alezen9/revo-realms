@@ -2,7 +2,7 @@ import { CompressedTexture, CubeTexture, SRGBColorSpace, Texture } from "three";
 import { type GLTF } from "three/addons/loaders/GLTFLoader.js";
 // Model
 import realmModelUrl from "/models/realm.glb?url"; // old
-import worldModelUrl from "/models/world.glb?url"; // new
+import worldModelUrl from "/models/sekai.glb?url"; // new
 // Environment
 import pxUrl from "/textures/environment/px.webp?url";
 import nxUrl from "/textures/environment/nx.webp?url";
@@ -59,6 +59,12 @@ import playerDiffuseUrl from "/textures/new-world/player/football/diffuse_512.kt
 import playerNormalUrl from "/textures/new-world/player/football/normal_512.ktx2?url";
 // Leaf
 import leafDiffuseUrl from "/textures/realm/leafDiffuse.webp?url";
+
+// Tree
+import _treeCanopyDiffuseUrl from "/textures/new-world/tree/canopy_diffuse_512_uastc.ktx2?url";
+import _treeCanopyNormalUrl from "/textures/new-world/tree/canopy_normal_512_uastc.ktx2?url";
+import _treeBarkDiffuseUrl from "/textures/new-world/tree/bark_diffuse_512_uastc.ktx2?url";
+import _treeBarkNormalUrl from "/textures/new-world/tree/bark_normal_512_uastc.ktx2?url";
 
 import uvCheckerUrl from "/textures/new-world/debug/uvChecker_1k_uastc.ktx2?url";
 import terrainNormAoUrl from "/textures/new-world/terrain/groundNormalAO_1k.ktx2?url";
@@ -278,6 +284,38 @@ export const manifest = [
   {
     name: "playerNormal",
     url: playerNormalUrl,
+    type: "ktx2",
+    flipY: false,
+  },
+
+  // -----------------------------------------------
+  // New Tree
+  // -----------------------------------------------
+  {
+    name: "treeBarkDiffuse",
+    url: _treeBarkDiffuseUrl,
+    type: "ktx2",
+    flipY: false,
+    wrap: true,
+    colorSpace: SRGBColorSpace,
+  },
+  {
+    name: "treeCanopyDiffuse",
+    url: _treeCanopyDiffuseUrl,
+    type: "ktx2",
+    flipY: false,
+    colorSpace: SRGBColorSpace,
+  },
+  {
+    name: "treeBarkNormal",
+    url: _treeBarkNormalUrl,
+    type: "ktx2",
+    flipY: false,
+    wrap: true,
+  },
+  {
+    name: "treeCanopyNormal",
+    url: _treeCanopyNormalUrl,
     type: "ktx2",
     flipY: false,
   },
