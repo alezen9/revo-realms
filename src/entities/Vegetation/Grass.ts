@@ -33,7 +33,6 @@ import {
   remap,
   fract,
   INFINITY,
-  int,
 } from "three/tsl";
 import {
   assetManager,
@@ -49,7 +48,7 @@ import { VegetationSsboUtils } from "./ssboUtils";
 const getConfig = () => {
   const BLADE_WIDTH = 0.125;
   const BLADE_HEIGHT = 1.75;
-  const TILE_SIZE = 150;
+  const TILE_SIZE = 130;
   const BLADES_PER_SIDE = 512 + 256; // power of 2 is optimal, divisible by wg also good
   return {
     BLADE_WIDTH,
@@ -94,9 +93,9 @@ const uniforms = {
   // Color
   uBaseColor: uniform(new Color().setRGB(0.03, 0.05, 0.01)),
   uTipColor: uniform(new Color().setRGB(0.47, 0.25, 0.04)),
-  uColorMixFactor: uniform(0.1),
-  uColorVariationStrength: uniform(2.3),
-  uAoScale: uniform(2.25),
+  uColorMixFactor: uniform(0.2),
+  uColorVariationStrength: uniform(1.75),
+  uAoScale: uniform(0.5),
   uAoRimSmoothness: uniform(5),
   uAoRadius: uniform(50),
   uAoRadiusSquared: uniform(50 * 50),
@@ -571,7 +570,7 @@ class GrassMaterial extends SpriteNodeMaterial {
 export default class Grass {
   constructor() {
     const ssbo = new GrassSsbo();
-    const geometry = this.createGeometry(3);
+    const geometry = this.createGeometry(5);
     const material = new GrassMaterial(ssbo);
     const grass = new InstancedMesh(geometry, material, config.COUNT);
     grass.frustumCulled = false;
@@ -773,7 +772,7 @@ export default class Grass {
     general.addBinding(uniforms.uCullPadNDCYFar, "value", {
       label: "Cull pad Y (far)",
       min: 0,
-      max: 0.2,
+      max: 1,
       step: 0.001,
     });
   }

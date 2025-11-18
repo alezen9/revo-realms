@@ -9,6 +9,7 @@ import {
   texture,
   time,
   uniform,
+  uv,
   varying,
   vec2,
   vec3,
@@ -44,17 +45,15 @@ import {
 } from "../systems";
 
 const uniforms = {
-  uGrassTerrainColor1: uniform(new Color().setRGB(0.16, 0.26, 0.08)),
-  uGrassTerrainColor2: uniform(new Color().setRGB(0.32, 0.49, 0.13)),
-  uWaterSandColor: uniform(new Color().setRGB(0.54, 0.39, 0.2)),
-  uPathSandColor: uniform(new Color().setRGB(0.65, 0.49, 0.27)),
+  uGrassTerrainColor: uniform(new Color().setRGB(0.33, 0.38, 0.13)),
+  uWaterSandColor: uniform(new Color().setRGB(0.7, 0.55, 0.29)),
   uTerrainColor: uniform(new Color().setRGB(0.7, 0.55, 0.29)),
-  uTerrainNormalScale: uniform(0.6),
-  uMinHeight: uniform(0),
-  uMaxHeight: uniform(0),
-  uGrassNormalScale: uniform(0.1),
-  uA: uniform(0),
-  uB: uniform(0.2),
+  uGrassNormalScale: uniform(1.25),
+  uTerrainNormalScale: uniform(0.25),
+  uWaterNormalScale: uniform(0.35),
+  uCausticsHighlightScale: uniform(0.4),
+  uCausticsUv1Scale: uniform(31.53),
+  uCausticsUv2Scale: uniform(58.71),
 };
 
 class TerainMaterial extends MeshLambertNodeMaterial {
@@ -69,122 +68,123 @@ class TerainMaterial extends MeshLambertNodeMaterial {
       title: "⛰️ Terrain",
       expanded: false,
     });
-    folder.addBinding(uniforms.uTerrainColor, "value", {
-      label: "Terrain color",
+
+    const color = folder.addFolder({ title: "Color" });
+    color.addBinding(uniforms.uTerrainColor, "value", {
+      label: "Terrain",
       view: "color",
       color: { type: "float" },
     });
-    folder.addBinding(uniforms.uTerrainNormalScale, "value", {
-      label: "Terrain normal scale",
+    color.addBinding(uniforms.uGrassTerrainColor, "value", {
+      label: "Grass",
       view: "color",
       color: { type: "float" },
     });
-    // folder.addBinding(uniforms.uWaterSandColor, "value", {
-    //   label: "Water bed color",
-    //   view: "color",
-    //   color: { type: "float" },
-    // });
-    folder.addBinding(uniforms.uGrassTerrainColor1, "value", {
-      label: "Grass terrain color 1",
+    color.addBinding(uniforms.uWaterSandColor, "value", {
+      label: "Water",
       view: "color",
       color: { type: "float" },
     });
-    folder.addBinding(uniforms.uGrassTerrainColor2, "value", {
-      label: "Grass terrain color 2",
-      view: "color",
-      color: { type: "float" },
+
+    const normal = folder.addFolder({ title: "Normal scale" });
+    normal.addBinding(uniforms.uTerrainNormalScale, "value", {
+      label: "Terrain",
     });
-    folder.addBinding(uniforms.uGrassNormalScale, "value", {
-      label: "Grass normal scale",
+    normal.addBinding(uniforms.uGrassNormalScale, "value", {
+      label: "Grass",
     });
-    folder.addBinding(uniforms.uTerrainNormalScale, "value", {
-      label: "Terrain normal scale",
+    normal.addBinding(uniforms.uWaterNormalScale, "value", {
+      label: "Water",
     });
-    folder.addBinding(uniforms.uA, "value", {
-      label: "A",
+
+    const caustics = folder.addFolder({ title: "Caustics" });
+    caustics.addBinding(uniforms.uCausticsUv1Scale, "value", {
+      label: "UV 1 scale",
       min: 0,
-      max: 1,
+      max: 100,
       step: 0.001,
     });
-    folder.addBinding(uniforms.uB, "value", {
-      label: "B",
+    caustics.addBinding(uniforms.uCausticsUv2Scale, "value", {
+      label: "UV 2 scale",
+      min: 0,
+      max: 100,
+      step: 0.001,
+    });
+    caustics.addBinding(uniforms.uCausticsHighlightScale, "value", {
+      label: "Highlight scale",
       min: 0,
       max: 1,
       step: 0.001,
     });
   }
 
-  private computeCausticsDiffuse = Fn(([vUv = vec2(0), vDepth = float(0)]) => {
+  private createMaterial() {
+    this.precision = "lowp";
+    const worldUv = TSLUtils.computeMapUvByPosition(positionWorld.xz);
+    const noise = texture(assetManager.resources.noiseAtlas, worldUv.mul(10));
+    const vUv = varying(worldUv);
+
+    // LAND
+    const isGrass = texture(assetManager.resources.grassMap, vUv).r;
+    const smoothIsGrass = smoothstep(0, 0.2, isGrass.mul(noise.b));
+    const terrainColor = mix(
+      uniforms.uTerrainColor,
+      uniforms.uGrassTerrainColor,
+      smoothIsGrass,
+    );
+
+    // WATER
+    const isWater = texture(assetManager.resources.waterMap, vUv).r;
+    const depth = positionWorld.y.negate();
+    const blendFactor = smoothstep(0, 8, depth);
+    const waterTint = vec3(0.35, 0.45, 0.55).mul(0.65);
+
     const timer = time.mul(0.15);
-    const uv1 = vUv.mul(17).add(vec2(timer, 0)).fract();
-    const noiseA = texture(assetManager.resources.noiseTexture, uv1, 1).g;
-    const uv2 = vUv.mul(33).add(vec2(0, timer.negate())).fract();
-    const noiseB = texture(assetManager.resources.noiseTexture, uv2, 3).g;
+    const uv1 = vUv.mul(uniforms.uCausticsUv1Scale).add(vec2(timer, 0)).fract();
+    const noiseA = texture(assetManager.resources.noiseAtlas, uv1, 1).a;
+    const uv2 = vUv
+      .mul(uniforms.uCausticsUv2Scale)
+      .add(vec2(0, timer.negate()))
+      .fract();
+    const noiseB = texture(assetManager.resources.noiseAtlas, uv2, 3).a;
     const caustics = noiseA.add(noiseB);
     const caustics3 = caustics.mul(caustics).mul(caustics);
-    const depthFalloff = smoothstep(-1, 7.5, vDepth);
+    const depthFalloff = smoothstep(-1, 7.5, depth);
     const adjustedCaustics = caustics3.mul(float(1).sub(depthFalloff));
-    const causticsHighlightColor = vec3(0.3, 0.4, 0.5);
+    const causticsHighlightColor = vec3(0.3, 0.4, 0.5).mul(
+      uniforms.uCausticsHighlightScale,
+    );
     const causticsShadowColor = vec3(0, 0, 0);
-    return mix(causticsShadowColor, causticsHighlightColor, adjustedCaustics);
-  });
+    const causticsColor = mix(
+      causticsShadowColor,
+      causticsHighlightColor,
+      adjustedCaustics,
+    );
 
-  private computeWaterDiffuse = Fn(([vDepth = float(0), vUv = vec2(0, 0)]) => {
-    const blendFactor = smoothstep(0, 8, vDepth);
-    const waterTint = vec3(0.35, 0.45, 0.55).mul(0.65);
-    const causticsColor = this.computeCausticsDiffuse(vUv, vDepth);
-    const shallowBoost = smoothstep(0.0, 1.5, vDepth);
+    const shallowBoost = smoothstep(0.0, 1.5, depth);
     const sandHighlight = vec3(1.0, 0.9, 0.7).mul(0.1).mul(shallowBoost);
     const waterBaseColor = mix(
       uniforms.uWaterSandColor,
       waterTint,
       blendFactor,
     ).add(sandHighlight);
-    return waterBaseColor.add(causticsColor);
-  });
+    const waterColor = waterBaseColor.add(causticsColor);
 
-  private createMaterial() {
-    this.precision = "lowp";
-    const worldUv = TSLUtils.computeMapUvByPosition(positionWorld.xz);
-    const noise = texture(assetManager.resources.noiseAtlas, worldUv.mul(10));
-    const vUv = varying(worldUv);
-    const variation = remap(noise.r, 0, 1, 0.15, 1);
+    const final = mix(terrainColor, waterColor, isWater);
 
-    // const type = texture(assetManager.resources.terrainTypeTexture, vUv);
-    const isGrass = texture(assetManager.resources.grassMap, vUv).r;
-
-    const smoothIsGrass = smoothstep(
-      uniforms.uA,
-      uniforms.uB,
-      isGrass.mul(noise.b),
-    );
-
-    // const height = texture(
-    //   assetManager.resources.heightmap,
-    //   vec2(vUv.x, float(1).sub(vUv.y)),
-    // ).r;
-
-    // const checkerColor = texture(assetManager.resources.uvChecker, vUv.mul(5));
-    // const grassColor = texture(
-    //   assetManager.resources.grassAlbedo,
-    //   vUv.mul(81.7),
-    // );
-    const grassColor = mix(
-      uniforms.uGrassTerrainColor1,
-      uniforms.uGrassTerrainColor2,
-      noise.b,
-    );
-    const terrainColor = uniforms.uTerrainColor;
-
-    const final = mix(terrainColor, grassColor, smoothIsGrass);
     this.colorNode = final;
 
+    // NORMAL
     const norAo = texture(assetManager.resources.terrainNormAo, vUv.mul(41.7));
-
-    const normalScale = mix(
+    const normalScaleTerrainGrass = mix(
       uniforms.uTerrainNormalScale,
       uniforms.uGrassNormalScale,
       smoothIsGrass,
+    );
+    const normalScale = mix(
+      normalScaleTerrainGrass,
+      uniforms.uWaterNormalScale,
+      isWater,
     );
     this.normalNode = normalMap(norAo.rgb, normalScale);
     this.aoNode = norAo.a;

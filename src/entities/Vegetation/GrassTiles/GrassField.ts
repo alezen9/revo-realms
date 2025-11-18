@@ -403,56 +403,49 @@ class GrassSsbo {
 
     const worldPos = pos.add(uniforms.uPlayerPosition);
 
-    // Visibility
-    const stochasticKeep = this.computeStochasticKeep(worldPos);
-    const isVisible = this.computeVisibility(worldPos).mul(stochasticKeep);
-    data1.assign(this.setVisibility(data1, isVisible));
-
     // Soft culling
-    If(isVisible, () => {
-      const data2 = this.buffer2.element(instanceIndex);
+    const data2 = this.buffer2.element(instanceIndex);
 
-      // Compute distance to player
-      const diff = worldPos.xz.sub(uniforms.uPlayerPosition.xz);
-      const distSq = diff.dot(diff);
+    // Compute distance to player
+    const diff = worldPos.xz.sub(uniforms.uPlayerPosition.xz);
+    const distSq = diff.dot(diff);
 
-      // Check if the player is on the ground
-      const isPlayerGrounded = step(
-        0.1,
-        float(1).sub(uniforms.uPlayerPosition.y),
-      );
+    // Check if the player is on the ground
+    const isPlayerGrounded = step(
+      0.1,
+      float(1).sub(uniforms.uPlayerPosition.y),
+    );
 
-      const inner = uniforms.uTrailRaiusSquared.mul(0.35);
-      const outer = uniforms.uTrailRaiusSquared;
-      const contact = float(1.0)
-        .sub(smoothstep(inner, outer, distSq))
-        .mul(isPlayerGrounded);
+    const inner = uniforms.uTrailRaiusSquared.mul(0.35);
+    const outer = uniforms.uTrailRaiusSquared;
+    const contact = float(1.0)
+      .sub(smoothstep(inner, outer, distSq))
+      .mul(isPlayerGrounded);
 
-      // Trail
-      const currentScale = this.getScale(data1);
-      const originalScale = this.getOriginalScale(data1);
-      const newScale = this.computeTrailScale(
-        originalScale,
-        currentScale,
-        contact,
-      );
-      data1.assign(this.setScale(data1, newScale));
+    // Trail
+    const currentScale = this.getScale(data1);
+    const originalScale = this.getOriginalScale(data1);
+    const newScale = this.computeTrailScale(
+      originalScale,
+      currentScale,
+      contact,
+    );
+    data1.assign(this.setScale(data1, newScale));
 
-      // Alpha
-      const alpha = this.computeAlpha(worldPos);
-      data1.assign(this.setVisibility(data1, alpha));
+    // Alpha
+    // const alpha = this.computeAlpha(worldPos);
+    // data1.assign(this.setVisibility(data1, alpha));
 
-      // Wind
-      const positionNoise = this.getPositionNoise(data2);
-      const prevWind = this.getWind(data1);
-      const newWind = this.computeWind(prevWind, worldPos, positionNoise);
-      data1.assign(this.setWind(data1, newWind.xy)); // Wind displacement
-      data1.assign(this.setWindNoise(data1, newWind.z)); // Noise factor
+    // Wind
+    const positionNoise = this.getPositionNoise(data2);
+    const prevWind = this.getWind(data1);
+    const newWind = this.computeWind(prevWind, worldPos, positionNoise);
+    data1.assign(this.setWind(data1, newWind.xy)); // Wind displacement
+    data1.assign(this.setWindNoise(data1, newWind.z)); // Noise factor
 
-      // // Shadow
-      // const isShadow = this.computeShadow(worldPos);
-      // data.assign(this.setShadow(data, isShadow));
-    });
+    // // Shadow
+    // const isShadow = this.computeShadow(worldPos);
+    // data.assign(this.setShadow(data, isShadow));
   })().compute(config.COUNT, [config.WORKGROUP_SIZE]);
 }
 
@@ -483,12 +476,12 @@ class GrassMaterial extends SpriteNodeMaterial {
     const positionNoise = this.ssbo.getPositionNoise(data2);
 
     // OPACITY
-    this.opacityNode = isVisible;
+    // this.opacityNode = isVisible;
 
     // SCALE
     const scaleX = positionNoise.add(0.25);
     const bladeScale = vec3(scaleX, scaleY, 1);
-    this.scaleNode = mix(vec3(0), bladeScale, isVisible);
+    this.scaleNode = bladeScale;
 
     // ROTATION
     const h = uv().y;
@@ -566,8 +559,7 @@ class GrassMaterial extends SpriteNodeMaterial {
 
 export default class GrassTiles {
   private group = new Group();
-  private nGrid = 5;
-  private instanceCellIdxMap = new Map<number, number>();
+  private nGrid = 3;
 
   constructor() {
     const ssbo = new GrassSsbo();
@@ -580,7 +572,7 @@ export default class GrassTiles {
     ];
     this.group = this.createGrid(material, geometries);
     sceneManager.scene.add(this.group);
-    eventsManager.on("engine-update-throttle-4x", ({ player }) => {
+    eventsManager.on("engine-update-throttle-2x", ({ player }) => {
       rendererManager.renderer.computeAsync(ssbo.computeUpdate);
 
       const dx = player.position.x - this.group.position.x;
@@ -612,9 +604,6 @@ export default class GrassTiles {
         const tile = this.createTile(material, geometries);
         tile.position.set(x, 0, z);
         tile.userData = { idx };
-        tile.onBeforeRender = (_, __, ___, ____, mat: GrassMaterial) => {
-          mat.uInstanceCellIdx.value = this.instanceCellIdxMap.get(idx) ?? 0;
-        };
 
         // // add text geometry label to tile with the incremental index
         // const textGeom = new TextGeometry(`${idx}`, {
