@@ -32,7 +32,7 @@ const POSITIONS = {
   center: [0, 0.5, 10],
   berserk: [180, 0.5, -150],
   hill: [-100, 0.5, 240],
-  campfire: [-170, 0.5, 180],
+  fireplace: [130, 0.5, 210],
   gow: [70, 0.5, 125],
 };
 
@@ -51,8 +51,8 @@ const getConfig = () => {
     ANG_VEL_STRENGTH: 25,
     RADIUS: 0.5,
     MASS: 0.5,
-    PLAYER_INITIAL_POSITION: new Vector3(...POSITIONS.campfire),
-    CAMERA_OFFSET: new Vector3(0, 19, 23),
+    PLAYER_INITIAL_POSITION: new Vector3(...POSITIONS.center),
+    CAMERA_OFFSET: new Vector3(0, 16, 20),
     CAMERA_LERP_FACTOR: 7.5,
     UP: new Vector3(0, 1, 0),
     DOWN: new Vector3(0, -1, 0),

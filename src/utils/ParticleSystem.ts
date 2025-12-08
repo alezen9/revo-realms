@@ -131,10 +131,10 @@ const getFirePresetConfig = (
     coneFactor = 1,
     bloom = 1,
   } = params;
-  const sparkHeight = fireHeight * 1.5;
-  const sparkLifetime = fireLifetime * 0.75;
+  const sparkHeight = fireHeight * 2;
+  const sparkLifetime = fireLifetime * 0.65;
   const secondaryBuffer = instancedArray(params.count, "float");
-  const fireParticlesPersentage = 0.95;
+  const fireParticlesPersentage = 0.9;
 
   const onInit = Fn(([_buffer]: [ParticleBuffer]) => {
     const rand = hash(instanceIndex.add(12345));
@@ -149,10 +149,11 @@ const getFirePresetConfig = (
     const isSpark = secondaryBuffer.element(instanceIndex);
 
     const randSeed = hash(instanceIndex);
+    const s = mix(speed, speed * 0.5, isSpark);
 
     const lifetime = mix(fireLifetime, sparkLifetime, isSpark);
 
-    const t = time.mul(speed).add(randSeed.mul(lifetime)).mod(lifetime);
+    const t = time.mul(s).add(randSeed.mul(lifetime)).mod(lifetime);
     const progress = t.div(lifetime);
     const verticalEase = float(1.0).sub(float(1.0).sub(progress).pow(2));
     const effectiveHeight = mix(fireHeight, sparkHeight, isSpark);
@@ -177,7 +178,7 @@ const getFirePresetConfig = (
       progress.mul(PI2).mul(swirlStrength).mul(randSign),
     );
 
-    const expansionFactor = mix(1, 0.85, isSpark);
+    const expansionFactor = mix(1, 1.25, isSpark);
     const wiggle = randSeed.sub(0.5).mul(0.05).mul(progress);
 
     const sparkExpansionProgress = smoothstep(0, 0.75, progress).mul(isSpark);

@@ -4,7 +4,7 @@ import { type Sizes, type State } from "../Game";
 type UpdateEvent = (state: State) => void;
 type ResizeEvent = (sizes: Sizes) => void;
 
-const throttle = [2, 4, 8, 16, 64] as const;
+const throttle = [2, 4, 16, 64] as const;
 type ThrottledEvents = {
   [T in (typeof throttle)[number] as `engine-update-throttle-${T}x`]: UpdateEvent;
 };

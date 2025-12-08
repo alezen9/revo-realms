@@ -46,10 +46,10 @@ import { systemState, eventsManager } from "../../systems";
 import { VegetationSsboUtils } from "./ssboUtils";
 
 const getConfig = () => {
-  const BLADE_WIDTH = 0.125;
+  const BLADE_WIDTH = 0.06;
   const BLADE_HEIGHT = 1.75;
   const TILE_SIZE = 130;
-  const BLADES_PER_SIDE = 512 + 256; // power of 2 is optimal, divisible by wg also good
+  const BLADES_PER_SIDE = 512 + 512 + 64; // power of 2 is optimal, divisible by wg also good
   return {
     BLADE_WIDTH,
     BLADE_HEIGHT,
@@ -78,34 +78,36 @@ const uniforms = {
   uPlayerDeltaXZ: uniform(new Vector2(0, 0)),
   uCameraForward: uniform(new Vector3(0, 0, 0)),
   // Scale
-  uBladeMinScale: uniform(0.5),
+  uBladeMinScale: uniform(0.6),
   uBladeMaxScale: uniform(2.5),
   // Trail
   uTrailGrowthRate: uniform(0.04),
   uTrailMinScale: uniform(0.25),
-  uTrailRaius: uniform(1),
-  uTrailRaiusSquared: uniform(1),
+  uTrailRadius: uniform(1),
+  uTrailRadiusSquared: uniform(1),
   uKDown: uniform(0.4),
   // Wind
   uWindStrength: uniform(0.4),
   uWindSpeed: uniform(0.25),
   uvWindScale: uniform(1.75),
   // Color
-  uBaseColor: uniform(new Color().setRGB(0.03, 0.05, 0.01)),
-  uTipColor: uniform(new Color().setRGB(0.47, 0.25, 0.04)),
-  uColorMixFactor: uniform(0.2),
-  uColorVariationStrength: uniform(1.75),
+  // uBaseColor: uniform(new Color().setRGB(0.08, 0.13, 0.02)),
+  // uTipColor: uniform(new Color().setRGB(0.47, 0.25, 0.04)),
+  uBaseColor: uniform(new Color().setRGB(0.55, 0.42, 0.19)),
+  uTipColor: uniform(new Color().setRGB(0.05, 0.47, 0.04)),
+  uColorMixFactor: uniform(0.125),
+  uColorVariationStrength: uniform(2.75),
   uAoScale: uniform(0.5),
   uAoRimSmoothness: uniform(5),
-  uAoRadius: uniform(50),
-  uAoRadiusSquared: uniform(50 * 50),
+  uAoRadius: uniform(25),
+  uAoRadiusSquared: uniform(25 * 25),
   uWindColorStrength: uniform(0.6),
   uBaseWindShade: uniform(0.75),
   uBaseShadeHeight: uniform(1),
   // Stochastic keep
-  uR0: uniform(45),
-  uR1: uniform(75),
-  uPMin: uniform(0.1),
+  uR0: uniform(10),
+  uR1: uniform(60),
+  uPMin: uniform(0),
   // Rotation
   uBaseBending: uniform(2),
 };
@@ -406,6 +408,10 @@ class GrassSsbo {
     If(isVisible, () => {
       const data2 = this.buffer2.element(instanceIndex);
 
+      // Alpha
+      const alpha = VegetationSsboUtils.computeAlpha(worldPos);
+      data1.assign(this.setVisibility(data1, alpha));
+
       // Y offset
       const yOffset = VegetationSsboUtils.computeYOffset(worldPos);
       data2.assign(this.setYOffset(data2, yOffset));
@@ -420,8 +426,8 @@ class GrassSsbo {
         float(1).sub(uniforms.uPlayerPosition.y.sub(yOffset)),
       );
 
-      const inner = uniforms.uTrailRaiusSquared.mul(0.35);
-      const outer = uniforms.uTrailRaiusSquared;
+      const inner = uniforms.uTrailRadiusSquared.mul(0.35);
+      const outer = uniforms.uTrailRadiusSquared;
       const contact = float(1.0)
         .sub(smoothstep(inner, outer, distSq))
         .mul(isPlayerGrounded);
@@ -435,10 +441,6 @@ class GrassSsbo {
         contact,
       );
       data1.assign(this.setScale(data1, newScale));
-
-      // Alpha
-      const alpha = VegetationSsboUtils.computeAlpha(worldPos);
-      data1.assign(this.setVisibility(data1, alpha));
 
       // Wind
       const positionNoise = this.getPositionNoise(data2);
@@ -465,7 +467,6 @@ class GrassMaterial extends SpriteNodeMaterial {
   private createGrassMaterial() {
     this.precision = "lowp";
     this.transparent = false;
-    this.alphaTest = 0.9;
 
     // compute values
     const data1 = this.ssbo.computeBuffer1.element(instanceIndex);
@@ -539,8 +540,7 @@ class GrassMaterial extends SpriteNodeMaterial {
     // ao
     const r2 = offsetX.mul(offsetX).add(offsetZ.mul(offsetZ));
     const near = float(1).sub(smoothstep(0, uniforms.uAoRadiusSquared, r2));
-    const x = uv().x;
-    const edge = x.mul(2.0).sub(1.0).abs();
+    const edge = uv().x.mul(2.0).sub(1.0).abs();
     const rim = smoothstep(
       uniforms.uAoRimSmoothness.negate(),
       uniforms.uAoRimSmoothness,
@@ -550,8 +550,12 @@ class GrassMaterial extends SpriteNodeMaterial {
     const aoStrength = uniforms.uAoScale.mul(0.25);
     const ao = float(1).sub(aoStrength.mul(near.mul(rim).mul(hWeight)));
     // diffuse
-    const colorProfile = h.mul(uniforms.uColorMixFactor).clamp();
-    const jitter = positionNoise.mul(uniforms.uColorVariationStrength);
+    const colorProfile = h.mul(uniforms.uColorMixFactor);
+    const jitter = smoothstep(
+      0,
+      uniforms.uColorVariationStrength,
+      positionNoise,
+    );
     const baseColorJittered = uniforms.uBaseColor.mul(jitter);
     const baseToTip = mix(baseColorJittered, uniforms.uTipColor, colorProfile);
     const baseMask = float(1).sub(
@@ -564,13 +568,24 @@ class GrassMaterial extends SpriteNodeMaterial {
     );
 
     this.colorNode = baseToTip.mul(windAo).mul(ao);
+
+    // const normal = vec3(instanceNoise, baseBending, instanceNoise).normalize();
+    // const reflectedLight = reflect(uniforms.uSunDir, normal);
+    // const viewDir = normalize(cameraPosition.sub(positionWorld));
+    // const align = max(dot(reflectedLight, viewDir), 0);
+    // const spec = smoothstep(
+    //   0,
+    //   1,
+    //   align.mul(float(1).sub(uv().y)).mul(3).add(0.4),
+    // );
+    // this.colorNode = baseToTip.mul(windAo).mul(ao).mul(spec);
   }
 }
 
 export default class Grass {
   constructor() {
     const ssbo = new GrassSsbo();
-    const geometry = this.createGeometry(5);
+    const geometry = this.createGeometry(4);
     const material = new GrassMaterial(ssbo);
     const grass = new InstancedMesh(geometry, material, config.COUNT);
     grass.frustumCulled = false;
@@ -617,13 +632,13 @@ export default class Grass {
     color.addBinding(uniforms.uColorMixFactor, "value", {
       label: "Mix factor",
       min: 0,
-      max: 2,
+      max: 1,
       step: 0.01,
     });
     color.addBinding(uniforms.uColorVariationStrength, "value", {
       label: "Variation strength",
-      min: -5,
-      max: 5,
+      min: 0,
+      max: 3,
       step: 0.01,
     });
     color.addBinding(uniforms.uWindColorStrength, "value", {
@@ -728,14 +743,14 @@ export default class Grass {
       step: 0.01,
     });
     trail
-      .addBinding(uniforms.uTrailRaius, "value", {
+      .addBinding(uniforms.uTrailRadius, "value", {
         label: "Trail radius",
         min: 0,
         max: 2,
         step: 0.01,
       })
       .on("change", ({ value }) => {
-        uniforms.uTrailRaiusSquared.value = value * value;
+        uniforms.uTrailRadiusSquared.value = value * value;
       });
 
     const general = folder.addFolder({ title: "General" });

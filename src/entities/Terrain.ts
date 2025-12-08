@@ -45,7 +45,7 @@ import {
 } from "../systems";
 
 const uniforms = {
-  uGrassTerrainColor: uniform(new Color().setRGB(0.33, 0.38, 0.13)),
+  uGrassTerrainColor: uniform(new Color().setRGB(0.29, 0.38, 0.13)),
   uWaterSandColor: uniform(new Color().setRGB(0.7, 0.55, 0.29)),
   uTerrainColor: uniform(new Color().setRGB(0.7, 0.55, 0.29)),
   uGrassNormalScale: uniform(1.25),
@@ -127,11 +127,12 @@ class TerainMaterial extends MeshLambertNodeMaterial {
     // LAND
     const isGrass = texture(assetManager.resources.grassMap, vUv).r;
     const smoothIsGrass = smoothstep(0, 0.2, isGrass.mul(noise.b));
-    const terrainColor = mix(
+    const grassColor = mix(
       uniforms.uTerrainColor,
       uniforms.uGrassTerrainColor,
-      smoothIsGrass,
+      noise.b,
     );
+    const terrainColor = mix(uniforms.uTerrainColor, grassColor, smoothIsGrass);
 
     // WATER
     const isWater = texture(assetManager.resources.waterMap, vUv).r;
