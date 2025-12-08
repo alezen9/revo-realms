@@ -56,8 +56,8 @@ import {
 const getConfig = () => {
   const BLADE_WIDTH = 0.1;
   const BLADE_HEIGHT = 1.45;
-  const TILE_SIZE = 64;
-  const BLADES_PER_SIDE = 256;
+  const TILE_SIZE = 50;
+  const BLADES_PER_SIDE = 512;
 
   const boundingSphereCenter = new Vector3(TILE_SIZE / 2, 0, TILE_SIZE / 2);
   const boundingSphereRadius = TILE_SIZE * 1.5;
@@ -740,10 +740,10 @@ export default class GrassTiles {
     lod.addLevel(meshHigh, 0);
     const meshMid = new InstancedMesh(geometries[1], material, config.COUNT);
     meshMid.boundingSphere = config.BOUNDING_SPHERE;
-    lod.addLevel(meshMid, 50);
+    lod.addLevel(meshMid, 10);
     const meshLow = new InstancedMesh(geometries[2], material, config.COUNT);
     meshLow.boundingSphere = config.BOUNDING_SPHERE;
-    lod.addLevel(meshLow, 100);
+    lod.addLevel(meshLow, 50);
     return lod;
   }
 }

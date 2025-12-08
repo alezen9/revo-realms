@@ -25,8 +25,9 @@ const config = {
   hemiIntensity: 0.3,
   // fogColor: new Color(0.05, 0.12, 0.24), // Dark
   // fogDensity: 0.009, // Dark
-  fogColor: new Color(0.29, 0.08, 0.0), // Light
-  fogDensity: 0.0046, // Light
+  fogColor: new Color().setRGB(0.4, 0.6, 0.3), // Light
+  fogDensity: 0.004, // Light
+  fogEnabled: true,
 };
 
 export class LightingManager {
@@ -55,11 +56,11 @@ export class LightingManager {
     sceneManager.scene.add(this.hemisphereLight);
 
     this.fog = this.setupFog();
-    // sceneManager.scene.fog = this.fog;
+    sceneManager.scene.fog = this.fog;
 
-    // eventsManager.on("camera-changed", () => {
-    //   sceneManager.scene.fog = sceneManager.scene.fog ? null : this.fog;
-    // });
+    eventsManager.on("engine-camera-change", () => {
+      sceneManager.scene.fog = sceneManager.scene.fog ? null : this.fog;
+    });
 
     eventsManager.on("engine-update", ({ player }) => {
       this.directionalLight.position
@@ -67,7 +68,7 @@ export class LightingManager {
         .add(config.LIGHT_POSITION_OFFSET);
     });
 
-    this.debugLight(debugManager);
+    this.debugLight(debugManager, sceneManager);
   }
 
   get sunColor() {
@@ -130,7 +131,7 @@ export class LightingManager {
     return shadowAo.r;
   });
 
-  private debugLight(debugManager: DebugManager) {
+  private debugLight(debugManager: DebugManager, sceneManager: SceneManager) {
     const lightFolder = debugManager.panel.addFolder({ title: "💡 Light" });
     lightFolder.expanded = false;
     lightFolder.addBinding(config.LIGHT_POSITION_OFFSET, "x", {
@@ -163,6 +164,13 @@ export class LightingManager {
       max: 0.025,
       step: 0.0001,
     });
+    lightFolder
+      .addBinding(config, "fogEnabled", {
+        label: "Fog enabled",
+      })
+      .on("change", ({ value }) => {
+        sceneManager.scene.fog = value ? this.fog : null;
+      });
 
     // lightFolder.addBinding(this.ambientLight, "color", {
     //   label: "Ambient Color",
