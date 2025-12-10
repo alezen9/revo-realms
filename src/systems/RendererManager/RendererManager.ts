@@ -58,11 +58,14 @@ export class RendererManager {
   }
 
   async init() {
+    await this.renderer.init();
     sceneManager.init();
     this.isWebGPU = !!(await navigator.gpu?.requestAdapter());
     this.postprocessingManager = new PostprocessingManager(this.renderer);
-    if (this.IS_MONITORING_ENABLED)
+    if (this.IS_MONITORING_ENABLED) {
+      this.renderer.info.autoReset = false;
       await this.monitoringManager.stats.init(this.renderer);
+    }
   }
 
   private async renderSceneAsync() {
@@ -76,24 +79,23 @@ export class RendererManager {
   }
 
   private renderWithMonitoring() {
-    const p = Promise.all([
-      this.renderer.resolveTimestampsAsync("compute"),
-      this.renderSceneAsync(),
-      this.renderer.resolveTimestampsAsync("render"),
-    ]);
-
     // Consume last frame’s results now (they should be ready)
     this.prevFrame
       ?.then(() => {
         this.monitoringManager.updateCustomPanels(this);
         this.monitoringManager.stats.update();
+        this.renderer.info.reset();
       })
       .catch((err) => {
         console.error("[renderWithMonitoring] previous frame error:", err);
       });
 
     // Set current as previous for next loop
-    this.prevFrame = p;
+    this.prevFrame = Promise.all([
+      this.renderer.resolveTimestampsAsync("compute"),
+      this.renderSceneAsync(),
+      this.renderer.resolveTimestampsAsync("render"),
+    ]);
   }
 
   async renderAsync() {

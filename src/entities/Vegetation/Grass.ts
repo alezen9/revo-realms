@@ -91,8 +91,6 @@ const uniforms = {
   uWindSpeed: uniform(0.25),
   uvWindScale: uniform(1.75),
   // Color
-  // uBaseColor: uniform(new Color().setRGB(0.08, 0.13, 0.02)),
-  // uTipColor: uniform(new Color().setRGB(0.47, 0.25, 0.04)),
   uBaseColor: uniform(new Color().setRGB(0.55, 0.42, 0.19)),
   uTipColor: uniform(new Color().setRGB(0.05, 0.47, 0.04)),
   uColorMixFactor: uniform(0.125),
@@ -107,7 +105,7 @@ const uniforms = {
   // Stochastic keep
   uR0: uniform(10),
   uR1: uniform(60),
-  uPMin: uniform(0),
+  uPMin: uniform(0.1),
   // Rotation
   uBaseBending: uniform(2),
 };

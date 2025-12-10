@@ -34,6 +34,7 @@ const POSITIONS = {
   hill: [-100, 0.5, 240],
   fireplace: [130, 0.5, 210],
   gow: [70, 0.5, 125],
+  lake: [-222.5, 0.5, 170],
 };
 
 const getConfig = () => {
@@ -51,7 +52,7 @@ const getConfig = () => {
     ANG_VEL_STRENGTH: 25,
     RADIUS: 0.5,
     MASS: 0.5,
-    PLAYER_INITIAL_POSITION: new Vector3(...POSITIONS.center),
+    PLAYER_INITIAL_POSITION: new Vector3(...POSITIONS.lake),
     CAMERA_OFFSET: new Vector3(0, 16, 20),
     CAMERA_LERP_FACTOR: 7.5,
     UP: new Vector3(0, 1, 0),
