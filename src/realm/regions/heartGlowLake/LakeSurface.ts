@@ -218,6 +218,7 @@ class WaterMaterial extends MeshBasicNodeMaterial {
 
   private createMaterial() {
     this.precision = "lowp";
+    this.fog = false;
 
     // 0. normal
     const speed = time.mul(this.uniforms.uSpeed);
