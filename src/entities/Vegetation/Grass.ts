@@ -33,6 +33,7 @@ import {
   remap,
   fract,
   INFINITY,
+  positionWorld,
 } from "three/tsl";
 import {
   assetManager,
@@ -358,14 +359,10 @@ class GrassSsbo {
     },
   );
 
-  private computeShadow = Fn(([worldPos = vec3(0)]) => {
-    const _uv = TSLUtils.computeMapUvByPosition(worldPos.xz);
-    const shadowAo = texture(
-      assetManager.resources.terrainShadowAoTexture,
-      _uv,
-    );
-    return step(0.65, shadowAo.r);
-  });
+  // private computeShadow = Fn(([worldPos = vec3(0)]) => {
+  //   const lightmap = TSLUtils.sampleLightmap(worldPos);
+  //   return step(0.65, lightmap.r);
+  // });
 
   computeUpdate = Fn(() => {
     const data1 = this.buffer1.element(instanceIndex);
@@ -447,9 +444,9 @@ class GrassSsbo {
       data1.assign(this.setWind(data1, newWind.xy)); // Wind displacement
       data1.assign(this.setWindNoise(data1, newWind.z)); // Noise factor
 
-      // // Shadow
+      // Shadow
       // const isShadow = this.computeShadow(worldPos);
-      // data.assign(this.setShadow(data, isShadow));
+      // data1.assign(this.setShadow(data1, isShadow));
     });
   })().compute(config.COUNT, [config.WORKGROUP_SIZE]);
 }
@@ -476,7 +473,7 @@ class GrassMaterial extends SpriteNodeMaterial {
     const scaleY = this.ssbo.getScale(data1);
     const isVisible = this.ssbo.getVisibility(data1);
     const windNoiseFactor = this.ssbo.getWindNoise(data1);
-    // const isShadow = this.ssbo.getShadow(data);
+    // const shadow = this.ssbo.getShadow(data1);
     const positionNoise = this.ssbo.getPositionNoise(data2);
 
     // OPACITY
@@ -565,7 +562,10 @@ class GrassMaterial extends SpriteNodeMaterial {
       baseMask.mul(smoothstep(0.0, 1.0, swayFactor)),
     );
 
-    this.colorNode = baseToTip.mul(windAo).mul(ao);
+    const shadow = TSLUtils.sampleLightmap(positionWorld).r;
+
+    const color = mix(baseToTip.mul(0.5), baseToTip, shadow);
+    this.colorNode = color.mul(windAo).mul(ao);
 
     // const normal = vec3(instanceNoise, baseBending, instanceNoise).normalize();
     // const reflectedLight = reflect(uniforms.uSunDir, normal);

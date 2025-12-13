@@ -1,19 +1,19 @@
-import { Mesh, PointLight } from "three";
+import { Mesh } from "three";
 import { ColliderDesc, RigidBodyDesc } from "@dimforge/rapier3d";
 import { RevoColliderType } from "../../../types";
 import ParticleSystem from "../../../utils/ParticleSystem";
 import { assetManager, sceneManager, physicsManager } from "../../../systems";
-import { MeshLambertNodeMaterial } from "three/webgpu";
+import { MeshStandardNodeMaterial } from "three/webgpu";
 import { float, normalMap, texture, uv } from "three/tsl";
 
-class CampfireMaterial extends MeshLambertNodeMaterial {
+class CampfireMaterial extends MeshStandardNodeMaterial {
   constructor() {
     super();
-    this.colorNode = texture(assetManager.resources.campfireDiffuse, uv()).mul(
-      1.5,
-    );
-    const norRough = texture(assetManager.resources.campfireNormal, uv());
-    this.normalNode = normalMap(norRough.rgb, float(2));
+
+    const diffuse = texture(assetManager.resources.campfireDiffuse, uv());
+    this.colorNode = diffuse.mul(2.25);
+    const normal = texture(assetManager.resources.campfireNormal, uv());
+    this.normalNode = normalMap(normal.rgb, float(1.75));
   }
 }
 
@@ -24,9 +24,6 @@ export class Campfire {
       "campfire",
     ) as Mesh;
     campfire.material = new CampfireMaterial();
-
-    // const pointLight = new PointLight("darkorange", 3, 2);
-    // pointLight.position.copy(campfire.position).setY(0.15);
 
     const fire = new ParticleSystem({
       preset: "fire",
