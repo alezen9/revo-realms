@@ -172,8 +172,10 @@ class TerainMaterial extends MeshLambertNodeMaterial {
     const waterColor = waterBaseColor.add(causticsColor);
 
     const final = mix(terrainColor, waterColor, isWater);
+    const lightmap = TSLUtils.sampleLightmap(positionWorld);
+    const light = lightmap.r.remap(0, 1, 0.65, 1);
 
-    this.colorNode = final;
+    this.colorNode = final.mul(light);
 
     // NORMAL
     const norAo = texture(assetManager.resources.terrainNormAo, vUv.mul(41.7));

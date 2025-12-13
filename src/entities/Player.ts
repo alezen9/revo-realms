@@ -32,7 +32,7 @@ const POSITIONS = {
   center: [0, 0.5, 10],
   berserk: [180, 0.5, -150],
   hill: [-100, 0.5, 240],
-  fireplace: [130, 0.5, 210],
+  campfire: [130, 0.5, 210],
   gow: [70, 0.5, 125],
   lake: [-222.5, 0.5, 170],
 };
@@ -52,7 +52,7 @@ const getConfig = () => {
     ANG_VEL_STRENGTH: 25,
     RADIUS: 0.5,
     MASS: 0.5,
-    PLAYER_INITIAL_POSITION: new Vector3(...POSITIONS.lake),
+    PLAYER_INITIAL_POSITION: new Vector3(...POSITIONS.campfire),
     CAMERA_OFFSET: new Vector3(0, 16, 20),
     CAMERA_LERP_FACTOR: 7.5,
     UP: new Vector3(0, 1, 0),
@@ -382,14 +382,13 @@ class PlayerMaterial extends MeshLambertNodeMaterial {
 
     this.castShadowNode = vec3(0.6);
 
-    const mapUv = TSLUtils.computeMapUvByPosition(positionWorld.xz);
-    const vMapUv = varying(mapUv);
-    const shadowFactor = lightingManager.getTerrainShadowFactor(vMapUv);
+    const lightmap = TSLUtils.sampleLightmap(positionWorld);
+    const light = lightmap.r.remap(0, 1, 0.35, 1);
     const baseColor = texture(assetManager.resources.playerDiffuse, uv()).mul(
       2,
     );
 
-    this.colorNode = baseColor.mul(shadowFactor);
+    this.colorNode = baseColor.mul(light);
 
     const normal = texture(assetManager.resources.playerNormal, uv());
     this.normalNode = normalMap(normal, float(3.5));

@@ -47,8 +47,8 @@ import onePieceAtlasUrl from "/textures/realm/onePieceAtlas.webp?url";
 import kunaiDiffuseUrl from "/textures/realm/kunaiDiffuse.webp?url";
 import kunaiMRUrl from "/textures/realm/kunaiMR.webp?url";
 // Campfire
-import campfireDiffuseUrl from "/textures/new-world/campfire/diffuse_512.ktx2?url";
-import campfireNormalUrl from "/textures/new-world/campfire/normal_512.ktx2?url";
+import campfireDiffuseUrl from "/textures/new-world/campfire/diffuse_1k.ktx2?url";
+import campfireNormalUrl from "/textures/new-world/campfire/normal_1k.ktx2?url";
 // Log
 import logNormalUrl from "/textures/new-world/log/normal_1k.ktx2?url";
 import logDiffuseUrl from "/textures/new-world/log/diffuse_512.ktx2?url";
@@ -73,6 +73,7 @@ import noiseAtlasUrl from "/textures/new-world/noise/noise_atlas.ktx2?url";
 
 import grassMapUrl from "/textures/new-world/terrain/grass-map.png?url";
 import waterMapUrl from "/textures/new-world/terrain/water-map.png?url";
+import lightmapUrl from "/textures/new-world/terrain/lightmap.ktx2?url";
 
 type ResourceType = {
   texture: Texture;
@@ -157,6 +158,12 @@ export const manifest = [
     flipY: false,
   },
   {
+    name: "lightmap",
+    url: lightmapUrl,
+    type: "ktx2",
+    flipY: false,
+  },
+  {
     name: "terrainNormAo",
     url: terrainNormAoUrl,
     type: "ktx2",
@@ -183,6 +190,7 @@ export const manifest = [
     url: campfireDiffuseUrl,
     flipY: false,
     type: "ktx2",
+    colorSpace: SRGBColorSpace,
   },
   {
     name: "campfireNormal",

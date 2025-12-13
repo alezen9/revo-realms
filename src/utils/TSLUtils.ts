@@ -11,8 +11,10 @@ import {
   PI2,
   round,
   vec3,
+  texture,
 } from "three/tsl";
 import { realmConfig } from "../realm/RevoRealm";
+import { assetManager } from "../systems";
 
 export class TSLUtils {
   /** pack into [offset, bits] using fixed-point (lsb, bias) */
@@ -181,6 +183,11 @@ export class TSLUtils {
       return uv.mul(scale).add(offset);
     },
   );
+
+  static sampleLightmap = Fn(([worldPos = vec3(0)]) => {
+    const _uv = this.computeMapUvByPosition(worldPos.xz);
+    return texture(assetManager.resources.lightmap, _uv);
+  });
 
   // Inputs n1, n2 are tangent-space normals already unpacked to [-1..1] and normalized.
   // (If you sampled from texture, do: n = tex.rgb * 2 - 1; normalize(n);)
