@@ -39,13 +39,13 @@ export class VegetationSsboUtils {
       const dz = worldPos.z.sub(playerPosition.z);
       const distSq = dx.mul(dx).add(dz.mul(dz));
 
-      const R0Sq = R0.mul(R0),
-        R1Sq = R1.mul(R1);
+      const R0Sq = R0.mul(R0);
+      const R1Sq = R1.mul(R1);
 
       // 0 inside R0, 1 at/after R1
       const t = distSq
         .sub(R0Sq)
-        .div(max(R1Sq.sub(R0Sq), 1e-5))
+        .div(max(R1Sq.sub(R0Sq), EPSILON))
         .clamp();
 
       // keep probability from 1 → pMin
@@ -80,8 +80,10 @@ export class VegetationSsboUtils {
       padNdcYNear = float(0),
       padNdcYFar = float(0),
     ]) => {
+      const one = float(1);
+
       const clip = cameraMatrix.mul(vec4(worldPos, 1.0));
-      const invW = float(1).div(clip.w);
+      const invW = one.div(clip.w);
       const ndc = clip.xyz.mul(invW);
 
       // works for WebGL and WebGPU
@@ -91,8 +93,6 @@ export class VegetationSsboUtils {
       const rNdcY = fY.mul(r).div(eyeDepthAbs);
       const rNdcYNear = rNdcY.add(padNdcYNear);
       const rNdcYFar = rNdcY.sub(padNdcYFar);
-
-      const one = float(1);
 
       const visLeft = step(one.negate().sub(rNdcX), ndc.x);
       const visRight = step(ndc.x, one.add(rNdcX));
