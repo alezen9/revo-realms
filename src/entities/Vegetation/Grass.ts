@@ -52,6 +52,7 @@ const getConfig = () => {
   const TILE_SIZE = 130;
   const BLADES_PER_SIDE = 512 + 512 + 64; // power of 2 is optimal, divisible by wg also good
   return {
+    SEGMENTS: 4,
     BLADE_WIDTH,
     BLADE_HEIGHT,
     BLADE_BOUNDING_SPHERE_RADIUS: BLADE_HEIGHT,
@@ -93,7 +94,7 @@ const uniforms = {
   uvWindScale: uniform(1.75),
   // Color
   uBaseColor: uniform(new Color().setRGB(0.55, 0.42, 0.19)),
-  uTipColor: uniform(new Color().setRGB(0.05, 0.47, 0.04)),
+  uTipColor: uniform(new Color().setRGB(0.29, 0.47, 0.04)),
   uColorMixFactor: uniform(0.125),
   uColorVariationStrength: uniform(2.75),
   uAoScale: uniform(0.5),
@@ -115,7 +116,7 @@ class GrassSsbo {
   // x -> offsetX (0 unused)
   // y -> offsetZ (0 unused)
   // z -> 0/12 windX - 12/12 windZ (0 unused)
-  // w -> 0/8 current scale - 8/8 original scale - 16/1 shadow - 17/1 visibility - 18/4 wind noise factor (0 unused)
+  // w -> 0/8 current scale - 8/8 original scale - 16/1 UNUSED - 17/1 visibility - 18/6 wind noise factor (1 unused)
   private buffer1: ReturnType<typeof instancedArray>;
   // x -> 0/4 position based noise - 4/20 offsetY (0 unused)
   private buffer2: ReturnType<typeof instancedArray>;
@@ -172,10 +173,6 @@ class GrassSsbo {
     );
   });
 
-  getShadow = Fn(([data = vec4(0)]) => {
-    return TSLUtils.unpackFlag(data.w, 16);
-  });
-
   getVisibility = Fn(([data = vec4(0)]) => {
     return TSLUtils.unpackFlag(data.w, 17);
   });
@@ -226,11 +223,6 @@ class GrassSsbo {
       uniforms.uBladeMinScale,
       uniforms.uBladeMaxScale,
     );
-    return data;
-  });
-
-  private setShadow = Fn(([data = vec4(0), value = float(0)]) => {
-    data.w = TSLUtils.packFlag(data.w, 16, value);
     return data;
   });
 
@@ -359,11 +351,6 @@ class GrassSsbo {
     },
   );
 
-  // private computeShadow = Fn(([worldPos = vec3(0)]) => {
-  //   const lightmap = TSLUtils.sampleLightmap(worldPos);
-  //   return step(0.65, lightmap.r);
-  // });
-
   computeUpdate = Fn(() => {
     const data1 = this.buffer1.element(instanceIndex);
 
@@ -443,10 +430,6 @@ class GrassSsbo {
       const newWind = this.computeWind(prevWind, worldPos, positionNoise);
       data1.assign(this.setWind(data1, newWind.xy)); // Wind displacement
       data1.assign(this.setWindNoise(data1, newWind.z)); // Noise factor
-
-      // Shadow
-      // const isShadow = this.computeShadow(worldPos);
-      // data1.assign(this.setShadow(data1, isShadow));
     });
   })().compute(config.COUNT, [config.WORKGROUP_SIZE]);
 }
@@ -462,6 +445,8 @@ class GrassMaterial extends SpriteNodeMaterial {
   private createGrassMaterial() {
     this.precision = "lowp";
     this.transparent = false;
+    this.stencilWrite = false;
+    this.forceSinglePass = true;
 
     // compute values
     const data1 = this.ssbo.computeBuffer1.element(instanceIndex);
@@ -473,7 +458,6 @@ class GrassMaterial extends SpriteNodeMaterial {
     const scaleY = this.ssbo.getScale(data1);
     const isVisible = this.ssbo.getVisibility(data1);
     const windNoiseFactor = this.ssbo.getWindNoise(data1);
-    // const shadow = this.ssbo.getShadow(data1);
     const positionNoise = this.ssbo.getPositionNoise(data2);
 
     // OPACITY
@@ -564,8 +548,8 @@ class GrassMaterial extends SpriteNodeMaterial {
 
     const shadow = TSLUtils.sampleLightmap(positionWorld).r;
 
-    const color = mix(baseToTip.mul(0.5), baseToTip, shadow);
-    this.colorNode = color.mul(windAo).mul(ao);
+    const withShadow = mix(baseToTip.mul(0.5), baseToTip, shadow);
+    this.colorNode = withShadow.mul(windAo).mul(ao);
 
     // const normal = vec3(instanceNoise, baseBending, instanceNoise).normalize();
     // const reflectedLight = reflect(uniforms.uSunDir, normal);
@@ -583,7 +567,7 @@ class GrassMaterial extends SpriteNodeMaterial {
 export default class Grass {
   constructor() {
     const ssbo = new GrassSsbo();
-    const geometry = this.createGeometry(4);
+    const geometry = this.createGeometry(config.SEGMENTS);
     const material = new GrassMaterial(ssbo);
     const grass = new InstancedMesh(geometry, material, config.COUNT);
     grass.frustumCulled = false;
