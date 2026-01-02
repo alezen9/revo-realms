@@ -41,7 +41,7 @@ import { eventsManager } from "../systems/EventsManager";
 import { tslUtils } from "../utils/TSLUtils";
 
 const uniforms = {
-  uGrassTerrainColor: uniform(new Color().setRGB(0.84, 0.62, 0.15)),
+  uGrassTerrainColor: uniform(new Color().setRGB(0.16, 0.41, 0.06)),
   uWaterSandColor: uniform(new Color().setRGB(0.54, 0.39, 0.2)),
   uPathSandColor: uniform(new Color().setRGB(0.65, 0.49, 0.27)),
 };

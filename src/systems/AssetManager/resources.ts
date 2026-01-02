@@ -90,7 +90,7 @@ export const manifest = [
   // Core
   // -----------------------------------------------
   { name: "realmModel", url: realmModelUrl, type: "gltf" },
-  { name: "noiseTexture", url: noiseUrl, type: "texture" },
+  { name: "noiseTexture", url: noiseUrl, type: "texture", wrap: true },
   {
     name: "envMapTexture",
     urls: [pxUrl, nxUrl, pyUrl, nyUrl, pzUrl, nzUrl],

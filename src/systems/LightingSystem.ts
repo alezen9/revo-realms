@@ -25,8 +25,8 @@ const config = {
   hemiIntensity: 0.3,
   // fogColor: new Color(0.05, 0.12, 0.24), // Dark
   // fogDensity: 0.009, // Dark
-  fogColor: new Color(0.29, 0.08, 0.0), // Light
-  fogDensity: 0.0046, // Light
+  fogColor: new Color(0.25, 0.26, 0.07), // Light
+  fogDensity: 0.006, // Light
 };
 
 class LightingSystem {
@@ -51,7 +51,7 @@ class LightingSystem {
     sceneManager.scene.add(this.hemisphereLight);
 
     this.fog = this.setupFog();
-    // sceneManager.scene.fog = this.fog;
+    sceneManager.scene.fog = this.fog;
 
     // eventsManager.on("camera-changed", () => {
     //   sceneManager.scene.fog = sceneManager.scene.fog ? null : this.fog;
