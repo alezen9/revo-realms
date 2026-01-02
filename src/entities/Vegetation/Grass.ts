@@ -70,8 +70,8 @@ const uniforms = {
   uCameraMatrix: uniform(new Matrix4()), // MVP = Projection * View
   uFx: uniform(1.0),
   uFy: uniform(1.0),
-  uCullPadNDCX: uniform(0.075), // small padding to hide rotation lag
-  uCullPadNDCYNear: uniform(0.75), // small padding to avoid near clipping
+  uCullPadNDCX: uniform(0), // small padding to hide rotation lag
+  uCullPadNDCYNear: uniform(0), // small padding to avoid near clipping
   uCullPadNDCYFar: uniform(0.2), // small padding to avoid far clipping
   // other
   uPlayerPosition: uniform(new Vector3(0, 0, 0)),
@@ -91,11 +91,11 @@ const uniforms = {
   uWindSpeed: uniform(0.08),
   uvWindScale: uniform(2.7),
   // Color
-  uBaseColor: uniform(new Color().setRGB(0.08, 0.3, 0.13)),
-  uTipColor: uniform(new Color().setRGB(0.21, 0.15, 0.0)),
-  uColorMixFactor: uniform(0.3),
-  uColorVariationStrength: uniform(2.25),
-  uAoScale: uniform(2.5),
+  uBaseColor: uniform(new Color().setRGB(0.11, 0.35, 0.09)),
+  uTipColor: uniform(new Color().setRGB(0.45, 0.11, 0.02)),
+  uColorMixFactor: uniform(0.2),
+  uColorVariationStrength: uniform(2.75),
+  uAoScale: uniform(1.5),
   uAoRimSmoothness: uniform(5),
   uAoRadius: uniform(30),
   uAoRadiusSquared: uniform(30 * 30),
