@@ -51,11 +51,8 @@ import onePieceAtlasUrl from "/textures/realm/onePieceAtlas.webp?url";
 import kunaiDiffuseUrl from "/textures/realm/kunaiDiffuse.webp?url";
 import kunaiMRUrl from "/textures/realm/kunaiMR.webp?url";
 // Campfire
-import campfireDiffuseUrl from "/textures/new-world/campfire/diffuse_1k.ktx2?url";
-import campfireNormalUrl from "/textures/new-world/campfire/normal_1k.ktx2?url";
-// Log
-import logNormalUrl from "/textures/new-world/log/normal_1k.ktx2?url";
-import logDiffuseUrl from "/textures/new-world/log/diffuse_512.ktx2?url";
+import campfireDiffuseUrl from "/textures/new-world/campfire/diffuse_2k.ktx2?url";
+import campfireNormalRoughnessUrl from "/textures/new-world/campfire/normalRoughness_2k.ktx2?url";
 // Fire
 import fireSpritesUrl from "/textures/new-world/fire/fireSprites_128_etc1s.ktx2?url";
 // Player
@@ -203,26 +200,12 @@ export const manifest = [
     colorSpace: SRGBColorSpace,
   },
   {
-    name: "campfireNormal",
-    url: campfireNormalUrl,
+    name: "campfireNormalRoughness",
+    url: campfireNormalRoughnessUrl,
     type: "ktx2",
     flipY: false,
   },
 
-  // -----------------------------------------------
-  // Log
-  // -----------------------------------------------
-  {
-    name: "logDiffuse",
-    url: logDiffuseUrl,
-    type: "ktx2",
-    colorSpace: SRGBColorSpace,
-  },
-  {
-    name: "logNormal",
-    url: logNormalUrl,
-    type: "ktx2",
-  },
   // -----------------------------------------------
   // Fire
   // -----------------------------------------------
