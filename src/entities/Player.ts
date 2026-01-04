@@ -8,15 +8,7 @@ import {
   ActiveEvents,
 } from "@dimforge/rapier3d";
 import { type State } from "../Game";
-import {
-  float,
-  normalMap,
-  positionWorld,
-  texture,
-  uv,
-  varying,
-  vec3,
-} from "three/tsl";
+import { float, normalMap, positionWorld, texture, uv, vec3 } from "three/tsl";
 import { MeshLambertNodeMaterial } from "three/webgpu";
 import { RevoColliderType } from "../types";
 import { physicsManager, sceneManager, eventsManager } from "../systems";
@@ -35,6 +27,7 @@ const POSITIONS = {
   campfire: [130, 0.5, 210],
   gow: [70, 0.5, 125],
   lake: [-222.5, 0.5, 170],
+  dragonball: [150, 0.5, 80],
 };
 
 const getConfig = () => {
@@ -52,7 +45,7 @@ const getConfig = () => {
     ANG_VEL_STRENGTH: 25,
     RADIUS: 0.5,
     MASS: 0.5,
-    PLAYER_INITIAL_POSITION: new Vector3(...POSITIONS.center),
+    PLAYER_INITIAL_POSITION: new Vector3(...POSITIONS.dragonball),
     CAMERA_OFFSET: new Vector3(0, 16, 20),
     CAMERA_LERP_FACTOR: 7.5,
     UP: new Vector3(0, 1, 0),
