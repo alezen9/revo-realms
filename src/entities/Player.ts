@@ -24,7 +24,7 @@ const POSITIONS = {
   center: [0, 0.5, 10],
   berserk: [180, 0.5, -150],
   hill: [-100, 0.5, 240],
-  campfire: [130, 0.5, 210],
+  campfire: [-165, 0.5, -150],
   gow: [70, 0.5, 125],
   lake: [-222.5, 0.5, 170],
   dragonball: [150, 0.5, 80],

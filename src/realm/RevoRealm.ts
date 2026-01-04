@@ -1,10 +1,9 @@
 import CoolStuff from "../entities/CoolStuff/CoolStuff";
-import Monuments from "../entities/Monuments";
-import Rocks from "../entities/Rocks";
 import Terrain from "../entities/Terrain";
 import Vegetation from "../entities/Vegetation/Vegetation";
 import { Compass } from "../entities/Compass";
-import { HeartGlowLake } from "./regions/heartGlowLake/HeartGlowLake";
+import { LakeSurface } from "../entities/LakeSurface";
+import { Campfire } from "../entities/Campfire";
 
 const getConfig = () => {
   const MAP_SIZE = 512;
@@ -22,12 +21,14 @@ export const realmConfig = getConfig();
 
 export default class PortfolioRealm {
   constructor() {
-    new HeartGlowLake();
     new Compass();
     new Terrain();
     // new Monuments();
     new Vegetation();
     // new Rocks();
     new CoolStuff();
+
+    new LakeSurface();
+    new Campfire();
   }
 }
