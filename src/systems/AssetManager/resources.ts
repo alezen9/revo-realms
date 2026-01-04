@@ -73,7 +73,16 @@ import noiseAtlasUrl from "/textures/new-world/noise/noise_atlas.ktx2?url";
 
 import grassMapUrl from "/textures/new-world/terrain/grass-map.png?url";
 import waterMapUrl from "/textures/new-world/terrain/water-map.png?url";
-import lightmapUrl from "/textures/new-world/terrain/lightmap.ktx2?url";
+// import lightmapUrl from "/textures/new-world/terrain/lightmap.ktx2?url";
+import lightmapUrl from "/textures/new-world/terrain/lightmap.png?url";
+
+import pineTreeDiffuseUrl from "/textures/new-world/pine-tree/diffuse.ktx2?url";
+// import pineTreeNormalUrl from "/textures/new-world/pine-tree/normal.ktx2?url";
+// import pineTreeARMUrl from "/textures/new-world/pine-tree/arm.ktx2?url";
+
+import gokuStatueDiffuseUrl from "/textures/new-world/cool-stuff/dragon-ball/diffuse.ktx2?url";
+import gokuStatueNormalUrl from "/textures/new-world/cool-stuff/dragon-ball/normal.ktx2?url";
+import gokuStatueARMUrl from "/textures/new-world/cool-stuff/dragon-ball/arm.ktx2?url";
 
 type ResourceType = {
   texture: Texture;
@@ -160,7 +169,7 @@ export const manifest = [
   {
     name: "lightmap",
     url: lightmapUrl,
-    type: "ktx2",
+    type: "texture",
     flipY: false,
   },
   {
@@ -286,6 +295,31 @@ export const manifest = [
   },
 
   // -----------------------------------------------
+  // Dragon Ball
+  // -----------------------------------------------
+  {
+    name: "concreteDiffuse",
+    url: gokuStatueDiffuseUrl,
+    type: "ktx2",
+    flipY: false,
+    wrap: true,
+    // colorSpace: SRGBColorSpace, // on purpose
+  },
+  {
+    name: "concreteNormal",
+    url: gokuStatueNormalUrl,
+    type: "ktx2",
+    flipY: false,
+    wrap: true,
+  },
+  {
+    name: "gokuStatueARM",
+    url: gokuStatueARMUrl,
+    type: "ktx2",
+    flipY: false,
+  },
+
+  // -----------------------------------------------
   // Player
   // -----------------------------------------------
   {
@@ -350,6 +384,29 @@ export const manifest = [
     type: "texture",
     flipY: false,
   },
+
+  // -----------------------------------------------
+  // Pine Tree
+  // -----------------------------------------------
+  {
+    name: "pineTreeDiffuse",
+    url: pineTreeDiffuseUrl,
+    type: "ktx2",
+    flipY: false,
+    // colorSpace: SRGBColorSpace, // on purpose a bit dimmed, otherwise it's too vibrant
+  },
+  // {
+  //   name: "pineTreeNormal",
+  //   url: pineTreeNormalUrl,
+  //   type: "ktx2",
+  //   flipY: false,
+  // },
+  // {
+  //   name: "pineTreeARM",
+  //   url: pineTreeARMUrl,
+  //   type: "ktx2",
+  //   flipY: false,
+  // },
 
   // -----------------------------------------------
   // Flowers
