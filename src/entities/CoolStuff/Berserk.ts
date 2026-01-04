@@ -1,4 +1,4 @@
-import { assetManager, debugManager } from "../../systems";
+import { assetManager, debugManager, systemState } from "../../systems";
 import { Mesh } from "three";
 import { MeshStandardNodeMaterial } from "three/webgpu";
 import { ColliderDesc, RigidBodyDesc } from "@dimforge/rapier3d";
@@ -7,60 +7,38 @@ import { RevoColliderType } from "../../types";
 import { normalMap, texture, uniform, uv } from "three/tsl";
 
 const uniforms = {
-  diffuseScale: uniform(3.75),
-  normalScale: uniform(1.5),
-  aoScale: uniform(1),
-  metalnessScale: uniform(1),
-  roughnessScale: uniform(1.5),
+  uDiffuseScale: uniform(3.75),
+  uNormalScale: uniform(1.5),
+  uAoScale: uniform(1),
+  uMetalnessScale: uniform(1),
+  uRoughnessScale: uniform(1.5),
 };
 class DragonSlayerMaterial extends MeshStandardNodeMaterial {
   constructor() {
     super();
-
-    this.debug();
-
     this.precision = "lowp";
-    const diffuse = texture(assetManager.resources.berserkDiffuse, uv());
-    this.colorNode = diffuse.rgb.mul(uniforms.diffuseScale);
-    const normal = texture(assetManager.resources.berserkNormal, uv());
-    this.normalNode = normalMap(normal.rgb, uniforms.normalScale);
+    const diffuse = texture(
+      assetManager.resources.dragonSlayerSwordDiffuse,
+      uv(),
+    );
+    this.colorNode = diffuse.rgb.mul(uniforms.uDiffuseScale);
+    const normal = texture(
+      assetManager.resources.dragonSlayerSwordNormal,
+      uv(),
+    );
+    this.normalNode = normalMap(normal.rgb, uniforms.uNormalScale);
 
-    const orm = texture(assetManager.resources.berserkORM, uv());
-    this.aoNode = orm.r.mul(uniforms.aoScale);
-    this.metalnessNode = orm.b.mul(uniforms.metalnessScale);
-    this.roughnessNode = orm.g.mul(uniforms.roughnessScale);
-  }
-
-  private debug() {
-    const folder = debugManager.panel.addFolder({
-      title: "🗡️ Berserk",
-      expanded: false,
-    });
-    folder.addBinding(uniforms.diffuseScale, "value", {
-      label: "Diffuse scale",
-      min: 0,
-    });
-    folder.addBinding(uniforms.normalScale, "value", {
-      label: "Normal scale",
-      min: 0,
-    });
-    folder.addBinding(uniforms.aoScale, "value", {
-      label: "AO scale",
-      min: 0,
-    });
-    folder.addBinding(uniforms.metalnessScale, "value", {
-      label: "Metalness scale",
-      min: 0,
-    });
-    folder.addBinding(uniforms.roughnessScale, "value", {
-      label: "Roughness scale",
-      min: 0,
-    });
+    const orm = texture(assetManager.resources.dragonSlayerSwordARM, uv());
+    this.aoNode = orm.r.mul(uniforms.uAoScale);
+    this.metalnessNode = orm.b.mul(uniforms.uMetalnessScale);
+    this.roughnessNode = orm.g.mul(uniforms.uRoughnessScale);
   }
 }
 
 export default class Berserk {
   constructor() {
+    this.debug();
+
     // Visual
     const sword = assetManager.resources.worldModel.scene.getObjectByName(
       "dragon_slayer",
@@ -85,5 +63,35 @@ export default class Berserk {
     //   max.z,
     // ).setRestitution(0.75);
     // physicsManager.world.createCollider(colliderDescAxe, rigidBodyAxe);
+
+    // Landmark
+    systemState.wind.registerTarget("Dragon Slayer", sword.position, 20);
+  }
+
+  private debug() {
+    const folder = debugManager.panel.addFolder({
+      title: "🗡️ Berserk",
+      expanded: false,
+    });
+    folder.addBinding(uniforms.uDiffuseScale, "value", {
+      label: "Diffuse scale",
+      min: 0,
+    });
+    folder.addBinding(uniforms.uNormalScale, "value", {
+      label: "Normal scale",
+      min: 0,
+    });
+    folder.addBinding(uniforms.uAoScale, "value", {
+      label: "AO scale",
+      min: 0,
+    });
+    folder.addBinding(uniforms.uMetalnessScale, "value", {
+      label: "Metalness scale",
+      min: 0,
+    });
+    folder.addBinding(uniforms.uRoughnessScale, "value", {
+      label: "Roughness scale",
+      min: 0,
+    });
   }
 }

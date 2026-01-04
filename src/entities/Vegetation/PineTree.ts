@@ -5,11 +5,7 @@ import {
   physicsManager,
   sceneManager,
 } from "../../systems";
-import {
-  BatchedMesh,
-  InstancedMesh,
-  MeshLambertNodeMaterial,
-} from "three/webgpu";
+import { InstancedMesh, MeshLambertNodeMaterial } from "three/webgpu";
 import {
   attribute,
   normalMap,
@@ -25,16 +21,11 @@ import { ColliderDesc, RigidBodyDesc } from "@dimforge/rapier3d";
 import { RevoColliderType } from "../../types";
 
 const uniforms = {
-  // canopyDiffuseScale: uniform(1.2),
-  canopyDiffuseScale: uniform(0.6),
-  // canopyNormalScale: uniform(0.35),
-  // canopyAoScale: uniform(1),
-  // canopyMetalnessScale: uniform(0.5),
-  // canopyRoughnessScale: uniform(1.5),
-  swaySpeed: uniform(0.75),
-  barkDiffuseScale: uniform(4),
-  barkNormalScale: uniform(2.5),
-  barkUVScale: uniform(3),
+  uCanopyDiffuseScale: uniform(0.6),
+  uCanopySwaySpeed: uniform(0.75),
+  uBarkDiffuseScale: uniform(3.5),
+  uBarkNormalScale: uniform(3),
+  uBarkUvScale: uniform(3),
 };
 
 class PineTreeCanopyMaterial extends MeshLambertNodeMaterial {
@@ -46,23 +37,15 @@ class PineTreeCanopyMaterial extends MeshLambertNodeMaterial {
     const windWeight = attribute("_windweight");
 
     const diffuse = texture(assetManager.resources.pineTreeDiffuse, uv());
-    this.colorNode = diffuse.rgb.mul(uniforms.canopyDiffuseScale);
+    this.colorNode = diffuse.rgb.mul(uniforms.uCanopyDiffuseScale);
     this.opacityNode = diffuse.a;
     this.alphaTest = 0.35;
 
     const random = uv().x.mul(uv().y).mul(4);
     const profile = windWeight.mul(windWeight);
-    const t = time.mul(uniforms.swaySpeed).add(random);
+    const t = time.mul(uniforms.uCanopySwaySpeed).add(random);
     const swayOffset = oscSine(t).mul(profile).mul(0.1);
     this.positionNode = positionLocal.add(vec3(0, swayOffset, 0));
-
-    // const arm = texture(assetManager.resources.pineTreeARM, uv());
-    // this.aoNode = arm.r.mul(uniforms.canopyAoScale);
-    // this.roughnessNode = arm.g.mul(uniforms.canopyRoughnessScale);
-    // this.metalnessNode = arm.b.mul(uniforms.canopyMetalnessScale);
-
-    // const normal = texture(assetManager.resources.pineTreeNormal, uv());
-    // this.normalNode = normalMap(normal, uniforms.canopyNormalScale);
   }
 }
 
@@ -70,14 +53,14 @@ class PineTreeBarkMaterial extends MeshLambertNodeMaterial {
   constructor() {
     super();
     this.precision = "lowp";
-    const _uv = uv().mul(uniforms.barkUVScale);
+    const _uv = uv().mul(uniforms.uBarkUvScale);
     const diffuse = texture(assetManager.resources.treeBarkDiffuse, _uv);
-    this.colorNode = diffuse.rgb.mul(uniforms.barkDiffuseScale);
+    this.colorNode = diffuse.rgb.mul(uniforms.uBarkDiffuseScale);
     this.opacityNode = diffuse.a;
     this.alphaTest = 0.35;
 
     const normal = texture(assetManager.resources.treeBarkNormal, _uv);
-    this.normalNode = normalMap(normal, uniforms.barkNormalScale);
+    this.normalNode = normalMap(normal, uniforms.uBarkNormalScale);
   }
 }
 
@@ -143,41 +126,32 @@ export class PineTree {
       title: "🌲 Pine Tree",
       expanded: false,
     });
-    folder.addBinding(uniforms.canopyDiffuseScale, "value", {
-      label: "Canopy Diffuse scale",
+    const canopy = folder.addFolder({
+      title: "Canopy",
+    });
+    canopy.addBinding(uniforms.uCanopyDiffuseScale, "value", {
+      label: "Diffuse scale",
       min: 0,
     });
-    folder.addBinding(uniforms.swaySpeed, "value", {
-      label: "Canopy Sway speed",
+    canopy.addBinding(uniforms.uCanopySwaySpeed, "value", {
+      label: "Sway speed",
       min: 0,
     });
-    // folder.addBinding(uniforms.canopyNormalScale, "value", {
-    //   label: "Canopy Normal scale",
-    //   min: 0,
-    // });
-    // folder.addBinding(uniforms.canopyAoScale, "value", {
-    //   label: "Canopy AO scale",
-    //   min: 0,
-    // });
-    // folder.addBinding(uniforms.canopyMetalnessScale, "value", {
-    //   label: "Canopy Metalness scale",
-    //   min: 0,
-    // });
-    // folder.addBinding(uniforms.canopyRoughnessScale, "value", {
-    //   label: "Canopy Roughness scale",
-    //   min: 0,
-    // });
 
-    folder.addBinding(uniforms.barkDiffuseScale, "value", {
-      label: "Bark Diffuse scale",
+    const bark = folder.addFolder({
+      title: "Bark",
+    });
+
+    bark.addBinding(uniforms.uBarkUvScale, "value", {
+      label: "UV scale",
       min: 0,
     });
-    folder.addBinding(uniforms.barkNormalScale, "value", {
-      label: "Bark Normal scale",
+    bark.addBinding(uniforms.uBarkDiffuseScale, "value", {
+      label: "Diffuse scale",
       min: 0,
     });
-    folder.addBinding(uniforms.barkUVScale, "value", {
-      label: "Bark UV scale",
+    bark.addBinding(uniforms.uBarkNormalScale, "value", {
+      label: "Normal scale",
       min: 0,
     });
   }

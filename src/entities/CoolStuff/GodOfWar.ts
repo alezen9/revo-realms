@@ -1,4 +1,4 @@
-import { assetManager, debugManager } from "../../systems";
+import { assetManager, debugManager, systemState } from "../../systems";
 import { Mesh } from "three";
 import { MeshStandardNodeMaterial } from "three/webgpu";
 import { ColliderDesc, RigidBodyDesc } from "@dimforge/rapier3d";
@@ -7,85 +7,51 @@ import { RevoColliderType } from "../../types";
 import { color, normalMap, texture, uniform, uv, vec3 } from "three/tsl";
 
 const uniforms = {
-  diffuseScale: uniform(4),
-  normalScale: uniform(1.25),
-  aoScale: uniform(1),
-  metalnessScale: uniform(1),
-  roughnessScale: uniform(1.5),
-  emissionScale: uniform(10),
+  uDiffuseScale: uniform(4),
+  uNormalScale: uniform(1.25),
+  uAoScale: uniform(1),
+  uMetalnessScale: uniform(1),
+  uRoughnessScale: uniform(1.5),
+  uEmissionScale: uniform(10),
 };
 
 class LeviathanAxeMaterial extends MeshStandardNodeMaterial {
   constructor() {
     super();
-
-    this.debug();
-
     this.precision = "lowp";
-    this.flatShading = false;
 
     const diffuseEmission = texture(
-      assetManager.resources.leviathanDiffuseEmissive,
+      assetManager.resources.leviathanAxeDiffuseEmissive,
       uv(),
     );
-    this.colorNode = diffuseEmission.rgb.mul(uniforms.diffuseScale);
+    this.colorNode = diffuseEmission.rgb.mul(uniforms.uDiffuseScale);
 
     const emissive = color("lightblue")
       .mul(diffuseEmission.a)
-      .mul(uniforms.emissionScale);
+      .mul(uniforms.uEmissionScale);
     this.emissiveNode = emissive;
 
-    const normal = texture(assetManager.resources.leviathanNormal, uv());
-    this.normalNode = normalMap(normal, uniforms.normalScale);
+    const normal = texture(assetManager.resources.leviathanAxeNormal, uv());
+    this.normalNode = normalMap(normal, uniforms.uNormalScale);
 
-    const orm = texture(assetManager.resources.leviathanORM, uv());
-    this.aoNode = orm.r.mul(uniforms.aoScale);
-    this.metalnessNode = orm.b.mul(uniforms.metalnessScale);
-    this.roughnessNode = orm.g.mul(uniforms.roughnessScale);
-  }
-
-  private debug() {
-    const folder = debugManager.panel.addFolder({
-      title: "🪓 God of War",
-      expanded: false,
-    });
-    folder.addBinding(uniforms.diffuseScale, "value", {
-      label: "Diffuse scale",
-      min: 0,
-    });
-    folder.addBinding(uniforms.normalScale, "value", {
-      label: "Normal scale",
-      min: 0,
-    });
-    folder.addBinding(uniforms.emissionScale, "value", {
-      label: "Emission scale",
-      min: 0,
-    });
-    folder.addBinding(uniforms.aoScale, "value", {
-      label: "AO scale",
-      min: 0,
-    });
-    folder.addBinding(uniforms.metalnessScale, "value", {
-      label: "Metalness scale",
-      min: 0,
-    });
-    folder.addBinding(uniforms.roughnessScale, "value", {
-      label: "Roughness scale",
-      min: 0,
-    });
+    const orm = texture(assetManager.resources.leviathanAxeORM, uv());
+    this.aoNode = orm.r.mul(uniforms.uAoScale);
+    this.metalnessNode = orm.b.mul(uniforms.uMetalnessScale);
+    this.roughnessNode = orm.g.mul(uniforms.uRoughnessScale);
   }
 }
 
 export default class GodOfWar {
   constructor() {
-    // Visual
-    const leviathanAxe =
-      assetManager.resources.worldModel.scene.getObjectByName(
-        "leviathan_axe",
-      ) as Mesh;
-    leviathanAxe.material = new LeviathanAxeMaterial();
+    this.debug();
 
-    sceneManager.scene.add(leviathanAxe);
+    // Visual
+    const axe = assetManager.resources.worldModel.scene.getObjectByName(
+      "leviathan_axe",
+    ) as Mesh;
+    axe.material = new LeviathanAxeMaterial();
+
+    sceneManager.scene.add(axe);
 
     // // Physics
     // const axeCollider = assetManager.resources.worldModel.scene.getObjectByName(
@@ -124,5 +90,39 @@ export default class GodOfWar {
     //   radius,
     // ).setRestitution(0.75);
     // physicsManager.world.createCollider(colliderDescTrunk, rigidBodyTrunk);
+
+    // Landmark
+    systemState.wind.registerTarget("Leviathan Axe", axe.position, 20);
+  }
+
+  private debug() {
+    const folder = debugManager.panel.addFolder({
+      title: "🪓 God of War",
+      expanded: false,
+    });
+    folder.addBinding(uniforms.uDiffuseScale, "value", {
+      label: "Diffuse scale",
+      min: 0,
+    });
+    folder.addBinding(uniforms.uNormalScale, "value", {
+      label: "Normal scale",
+      min: 0,
+    });
+    folder.addBinding(uniforms.uEmissionScale, "value", {
+      label: "Emission scale",
+      min: 0,
+    });
+    folder.addBinding(uniforms.uAoScale, "value", {
+      label: "AO scale",
+      min: 0,
+    });
+    folder.addBinding(uniforms.uMetalnessScale, "value", {
+      label: "Metalness scale",
+      min: 0,
+    });
+    folder.addBinding(uniforms.uRoughnessScale, "value", {
+      label: "Roughness scale",
+      min: 0,
+    });
   }
 }

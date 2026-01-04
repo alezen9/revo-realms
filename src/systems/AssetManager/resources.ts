@@ -41,6 +41,10 @@ import leviathanORMUrl from "/textures/new-world/cool-stuff/leviathan/orm_512.kt
 import berserkDiffuseUrl from "/textures/new-world/cool-stuff/berserk/diffuse_1k.ktx2?url";
 import berserkNormalUrl from "/textures/new-world/cool-stuff/berserk/normal_1k.ktx2?url";
 import berserkORMUrl from "/textures/new-world/cool-stuff/berserk/orm_512.ktx2?url";
+// Dragon Ball
+import gokuStatueDiffuseUrl from "/textures/new-world/cool-stuff/dragon-ball/diffuse_1k.ktx2?url";
+import gokuStatueNormalUrl from "/textures/new-world/cool-stuff/dragon-ball/normal_1k.ktx2?url";
+import gokuStatueARMUrl from "/textures/new-world/cool-stuff/dragon-ball/arm_1k.ktx2?url";
 // One Piece
 import onePieceAtlasUrl from "/textures/realm/onePieceAtlas.webp?url";
 // Naruto
@@ -53,7 +57,7 @@ import campfireNormalUrl from "/textures/new-world/campfire/normal_1k.ktx2?url";
 import logNormalUrl from "/textures/new-world/log/normal_1k.ktx2?url";
 import logDiffuseUrl from "/textures/new-world/log/diffuse_512.ktx2?url";
 // Fire
-import fireSpritesUrl from "/textures/new-world/cool-stuff/fire/fireSprites_128_etc1s.ktx2?url";
+import fireSpritesUrl from "/textures/new-world/fire/fireSprites_128_etc1s.ktx2?url";
 // Player
 import playerDiffuseUrl from "/textures/new-world/player/football/diffuse_512.ktx2?url";
 import playerNormalUrl from "/textures/new-world/player/football/normal_512.ktx2?url";
@@ -76,13 +80,10 @@ import waterMapUrl from "/textures/new-world/terrain/water-map.png?url";
 // import lightmapUrl from "/textures/new-world/terrain/lightmap.ktx2?url";
 import lightmapUrl from "/textures/new-world/terrain/lightmap.png?url";
 
-import pineTreeDiffuseUrl from "/textures/new-world/pine-tree/diffuse.ktx2?url";
+// Pine Tree
+import pineTreeDiffuseUrl from "/textures/new-world/pine-tree/diffuse_2k.ktx2?url";
 // import pineTreeNormalUrl from "/textures/new-world/pine-tree/normal.ktx2?url";
 // import pineTreeARMUrl from "/textures/new-world/pine-tree/arm.ktx2?url";
-
-import gokuStatueDiffuseUrl from "/textures/new-world/cool-stuff/dragon-ball/diffuse.ktx2?url";
-import gokuStatueNormalUrl from "/textures/new-world/cool-stuff/dragon-ball/normal.ktx2?url";
-import gokuStatueARMUrl from "/textures/new-world/cool-stuff/dragon-ball/arm.ktx2?url";
 
 type ResourceType = {
   texture: Texture;
@@ -252,20 +253,20 @@ export const manifest = [
   },
 
   {
-    name: "leviathanDiffuseEmissive",
+    name: "leviathanAxeDiffuseEmissive",
     url: leviathanDiffuseEmissiveUrl,
     type: "ktx2",
     flipY: false,
     colorSpace: SRGBColorSpace,
   },
   {
-    name: "leviathanNormal",
+    name: "leviathanAxeNormal",
     url: leviathanNormalUrl,
     type: "ktx2",
     flipY: false,
   },
   {
-    name: "leviathanORM",
+    name: "leviathanAxeORM",
     url: leviathanORMUrl,
     type: "ktx2",
     flipY: false,
@@ -275,20 +276,20 @@ export const manifest = [
   // Berserk
   // -----------------------------------------------
   {
-    name: "berserkDiffuse",
+    name: "dragonSlayerSwordDiffuse",
     url: berserkDiffuseUrl,
     type: "ktx2",
     flipY: false,
     colorSpace: SRGBColorSpace,
   },
   {
-    name: "berserkNormal",
+    name: "dragonSlayerSwordNormal",
     url: berserkNormalUrl,
     type: "ktx2",
     flipY: false,
   },
   {
-    name: "berserkORM",
+    name: "dragonSlayerSwordARM",
     url: berserkORMUrl,
     type: "ktx2",
     flipY: false,
@@ -303,7 +304,7 @@ export const manifest = [
     type: "ktx2",
     flipY: false,
     wrap: true,
-    // colorSpace: SRGBColorSpace, // on purpose
+    // colorSpace: SRGBColorSpace, // on purpose a bit dimmed, otherwise it's too vibrant
   },
   {
     name: "concreteNormal",
