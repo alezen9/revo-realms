@@ -7,29 +7,28 @@ import { RevoColliderType } from "../../types";
 import { mix, normalMap, texture, uniform, uv, vec3 } from "three/tsl";
 
 const uniforms = {
-  diffuseScale: uniform(1.15),
-  normalScale: uniform(1.5),
-  metalnessScale: uniform(1),
-  roughnessScale: uniform(1.5),
-  uvScale: uniform(4.75),
+  uDiffuseScale: uniform(1.15),
+  uNormalScale: uniform(1.5),
+  uMetalnessScale: uniform(1),
+  uRoughnessScale: uniform(1.5),
+  uUvScale: uniform(4.75),
 };
-class ConcreteMaterial extends MeshStandardNodeMaterial {
+class GokuStatueMaterial extends MeshStandardNodeMaterial {
   constructor() {
     super();
-
     this.precision = "lowp";
     const arm = texture(assetManager.resources.gokuStatueARM, uv());
 
-    const _uv = uv().mul(uniforms.uvScale);
+    const _uv = uv().mul(uniforms.uUvScale);
     const diffuse = texture(assetManager.resources.concreteDiffuse, _uv);
     const color = mix(vec3(0), diffuse.rgb, arm.r);
-    this.colorNode = color.mul(uniforms.diffuseScale);
+    this.colorNode = color.mul(uniforms.uDiffuseScale);
 
     const normal = texture(assetManager.resources.concreteNormal, _uv);
-    this.normalNode = normalMap(normal.rgb, uniforms.normalScale);
+    this.normalNode = normalMap(normal.rgb, uniforms.uNormalScale);
 
-    this.metalnessNode = arm.b.mul(uniforms.metalnessScale);
-    this.roughnessNode = arm.g.mul(uniforms.roughnessScale);
+    this.metalnessNode = arm.b.mul(uniforms.uMetalnessScale);
+    this.roughnessNode = arm.g.mul(uniforms.uRoughnessScale);
   }
 }
 
@@ -41,7 +40,7 @@ export default class DragonBall {
     const gokuStatue = assetManager.resources.worldModel.scene.getObjectByName(
       "goku_statue",
     ) as Mesh;
-    gokuStatue.material = new ConcreteMaterial();
+    gokuStatue.material = new GokuStatueMaterial();
     gokuStatue.receiveShadow = true;
     sceneManager.scene.add(gokuStatue);
 
@@ -70,24 +69,24 @@ export default class DragonBall {
       title: "🐉 Dragon Ball",
       expanded: false,
     });
-    folder.addBinding(uniforms.diffuseScale, "value", {
+    folder.addBinding(uniforms.uUvScale, "value", {
+      label: "UV scale",
+      min: 0,
+    });
+    folder.addBinding(uniforms.uDiffuseScale, "value", {
       label: "Diffuse scale",
       min: 0,
     });
-    folder.addBinding(uniforms.normalScale, "value", {
+    folder.addBinding(uniforms.uNormalScale, "value", {
       label: "Normal scale",
       min: 0,
     });
-    folder.addBinding(uniforms.metalnessScale, "value", {
+    folder.addBinding(uniforms.uMetalnessScale, "value", {
       label: "Metalness scale",
       min: 0,
     });
-    folder.addBinding(uniforms.roughnessScale, "value", {
+    folder.addBinding(uniforms.uRoughnessScale, "value", {
       label: "Roughness scale",
-      min: 0,
-    });
-    folder.addBinding(uniforms.uvScale, "value", {
-      label: "UV scale",
       min: 0,
     });
   }
