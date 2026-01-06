@@ -12,165 +12,212 @@ import {
   round,
   vec3,
   texture,
+  int,
+  EPSILON,
 } from "three/tsl";
 import { realmConfig } from "../realm/RevoRealm";
 import { assetManager } from "../systems";
 
 export class TSLUtils {
-  /** pack into [offset, bits] using fixed-point (lsb, bias) */
-  static packF32 = Fn(
+  /**
+   * @description Packs into [offset, bits] using fixed-point (lsb, bias)
+   * @param dest [float] destination data
+   * @param offset [int] location of starting bit index
+   * @param bits [int] how many bits it should occupy
+   * @param value [float] value to be stored
+   * @param lsb [float]
+   * @param bias [float]
+   */
+  private static packF32 = Fn(
     ([
-      packed = float(0),
-      offset = float(0),
-      bits = float(8),
+      dest = float(0),
+      offset = int(0),
+      bits = int(8),
       value = float(0),
       lsb = float(1),
       bias = float(0),
     ]) => {
       const levels = sub(pow(2, bits), 1);
-      const qRaw = sub(value, bias).div(max(lsb, 1e-20));
+      const qRaw = sub(value, bias).div(max(lsb, EPSILON));
       const q = clamp(round(qRaw), 0, levels);
 
       const base = pow(2, offset); // 2^offset
       const span = pow(2, bits); // 2^bits
-      const slot = floor(packed.div(base));
+      const slot = floor(dest.div(base));
       const old = mod(slot, span).mul(base); // old field value * base
 
       // remove old field, add new field
-      return packed.sub(old).add(q.mul(base));
+      return dest.sub(old).add(q.mul(base));
     },
   );
 
-  /** unpack from [offset, bits] with (lsb, bias) */
-  static unpackF32 = Fn(
+  /**
+   * @description Unpacks from [offset, bits] with (lsb, bias)
+   * @param src [float] source data
+   * @param offset [int] location of starting bit index
+   * @param bits [int] how many bits it occupies
+   * @param lsb [float]
+   * @param bias [float]
+   */
+  private static unpackF32 = Fn(
     ([
-      packed = float(0),
-      offset = float(0),
-      bits = float(8),
+      src = float(0),
+      offset = int(0),
+      bits = int(8),
       lsb = float(1),
       bias = float(0),
     ]) => {
       const base = pow(2, offset);
       const span = pow(2, bits);
-      const slot = floor(packed.div(base));
+      const slot = floor(src.div(base));
       const q = mod(slot, span);
       return q.mul(lsb).add(bias);
     },
   );
 
   /**
-   * @description Packs a value with a range 0-1
+   * @description Packs a value with a range 0..1
+   * @param dest [float] destination data
+   * @param offset [int] location of starting bit index
+   * @param bits [int] how many bits it should occupy
+   * @param value [float] value to be stored (in range 0..1)
    */
   static packUnit = Fn(
-    ([
-      packed = float(0),
-      offset = float(0),
-      bits = float(8),
-      x01 = float(0),
-    ]) => {
+    ([dest = float(0), offset = int(0), bits = int(8), value = float(0)]) => {
       const lsb = float(1).div(sub(pow(2, bits), 1)); // 1/(2^bits-1)
-      return this.packF32(packed, offset, bits, x01, lsb, float(0));
+      return this.packF32(dest, offset, bits, value, lsb, float(0));
     },
   );
 
   /**
-   * @description Unpacks a value with a range 0-1
+   * @description Unpacks a value with a range 0..1
+   * @param src [float] source data
+   * @param offset [int] location of starting bit index
+   * @param bits [int] how many bits it occupies
    */
-  static unpackUnit = Fn(
-    ([packed = float(0), offset = float(0), bits = float(8)]) => {
-      const lsb = float(1).div(sub(pow(2, bits), 1));
-      return this.unpackF32(packed, offset, bits, lsb, float(0));
-    },
-  );
+  static unpackUnit = Fn(([src = float(0), offset = int(0), bits = int(8)]) => {
+    const lsb = float(1).div(sub(pow(2, bits), 1));
+    return this.unpackF32(src, offset, bits, lsb, float(0));
+  });
 
-  // Boolean/flag (single bit 0/1) – uses packUnit with bits=1
   /**
-   * @description Packs a value that can be either 0 or 1
-   * @bits 1
+   * @description Packs a binary value that is either 0 or 1
+   * @param dest [float] destination data
+   * @param offset [int] location of starting bit index
+   * @param value [float] flag to be stored, binary 0/1
    */
-  static packFlag = Fn(
-    ([packed = float(0), offset = float(0), flag01 = float(0)]) =>
-      this.packF32(packed, offset, float(1), flag01, float(1), float(0)),
-  );
-  static unpackFlag = Fn(([packed = float(0), offset = float(0)]) =>
-    this.unpackF32(packed, offset, float(1), float(1), float(0)),
+  static packFlag = Fn(([dest = float(0), offset = int(0), value = float(0)]) =>
+    this.packF32(dest, offset, int(1), value, float(1), float(0)),
   );
 
-  // Angle in radians [0..2π)
+  /**
+   * @description Unpacks a binary value that is either 0 or 1
+   * @param src [float] source data
+   * @param offset [int] location of starting bit index
+   */
+  static unpackFlag = Fn(([src = float(0), offset = int(0)]) =>
+    this.unpackF32(src, offset, int(1), float(1), float(0)),
+  );
+
+  /**
+   * @description Packs an angle in radians [0..2π)
+   * @param dest [float] destination data
+   * @param offset [int] location of starting bit index
+   * @param value [float] angle to be stored in radians
+   */
   static packAngle = Fn(
-    ([
-      packed = float(0),
-      offset = float(0),
-      bits = float(9),
-      angle = float(0),
-    ]) => {
+    ([dest = float(0), offset = int(0), bits = int(9), value = float(0)]) => {
       const levels = sub(pow(2, bits), 1);
       const lsb = PI2.div(levels); // 2π/(2^bits-1)
       // wrap into [0,2π)
-      const a = angle.sub(PI2.mul(floor(angle.div(PI2))));
-      return this.packF32(packed, offset, bits, a, lsb, float(0));
+      const a = value.sub(PI2.mul(floor(value.div(PI2))));
+      return this.packF32(dest, offset, bits, a, lsb, float(0));
     },
   );
+
+  /**
+   * @description Unpacks an angle in radians [0..2π)
+   * @param src [float] source data
+   * @param offset [int] location of starting bit index
+   * @param bits [int] how many bits it occupies
+   */
   static unpackAngle = Fn(
-    ([packed = float(0), offset = float(0), bits = float(9)]) => {
+    ([src = float(0), offset = int(0), bits = int(9)]) => {
       const lsb = PI2.div(sub(pow(2, bits), 1));
-      return this.unpackF32(packed, offset, bits, lsb, float(0));
+      return this.unpackF32(src, offset, bits, lsb, float(0));
     },
   );
 
   // Signed range [-A..+A]
-  static packSigned = Fn(
-    ([
-      packed = float(0),
-      offset = float(0),
-      bits = float(8),
-      value = float(0),
-      maxAbs = float(1),
-    ]) => {
-      const levels = sub(pow(2, bits), 1);
-      const lsb = maxAbs.mul(2).div(levels); // step
-      const bias = maxAbs.negate();
-      return this.packF32(packed, offset, bits, value, lsb, bias);
-    },
-  );
-  static unpackSigned = Fn(
-    ([
-      packed = float(0),
-      offset = float(0),
-      bits = float(8),
-      maxAbs = float(1),
-    ]) => {
-      const lsb = maxAbs.mul(2).div(sub(pow(2, bits), 1));
-      const bias = maxAbs.negate();
-      return this.unpackF32(packed, offset, bits, lsb, bias);
-    },
-  );
+  // static packSigned = Fn(
+  //   ([
+  //     packed = float(0),
+  //     offset = float(0),
+  //     bits = float(8),
+  //     value = float(0),
+  //     maxAbs = float(1),
+  //   ]) => {
+  //     const levels = sub(pow(2, bits), 1);
+  //     const lsb = maxAbs.mul(2).div(levels); // step
+  //     const bias = maxAbs.negate();
+  //     return this.packF32(packed, offset, bits, value, lsb, bias);
+  //   },
+  // );
+  // static unpackSigned = Fn(
+  //   ([
+  //     packed = float(0),
+  //     offset = float(0),
+  //     bits = float(8),
+  //     maxAbs = float(1),
+  //   ]) => {
+  //     const lsb = maxAbs.mul(2).div(sub(pow(2, bits), 1));
+  //     const bias = maxAbs.negate();
+  //     return this.unpackF32(packed, offset, bits, lsb, bias);
+  //   },
+  // );
 
-  // Generic units [min..max] (inclusive)
+  /**
+   * @description Packs a value with a range min..max both ends included
+   * @param dest [float] destination data
+   * @param offset [int] location of starting bit index
+   * @param bits [int] how many bits it should occupy
+   * @param value [float] value to be stored (in range 0..1)
+   * @param minV [float] min (included)
+   * @param maxV [float] max (included)
+   */
   static packUnits = Fn(
     ([
-      packed = float(0),
-      offset = float(0),
-      bits = float(8),
+      dest = float(0),
+      offset = int(0),
+      bits = int(8),
       value = float(0),
       minV = float(0),
       maxV = float(1),
     ]) => {
       const levels = sub(pow(2, bits), 1);
       const lsb = maxV.sub(minV).div(levels);
-      return this.packF32(packed, offset, bits, value, lsb, minV);
+      return this.packF32(dest, offset, bits, value, lsb, minV);
     },
   );
+
+  /**
+   * @description Unpacks a value with a range min..max both ends included
+   * @param src [float] source data
+   * @param offset [int] location of starting bit index
+   * @param bits [int] how many bits it occupies
+   * @param minV [float] min (included)
+   * @param maxV [float] max (included)
+   */
   static unpackUnits = Fn(
     ([
-      packed = float(0),
-      offset = float(0),
-      bits = float(8),
+      src = float(0),
+      offset = int(0),
+      bits = int(8),
       minV = float(0),
       maxV = float(1),
     ]) => {
       const lsb = maxV.sub(minV).div(sub(pow(2, bits), 1));
-      return this.unpackF32(packed, offset, bits, lsb, minV);
+      return this.unpackF32(src, offset, bits, lsb, minV);
     },
   );
 
