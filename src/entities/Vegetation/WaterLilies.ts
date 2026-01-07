@@ -31,7 +31,7 @@ export class WaterLilies {
     const offset = positionWorld.x.mul(0.1);
 
     const noise = texture(
-      assetManager.resources.noiseTexture,
+      assetManager.resources.noiseAtlas,
       fract(positionWorld.xz.add(timer).mul(offset)),
     ).b.mul(0.5);
 

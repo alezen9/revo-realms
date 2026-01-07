@@ -149,32 +149,32 @@ export class TSLUtils {
   );
 
   // Signed range [-A..+A]
-  // static packSigned = Fn(
-  //   ([
-  //     packed = float(0),
-  //     offset = float(0),
-  //     bits = float(8),
-  //     value = float(0),
-  //     maxAbs = float(1),
-  //   ]) => {
-  //     const levels = sub(pow(2, bits), 1);
-  //     const lsb = maxAbs.mul(2).div(levels); // step
-  //     const bias = maxAbs.negate();
-  //     return this.packF32(packed, offset, bits, value, lsb, bias);
-  //   },
-  // );
-  // static unpackSigned = Fn(
-  //   ([
-  //     packed = float(0),
-  //     offset = float(0),
-  //     bits = float(8),
-  //     maxAbs = float(1),
-  //   ]) => {
-  //     const lsb = maxAbs.mul(2).div(sub(pow(2, bits), 1));
-  //     const bias = maxAbs.negate();
-  //     return this.unpackF32(packed, offset, bits, lsb, bias);
-  //   },
-  // );
+  static packSigned = Fn(
+    ([
+      packed = float(0),
+      offset = float(0),
+      bits = float(8),
+      value = float(0),
+      maxAbs = float(1),
+    ]) => {
+      const levels = sub(pow(2, bits), 1);
+      const lsb = maxAbs.mul(2).div(levels); // step
+      const bias = maxAbs.negate();
+      return this.packF32(packed, offset, bits, value, lsb, bias);
+    },
+  );
+  static unpackSigned = Fn(
+    ([
+      packed = float(0),
+      offset = float(0),
+      bits = float(8),
+      maxAbs = float(1),
+    ]) => {
+      const lsb = maxAbs.mul(2).div(sub(pow(2, bits), 1));
+      const bias = maxAbs.negate();
+      return this.unpackF32(packed, offset, bits, lsb, bias);
+    },
+  );
 
   /**
    * @description Packs a value with a range min..max both ends included

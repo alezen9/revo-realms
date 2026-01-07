@@ -215,10 +215,7 @@ class LeavesSsbo {
     const noiseScale = float(1.0 / 80.0);
     const scroll = float(0.02);
     const noiseUV = fract(worldXZ.mul(noiseScale).add(vec2(time.mul(scroll))));
-    const noiseSample = texture(
-      assetManager.resources.noiseTexture,
-      noiseUV,
-    ).rgb; // r=perlin, g=voronoi, b=random
+    const noiseSample = texture(assetManager.resources.noiseAtlas, noiseUV).rgb; // r=perlin, g=voronoi, b=random
 
     // gentle breathing and per-leaf variation from noise (no sharp changes)
     const breathing = float(0.85).add(

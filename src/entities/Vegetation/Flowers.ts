@@ -1,4 +1,5 @@
 import {
+  cos,
   deltaTime,
   float,
   floor,
@@ -8,6 +9,7 @@ import {
   INFINITY,
   instancedArray,
   instanceIndex,
+  mix,
   sin,
   step,
   texture,
@@ -19,6 +21,7 @@ import {
   vec4,
 } from "three/tsl";
 import {
+  Color,
   InstancedMesh,
   Matrix4,
   PlaneGeometry,
@@ -32,6 +35,7 @@ import {
   sceneManager,
   eventsManager,
   systemState,
+  debugManager,
 } from "../../systems";
 import { VegetationSsboUtils } from "./ssboUtils";
 import { TSLUtils } from "../../utils/TSLUtils";
@@ -40,8 +44,12 @@ const getConfig = () => {
   const FLOWER_WIDTH = 0.5;
   const FLOWER_HEIGHT = 1;
   const TILE_SIZE = 150;
-  const FLOWERS_PER_SIDE = 32;
+  const FLOWERS_PER_SIDE = 64;
+  const MIN_SCALE = 0.125;
+  const MAX_SCALE = 0.2;
   return {
+    MIN_SCALE,
+    MAX_SCALE,
     FLOWER_WIDTH,
     FLOWER_HEIGHT,
     FLOWER_BOUNDING_SPHERE_RADIUS: FLOWER_HEIGHT,
@@ -50,7 +58,7 @@ const getConfig = () => {
     FLOWERS_PER_SIDE,
     COUNT: FLOWERS_PER_SIDE * FLOWERS_PER_SIDE,
     SPACING: TILE_SIZE / FLOWERS_PER_SIDE,
-    WORKGROUP_SIZE: 32,
+    WORKGROUP_SIZE: 64,
   };
 };
 const config = getConfig();
@@ -66,13 +74,18 @@ const uniforms = {
   uCullPadNDCX: uniform(0.075), // small padding to hide rotation lag
   uCullPadNDCYNear: uniform(0.75), // small padding to avoid near clipping
   uCullPadNDCYFar: uniform(0.2), // small padding to avoid far clipping
+  // tint
+  uColor1: uniform(new Color().setRGB(0.02, 0.14, 0.33)),
+  uColor2: uniform(new Color().setRGB(0.99, 0.64, 0.0)),
+  uColorStrength: uniform(0.275),
 };
 
 class FlowersSsbo {
   // x -> offsetX (0 unused)
   // y -> offsetZ (0 unused)
   // z -> 0/12 offsetY - 12/13 visibility (9 unused)
-  // w -> (24 unused)
+  // w -> noise (0 unused - also not used currently)
+  // private buffer: ReturnType<typeof instancedArray>;
   private buffer: ReturnType<typeof instancedArray>;
 
   constructor() {
@@ -100,6 +113,14 @@ class FlowersSsbo {
     return TSLUtils.unpackFlag(data.z, 12);
   });
 
+  getNoise = Fn(([data = vec4(0)]) => {
+    const x = TSLUtils.unpackUnit(data.w, 0, 6);
+    const y = TSLUtils.unpackUnit(data.w, 6, 6);
+    const z = TSLUtils.unpackUnit(data.w, 12, 6);
+    const w = TSLUtils.unpackUnit(data.w, 18, 6);
+    return vec4(x, y, z, w);
+  });
+
   private setYOffset = Fn(([data = vec4(0), value = float(0)]) => {
     data.z = TSLUtils.packUnits(
       data.z,
@@ -114,6 +135,14 @@ class FlowersSsbo {
 
   private setVisibility = Fn(([data = vec4(0), value = float(0)]) => {
     data.z = TSLUtils.packFlag(data.z, 12, value);
+    return data;
+  });
+
+  private setNoise = Fn(([data = vec4(0), value = vec4(0)]) => {
+    data.w = TSLUtils.packUnit(data.w, 0, 6, value.x);
+    data.w = TSLUtils.packUnit(data.w, 6, 6, value.y);
+    data.w = TSLUtils.packUnit(data.w, 12, 6, value.z);
+    data.w = TSLUtils.packUnit(data.w, 18, 6, value.a);
     return data;
   });
 
@@ -140,10 +169,12 @@ class FlowersSsbo {
       .div(config.TILE_SIZE)
       .abs();
 
-    const noise = texture(assetManager.resources.noiseTexture, _uv);
+    const noise = texture(assetManager.resources.noiseAtlas, _uv);
+    data.assign(this.setNoise(data, noise));
+    const wrapNoise = noise.r;
 
-    const noiseX = noise.r.sub(0.5).mul(100);
-    const noiseZ = noise.b.sub(0.5).mul(50);
+    const noiseX = wrapNoise.mul(99.37);
+    const noiseZ = wrapNoise.mul(49.71);
 
     data.x = offsetX.add(noiseX);
     data.y = offsetZ.add(noiseZ);
@@ -200,7 +231,9 @@ export default class Flowers {
     );
     sceneManager.scene.add(flowers);
 
-    eventsManager.on("engine-update-throttle-2x", ({ player }) => {
+    this.debug();
+
+    eventsManager.on("engine-update-throttle-16x", ({ player }) => {
       const dx = player.position.x - flowers.position.x;
       const dz = player.position.z - flowers.position.z;
       uniforms.uPlayerDeltaXZ.value.set(dx, dz);
@@ -218,6 +251,28 @@ export default class Flowers {
       rendererManager.renderer.computeAsync(ssbo.computeUpdate);
     });
   }
+
+  private debug() {
+    const folder = debugManager.panel.addFolder({
+      title: "🌸 Flowers",
+      expanded: false,
+    });
+
+    folder.addBinding(uniforms.uColor1, "value", {
+      label: "Color 1",
+      view: "color",
+      color: { type: "float" },
+    });
+    folder.addBinding(uniforms.uColor2, "value", {
+      label: "Color 2",
+      view: "color",
+      color: { type: "float" },
+    });
+    folder.addBinding(uniforms.uColorStrength, "value", {
+      label: "Color strength",
+      min: 0,
+    });
+  }
 }
 
 class FlowerMaterial extends SpriteNodeMaterial {
@@ -233,9 +288,11 @@ class FlowerMaterial extends SpriteNodeMaterial {
     this.precision = "lowp";
     this.stencilWrite = false;
     this.forceSinglePass = true;
+    this.transparent = false;
 
     const data = this.ssbo.computeBuffer.element(instanceIndex);
     const isVisible = this.ssbo.getVisibility(data);
+    // const noise = this.ssbo.getNoise(data);
     const x = data.x;
     const y = this.ssbo.getYOffset(data);
     const z = data.y;
@@ -249,34 +306,31 @@ class FlowerMaterial extends SpriteNodeMaterial {
     const timer = time.add(
       deltaTime.mul(float(2).add(windIntensity.mul(0.25))),
     );
-    const sway = sin(timer.add(rand1.mul(100))).mul(0.05);
+    const swayX = sin(timer.add(rand1.mul(100))).mul(0.25);
+    const swayY = rand2.mul(0.5);
+    const swayZ = cos(timer.mul(2).add(rand2.mul(33.76))).mul(0.15);
+    const swayOffset = vec3(swayX, swayY, swayZ);
     const offscreenOffset = uniforms.uCameraForward
       .mul(INFINITY)
       .mul(float(1).sub(isVisible));
     const offsetX = x.add(windDirection.x.mul(windIntensity).mul(0.5));
-    const offsetY = y.add(rand1.add(rand2));
+    const baseHeight = rand1.add(rand2).add(0.25).clamp();
+    const offsetY = y.add(baseHeight);
     const offsetZ = z.add(windDirection.y.mul(windIntensity).mul(0.5));
     const basePosition = vec3(offsetX, offsetY, offsetZ);
-    this.positionNode = basePosition
-      .add(offscreenOffset)
-      .add(vec3(sway, rand2.mul(0.5), sway));
+    this.positionNode = basePosition.add(swayOffset).add(offscreenOffset);
 
     // Size
-    this.scaleNode = vec3(rand1.remap(0, 1, 0.225, 0.25));
+    this.scaleNode = vec3(
+      rand1.remap(0, 1, config.MIN_SCALE, config.MAX_SCALE),
+    );
 
     // Diffuse
-    const u = step(0.5, rand1).mul(0.5);
-    const v = step(0.5, rand2).mul(0.5);
-
-    const baseUv = vec2(uv().x, float(1).sub(uv().y)).mul(0.5);
-    const flowerUv = baseUv.add(vec2(u, v));
-    const flower = texture(assetManager.resources.flowers, flowerUv);
-    // const c = mix(flower.rgb, vec3(0), 0.45);
-    this.colorNode = vec3(
-      flower.r.add(rand1),
-      flower.g.mul(rand1).add(rand2),
-      flower.b.mul(rand2),
-    ).mul(rand2.add(rand1).clamp(0.5, 1.25));
+    const flower = texture(assetManager.resources.edelweiss, uv());
+    const tint = mix(uniforms.uColor1, uniforms.uColor2, rand2);
+    const sign = step(rand2, rand1).mul(2).sub(1);
+    const color = mix(tint, flower.rgb, rand1.add(rand2.mul(sign)));
+    this.colorNode = color.mul(uniforms.uColorStrength);
 
     // Opacity
     this.opacityNode = isVisible.mul(flower.a);

@@ -80,8 +80,8 @@ const uniforms = {
   uPlayerDeltaXZ: uniform(new Vector2(0, 0)),
   uCameraForward: uniform(new Vector3(0, 0, 0)),
   // Scale
-  uBladeMinScale: uniform(0.6),
-  uBladeMaxScale: uniform(2.5),
+  uBladeMinScale: uniform(0.75),
+  uBladeMaxScale: uniform(2),
   // Trail
   uTrailGrowthRate: uniform(0.04),
   uTrailMinScale: uniform(0.25),
@@ -261,13 +261,14 @@ class GrassSsbo {
       .div(config.TILE_SIZE)
       .abs()
       .fract();
-    const noise = texture(assetManager.resources.noiseTexture, _uv);
-    const noiseX = noise.r.sub(0.5).mul(17).fract();
-    const noiseZ = noise.b.sub(0.5).mul(13).fract();
+    const noise = texture(assetManager.resources.noiseAtlas, _uv);
+    const wrapNoise = noise.b.sub(0.5);
+    const noiseX = wrapNoise.mul(17).fract();
+    const noiseZ = wrapNoise.mul(13).fract();
     data1.x = offsetX.add(noiseX);
     data1.y = offsetZ.add(noiseZ);
 
-    data2.assign(this.setPositionNoise(data2, noise.r));
+    data2.assign(this.setPositionNoise(data2, noise.g));
     // Scale
     const n = noise.b;
     const shaped = n.mul(n);

@@ -100,7 +100,7 @@ class RockMaterial extends MeshLambertNodeMaterial {
       hash(instanceIndex),
       hash(instanceIndex).mul(21.63),
     ).fract();
-    const noise = texture(assetManager.resources.noiseTexture, _uv);
+    const noise = texture(assetManager.resources.noiseAtlas, _uv);
     data.assign(noise.r);
   })().compute(COUNT);
 }

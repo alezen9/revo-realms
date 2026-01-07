@@ -248,7 +248,7 @@ class GrassSsbo {
       .div(config.TILE_SIZE)
       .abs()
       .fract();
-    const noise = texture(assetManager.resources.noiseTexture, _uv);
+    const noise = texture(assetManager.resources.noiseAtlas, _uv);
     const noiseX = noise.r.sub(0.5).mul(17).fract();
     const noiseZ = noise.b.sub(0.5).mul(13).fract();
     data1.x = offsetX.add(noiseX);
