@@ -11,7 +11,6 @@ import nyUrl from "/textures/environment/ny.webp?url";
 import pzUrl from "/textures/environment/pz.webp?url";
 import nzUrl from "/textures/environment/nz.webp?url";
 // Noise
-import noiseUrl from "/textures/noise/noise.webp?url";
 // Terrain
 import terrainTypeUrl from "/textures/realm/terrainType.webp?url";
 import waterNormalUrl from "/textures/realm/waterNormal.webp?url";
@@ -58,6 +57,12 @@ import fireSpritesUrl from "/textures/new-world/fire/fireSprites_128_etc1s.ktx2?
 // Player
 import playerDiffuseUrl from "/textures/new-world/player/football/diffuse_512.ktx2?url";
 import playerNormalUrl from "/textures/new-world/player/football/normal_512.ktx2?url";
+// Flowers
+import edelweissUrl from "/textures/new-world/flowers/edelweiss_128.ktx2?url";
+// Pine Tree
+import pineTreeDiffuseUrl from "/textures/new-world/pine-tree/diffuse_2k.ktx2?url";
+// import pineTreeNormalUrl from "/textures/new-world/pine-tree/normal.ktx2?url";
+// import pineTreeARMUrl from "/textures/new-world/pine-tree/arm.ktx2?url";
 // Leaf
 import leafDiffuseUrl from "/textures/realm/leafDiffuse.webp?url";
 
@@ -76,11 +81,6 @@ import grassMapUrl from "/textures/new-world/terrain/grass-map.png?url";
 import waterMapUrl from "/textures/new-world/terrain/water-map.png?url";
 // import lightmapUrl from "/textures/new-world/terrain/lightmap.ktx2?url";
 import lightmapUrl from "/textures/new-world/terrain/lightmap.png?url";
-
-// Pine Tree
-import pineTreeDiffuseUrl from "/textures/new-world/pine-tree/diffuse_2k.ktx2?url";
-// import pineTreeNormalUrl from "/textures/new-world/pine-tree/normal.ktx2?url";
-// import pineTreeARMUrl from "/textures/new-world/pine-tree/arm.ktx2?url";
 
 type ResourceType = {
   texture: Texture;
@@ -127,7 +127,6 @@ export const manifest = [
   // Core
   // -----------------------------------------------
   { name: "realmModel", url: realmModelUrl, type: "gltf" }, // old
-  { name: "noiseTexture", url: noiseUrl, type: "texture" }, // old
   { name: "worldModel", url: worldModelUrl, type: "gltf" },
   {
     name: "noiseAtlas", // super_noise_low / super_perlin / grainy / cracks
@@ -398,6 +397,12 @@ export const manifest = [
   {
     name: "flowers",
     url: flowerAtlasUrl,
+    type: "ktx2",
+    colorSpace: SRGBColorSpace,
+  },
+  {
+    name: "edelweiss",
+    url: edelweissUrl,
     type: "ktx2",
     colorSpace: SRGBColorSpace,
   },

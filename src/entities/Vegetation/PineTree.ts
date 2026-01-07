@@ -64,7 +64,7 @@ class PineTreeBarkMaterial extends MeshLambertNodeMaterial {
   }
 }
 
-export class PineTree {
+export default class PineTree {
   constructor() {
     // Visual
     this.debug();

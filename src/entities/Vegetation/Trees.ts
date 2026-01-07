@@ -64,7 +64,7 @@ class CanopyMaterial extends MeshLambertNodeMaterial {
     this.side = DoubleSide;
 
     const worlUv = TSLUtils.computeMapUvByPosition(positionWorld.xz);
-    const noise = texture(assetManager.resources.noiseTexture, worlUv);
+    const noise = texture(assetManager.resources.noiseAtlas, worlUv);
 
     // Diffuse
     const diff = texture(assetManager.resources.canopyDiffuse, uv());
