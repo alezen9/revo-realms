@@ -19,6 +19,9 @@ import terrainShadowAoUrl from "/textures/realm/terrainShadowAo.webp?url";
 // Water lilies
 import waterLiliesDiffuseUrl from "/textures/realm/waterLiliesDiffuse.webp?url";
 import waterLiliesAlphaUrl from "/textures/realm/waterLiliesAlpha.webp?url";
+
+import waterLilyDiffuseUrl from "/textures/new-world/water-lily/diffuse.png?url";
+import waterLilyNormalUrl from "/textures/new-world/water-lily/normal.png?url";
 // Flowers
 import flowerAtlasUrl from "/textures/new-world/terrain/flowerAtlas.ktx2?url";
 // Stones
@@ -356,14 +359,15 @@ export const manifest = [
   // Water lilies
   // -----------------------------------------------
   {
-    name: "waterLiliesTexture",
-    url: waterLiliesDiffuseUrl,
+    name: "waterLilyDiffuse",
+    url: waterLilyDiffuseUrl,
     type: "texture",
     flipY: false,
+    // colorSpace: SRGBColorSpace,
   },
   {
-    name: "waterLiliesAlphaTexture",
-    url: waterLiliesAlphaUrl,
+    name: "waterLilyNormal",
+    url: waterLilyNormalUrl,
     type: "texture",
     flipY: false,
   },
