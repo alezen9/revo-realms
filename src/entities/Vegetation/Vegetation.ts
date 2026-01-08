@@ -1,7 +1,7 @@
 import Grass from "./Grass";
 import Flowers from "./Flowers";
 import PineTree from "./PineTree";
-import { WaterLilies } from "./WaterLilies";
+import WaterLilies from "./WaterLilies";
 import Trees from "./Trees";
 import { BigTree } from "./BigTree";
 import { Tree } from "./Tree";
