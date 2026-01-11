@@ -1,4 +1,4 @@
-import { assetManager, debugManager, systemState } from "../../systems";
+import { assetManager, debugManager, systemState, landmarkManager } from "../../systems";
 import { Mesh } from "three";
 import { MeshStandardNodeMaterial } from "three/webgpu";
 import { ColliderDesc, RigidBodyDesc } from "@dimforge/rapier3d";
@@ -91,8 +91,18 @@ export default class GodOfWar {
     // ).setRestitution(0.75);
     // physicsManager.world.createCollider(colliderDescTrunk, rigidBodyTrunk);
 
-    // Landmark
-    systemState.wind.registerTarget("Leviathan Axe", axe.position, 20);
+    // Register landmark for radial menu discovery
+    const landmarkId = landmarkManager.register({
+      name: "Leviathan Axe",
+      icon: "🪓",
+      position: axe.position,
+      discoveryRadius: 80,
+      arrivalRadius: 20,
+    });
+
+    // Register wind target and link to landmark
+    const windTargetId = systemState.wind.registerTarget("Leviathan Axe", axe.position, 20);
+    landmarkManager.setWindTargetId(landmarkId, windTargetId);
   }
 
   private debug() {

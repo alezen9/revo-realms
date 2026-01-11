@@ -1,4 +1,4 @@
-import { assetManager, debugManager, systemState } from "../../systems";
+import { assetManager, debugManager, systemState, landmarkManager } from "../../systems";
 import { Mesh } from "three";
 import { MeshStandardNodeMaterial } from "three/webgpu";
 import { ColliderDesc, RigidBodyDesc } from "@dimforge/rapier3d";
@@ -64,8 +64,18 @@ export default class Berserk {
     // ).setRestitution(0.75);
     // physicsManager.world.createCollider(colliderDescAxe, rigidBodyAxe);
 
-    // Landmark
-    systemState.wind.registerTarget("Dragon Slayer", sword.position, 20);
+    // Register landmark for radial menu discovery
+    const landmarkId = landmarkManager.register({
+      name: "Dragon Slayer",
+      icon: "⚔️",
+      position: sword.position,
+      discoveryRadius: 80,
+      arrivalRadius: 20,
+    });
+
+    // Register wind target and link to landmark
+    const windTargetId = systemState.wind.registerTarget("Dragon Slayer", sword.position, 20);
+    landmarkManager.setWindTargetId(landmarkId, windTargetId);
   }
 
   private debug() {

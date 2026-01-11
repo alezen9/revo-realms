@@ -7,6 +7,8 @@ import {
   sceneManager,
   physicsManager,
   debugManager,
+  landmarkManager,
+  systemState,
 } from "../systems";
 import { MeshStandardNodeMaterial } from "three/webgpu";
 import { normalMap, texture, uv } from "three/tsl";
@@ -58,5 +60,18 @@ export class Campfire {
     const { radius } = campfire.geometry.boundingSphere!;
     const colliderDesc = ColliderDesc.ball(radius).setRestitution(0.75);
     physicsManager.world.createCollider(colliderDesc, rigidBody);
+
+    // Register landmark for radial menu discovery
+    const landmarkId = landmarkManager.register({
+      name: "Campfire",
+      icon: "🔥",
+      position: campfire.position,
+      discoveryRadius: 100,
+      arrivalRadius: 15,
+    });
+
+    // Register wind target and link to landmark
+    const windTargetId = systemState.wind.registerTarget("Campfire", campfire.position, 15);
+    landmarkManager.setWindTargetId(landmarkId, windTargetId);
   }
 }
