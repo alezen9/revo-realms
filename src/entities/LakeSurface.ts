@@ -35,6 +35,7 @@ import {
   sceneManager,
   systemState,
   eventsManager,
+  landmarkManager,
 } from "../systems";
 
 export class LakeSurface {
@@ -69,7 +70,18 @@ export class LakeSurface {
 
     sceneManager.scene.add(lakeSurface);
 
-    systemState.wind.registerTarget("Lake", lakeSurface.position, 90);
+    // Register landmark for radial menu discovery
+    const landmarkId = landmarkManager.register({
+      name: "Lake",
+      icon: "🌊",
+      position: lakeSurface.position,
+      discoveryRadius: 150,
+      arrivalRadius: 90,
+    });
+
+    // Register wind target and link to landmark
+    const windTargetId = systemState.wind.registerTarget("Lake", lakeSurface.position, 90);
+    landmarkManager.setWindTargetId(landmarkId, windTargetId);
 
     eventsManager.on("engine-loading-audio-progress", (p) => {
       if (p === 100) lakeSurface.add(audioManager.lake);

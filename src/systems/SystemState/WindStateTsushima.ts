@@ -157,10 +157,7 @@ export class WindStateTsushima {
       radiusSq: radius * radius,
     });
 
-    this.folder
-      .addButton({ label: "Sway towards", title: label })
-      .on("click", () => this.activateTargetById(targetId));
-
+    // Debug buttons removed - wind targets are now selected via RadialMenu
     return targetId;
   }
 

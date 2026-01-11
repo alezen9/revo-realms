@@ -27,9 +27,15 @@ type GameEvents = {
   "game-wind-end": VoidFunction;
 };
 
+type LandmarkEvents = {
+  "landmark-discovered": (id: string) => void;
+  "landmark-selected": (id: string) => void;
+};
+
 type Events = EngineEvents &
   InputEvents &
-  GameEvents & {
+  GameEvents &
+  LandmarkEvents & {
     "blow-wind": VoidFunction;
   };
 

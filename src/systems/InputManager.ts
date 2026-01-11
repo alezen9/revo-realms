@@ -153,4 +153,8 @@ export class InputManager {
   isJumpPressed(): boolean {
     return keyboardManager.isKeyPressed("Space");
   }
+
+  isKeyPressed(code: string): boolean {
+    return keyboardManager.isKeyPressed(code);
+  }
 }

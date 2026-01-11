@@ -2,6 +2,7 @@
 	import LoadingScreen from "./components/LoadingScreen.svelte"
 	import Toggles from "./components/Toggles.svelte"
 	import WindIcon from "./components/WindIcon.svelte"
+	import RadialMenu from "./components/RadialMenu.svelte"
 
 	const IS_LOADING_SCREEN_ENABLED = import.meta.env.PROD || true // tweak boolean for dev
 </script>
@@ -12,6 +13,7 @@
 		<LoadingScreen />
 	{/if}
 	<WindIcon />
+	<RadialMenu />
 </div>
 
 <style>

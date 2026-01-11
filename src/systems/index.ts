@@ -3,6 +3,7 @@ import { AudioManager } from "./AudioManager";
 import { DebugManager } from "./DebugManager";
 import { EventsManager } from "./EventsManager";
 import { InputManager } from "./InputManager";
+import { LandmarkManager } from "./LandmarkManager";
 import { LightingManager } from "./LightingManager";
 import { PhysicsManager } from "./PhysicsManager";
 import { RendererManager } from "./RendererManager/RendererManager";
@@ -20,6 +21,7 @@ const init = () => {
   const inputManager = new InputManager();
   const physicsManager = new PhysicsManager();
   const uiManager = new UIManager();
+  const landmarkManager = new LandmarkManager(eventsManager);
   const systemState = new SystemState(debugManager, eventsManager);
   const lightingManager = new LightingManager(
     sceneManager,
@@ -37,6 +39,7 @@ const init = () => {
     inputManager,
     physicsManager,
     uiManager,
+    landmarkManager,
     systemState,
   };
 };
@@ -52,5 +55,6 @@ export const {
   inputManager,
   physicsManager,
   uiManager,
+  landmarkManager,
   systemState,
 } = init();
