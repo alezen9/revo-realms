@@ -169,4 +169,8 @@ export class WindStateTsushima {
     this.targetPositionXZ.set(target.position.x, target.position.z);
     eventsManager.emit("wind-target-change", id);
   }
+
+  get activeTargetId() {
+    return this.target?.id ?? null;
+  }
 }

@@ -158,6 +158,7 @@
 		window.addEventListener("pointerdown", handlePointerDown)
 
 		syncLandmarks()
+		setActiveWindTarget(systemState.wind.activeTargetId)
 
 		return () => {
 			unsubscribeDiscovery()
@@ -200,6 +201,9 @@
 					role="button"
 					tabindex={menuVisible && landmark.hasBeenDiscovered ? 0 : -1}
 					data-landmark-id={landmark.id}
+					aria-label={landmark.hasBeenDiscovered
+						? landmark.name
+						: "Undiscovered landmark"}
 				>
 					<path class="radial-menu__arc" d={slot.path} />
 
@@ -228,7 +232,7 @@
 			{/each}
 		</svg>
 
-		<div class="radial-menu__hints">
+		<div class="radial-menu__hints" aria-live="polite">
 			<div class="radial-menu__hint">Press L or Esc to close</div>
 			{#if selectedId}
 				<div class="radial-menu__hint radial-menu__hint--secondary">
@@ -270,6 +274,11 @@
 	.radial-menu__slot {
 		cursor: default;
 		outline: none;
+	}
+
+	.radial-menu__slot:focus-visible .radial-menu__arc {
+		stroke: rgba(255, 255, 255, 0.8);
+		stroke-width: 2;
 	}
 
 	.radial-menu__slot.discovered {
