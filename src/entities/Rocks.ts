@@ -5,8 +5,10 @@ import {
   hash,
   instancedArray,
   instanceIndex,
+  normalMap,
   step,
   texture,
+  uniform,
   uv,
   vec2,
 } from "three/tsl";
@@ -14,11 +16,13 @@ import {
   InstancedMesh,
   Mesh,
   MeshLambertNodeMaterial,
+  MeshStandardMaterial,
+  MeshStandardNodeMaterial,
   NormalMapNode,
   Vector2,
 } from "three/webgpu";
 import { ColliderDesc, RigidBodyDesc } from "@dimforge/rapier3d";
-import { physicsManager, sceneManager } from "../systems";
+import { debugManager, physicsManager, sceneManager } from "../systems";
 import { TSLUtils } from "../utils/TSLUtils";
 import { RevoColliderType } from "../types";
 import { assetManager, rendererManager } from "../systems";
@@ -105,6 +109,23 @@ class RockMaterial extends MeshLambertNodeMaterial {
   })().compute(COUNT);
 }
 
+const d = uniform(1.8);
+const n = uniform(1.3);
+
+class RockMaterial2 extends MeshStandardNodeMaterial {
+  constructor() {
+    super();
+
+    debugManager.panel.addBinding(d, "value");
+    debugManager.panel.addBinding(n, "value");
+
+    const diffuse = texture(assetManager.resources.rocksDiffuse);
+    this.colorNode = diffuse.rgb.mul(d);
+    const normal = texture(assetManager.resources.rocksNormal);
+    this.normalNode = normalMap(normal.rgb, n);
+  }
+}
+
 export default class Rocks {
   constructor() {
     // Visual
@@ -114,6 +135,14 @@ export default class Rocks {
     const colliders = assetManager.resources.realmModel.scene.children.filter(
       ({ name }) => name.startsWith("stone_collider"),
     ) as Mesh[];
+
+    const newRocks = assetManager.resources.worldModel.scene.children.filter(
+      ({ name }) => name.startsWith("rock_common"),
+    ) as Mesh[];
+
+    const rocksMaterial = new RockMaterial2();
+
+    newRocks.forEach((newRock) => (newRock.material = rocksMaterial));
 
     const material = new RockMaterial();
     const instances = new InstancedMesh(
@@ -139,6 +168,6 @@ export default class Rocks {
       const colliderDesc = ColliderDesc.ball(radius).setRestitution(0.75);
       physicsManager.world.createCollider(colliderDesc, rigidBody);
     });
-    sceneManager.scene.add(instances);
+    sceneManager.scene.add(instances, ...newRocks);
   }
 }
