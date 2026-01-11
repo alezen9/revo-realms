@@ -38,7 +38,6 @@ export class RendererManager {
     });
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = PCFShadowMap;
-    renderer.toneMapping = ACESFilmicToneMapping;
     renderer.setClearColor(0x000000, 1);
 
     renderer.toneMappingExposure = 1.5;

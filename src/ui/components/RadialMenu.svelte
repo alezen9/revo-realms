@@ -7,25 +7,85 @@
 	let selectedId = $state<string | null>(null)
 	let landmarks = $state<Landmark[]>([])
 
-	const radius = 140 // px from center
+	const innerRadius = 90
+	const outerRadius = 160
+	const gapAngleDeg = 4
+	const svgSize = 400
+	const center = svgSize / 2
+	const labelRadius = (innerRadius + outerRadius) / 2
+	const DEG_TO_RAD = Math.PI / 180
 
-	// Reactive slot calculations
+	const toRad = (deg: number) => deg * DEG_TO_RAD
+	const toPoint = (radius: number, angleRad: number) => ({
+		x: center + radius * Math.cos(angleRad),
+		y: center + radius * Math.sin(angleRad),
+	})
+
+	const buildSlots = (items: Landmark[], angleDeg: number) => {
+		if (!items.length) return []
+		const slotAngleRad = toRad(angleDeg)
+		const outerGapRad = toRad(gapAngleDeg)
+		const innerGapRad = Math.min(
+			(outerGapRad * outerRadius) / innerRadius,
+			Math.max(slotAngleRad - 0.02, 0)
+		)
+
+		return items.map((landmark, index) => {
+			const baseStart = toRad(index * angleDeg - 90)
+			const baseEnd = baseStart + slotAngleRad
+			const outerStart = baseStart + outerGapRad / 2
+			const outerEnd = baseEnd - outerGapRad / 2
+			const innerStart = baseStart + innerGapRad / 2
+			const innerEnd = baseEnd - innerGapRad / 2
+
+			const outerLargeArc = outerEnd - outerStart > Math.PI ? 1 : 0
+			const innerLargeArc = innerEnd - innerStart > Math.PI ? 1 : 0
+
+			const outerStartPos = toPoint(outerRadius, outerStart)
+			const outerEndPos = toPoint(outerRadius, outerEnd)
+			const innerStartPos = toPoint(innerRadius, innerStart)
+			const innerEndPos = toPoint(innerRadius, innerEnd)
+			const labelPos = toPoint(labelRadius, (outerStart + outerEnd) / 2)
+
+			return {
+				landmark,
+				labelX: labelPos.x,
+				labelY: labelPos.y,
+				delay: `${index * 0.05}s`,
+				path: `M ${outerStartPos.x} ${outerStartPos.y} A ${outerRadius} ${outerRadius} 0 ${outerLargeArc} 1 ${outerEndPos.x} ${outerEndPos.y} L ${innerEndPos.x} ${innerEndPos.y} A ${innerRadius} ${innerRadius} 0 ${innerLargeArc} 0 ${innerStartPos.x} ${innerStartPos.y} Z`,
+			}
+		})
+	}
+
 	let slotCount = $derived(landmarks.length)
-	let slotAngle = $derived(slotCount > 0 ? 360 / slotCount : 0)
+	let slotAngleDeg = $derived(slotCount > 0 ? 360 / slotCount : 0)
+	let slots = $derived(buildSlots(landmarks, slotAngleDeg))
+	let lastVisibility = false
+
+	const syncLandmarks = () => {
+		landmarks = landmarkManager.getAll()
+	}
+
+	const updateVisibility = () => {
+		const nextVisible = inputManager.isKeyPressed("KeyL")
+		if (nextVisible !== isVisible) isVisible = nextVisible
+	}
+
+	const handleSlotClick = (landmark: Landmark) => {
+		if (!landmark.hasBeenDiscovered) return
+		selectedId = landmark.id
+
+		if (landmark.windTargetId) {
+			systemState.wind.activateTargetById(landmark.windTargetId)
+			eventsManager.emit("landmark-selected", landmark.id)
+		}
+	}
 
 	onMount(() => {
-		// Poll for L key press
-		const unsubscribeUpdate = eventsManager.on("engine-update", () => {
-			isVisible = inputManager.isKeyPressed("KeyL")
-		})
+		const unsubscribeUpdate = eventsManager.on("engine-update", updateVisibility)
+		const unsubscribeDiscovery = eventsManager.on("landmark-discovered", syncLandmarks)
 
-		// Update landmarks list when discovery changes
-		const unsubscribeDiscovery = eventsManager.on("landmark-discovered", () => {
-			landmarks = landmarkManager.getAll()
-		})
-
-		// Initial load of landmarks
-		landmarks = landmarkManager.getAll()
+		syncLandmarks()
 
 		return () => {
 			unsubscribeUpdate()
@@ -33,68 +93,92 @@
 		}
 	})
 
-	function getSlotStyle(index: number): string {
-		const angle = index * slotAngle - 90 // Start from top (-90deg)
-		const staggerDelay = index * 0.04 // Staggered animation delay
-		return `--angle: ${angle}deg; --radius: ${radius}px; --stagger-delay: ${staggerDelay}s; --index: ${index};`
-	}
-
-	function onSlotClick(landmark: Landmark) {
-		if (!landmark.hasBeenDiscovered) return
-		selectedId = landmark.id
-
-		// Activate wind toward this landmark
-		if (landmark.windTargetId) {
-			systemState.wind.activateTargetById(landmark.windTargetId)
-			eventsManager.emit("landmark-selected", landmark.id)
-		}
-	}
+	$effect(() => {
+		const menuVisible = isVisible && slots.length > 0
+		if (menuVisible === lastVisibility) return
+		lastVisibility = menuVisible
+		eventsManager.emit("radial-menu-visibility", menuVisible)
+	})
 </script>
 
-{#if landmarks.length > 0}
-<div class="radial-menu" class:visible={isVisible}>
-	<!-- Backdrop ring -->
-	<div class="backdrop-ring"></div>
+{#if slots.length > 0}
+	<div class="radial-menu" class:open={isVisible}>
+		<svg
+			class="radial-menu__ring"
+			viewBox="0 0 {svgSize} {svgSize}"
+			width={svgSize}
+			height={svgSize}
+		>
+			<defs>
+				<filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+					<feGaussianBlur stdDeviation="3" result="blur" />
+					<feMerge>
+						<feMergeNode in="blur" />
+						<feMergeNode in="SourceGraphic" />
+					</feMerge>
+				</filter>
+				<filter id="selectedGlow" x="-50%" y="-50%" width="200%" height="200%">
+					<feGaussianBlur stdDeviation="6" result="blur" />
+					<feMerge>
+						<feMergeNode in="blur" />
+						<feMergeNode in="SourceGraphic" />
+					</feMerge>
+				</filter>
+			</defs>
 
-	<div class="slots-container">
-		{#each landmarks as landmark, index}
-			<button
-				class="slot"
-				class:discovered={landmark.hasBeenDiscovered}
-				class:selected={selectedId === landmark.id}
-				style={getSlotStyle(index)}
-				onclick={() => onSlotClick(landmark)}
-				disabled={!landmark.hasBeenDiscovered}
-			>
-				<span class="slot-content">
+			{#each slots as slot (slot.landmark.id)}
+				{@const landmark = slot.landmark}
+				<g
+					class="radial-menu__slot"
+					class:discovered={landmark.hasBeenDiscovered}
+					class:selected={selectedId === landmark.id}
+					style="--delay: {slot.delay}"
+					onclick={() => handleSlotClick(landmark)}
+					onkeydown={event => event.key === "Enter" && handleSlotClick(landmark)}
+					role="button"
+					tabindex={landmark.hasBeenDiscovered ? 0 : -1}
+				>
+					<path class="radial-menu__arc" d={slot.path} />
+
+					<text
+						class="radial-menu__icon"
+						x={slot.labelX}
+						y={slot.labelY - 6}
+						text-anchor="middle"
+						dominant-baseline="middle"
+					>
+						{landmark.hasBeenDiscovered ? landmark.icon : "?"}
+					</text>
+
 					{#if landmark.hasBeenDiscovered}
-						<span class="icon">{landmark.icon}</span>
-						<span class="name">{landmark.name}</span>
-					{:else}
-						<span class="icon unknown">?</span>
+						<text
+							class="radial-menu__label"
+							x={slot.labelX}
+							y={slot.labelY + 16}
+							text-anchor="middle"
+							dominant-baseline="middle"
+						>
+							{landmark.name}
+						</text>
 					{/if}
-				</span>
-			</button>
-		{/each}
-	</div>
+				</g>
+			{/each}
 
-	<!-- Center indicator -->
-	<div class="center-indicator">
-		<div class="center-dot"></div>
-		<div class="center-ring"></div>
-	</div>
+			<circle class="radial-menu__center-ring" cx={center} cy={center} r="24" />
+			<circle class="radial-menu__center-dot" cx={center} cy={center} r="6" />
+		</svg>
 
-	<!-- Hint text -->
-	<div class="hint">Hold L to select landmark</div>
-</div>
+		<div class="radial-menu__hint">Hold L to select landmark</div>
+	</div>
 {/if}
 
 <style>
 	.radial-menu {
+		--menu-scale: 0.85;
 		position: fixed;
 		top: 50%;
 		left: 50%;
-		transform: translate(-50%, -50%) scale(0.8);
+		transform: translate(-50%, -50%) scale(var(--menu-scale));
 		opacity: 0;
 		visibility: hidden;
 		transition:
@@ -102,192 +186,144 @@
 			transform 0.25s cubic-bezier(0.4, 0, 0.2, 1),
 			visibility 0.25s;
 		pointer-events: none;
+		z-index: 100;
 	}
 
-	.radial-menu.visible {
+	.radial-menu.open {
+		--menu-scale: 1;
 		opacity: 1;
 		visibility: visible;
 		pointer-events: auto;
-		transform: translate(-50%, -50%) scale(1);
 	}
 
-	/* Backdrop ring */
-	.backdrop-ring {
-		position: absolute;
-		top: 50%;
-		left: 50%;
-		transform: translate(-50%, -50%);
-		width: 320px;
-		height: 320px;
-		border-radius: 50%;
-		background: radial-gradient(
-			circle,
-			rgba(0, 0, 0, 0.6) 0%,
-			rgba(0, 0, 0, 0.4) 50%,
-			rgba(0, 0, 0, 0) 70%
-		);
-		backdrop-filter: blur(8px);
-		-webkit-backdrop-filter: blur(8px);
+	.radial-menu__ring {
+		overflow: visible;
 	}
 
-	.slots-container {
-		position: relative;
-		width: 0;
-		height: 0;
-	}
-
-	.slot {
-		position: absolute;
-		width: 90px;
-		height: 90px;
-		border-radius: 50%;
-		border: 2px solid rgba(255, 255, 255, 0.15);
-		background: rgba(20, 20, 25, 0.85);
-		backdrop-filter: blur(12px);
-		-webkit-backdrop-filter: blur(12px);
-		color: white;
+	.radial-menu__slot {
 		cursor: default;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		transform: rotate(var(--angle)) translateX(var(--radius)) rotate(calc(-1 * var(--angle))) scale(0);
-		margin-left: -45px;
-		margin-top: -45px;
-		transition:
-			transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1),
-			background 0.2s ease-out,
-			border-color 0.2s ease-out,
-			box-shadow 0.2s ease-out;
-		box-shadow:
-			0 4px 20px rgba(0, 0, 0, 0.4),
-			inset 0 1px 0 rgba(255, 255, 255, 0.1);
+		outline: none;
 	}
 
-	/* Staggered entrance animation */
-	.radial-menu.visible .slot {
-		transform: rotate(var(--angle)) translateX(var(--radius)) rotate(calc(-1 * var(--angle))) scale(1);
-		transition-delay: var(--stagger-delay);
-	}
-
-	.slot.discovered {
+	.radial-menu__slot.discovered {
 		cursor: pointer;
-		border-color: rgba(255, 255, 255, 0.35);
 	}
 
-	.slot.discovered:hover {
-		background: rgba(40, 40, 50, 0.95);
-		border-color: rgba(255, 255, 255, 0.7);
-		box-shadow:
-			0 4px 20px rgba(0, 0, 0, 0.4),
-			0 0 30px rgba(255, 255, 255, 0.15),
-			inset 0 1px 0 rgba(255, 255, 255, 0.2);
-		transform: rotate(var(--angle)) translateX(var(--radius)) rotate(calc(-1 * var(--angle))) scale(1.12);
-		transition-delay: 0s;
+	.radial-menu__arc {
+		fill: rgba(15, 15, 20, 0.85);
+		stroke: rgba(255, 255, 255, 0.12);
+		stroke-width: 1.5;
+		transform-origin: center;
+		transform: scale(0);
+		transition:
+			transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1),
+			fill 0.2s ease-out,
+			stroke 0.2s ease-out,
+			filter 0.2s ease-out;
+		transition-delay: var(--delay);
 	}
 
-	.slot.discovered.selected {
-		border-color: rgba(187, 1, 45, 0.9);
-		box-shadow:
-			0 4px 20px rgba(0, 0, 0, 0.4),
-			0 0 25px rgba(187, 1, 45, 0.4),
-			inset 0 1px 0 rgba(255, 255, 255, 0.1);
+	.radial-menu.open .radial-menu__arc {
+		transform: scale(1);
 	}
 
-	.slot:not(.discovered) {
-		opacity: 0.4;
-		border-style: dashed;
+	.radial-menu__slot.discovered .radial-menu__arc {
+		stroke: rgba(255, 255, 255, 0.25);
 	}
 
-	.slot-content {
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		gap: 4px;
-		text-align: center;
+	.radial-menu__slot.discovered:hover .radial-menu__arc {
+		fill: rgba(30, 30, 40, 0.95);
+		stroke: rgba(255, 255, 255, 0.6);
+		filter: url(#glow);
 	}
 
-	.icon {
-		font-size: 1.75rem;
-		line-height: 1;
-		filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
+	.radial-menu__slot.selected .radial-menu__arc {
+		stroke: rgba(187, 1, 45, 0.8);
+		filter: url(#selectedGlow);
 	}
 
-	.icon.unknown {
-		font-size: 1.5rem;
+	.radial-menu__slot:not(.discovered) .radial-menu__arc {
+		opacity: 0.35;
+		stroke-dasharray: 6 4;
+	}
+
+	.radial-menu__icon,
+	.radial-menu__label {
+		opacity: 0;
+		transition: opacity 0.25s ease-out;
+		pointer-events: none;
+	}
+
+	.radial-menu__icon {
+		font-size: 26px;
+		fill: white;
+		transition-delay: calc(var(--delay) + 0.1s);
+		filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.4));
+	}
+
+	.radial-menu.open .radial-menu__icon {
+		opacity: 1;
+	}
+
+	.radial-menu__slot:not(.discovered) .radial-menu__icon {
+		font-family: system-ui, sans-serif;
 		font-weight: 300;
-		font-family: system-ui, sans-serif;
-		opacity: 0.6;
+		font-size: 22px;
 	}
 
-	.name {
-		font-size: 0.6rem;
-		font-weight: 600;
+	.radial-menu.open .radial-menu__slot:not(.discovered) .radial-menu__icon {
+		opacity: 0.5;
+	}
+
+	.radial-menu__label {
+		font-size: 9px;
 		font-family: system-ui, sans-serif;
+		font-weight: 600;
 		text-transform: uppercase;
 		letter-spacing: 0.08em;
-		max-width: 75px;
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-		opacity: 0.9;
-		text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+		fill: rgba(255, 255, 255, 0.85);
+		transition-delay: calc(var(--delay) + 0.15s);
 	}
 
-	/* Center indicator */
-	.center-indicator {
-		position: absolute;
-		top: 50%;
-		left: 50%;
-		transform: translate(-50%, -50%);
+	.radial-menu.open .radial-menu__label {
+		opacity: 1;
 	}
 
-	.center-dot {
-		position: absolute;
-		top: 50%;
-		left: 50%;
-		transform: translate(-50%, -50%);
-		width: 12px;
-		height: 12px;
-		border-radius: 50%;
-		background: rgba(255, 255, 255, 0.9);
-		box-shadow: 0 0 15px rgba(255, 255, 255, 0.5);
+	.radial-menu__center-ring {
+		fill: none;
+		stroke: rgba(255, 255, 255, 0.25);
+		stroke-width: 1.5;
+		animation: pulse 2.5s ease-in-out infinite;
 	}
 
-	.center-ring {
-		position: absolute;
-		top: 50%;
-		left: 50%;
-		transform: translate(-50%, -50%);
-		width: 36px;
-		height: 36px;
-		border-radius: 50%;
-		border: 2px solid rgba(255, 255, 255, 0.3);
-		animation: pulse 2s ease-in-out infinite;
+	.radial-menu__center-dot {
+		fill: rgba(255, 255, 255, 0.9);
+		filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.5));
 	}
 
 	@keyframes pulse {
-		0%, 100% {
-			transform: translate(-50%, -50%) scale(1);
-			opacity: 0.5;
+		0%,
+		100% {
+			transform: scale(1);
+			opacity: 0.4;
 		}
 		50% {
-			transform: translate(-50%, -50%) scale(1.15);
-			opacity: 0.3;
+			transform: scale(1.1);
+			opacity: 0.2;
 		}
 	}
 
-	/* Hint text */
-	.hint {
+	.radial-menu__hint {
 		position: absolute;
-		top: calc(50% + 180px);
+		top: calc(50% + 220px);
 		left: 50%;
 		transform: translateX(-50%);
-		font-size: 0.7rem;
+		font-size: 0.65rem;
 		font-family: system-ui, sans-serif;
 		font-weight: 500;
 		text-transform: uppercase;
-		letter-spacing: 0.15em;
-		color: rgba(255, 255, 255, 0.4);
+		letter-spacing: 0.2em;
+		color: rgba(255, 255, 255, 0.35);
 		white-space: nowrap;
 	}
 </style>

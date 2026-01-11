@@ -30,6 +30,7 @@ type GameEvents = {
 type LandmarkEvents = {
   "landmark-discovered": (id: string) => void;
   "landmark-selected": (id: string) => void;
+  "radial-menu-visibility": (visible: boolean) => void;
 };
 
 type Events = EngineEvents &
@@ -39,9 +40,10 @@ type Events = EngineEvents &
     "blow-wind": VoidFunction;
   };
 
-export class EventsManager extends EventEmitter<Events> {
+export class EventsManager {
+  private emitter = new EventEmitter<Events>();
+
   constructor() {
-    super();
     throttle.forEach((n) => this.updateThrottled(n));
 
     import.meta.hot?.dispose(() => {
@@ -65,5 +67,27 @@ export class EventsManager extends EventEmitter<Events> {
       frame = 0;
       accDelta = 0;
     });
+  }
+
+  on<K extends keyof Events>(event: K, listener: Events[K]): () => void {
+    this.emitter.on(event, listener);
+    return () => {
+      this.emitter.off(event, listener);
+    };
+  }
+
+  emit<K extends keyof Events>(
+    event: K,
+    ...args: Parameters<Events[K]>
+  ): boolean {
+    return this.emitter.emit(event, ...args);
+  }
+
+  off<K extends keyof Events>(event: K, listener: Events[K]) {
+    this.emitter.off(event, listener);
+  }
+
+  removeAllListeners<K extends keyof Events>(event?: K) {
+    this.emitter.removeAllListeners(event);
   }
 }
