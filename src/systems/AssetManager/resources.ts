@@ -20,6 +20,10 @@ import terrainShadowAoUrl from "/textures/realm/terrainShadowAo.webp?url";
 import waterLiliesDiffuseUrl from "/textures/realm/waterLiliesDiffuse.webp?url";
 import waterLiliesAlphaUrl from "/textures/realm/waterLiliesAlpha.webp?url";
 
+// Rocks
+import rocksDiffuseUrl from "/textures/new-world/rocks/diffuse.png?url";
+import rocksNormalUrl from "/textures/new-world/rocks/normal.png?url";
+
 import waterLilyDiffuseUrl from "/textures/new-world/water-lily/diffuse.png?url";
 import waterLilyNormalUrl from "/textures/new-world/water-lily/normal.png?url";
 // Flowers
@@ -415,6 +419,15 @@ export const manifest = [
   // Stones
   // -----------------------------------------------
   { name: "stoneAtlas", url: stoneAtlasUrl, type: "texture", flipY: false },
+
+  {
+    name: "rocksDiffuse",
+    url: rocksDiffuseUrl,
+    type: "texture",
+    flipY: false,
+    colorSpace: SRGBColorSpace,
+  },
+  { name: "rocksNormal", url: rocksNormalUrl, type: "texture", flipY: false },
 
   // -----------------------------------------------
   // Trees

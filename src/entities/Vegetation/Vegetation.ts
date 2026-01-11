@@ -5,6 +5,7 @@ import WaterLilies from "./WaterLilies";
 import Trees from "./Trees";
 import { BigTree } from "./BigTree";
 import { Tree } from "./Tree";
+import Rocks from "../Rocks";
 // import Leaves from "./Leaves";
 
 export default class Vegetation {
@@ -17,5 +18,6 @@ export default class Vegetation {
     // new Leaves(); // not ready yet but pretty good already
     // new BigTree();
     // new Tree();
+    // new Rocks();
   }
 }
