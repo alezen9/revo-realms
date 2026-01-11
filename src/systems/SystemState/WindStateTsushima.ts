@@ -71,6 +71,7 @@ export class WindStateTsushima {
     if (lenSq <= (this.target?.radiusSq ?? 0)) {
       this.target = undefined;
       this.phase = "idle";
+      eventsManager.emit("wind-target-change", null);
       return;
     }
 
@@ -166,5 +167,6 @@ export class WindStateTsushima {
     if (!target) return;
     this.target = target;
     this.targetPositionXZ.set(target.position.x, target.position.z);
+    eventsManager.emit("wind-target-change", id);
   }
 }

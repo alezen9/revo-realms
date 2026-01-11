@@ -25,6 +25,7 @@ type InputEvents = {
 type GameEvents = {
   "game-wind-start": VoidFunction;
   "game-wind-end": VoidFunction;
+  "wind-target-change": (targetId: string | null) => void;
 };
 
 type LandmarkEvents = {

@@ -1,19 +1,21 @@
 <script lang="ts">
 	import { onMount } from "svelte"
-	import { inputManager, eventsManager, landmarkManager, systemState } from "../../systems"
+	import { eventsManager, landmarkManager, systemState } from "../../systems"
 	import type { Landmark } from "../../systems/LandmarkManager"
 
 	let isVisible = $state(false)
-	let selectedId = $state<string | null>(null)
 	let landmarks = $state<Landmark[]>([])
+	let activeWindTargetId = $state<string | null>(null)
 
-	const innerRadius = 90
-	const outerRadius = 160
+	const innerRadius = 78
+	const outerRadius = 178
 	const gapAngleDeg = 4
 	const svgSize = 400
 	const center = svgSize / 2
 	const labelRadius = (innerRadius + outerRadius) / 2
 	const DEG_TO_RAD = Math.PI / 180
+
+	let menuEl: HTMLDivElement | null = null
 
 	const toRad = (deg: number) => deg * DEG_TO_RAD
 	const toPoint = (radius: number, angleRad: number) => ({
@@ -57,24 +59,67 @@
 		})
 	}
 
+	const getSelectedId = (targetId: string | null) => {
+		if (!targetId) return null
+		return (
+			landmarks.find(landmark => landmark.windTargetId === targetId)?.id ?? null
+		)
+	}
+
 	let slotCount = $derived(landmarks.length)
 	let slotAngleDeg = $derived(slotCount > 0 ? 360 / slotCount : 0)
 	let slots = $derived(buildSlots(landmarks, slotAngleDeg))
+	let selectedId = $derived(getSelectedId(activeWindTargetId))
+	let menuVisible = $derived(isVisible && slots.length > 0)
 	let lastVisibility = false
 
 	const syncLandmarks = () => {
 		landmarks = landmarkManager.getAll()
 	}
 
-	const updateVisibility = () => {
-		const nextVisible = inputManager.isKeyPressed("KeyL")
-		if (nextVisible !== isVisible) isVisible = nextVisible
+	const setActiveWindTarget = (targetId: string | null) => {
+		activeWindTargetId = targetId
+	}
+
+	const getFocusableSlots = () =>
+		menuEl
+			? Array.from(
+					menuEl.querySelectorAll<SVGGElement>(
+						".radial-menu__slot[tabindex='0']"
+					)
+				)
+			: []
+
+	const focusSlot = (landmarkId: string | null) => {
+		const focusable = getFocusableSlots()
+		if (!focusable.length) return
+		if (landmarkId) {
+			const selected = focusable.find(
+				element => element.dataset.landmarkId === landmarkId
+			)
+			if (selected) {
+				selected.focus()
+				return
+			}
+		}
+		focusable[0].focus()
+	}
+
+	const focusNextSlot = (reverse: boolean) => {
+		const focusable = getFocusableSlots()
+		if (!focusable.length) return
+		const active = document.activeElement
+		const currentIndex = focusable.findIndex(element => element === active)
+		const direction = reverse ? -1 : 1
+		const nextIndex =
+			currentIndex === -1
+				? 0
+				: (currentIndex + direction + focusable.length) % focusable.length
+		focusable[nextIndex].focus()
 	}
 
 	const handleSlotClick = (landmark: Landmark) => {
 		if (!landmark.hasBeenDiscovered) return
-		selectedId = landmark.id
-
 		if (landmark.windTargetId) {
 			systemState.wind.activateTargetById(landmark.windTargetId)
 			eventsManager.emit("landmark-selected", landmark.id)
@@ -82,50 +127,66 @@
 	}
 
 	onMount(() => {
-		const unsubscribeUpdate = eventsManager.on("engine-update", updateVisibility)
-		const unsubscribeDiscovery = eventsManager.on("landmark-discovered", syncLandmarks)
+		const unsubscribeDiscovery = eventsManager.on(
+			"landmark-discovered",
+			syncLandmarks
+		)
+		const unsubscribeWindTarget = eventsManager.on(
+			"wind-target-change",
+			setActiveWindTarget
+		)
+		const handleKeyDown = (event: KeyboardEvent) => {
+			if (event.code === "KeyL" && !event.repeat) {
+				isVisible = !isVisible
+				return
+			}
+			if (event.code === "Escape" && menuVisible) {
+				isVisible = false
+				return
+			}
+			if (!menuVisible || event.key !== "Tab") return
+			event.preventDefault()
+			focusNextSlot(event.shiftKey)
+		}
+		const handlePointerDown = (event: PointerEvent) => {
+			if (!menuVisible || !menuEl) return
+			if (event.target instanceof Node && !menuEl.contains(event.target)) {
+				isVisible = false
+			}
+		}
+		window.addEventListener("keydown", handleKeyDown)
+		window.addEventListener("pointerdown", handlePointerDown)
 
 		syncLandmarks()
 
 		return () => {
-			unsubscribeUpdate()
 			unsubscribeDiscovery()
+			unsubscribeWindTarget()
+			window.removeEventListener("keydown", handleKeyDown)
+			window.removeEventListener("pointerdown", handlePointerDown)
 		}
 	})
 
 	$effect(() => {
-		const menuVisible = isVisible && slots.length > 0
 		if (menuVisible === lastVisibility) return
 		lastVisibility = menuVisible
 		eventsManager.emit("radial-menu-visibility", menuVisible)
 	})
+
+	$effect(() => {
+		if (!menuVisible) return
+		requestAnimationFrame(() => focusSlot(selectedId))
+	})
 </script>
 
 {#if slots.length > 0}
-	<div class="radial-menu" class:open={isVisible}>
+	<div class="radial-menu" class:open={menuVisible} bind:this={menuEl}>
 		<svg
 			class="radial-menu__ring"
 			viewBox="0 0 {svgSize} {svgSize}"
 			width={svgSize}
 			height={svgSize}
 		>
-			<defs>
-				<filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
-					<feGaussianBlur stdDeviation="3" result="blur" />
-					<feMerge>
-						<feMergeNode in="blur" />
-						<feMergeNode in="SourceGraphic" />
-					</feMerge>
-				</filter>
-				<filter id="selectedGlow" x="-50%" y="-50%" width="200%" height="200%">
-					<feGaussianBlur stdDeviation="6" result="blur" />
-					<feMerge>
-						<feMergeNode in="blur" />
-						<feMergeNode in="SourceGraphic" />
-					</feMerge>
-				</filter>
-			</defs>
-
 			{#each slots as slot (slot.landmark.id)}
 				{@const landmark = slot.landmark}
 				<g
@@ -134,9 +195,11 @@
 					class:selected={selectedId === landmark.id}
 					style="--delay: {slot.delay}"
 					onclick={() => handleSlotClick(landmark)}
-					onkeydown={event => event.key === "Enter" && handleSlotClick(landmark)}
+					onkeydown={event =>
+						event.key === "Enter" && handleSlotClick(landmark)}
 					role="button"
-					tabindex={landmark.hasBeenDiscovered ? 0 : -1}
+					tabindex={menuVisible && landmark.hasBeenDiscovered ? 0 : -1}
+					data-landmark-id={landmark.id}
 				>
 					<path class="radial-menu__arc" d={slot.path} />
 
@@ -163,12 +226,16 @@
 					{/if}
 				</g>
 			{/each}
-
-			<circle class="radial-menu__center-ring" cx={center} cy={center} r="24" />
-			<circle class="radial-menu__center-dot" cx={center} cy={center} r="6" />
 		</svg>
 
-		<div class="radial-menu__hint">Hold L to select landmark</div>
+		<div class="radial-menu__hints">
+			<div class="radial-menu__hint">Press L or Esc to close</div>
+			{#if selectedId}
+				<div class="radial-menu__hint radial-menu__hint--secondary">
+					Swipe up or scroll up to call wind
+				</div>
+			{/if}
+		</div>
 	</div>
 {/if}
 
@@ -216,11 +283,10 @@
 		transform-origin: center;
 		transform: scale(0);
 		transition:
-			transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1),
-			fill 0.2s ease-out,
-			stroke 0.2s ease-out,
-			filter 0.2s ease-out;
-		transition-delay: var(--delay);
+			transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) var(--delay),
+			fill 0.2s ease-out 0s,
+			stroke 0.2s ease-out 0s,
+			stroke-width 0.2s ease-out 0s;
 	}
 
 	.radial-menu.open .radial-menu__arc {
@@ -232,14 +298,15 @@
 	}
 
 	.radial-menu__slot.discovered:hover .radial-menu__arc {
-		fill: rgba(30, 30, 40, 0.95);
-		stroke: rgba(255, 255, 255, 0.6);
-		filter: url(#glow);
+		fill: rgba(35, 38, 48, 0.95);
+		stroke: rgba(255, 255, 255, 0.7);
+		stroke-width: 2;
 	}
 
 	.radial-menu__slot.selected .radial-menu__arc {
-		stroke: rgba(187, 1, 45, 0.8);
-		filter: url(#selectedGlow);
+		fill: rgba(28, 48, 36, 0.92);
+		stroke: rgba(46, 200, 118, 0.95);
+		stroke-width: 2.2;
 	}
 
 	.radial-menu__slot:not(.discovered) .radial-menu__arc {
@@ -258,7 +325,7 @@
 		font-size: 26px;
 		fill: white;
 		transition-delay: calc(var(--delay) + 0.1s);
-		filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.4));
+		/* filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.4)); */
 	}
 
 	.radial-menu.open .radial-menu__icon {
@@ -289,35 +356,18 @@
 		opacity: 1;
 	}
 
-	.radial-menu__center-ring {
-		fill: none;
-		stroke: rgba(255, 255, 255, 0.25);
-		stroke-width: 1.5;
-		animation: pulse 2.5s ease-in-out infinite;
-	}
-
-	.radial-menu__center-dot {
-		fill: rgba(255, 255, 255, 0.9);
-		filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.5));
-	}
-
-	@keyframes pulse {
-		0%,
-		100% {
-			transform: scale(1);
-			opacity: 0.4;
-		}
-		50% {
-			transform: scale(1.1);
-			opacity: 0.2;
-		}
-	}
-
-	.radial-menu__hint {
+	.radial-menu__hints {
 		position: absolute;
 		top: calc(50% + 220px);
 		left: 50%;
 		transform: translateX(-50%);
+		display: grid;
+		justify-items: center;
+		gap: 6px;
+		pointer-events: none;
+	}
+
+	.radial-menu__hint {
 		font-size: 0.65rem;
 		font-family: system-ui, sans-serif;
 		font-weight: 500;
@@ -325,5 +375,9 @@
 		letter-spacing: 0.2em;
 		color: rgba(255, 255, 255, 0.35);
 		white-space: nowrap;
+	}
+
+	.radial-menu__hint--secondary {
+		color: rgba(255, 255, 255, 0.5);
 	}
 </style>
