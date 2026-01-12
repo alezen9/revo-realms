@@ -13,19 +13,17 @@
 	const svgSize = 400
 	const center = svgSize / 2
 	const labelRadius = (innerRadius + outerRadius) / 2
-	const DEG_TO_RAD = Math.PI / 180
+	let menuEl = $state.raw<HTMLDivElement | null>(null)
 
-	let menuEl: HTMLDivElement | null = null
-
-	const toRad = (deg: number) => deg * DEG_TO_RAD
+	const toRad = (deg: number) => (deg * Math.PI) / 180
 	const toPoint = (radius: number, angleRad: number) => ({
 		x: center + radius * Math.cos(angleRad),
 		y: center + radius * Math.sin(angleRad),
 	})
-
-	const buildSlots = (items: Landmark[], angleDeg: number) => {
+	const buildSlots = (items: Landmark[]) => {
 		if (!items.length) return []
-		const slotAngleRad = toRad(angleDeg)
+		const slotAngleDeg = 360 / items.length
+		const slotAngleRad = toRad(slotAngleDeg)
 		const outerGapRad = toRad(gapAngleDeg)
 		const innerGapRad = Math.min(
 			(outerGapRad * outerRadius) / innerRadius,
@@ -33,7 +31,7 @@
 		)
 
 		return items.map((landmark, index) => {
-			const baseStart = toRad(index * angleDeg - 90)
+			const baseStart = toRad(index * slotAngleDeg - 90)
 			const baseEnd = baseStart + slotAngleRad
 			const outerStart = baseStart + outerGapRad / 2
 			const outerEnd = baseEnd - outerGapRad / 2
@@ -59,106 +57,80 @@
 		})
 	}
 
-	const getSelectedId = (targetId: string | null) => {
-		if (!targetId) return null
-		return (
-			landmarks.find(landmark => landmark.windTargetId === targetId)?.id ?? null
-		)
-	}
-
-	let slotCount = $derived(landmarks.length)
-	let slotAngleDeg = $derived(slotCount > 0 ? 360 / slotCount : 0)
-	let slots = $derived(buildSlots(landmarks, slotAngleDeg))
-	let selectedId = $derived(getSelectedId(activeWindTargetId))
+	let slots = $derived(buildSlots(landmarks))
+	let selectedId = $derived(
+		activeWindTargetId
+			? (landmarks.find(
+					landmark => landmark.windTargetId === activeWindTargetId
+				)?.id ?? null)
+			: null
+	)
 	let menuVisible = $derived(isVisible && slots.length > 0)
 	let lastVisibility = false
 
-	const syncLandmarks = () => {
-		landmarks = landmarkManager.getAll()
-	}
-
-	const setActiveWindTarget = (targetId: string | null) => {
-		activeWindTargetId = targetId
-	}
-
 	const getFocusableSlots = () =>
-		menuEl
-			? Array.from(
-					menuEl.querySelectorAll<SVGGElement>(
-						".radial-menu__slot[tabindex='0']"
-					)
-				)
-			: []
-
-	const focusSlot = (landmarkId: string | null) => {
-		const focusable = getFocusableSlots()
-		if (!focusable.length) return
-		if (landmarkId) {
-			const selected = focusable.find(
-				element => element.dataset.landmarkId === landmarkId
-			)
-			if (selected) {
-				selected.focus()
-				return
-			}
-		}
-		focusable[0].focus()
-	}
-
-	const focusNextSlot = (reverse: boolean) => {
-		const focusable = getFocusableSlots()
-		if (!focusable.length) return
-		const active = document.activeElement
-		const currentIndex = focusable.findIndex(element => element === active)
-		const direction = reverse ? -1 : 1
-		const nextIndex =
-			currentIndex === -1
-				? 0
-				: (currentIndex + direction + focusable.length) % focusable.length
-		focusable[nextIndex].focus()
-	}
+		Array.from(
+			menuEl?.querySelectorAll<SVGGElement>(
+				".radial-menu__slot[tabindex='0']"
+			) ?? []
+		)
 
 	const handleSlotClick = (landmark: Landmark) => {
-		if (!landmark.hasBeenDiscovered) return
-		if (landmark.windTargetId) {
-			systemState.wind.activateTargetById(landmark.windTargetId)
-			eventsManager.emit("landmark-selected", landmark.id)
-		}
+		if (!landmark.hasBeenDiscovered || !landmark.windTargetId) return
+		systemState.wind.activateTargetById(landmark.windTargetId)
+		eventsManager.emit("landmark-selected", landmark.id)
 	}
 
 	onMount(() => {
-		const unsubscribeDiscovery = eventsManager.on(
-			"landmark-discovered",
-			syncLandmarks
-		)
+		const unsubscribeDiscovery = eventsManager.on("landmark-discovered", () => {
+			landmarks = landmarkManager.getAll()
+		})
 		const unsubscribeWindTarget = eventsManager.on(
 			"wind-target-change",
-			setActiveWindTarget
+			(targetId: string | null) => {
+				activeWindTargetId = targetId
+			}
 		)
 		const handleKeyDown = (event: KeyboardEvent) => {
 			if (event.code === "KeyL" && !event.repeat) {
 				isVisible = !isVisible
 				return
 			}
-			if (event.code === "Escape" && menuVisible) {
+			if (!menuVisible) return
+			if (event.code === "Escape") {
 				isVisible = false
 				return
 			}
-			if (!menuVisible || event.key !== "Tab") return
-			event.preventDefault()
-			focusNextSlot(event.shiftKey)
+			if (event.key === "Tab") {
+				event.preventDefault()
+				const focusable = getFocusableSlots()
+				if (!focusable.length) return
+				const currentIndex = focusable.indexOf(
+					document.activeElement as SVGGElement
+				)
+				const direction = event.shiftKey ? -1 : 1
+				const nextIndex =
+					currentIndex === -1
+						? 0
+						: (currentIndex + direction + focusable.length) % focusable.length
+				focusable[nextIndex].focus()
+			}
 		}
 		const handlePointerDown = (event: PointerEvent) => {
-			if (!menuVisible || !menuEl) return
-			if (event.target instanceof Node && !menuEl.contains(event.target)) {
+			if (
+				menuVisible &&
+				menuEl &&
+				event.target instanceof Node &&
+				!menuEl.contains(event.target)
+			) {
 				isVisible = false
 			}
 		}
 		window.addEventListener("keydown", handleKeyDown)
 		window.addEventListener("pointerdown", handlePointerDown)
 
-		syncLandmarks()
-		setActiveWindTarget(systemState.wind.activeTargetId)
+		landmarks = landmarkManager.getAll()
+		activeWindTargetId = systemState.wind.activeTargetId
 
 		return () => {
 			unsubscribeDiscovery()
@@ -176,7 +148,14 @@
 
 	$effect(() => {
 		if (!menuVisible) return
-		requestAnimationFrame(() => focusSlot(selectedId))
+		requestAnimationFrame(() => {
+			const focusable = getFocusableSlots()
+			if (!focusable.length) return
+			const selected = selectedId
+				? focusable.find(element => element.dataset.landmarkId === selectedId)
+				: null
+			;(selected ?? focusable[0]).focus()
+		})
 	})
 </script>
 
