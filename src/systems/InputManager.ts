@@ -157,4 +157,12 @@ export class InputManager {
   isKeyPressed(code: string): boolean {
     return keyboardManager.isKeyPressed(code);
   }
+
+  onKeyDown(code: string, callback: VoidFunction) {
+    keyboardManager.onKeyDown(code, callback);
+  }
+
+  onKeyUp(code: string, callback: VoidFunction) {
+    keyboardManager.onKeyUp(code, callback);
+  }
 }

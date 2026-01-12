@@ -21,6 +21,8 @@ export class PhysicsManager {
   world!: World;
   private eventQueue!: EventQueue;
   private readonly IS_DEBUGGING_ENABLED = false;
+  private baseTimestep = 1 / 60;
+  private timeScale = 1;
 
   private dummyVectorLinVel = new Vector3();
   private debugMesh?: LineSegments2;
@@ -35,7 +37,21 @@ export class PhysicsManager {
     return import("@dimforge/rapier3d").then(() => {
       this.world = new World({ x: 0, y: -9.81, z: 0 });
       this.eventQueue = new EventQueue(true);
+      this.baseTimestep = this.world.timestep;
+      this.applyTimeScale();
     });
+  }
+
+  setTimeScale(scale: number) {
+    this.timeScale = Math.max(0, scale);
+    this.applyTimeScale();
+  }
+
+  private applyTimeScale() {
+    if (!this.world) return;
+    if (this.timeScale === 0) return;
+    const timestep = this.baseTimestep * this.timeScale;
+    if (this.world.timestep !== timestep) this.world.timestep = timestep;
   }
 
   private getColliderName(collider: Collider) {
@@ -119,6 +135,7 @@ export class PhysicsManager {
   }
 
   update() {
+    if (!this.world) return;
     this.updateDebugMesh();
     this.world.step(this.eventQueue);
     if (audioManager.isReady) this.handleCollisionSounds();
