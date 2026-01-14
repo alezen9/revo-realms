@@ -1,6 +1,5 @@
 import {
   cos,
-  deltaTime,
   float,
   floor,
   Fn,
@@ -13,7 +12,6 @@ import {
   sin,
   step,
   texture,
-  time,
   uniform,
   uv,
   vec2,
@@ -38,6 +36,7 @@ import {
   debugManager,
 } from "../../systems";
 import { VegetationSsboUtils } from "./ssboUtils";
+import { gameDeltaTime, gameTime } from "../../utils/GameTime";
 import { TSLUtils } from "../../utils/TSLUtils";
 
 const getConfig = () => {
@@ -303,8 +302,8 @@ class FlowerMaterial extends SpriteNodeMaterial {
     // Position
     const windIntensity = systemState.wind.uIntensity;
     const windDirection = systemState.wind.uDirection;
-    const timer = time.add(
-      deltaTime.mul(float(2).add(windIntensity.mul(0.25))),
+    const timer = gameTime.add(
+      gameDeltaTime.mul(float(2).add(windIntensity.mul(0.25))),
     );
     const swayX = sin(timer.add(rand1.mul(100))).mul(0.25);
     const swayY = rand2.mul(0.5);

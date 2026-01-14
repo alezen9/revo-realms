@@ -5,17 +5,14 @@ import { MathUtils, Vector3 } from "three";
 import { LineSegments2 } from "three/examples/jsm/lines/webgpu/LineSegments2.js";
 import { LineSegmentsGeometry } from "three/examples/jsm/Addons.js";
 import { Line2NodeMaterial } from "three/webgpu";
+import type { EventsManager } from "./EventsManager";
 
-const getConfig = () => {
-  return {
-    minImpactSq: 5,
-    maxImpactSq: 400,
-    minImpactVolume: 0.01,
-    maxImpactVolume: 0.25,
-  };
+const config = {
+  minImpactSq: 5,
+  maxImpactSq: 400,
+  minImpactVolume: 0.01,
+  maxImpactVolume: 0.25,
 };
-
-const config = getConfig();
 
 export class PhysicsManager {
   world!: World;
@@ -27,10 +24,14 @@ export class PhysicsManager {
   private dummyVectorLinVel = new Vector3();
   private debugMesh?: LineSegments2;
 
-  constructor() {
-    if (!this.IS_DEBUGGING_ENABLED) return;
-    this.debugMesh = this.createDebugMesh();
-    sceneManager.scene.add(this.debugMesh);
+  constructor(eventsManager: EventsManager) {
+    if (this.IS_DEBUGGING_ENABLED) {
+      this.debugMesh = this.createDebugMesh();
+      sceneManager.scene.add(this.debugMesh);
+    }
+    eventsManager.on("engine-time-scale", (scale) => {
+      this.setTimeScale(scale);
+    });
   }
 
   async initAsync() {

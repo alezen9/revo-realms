@@ -8,7 +8,6 @@ import {
   sin,
   step,
   texture,
-  time,
   uniform,
   uv,
   vec3,
@@ -30,6 +29,7 @@ import { ColliderDesc, RigidBodyDesc } from "@dimforge/rapier3d";
 import { TSLUtils } from "../../utils/TSLUtils";
 import { RevoColliderType } from "../../types";
 import { debugManager, sceneManager, physicsManager } from "../../systems";
+import { gameTime } from "../../utils/GameTime";
 
 class BarkMaterial extends MeshLambertNodeMaterial {
   constructor() {
@@ -90,7 +90,7 @@ class CanopyMaterial extends MeshLambertNodeMaterial {
     this.alphaTest = 0.1;
 
     // Position
-    const timer = time.mul(noise.r).add(vertexIndex).mul(7.5);
+    const timer = gameTime.mul(noise.r).add(vertexIndex).mul(7.5);
     const sway = sin(timer).mul(0.015);
     const flutter = cos(timer.mul(0.75)).mul(0.01);
     this.positionNode = positionLocal.add(vec3(0, flutter, sway));

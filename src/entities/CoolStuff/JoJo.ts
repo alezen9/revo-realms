@@ -9,10 +9,10 @@ import {
   sin,
   step,
   texture,
-  time,
   uv,
   vec2,
 } from "three/tsl";
+import { gameTime } from "../../utils/GameTime";
 import { TSLUtils } from "../../utils/TSLUtils";
 
 export default class JoJo {
@@ -73,7 +73,7 @@ class SymbolMaterial extends MeshLambertNodeMaterial {
     this.colorNode = mix(darkPurple, purple, uv().y.mul(0.5)).mul(0.45);
 
     // Position
-    const timer = time.mul(20);
+    const timer = gameTime.mul(20);
     const offset = sin(timer.add(instanceIndex));
     const sharpOffset = step(0, offset).mul(0.25);
     this.positionNode = positionLocal.add(sharpOffset);

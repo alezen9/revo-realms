@@ -7,12 +7,12 @@ import {
   positionWorld,
   sin,
   texture,
-  time,
   uniform,
   uv,
   vec3,
   vertexIndex,
 } from "three/tsl";
+import { gameTime } from "../../utils/GameTime";
 import { MeshStandardNodeMaterial } from "three/webgpu";
 import { assetManager, debugManager, sceneManager } from "../../systems";
 
@@ -39,7 +39,7 @@ class WaterLylyMaterial extends MeshStandardNodeMaterial {
 
     const noise = texture(
       assetManager.resources.noiseAtlas,
-      uv().add(time).mul(uniforms.uWaveringSpeed),
+      uv().add(gameTime).mul(uniforms.uWaveringSpeed),
     );
 
     const wavering = sin(noise.a).mul(uniforms.uWaveringStrength);

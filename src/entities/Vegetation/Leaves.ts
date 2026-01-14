@@ -23,7 +23,6 @@ import {
   fract,
   sin,
   cos,
-  time,
   float,
   normalize,
   rotate,
@@ -32,7 +31,6 @@ import {
   uv,
   mix,
   color,
-  deltaTime,
 } from "three/tsl";
 import {
   assetManager,
@@ -41,6 +39,7 @@ import {
   sceneManager,
   eventsManager,
 } from "../../systems";
+import { gameDeltaTime, gameTime } from "../../utils/GameTime";
 import { TSLUtils } from "../../utils/TSLUtils";
 
 const getConfig = () => {
@@ -188,23 +187,23 @@ class LeavesSsbo {
     const dpsi_dx = amp1
       .mul(PI2)
       .mul(k1)
-      .mul(cos(x1.add(time.mul(w1)).add(phase1)))
+      .mul(cos(x1.add(gameTime.mul(w1)).add(phase1)))
       .add(
         amp3
           .mul(PI2)
           .mul(k3)
-          .mul(cos(xz3.add(time.mul(w3)).add(phase3))),
+          .mul(cos(xz3.add(gameTime.mul(w3)).add(phase3))),
       );
 
     const dpsi_dz = amp2
       .mul(PI2)
       .mul(k2)
-      .mul(cos(z2.add(time.mul(w2)).add(phase2)))
+      .mul(cos(z2.add(gameTime.mul(w2)).add(phase2)))
       .add(
         amp3
           .mul(PI2)
           .mul(k3)
-          .mul(cos(xz3.add(time.mul(w3)).add(phase3))),
+          .mul(cos(xz3.add(gameTime.mul(w3)).add(phase3))),
       );
 
     const flowDir = normalize(vec2(dpsi_dz, dpsi_dx.negate()));
@@ -214,12 +213,14 @@ class LeavesSsbo {
     // =========================
     const noiseScale = float(1.0 / 80.0);
     const scroll = float(0.02);
-    const noiseUV = fract(worldXZ.mul(noiseScale).add(vec2(time.mul(scroll))));
+    const noiseUV = fract(
+      worldXZ.mul(noiseScale).add(vec2(gameTime.mul(scroll))),
+    );
     const noiseSample = texture(assetManager.resources.noiseAtlas, noiseUV).rgb; // r=perlin, g=voronoi, b=random
 
     // gentle breathing and per-leaf variation from noise (no sharp changes)
     const breathing = float(0.85).add(
-      sin(time.mul(0.25).add(phase1)).mul(0.15),
+      sin(gameTime.mul(0.25).add(phase1)).mul(0.15),
     );
     const speed = uniforms.uSpeed
       .mul(breathing)
@@ -244,7 +245,7 @@ class LeavesSsbo {
     // const phaseY = seedY.mul(PI2);
 
     // tiny bob velocity (no big sine arcs)
-    // const bobVel = sin(time.mul(0.6).add(phaseY)).mul(0.01); // ~1 cm/step
+    // const bobVel = sin(gameTime.mul(0.6).add(phaseY)).mul(0.01); // ~1 cm/step
 
     // steady downward drift with mild per-leaf variation
     // const fallVel = float(0.015).add(seedY.mul(0.008)); // ~1.5–2.3 cm/step
@@ -255,7 +256,7 @@ class LeavesSsbo {
 
     // accumulate rotation angle in w (use noise to vary omega)
     const omega = float(0.8).add(noiseSample.g.mul(1.2)); // rad/s ≈ 0.8..2.0
-    const dTheta = omega.mul(deltaTime);
+    const dTheta = omega.mul(gameDeltaTime);
     const oRotation = this.getRotation(data);
     const nextRotation = mod(oRotation.add(dTheta), PI2);
 

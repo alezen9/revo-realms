@@ -8,7 +8,7 @@ import {
   rendererManager,
   sceneManager,
   eventsManager,
-  inputManager,
+  timeManager,
 } from "./systems";
 import { Utils } from "./utils/Utils";
 
@@ -32,13 +32,6 @@ export default class Game {
   private config = {
     halvenFPS: false,
   };
-  private timeState = {
-    isPaused: false,
-    isSlowMotion: false,
-    isMenuSlow: false,
-    slowMotionScale: 0.1,
-  };
-  private timeScale = 1;
 
   constructor() {
     this.player = new Player();
@@ -52,38 +45,6 @@ export default class Game {
     });
     folder.addBinding(this.config, "halvenFPS", {
       label: "Halven FPS",
-    });
-  }
-
-  private applyTimeScale() {
-    const isSlowed = this.timeState.isSlowMotion || this.timeState.isMenuSlow;
-    const nextScale = this.timeState.isPaused
-      ? 0
-      : isSlowed
-        ? this.timeState.slowMotionScale
-        : 1;
-    if (this.timeScale === nextScale) return;
-    this.timeScale = nextScale;
-    rendererManager.setTimeScale(nextScale);
-    if (nextScale > 0) physicsManager.setTimeScale(nextScale);
-  }
-
-  private togglePause() {
-    this.timeState.isPaused = !this.timeState.isPaused;
-    this.applyTimeScale();
-  }
-
-  private toggleSlowMotion() {
-    this.timeState.isSlowMotion = !this.timeState.isSlowMotion;
-    this.applyTimeScale();
-  }
-
-  private bindTimeControls() {
-    inputManager.onKeyDown("KeyP", () => this.togglePause());
-    inputManager.onKeyDown("KeyT", () => this.toggleSlowMotion());
-    eventsManager.on("radial-menu-visibility", (visible) => {
-      this.timeState.isMenuSlow = visible;
-      this.applyTimeScale();
     });
   }
 
@@ -113,28 +74,25 @@ export default class Game {
   async startLoop() {
     await this.updateRefreshRate();
     this.debugGame();
-    this.bindTimeControls();
-    this.applyTimeScale();
+    timeManager.reset();
     const clock = new Clock(true);
 
     const state: State = { delta: clock.getDelta(), player: this.player };
 
     let flip = false;
+    let pendingDelta = 0;
 
     const loop = () => {
-      if (this.timeScale === 0) {
-        clock.getDelta();
-        return;
-      }
+      pendingDelta += clock.getDelta();
+      const shouldTick = this.config.halvenFPS ? (flip = !flip) : true;
+      if (!shouldTick) return;
+      state.delta = timeManager.update(pendingDelta);
+      pendingDelta = 0;
+      if (timeManager.isPaused) return;
       physicsManager.update();
-      if (this.config.halvenFPS) flip = !flip;
-      else flip = false;
-      if (flip || !this.config.halvenFPS) {
-        if (import.meta.env.DEV) sceneManager.update();
-        state.delta = clock.getDelta() * this.timeScale;
-        eventsManager.emit("engine-update", state);
-        rendererManager.renderAsync();
-      }
+      if (import.meta.env.DEV) sceneManager.update();
+      eventsManager.emit("engine-update", state);
+      rendererManager.renderAsync();
     };
 
     // resize & start

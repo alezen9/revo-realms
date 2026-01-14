@@ -21,7 +21,6 @@ export class RendererManager {
     import.meta.env.DEV && ENABLE_MONITORING;
   private readonly IS_DEBUGGING_ENABLED =
     import.meta.env.DEV && ENABLE_DEBUGGING;
-  private timeScale = 1;
 
   constructor(debugManager: DebugManager, eventsManager: EventsManager) {
     const canvas = document.createElement("canvas");
@@ -59,7 +58,6 @@ export class RendererManager {
 
   async init() {
     await this.renderer.init();
-    this.patchNodeFrameTimeScale();
     sceneManager.init();
     this.isWebGPU = !!(await navigator.gpu?.requestAdapter());
     this.postprocessingManager = new PostprocessingManager(this.renderer);
@@ -67,39 +65,6 @@ export class RendererManager {
       this.renderer.info.autoReset = false;
       await this.monitoringManager.stats.init(this.renderer);
     }
-  }
-
-  setTimeScale(scale: number) {
-    this.timeScale = Math.max(0, scale);
-  }
-
-  private patchNodeFrameTimeScale() {
-    // Hook NodeFrame so TSL `time`/`deltaTime` follow the game time scale.
-    const renderer = this.renderer as unknown as {
-      _nodes?: {
-        nodeFrame?: {
-          update: () => void;
-          time: number;
-          deltaTime: number;
-          __timeScalePatched?: boolean;
-        };
-      };
-    };
-    const nodeFrame = renderer?._nodes?.nodeFrame;
-    if (!nodeFrame || nodeFrame.__timeScalePatched) return;
-    nodeFrame.__timeScalePatched = true;
-    const originalUpdate = nodeFrame.update.bind(nodeFrame);
-    const getTimeScale = () => this.timeScale;
-
-    nodeFrame.update = () => {
-      const previousTime = nodeFrame.time;
-      originalUpdate();
-      const scale = getTimeScale();
-      if (scale === 1) return;
-      const scaledDelta = nodeFrame.deltaTime * scale;
-      nodeFrame.deltaTime = scaledDelta;
-      nodeFrame.time = previousTime + scaledDelta;
-    };
   }
 
   private async renderSceneAsync() {

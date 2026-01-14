@@ -12,7 +12,6 @@ import {
   smoothstep,
   step,
   texture,
-  time,
   uv,
   vec2,
   vec3,
@@ -28,6 +27,7 @@ import {
   SpriteNodeMaterial,
 } from "three/webgpu";
 import { assetManager, rendererManager, eventsManager } from "../systems";
+import { gameTime } from "./GameTime";
 import { Utils } from "./Utils";
 
 type ParticleBuffer = ReturnType<typeof instancedArray>;
@@ -159,7 +159,7 @@ const getFirePresetConfig = (
 
     const lifetime = mix(fireLifetime, sparkLifetime, isSpark);
 
-    const t = time.mul(s).add(randSeed.mul(lifetime)).mod(lifetime);
+    const t = gameTime.mul(s).add(randSeed.mul(lifetime)).mod(lifetime);
     const progress = t.div(lifetime);
     const verticalEase = float(1.0).sub(float(1.0).sub(progress).pow(2));
     const effectiveHeight = mix(fireHeight, sparkHeight, isSpark);
@@ -172,7 +172,7 @@ const getFirePresetConfig = (
 
     const coneFalloff = float(1).sub(verticalEase.mul(coneFactor));
     const squishFactor = smoothstep(0.0, 0.35, verticalEase);
-    const breathing = sin(time.mul(0.5)).mul(0.05).add(1.0);
+    const breathing = sin(gameTime.mul(0.5)).mul(0.05).add(1.0);
     const effectiveRadius = mix(radius * 0.25, radius, squishFactor)
       .mul(coneFalloff)
       .mul(breathing);
