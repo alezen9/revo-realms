@@ -9,13 +9,13 @@ import {
   oscSine,
   positionLocal,
   texture,
-  time,
   uniform,
   uv,
   vec3,
   vec4,
   vertexIndex,
 } from "three/tsl";
+import { gameTime } from "../../utils/GameTime";
 
 const uniforms = {
   diffuseScale: uniform(4),
@@ -68,7 +68,7 @@ class TreeMaterial extends MeshStandardNodeMaterial {
     this.normalNode = normal;
 
     const id = hash(vertexIndex);
-    const sway = oscSine(time.mul(id).mul(0.15))
+    const sway = oscSine(gameTime.mul(id).mul(0.15))
       .mul(0.05)
       .mul(isCanopy)
       .mul(positionLocal.x);

@@ -12,13 +12,13 @@ import {
   oscSine,
   positionLocal,
   texture,
-  time,
   uniform,
   uv,
   vec3,
 } from "three/tsl";
 import { ColliderDesc, RigidBodyDesc } from "@dimforge/rapier3d";
 import { RevoColliderType } from "../../types";
+import { gameTime } from "../../utils/GameTime";
 
 const uniforms = {
   uCanopyDiffuseScale: uniform(0.6),
@@ -43,7 +43,7 @@ class PineTreeCanopyMaterial extends MeshLambertNodeMaterial {
 
     const random = uv().x.mul(uv().y).mul(4);
     const profile = windWeight.mul(windWeight);
-    const t = time.mul(uniforms.uCanopySwaySpeed).add(random);
+    const t = gameTime.mul(uniforms.uCanopySwaySpeed).add(random);
     const swayOffset = oscSine(t).mul(profile).mul(0.1);
     this.positionNode = positionLocal.add(vec3(0, swayOffset, 0));
   }

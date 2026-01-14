@@ -18,13 +18,13 @@ import {
   smoothstep,
   step,
   texture,
-  time,
   uniform,
   uv,
   vec3,
   viewportDepthTexture,
   viewportTexture,
 } from "three/tsl";
+import { gameTime } from "../utils/GameTime";
 import { TSLUtils } from "../utils/TSLUtils";
 import {
   assetManager,
@@ -233,7 +233,7 @@ class WaterMaterial extends MeshBasicNodeMaterial {
     this.fog = false;
 
     // 0. normal
-    const speed = time.mul(this.uniforms.uSpeed);
+    const speed = gameTime.mul(this.uniforms.uSpeed);
     const frequency = this.uniforms.uNoiseScrollDir.mul(speed);
     const nUV1 = uv()
       .add(frequency)

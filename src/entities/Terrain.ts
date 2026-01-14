@@ -7,7 +7,6 @@ import {
   remap,
   smoothstep,
   texture,
-  time,
   uniform,
   uv,
   varying,
@@ -35,6 +34,7 @@ import {
   RigidBodyDesc,
 } from "@dimforge/rapier3d";
 import { type State } from "../Game";
+import { gameTime } from "../utils/GameTime";
 import { TSLUtils } from "../utils/TSLUtils";
 import {
   assetManager,
@@ -140,7 +140,7 @@ class TerainMaterial extends MeshLambertNodeMaterial {
     const blendFactor = smoothstep(0, 8, depth);
     const waterTint = vec3(0.35, 0.45, 0.55).mul(0.65);
 
-    const timer = time.mul(0.15);
+    const timer = gameTime.mul(0.15);
     const uv1 = vUv.mul(uniforms.uCausticsUv1Scale).add(vec2(timer, 0)).fract();
     const noiseA = texture(assetManager.resources.noiseAtlas, uv1, 1).a;
     const uv2 = vUv

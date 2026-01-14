@@ -27,7 +27,6 @@ import {
   vec2,
   positionWorld,
   rotate,
-  time,
   mix,
   smoothstep,
   clamp,
@@ -44,6 +43,7 @@ import {
   fract,
 } from "three/tsl";
 import { SpriteNodeMaterial } from "three/webgpu";
+import { gameTime } from "../../../utils/GameTime";
 import { TSLUtils } from "../../../utils/TSLUtils";
 import {
   assetManager,
@@ -325,7 +325,7 @@ class GrassSsbo {
 
       // base uv + scroll
       const uvBase = worldPos.xz.mul(0.01).mul(uniforms.uvWindScale);
-      const scroll = dir.mul(speed).mul(time);
+      const scroll = dir.mul(speed).mul(gameTime);
 
       // sample 1 — main noise
       const uvA = uvBase.add(scroll);
@@ -341,7 +341,9 @@ class GrassSsbo {
 
       // mix them — random per instance + slow time wobble
       const mixRand = fract(sin(positionNoise.mul(12.9898)).mul(78.233));
-      const mixTime = sin(time.mul(0.4).add(positionNoise.mul(0.1))).mul(0.25);
+      const mixTime = sin(gameTime.mul(0.4).add(positionNoise.mul(0.1))).mul(
+        0.25,
+      );
       const w = clamp(mixRand.add(mixTime), 0.2, 0.8);
       const n = mix(nA, nB, w);
 
@@ -503,7 +505,7 @@ class GrassMaterial extends SpriteNodeMaterial {
     const bladePosition = vec3(offsetX, 0, offsetZ);
     // sway effect
     const randomPhase = positionNoise.mul(PI2);
-    const swayAmount = sin(time.mul(5).add(randomPhase)).mul(0.15);
+    const swayAmount = sin(gameTime.mul(5).add(randomPhase)).mul(0.15);
     const swayFactor = uv().y.mul(windNoiseFactor);
     const swayOffset = swayAmount.mul(swayFactor);
     // flutter offset
@@ -511,7 +513,7 @@ class GrassMaterial extends SpriteNodeMaterial {
     const perp = vec2(dirXZ.y.negate(), dirXZ.x);
     const phase = hash(instanceIndex).mul(PI2);
     const flutter = sin(
-      time.mul(uniforms.uWindSpeed.mul(1.7)).add(phase.mul(1.3)),
+      gameTime.mul(uniforms.uWindSpeed.mul(1.7)).add(phase.mul(1.3)),
     )
       .mul(0.06)
       .mul(bendProfile);
