@@ -1,4 +1,4 @@
-import { ACESFilmicToneMapping, PCFShadowMap } from "three";
+import { PCFShadowMap } from "three";
 import { WebGPURenderer } from "three/webgpu";
 import { MonitoringManager } from "./MonitoringManager";
 import { PostprocessingManager } from "./PostprocessingManager";

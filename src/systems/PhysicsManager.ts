@@ -1,11 +1,12 @@
 import { Collider, EventQueue, World } from "@dimforge/rapier3d";
 import { RevoColliderType } from "../types";
-import { audioManager, sceneManager } from ".";
+import { audioManager } from ".";
 import { MathUtils, Vector3 } from "three";
 import { LineSegments2 } from "three/examples/jsm/lines/webgpu/LineSegments2.js";
 import { LineSegmentsGeometry } from "three/examples/jsm/Addons.js";
 import { Line2NodeMaterial } from "three/webgpu";
 import type { EventsManager } from "./EventsManager";
+import type { SceneManager } from "./SceneManager";
 
 const config = {
   minImpactSq: 5,
@@ -18,13 +19,16 @@ export class PhysicsManager {
   world!: World;
   private eventQueue!: EventQueue;
   private readonly IS_DEBUGGING_ENABLED = false;
-  private baseTimestep = 1 / 60;
+  private baseTimestep = 1 / 60; // 60Hz fixed timestep (standard for games)
   private timeScale = 1;
+  private accumulator = 0;
+  private maxStepsPerFrame = 8; // prevent spiral of death
+  private _didStep = false;
 
   private dummyVectorLinVel = new Vector3();
   private debugMesh?: LineSegments2;
 
-  constructor(eventsManager: EventsManager) {
+  constructor(eventsManager: EventsManager, sceneManager: SceneManager) {
     if (this.IS_DEBUGGING_ENABLED) {
       this.debugMesh = this.createDebugMesh();
       sceneManager.scene.add(this.debugMesh);
@@ -38,7 +42,7 @@ export class PhysicsManager {
     return import("@dimforge/rapier3d").then(() => {
       this.world = new World({ x: 0, y: -9.81, z: 0 });
       this.eventQueue = new EventQueue(true);
-      this.baseTimestep = this.world.timestep;
+      this.world.timestep = this.baseTimestep;
       this.applyTimeScale();
     });
   }
@@ -135,10 +139,37 @@ export class PhysicsManager {
     this.debugMesh.computeLineDistances();
   }
 
-  update() {
+  /** interpolation factor (0-1) for smooth rendering between physics steps */
+  get alpha() {
+    if (!this.world) return 1;
+    return this.accumulator / this.world.timestep;
+  }
+
+  /** use to update prev state */
+  get didStep() {
+    return this._didStep;
+  }
+
+  update(delta: number) {
     if (!this.world) return;
     this.updateDebugMesh();
-    this.world.step(this.eventQueue);
+
+    // fixed timestep with accumulator
+    this.accumulator += delta;
+    const timestep = this.world.timestep;
+    let steps = 0;
+
+    while (this.accumulator >= timestep && steps < this.maxStepsPerFrame) {
+      this.world.step(this.eventQueue);
+      this.accumulator -= timestep;
+      steps++;
+    }
+
+    this._didStep = steps > 0;
+
+    // clamp accumulator to prevent buildup during long frames
+    if (this.accumulator > timestep) this.accumulator = timestep;
+
     if (audioManager.isReady) this.handleCollisionSounds();
   }
 }

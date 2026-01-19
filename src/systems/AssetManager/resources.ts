@@ -87,7 +87,7 @@ import noiseAtlasUrl from "/textures/new-world/noise/noise_atlas.ktx2?url";
 import grassMapUrl from "/textures/new-world/terrain/grass-map.png?url";
 import waterMapUrl from "/textures/new-world/terrain/water-map.png?url";
 // import lightmapUrl from "/textures/new-world/terrain/lightmap.ktx2?url";
-import lightmapUrl from "/textures/new-world/terrain/lightmap.png?url";
+import shadowMapUrl from "/textures/new-world/terrain/lightmap.png?url";
 
 type ResourceType = {
   texture: Texture;
@@ -171,8 +171,8 @@ export const manifest = [
     flipY: false,
   },
   {
-    name: "lightmap",
-    url: lightmapUrl,
+    name: "shadowMap",
+    url: shadowMapUrl,
     type: "texture",
     flipY: false,
   },
