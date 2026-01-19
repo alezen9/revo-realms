@@ -25,6 +25,7 @@ export type Sizes = {
 };
 
 const ENABLE_CAP_FPS = true;
+const AUTO_HALF_FPS_THRESHOLD = 120; // Hz
 
 export default class Game {
   private player: Player;
@@ -62,7 +63,7 @@ export default class Game {
   private async updateRefreshRate() {
     if (!this.IS_CAP_FPS_ENABLED) return;
     const refreshRate = await Utils.getRefreshRate();
-    this.config.halvenFPS = refreshRate > 120;
+    this.config.halvenFPS = refreshRate > AUTO_HALF_FPS_THRESHOLD;
   }
 
   private onResize() {
@@ -89,7 +90,7 @@ export default class Game {
       state.delta = timeManager.update(pendingDelta);
       pendingDelta = 0;
       if (timeManager.isPaused) return;
-      physicsManager.update();
+      physicsManager.update(state.delta);
       if (import.meta.env.DEV) sceneManager.update();
       eventsManager.emit("engine-update", state);
       rendererManager.renderAsync();

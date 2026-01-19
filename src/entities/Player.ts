@@ -8,7 +8,15 @@ import {
   ActiveEvents,
 } from "@dimforge/rapier3d";
 import { type State } from "../Game";
-import { float, normalMap, positionWorld, texture, uv, vec3 } from "three/tsl";
+import {
+  float,
+  mix,
+  normalMap,
+  positionWorld,
+  texture,
+  uv,
+  vec3,
+} from "three/tsl";
 import { MeshLambertNodeMaterial } from "three/webgpu";
 import { RevoColliderType } from "../types";
 import { physicsManager, sceneManager, eventsManager } from "../systems";
@@ -35,17 +43,20 @@ const getConfig = () => {
   return {
     JUMP_BUFFER_DURATION_IN_SECONDS: 0.2,
     MAX_CONSECUTIVE_JUMPS: 2,
-    JUMP_CUT_MULTIPLIER: 0.25,
+    JUMP_CUT_MULTIPLIER: 0.15,
     FALL_MULTIPLIER: 2.75,
     MAX_UPWARD_VELOCITY: 6,
-    LINEAR_DAMPING: 0.35,
-    ANGULAR_DAMPING: 0.6,
+    LINEAR_DAMPING: 1.4,
+    ANGULAR_DAMPING: 1.2,
     JUMP_IMPULSE: new Vector3(0, jumpImpulse, 0),
-    LIN_VEL_STRENGTH: 35,
-    ANG_VEL_STRENGTH: 25,
+    LIN_VEL_STRENGTH: 70,
+    ANG_VEL_STRENGTH: 50,
     RADIUS: 0.5,
     MASS: 0.5,
-    PLAYER_INITIAL_POSITION: new Vector3(...POSITIONS.lake),
+    FRICTION: 1,
+    RESTITUTION: 0.6,
+    TURN_SPEED: 2, // radians/sec
+    PLAYER_INITIAL_POSITION: new Vector3(...POSITIONS.campfire),
     CAMERA_OFFSET: new Vector3(0, 16, 20),
     CAMERA_LERP_FACTOR: 7.5,
     UP: new Vector3(0, 1, 0),
@@ -84,6 +95,11 @@ export default class Player {
   private rayOrigin = new Vector3();
   private ray = new Ray(this.rayOrigin, config.DOWN);
 
+  private prevPosition = new Vector3();
+  private prevQuaternion = new Quaternion();
+  private targetPosition = new Vector3();
+  private targetQuaternion = new Quaternion();
+
   // Squash & stretch (visual only)
   // private ssCurrent = new Vector3(1, 1, 1); // current visual scale
   // private ssTarget = new Vector3(1, 1, 1); // target visual scale
@@ -104,6 +120,12 @@ export default class Player {
       this.rigidBody,
     );
 
+    // Initialize interpolation state
+    this.prevPosition.copy(this.rigidBody.translation());
+    this.prevQuaternion.copy(this.rigidBody.rotation());
+    this.targetPosition.copy(this.prevPosition);
+    this.targetQuaternion.copy(this.prevQuaternion);
+
     eventsManager.on("engine-update", this.update.bind(this));
     eventsManager.on(
       "engine-update-throttle-64x",
@@ -122,15 +144,39 @@ export default class Player {
   }
 
   private debugPlayer() {
-    const playerFolder = debugManager.panel.addFolder({
-      title: "🪩 Player",
+    const folder = debugManager.panel.addFolder({
+      title: "⚽️ Player",
       expanded: false,
     });
-    playerFolder.addBinding(config.CAMERA_OFFSET, "y", {
-      label: "Main camera height",
+    const physics = folder.addFolder({ title: "Physics" });
+    physics.addBinding(config, "LIN_VEL_STRENGTH", {
+      label: "Linear velocity",
+      min: 5,
+      max: 100,
     });
-    playerFolder.addBinding(config.CAMERA_OFFSET, "z", {
-      label: "Main camera distance",
+    physics.addBinding(config, "ANG_VEL_STRENGTH", {
+      label: "Angular velocity",
+      min: 5,
+      max: 100,
+    });
+    physics.addBinding(config, "ANGULAR_DAMPING", {
+      label: "Angular damping",
+      min: 0,
+      max: 5,
+    });
+    physics.addBinding(config, "FALL_MULTIPLIER", {
+      label: "Fall multiplier",
+      min: 0,
+      max: 10,
+    });
+
+    const camera = folder.addFolder({ title: "Camera" });
+
+    camera.addBinding(config.CAMERA_OFFSET, "y", {
+      label: "Camera height",
+    });
+    camera.addBinding(config.CAMERA_OFFSET, "z", {
+      label: "Camera distance",
     });
   }
 
@@ -155,8 +201,8 @@ export default class Player {
 
   private createColliderDesc() {
     return ColliderDesc.ball(config.RADIUS)
-      .setRestitution(0.6)
-      .setFriction(1)
+      .setRestitution(config.RESTITUTION)
+      .setFriction(config.FRICTION)
       .setMass(config.MASS)
       .setActiveEvents(ActiveEvents.COLLISION_EVENTS);
   }
@@ -300,9 +346,8 @@ export default class Player {
     const isLeftward = inputManager.isLeftward();
     const isRightward = inputManager.isRightward();
 
-    const turnSpeed = 2; // radians/sec
-    if (isLeftward) this.yawInRadians += turnSpeed * delta;
-    if (isRightward) this.yawInRadians -= turnSpeed * delta;
+    if (isLeftward) this.yawInRadians += config.TURN_SPEED * delta;
+    if (isRightward) this.yawInRadians -= config.TURN_SPEED * delta;
 
     this.forwardVec.copy(config.FORWARD).applyQuaternion(this.yawQuaternion);
 
@@ -330,8 +375,26 @@ export default class Player {
   }
 
   private syncMeshWithBody() {
-    this.mesh.position.copy(this.rigidBody.translation());
-    this.mesh.quaternion.copy(this.rigidBody.rotation());
+    // only update prev/target when physics actually stepped
+    if (physicsManager.didStep) {
+      this.prevPosition.copy(this.targetPosition);
+      this.prevQuaternion.copy(this.targetQuaternion);
+      this.targetPosition.copy(this.rigidBody.translation());
+      this.targetQuaternion.copy(this.rigidBody.rotation());
+    }
+
+    // interpolate for smooth rendering between physics steps
+    const alpha = physicsManager.alpha;
+    this.mesh.position.lerpVectors(
+      this.prevPosition,
+      this.targetPosition,
+      alpha,
+    );
+    this.mesh.quaternion.slerpQuaternions(
+      this.prevQuaternion,
+      this.targetQuaternion,
+      alpha,
+    );
   }
 
   private updateCameraPosition(delta: number) {
@@ -362,6 +425,10 @@ export default class Player {
   get yaw() {
     return this.yawInRadians;
   }
+
+  get radius() {
+    return config.RADIUS;
+  }
 }
 
 class PlayerMaterial extends MeshLambertNodeMaterial {
@@ -371,17 +438,17 @@ class PlayerMaterial extends MeshLambertNodeMaterial {
   }
 
   private createMaterial() {
+    this.precision = "lowp";
     this.flatShading = false;
 
     this.castShadowNode = vec3(0.6);
 
-    const lightmap = TSLUtils.sampleLightmap(positionWorld);
-    const light = lightmap.r.remap(0, 1, 0.35, 1);
     const baseColor = texture(assetManager.resources.playerDiffuse, uv()).mul(
       2,
     );
-
-    this.colorNode = baseColor.mul(light);
+    const bakedShadowFactor = TSLUtils.getBakedShadowFactor(positionWorld.xz);
+    const withShadow = mix(baseColor.mul(0.15), baseColor, bakedShadowFactor);
+    this.colorNode = withShadow;
 
     const normal = texture(assetManager.resources.playerNormal, uv());
     this.normalNode = normalMap(normal, float(3.5));

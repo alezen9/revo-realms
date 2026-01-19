@@ -1,10 +1,8 @@
 import {
   float,
-  Fn,
   mix,
   normalMap,
   positionWorld,
-  remap,
   smoothstep,
   texture,
   uniform,
@@ -172,10 +170,9 @@ class TerainMaterial extends MeshLambertNodeMaterial {
     const waterColor = waterBaseColor.add(causticsColor);
 
     const final = mix(terrainColor, waterColor, isWater);
-    const lightmap = TSLUtils.sampleLightmap(positionWorld);
-    const light = lightmap.r.remap(0, 1, 0.65, 1);
-
-    this.colorNode = final.mul(light);
+    const shadowFactor = TSLUtils.getBakedShadowFactor(positionWorld.xz);
+    const withShadow = mix(final.mul(0.5), final, shadowFactor);
+    this.colorNode = withShadow;
 
     // NORMAL
     const norAo = texture(assetManager.resources.terrainNormAo, vUv.mul(41.7));

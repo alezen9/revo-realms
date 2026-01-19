@@ -80,7 +80,11 @@ export class LakeSurface {
     });
 
     // Register wind target and link to landmark
-    const windTargetId = systemState.wind.registerTarget("Lake", lakeSurface.position, 90);
+    const windTargetId = systemState.wind.registerTarget(
+      "Lake",
+      lakeSurface.position,
+      90,
+    );
     landmarkManager.setWindTargetId(landmarkId, windTargetId);
 
     eventsManager.on("engine-loading-audio-progress", (p) => {

@@ -14,6 +14,7 @@ import {
   texture,
   int,
   EPSILON,
+  smoothstep,
 } from "three/tsl";
 import { realmConfig } from "../realm/RevoRealm";
 import { assetManager } from "../systems";
@@ -231,10 +232,39 @@ export class TSLUtils {
     },
   );
 
-  static sampleLightmap = Fn(([worldPos = vec3(0)]) => {
-    const _uv = this.computeMapUvByPosition(worldPos.xz);
-    return texture(assetManager.resources.lightmap, _uv);
+  static getBakedShadowFactor = Fn(([worldPosXZ = vec2(0)]) => {
+    const mapUv = this.computeMapUvByPosition(worldPosXZ).fract();
+    const shadow = texture(assetManager.resources.shadowMap, mapUv);
+    return shadow.r;
   });
+
+  static getPlayerShadowFactor = Fn(
+    ([
+      worldPos = vec3(0),
+      playerPos = vec3(0),
+      playerRadius = float(0.5),
+      sunDir = vec3(0),
+    ]) => {
+      // sunDir points FROM sun TO scene (e.g., normalized(-1,-1,-1))
+      // Find where player center projects onto plane at worldPos.y along sunDir
+      // playerPos + sunDir * t = shadowPoint, where shadowPoint.y = worldPos.y
+      // t = (worldPos.y - playerPos.y) / sunDir.y
+      const t = worldPos.y.sub(playerPos.y).div(sunDir.y.add(EPSILON));
+
+      // Shadow center XZ at grass height
+      const shadowX = playerPos.x.add(sunDir.x.mul(t));
+      const shadowZ = playerPos.z.add(sunDir.z.mul(t));
+
+      // Squared distance from grass to shadow center (XZ plane)
+      const dx = worldPos.x.sub(shadowX);
+      const dz = worldPos.z.sub(shadowZ);
+      const distSq = dx.mul(dx).add(dz.mul(dz));
+
+      // Soft shadow: 0 = full shadow, 1 = lit
+      const rSq = playerRadius.mul(playerRadius);
+      return smoothstep(rSq.mul(0.5), rSq.mul(2.0), distSq);
+    },
+  );
 
   // Inputs n1, n2 are tangent-space normals already unpacked to [-1..1] and normalized.
   // (If you sampled from texture, do: n = tex.rgb * 2 - 1; normalize(n);)

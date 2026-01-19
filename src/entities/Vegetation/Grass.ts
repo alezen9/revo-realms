@@ -32,19 +32,20 @@ import {
   remap,
   fract,
   INFINITY,
-  positionWorld,
 } from "three/tsl";
 import {
   assetManager,
   sceneManager,
   rendererManager,
   debugManager,
+  lightingManager,
 } from "../../systems";
 import { TSLUtils } from "../../utils/TSLUtils";
 import { gameTime } from "../../utils/GameTime";
 import { SpriteNodeMaterial } from "three/webgpu";
 import { systemState, eventsManager } from "../../systems";
 import { VegetationSsboUtils } from "./ssboUtils";
+import { LightingManager } from "../../systems/LightingManager";
 
 const getConfig = () => {
   const BLADE_WIDTH = 0.06;
@@ -61,7 +62,7 @@ const getConfig = () => {
     BLADES_PER_SIDE,
     COUNT: BLADES_PER_SIDE * BLADES_PER_SIDE,
     SPACING: TILE_SIZE / BLADES_PER_SIDE,
-    WORKGROUP_SIZE: 256,
+    WORKGROUP_SIZE: 64,
   };
 };
 
@@ -78,7 +79,9 @@ const uniforms = {
   // other
   uPlayerPosition: uniform(new Vector3(0, 0, 0)),
   uPlayerDeltaXZ: uniform(new Vector2(0, 0)),
+  uPlayerRadius: uniform(0.5),
   uCameraForward: uniform(new Vector3(0, 0, 0)),
+  uSunDir: uniform(new Vector3(0)),
   // Scale
   uBladeMinScale: uniform(0.75),
   uBladeMaxScale: uniform(2),
@@ -116,9 +119,9 @@ class GrassSsbo {
   // x -> offsetX (0 unused)
   // y -> offsetZ (0 unused)
   // z -> 0/12 windX - 12/12 windZ (0 unused)
-  // w -> 0/8 current scale - 8/8 original scale - 16/1 UNUSED - 17/1 visibility - 18/6 wind noise factor (1 unused)
+  // w -> 0/8 current scale - 8/8 original scale - 16/1 shadow - 17/1 visibility - 18/6 wind noise factor (1 unused)
   private buffer1: ReturnType<typeof instancedArray>;
-  // x -> 0/4 position based noise - 4/20 offsetY (0 unused)
+  // x -> 0/4 position based noise - 4/1 is far - 5/19 offsetY (0 unused)
   private buffer2: ReturnType<typeof instancedArray>;
 
   constructor() {
@@ -140,8 +143,8 @@ class GrassSsbo {
   getYOffset = Fn(([data = float(0)]) => {
     return TSLUtils.unpackUnits(
       data,
-      4,
-      20,
+      5,
+      19,
       0,
       Math.ceil(assetManager.resources.heightmap.userData.max),
     );
@@ -185,11 +188,19 @@ class GrassSsbo {
     return TSLUtils.unpackUnit(data, 0, 4);
   });
 
+  getShadowFactor = Fn(([data = vec4(0)]) => {
+    return TSLUtils.unpackFlag(data.w, 16);
+  });
+
+  getIsFar = Fn(([data = float(0)]) => {
+    return TSLUtils.unpackFlag(data, 4);
+  });
+
   private setYOffset = Fn(([data = float(0), value = float(0)]) => {
     return TSLUtils.packUnits(
       data,
-      4,
-      20,
+      5,
+      19,
       value,
       0,
       Math.ceil(assetManager.resources.heightmap.userData.max),
@@ -238,6 +249,15 @@ class GrassSsbo {
 
   private setPositionNoise = Fn(([data = float(0), value = float(0)]) => {
     return TSLUtils.packUnit(data, 0, 4, value);
+  });
+
+  private setShadowFactor = Fn(([data = vec4(0), value = float(0)]) => {
+    data.w = TSLUtils.packFlag(data.w, 16, value);
+    return data;
+  });
+
+  private setIsFar = Fn(([data = float(0), value = float(0)]) => {
+    return TSLUtils.packFlag(data, 4, value);
   });
 
   private computeInit = Fn(() => {
@@ -354,8 +374,34 @@ class GrassSsbo {
     },
   );
 
+  private computeShadowFactor = Fn(
+    ([grassWorldPos = vec3(0), playerPos = vec3(0)]) => {
+      // Baked shadow from lightmap
+      const bakedShadow = TSLUtils.getBakedShadowFactor(grassWorldPos.xz);
+
+      // Player shadow with smooth intensity based on height above grass
+      const playerBottomY = playerPos.y.sub(uniforms.uPlayerRadius);
+      const heightAboveGrass = playerBottomY.sub(grassWorldPos.y);
+
+      // Smooth transition: softer when grounded, stronger when jumping
+      const shadowStrength = smoothstep(0, 2, heightAboveGrass);
+
+      const playerShadow = TSLUtils.getPlayerShadowFactor(
+        grassWorldPos,
+        playerPos,
+        uniforms.uPlayerRadius,
+        uniforms.uSunDir,
+      );
+
+      // Blend shadow intensity based on player height
+      const effectivePlayerShadow = mix(float(1), playerShadow, shadowStrength);
+      return step(0.5, bakedShadow).mul(effectivePlayerShadow);
+    },
+  );
+
   computeUpdate = Fn(() => {
     const data1 = this.buffer1.element(instanceIndex);
+    const data2 = this.buffer2.element(instanceIndex);
 
     // Position
     const pos = VegetationSsboUtils.wrapPosition(
@@ -388,11 +434,11 @@ class GrassSsbo {
       uniforms.uCullPadNDCYFar,
     ).mul(stochasticKeep);
     data1.assign(this.setVisibility(data1, isVisible));
+    data1.assign(this.setShadowFactor(data1, 1));
+    data2.assign(this.setIsFar(data2, 0));
 
     // Soft culling
     If(isVisible, () => {
-      const data2 = this.buffer2.element(instanceIndex);
-
       // Alpha
       const alpha = VegetationSsboUtils.computeAlpha(worldPos);
       data1.assign(this.setVisibility(data1, alpha));
@@ -404,6 +450,7 @@ class GrassSsbo {
       // Compute distance to player
       const diff = worldPos.xz.sub(uniforms.uPlayerPosition.xz);
       const distSq = diff.dot(diff);
+      data2.assign(this.setIsFar(data2, distSq.lessThan(100).toFloat()));
 
       // Check if the player is on the ground
       const isPlayerGrounded = step(
@@ -433,6 +480,14 @@ class GrassSsbo {
       const newWind = this.computeWind(prevWind, worldPos, positionNoise);
       data1.assign(this.setWind(data1, newWind.xy)); // Wind displacement
       data1.assign(this.setWindNoise(data1, newWind.z)); // Noise factor
+
+      // Shadow factor (baked + player projected)
+      const grassWorldPos = vec3(worldPos.x, yOffset, worldPos.z);
+      const shadowFactor = this.computeShadowFactor(
+        grassWorldPos,
+        uniforms.uPlayerPosition,
+      );
+      data1.assign(this.setShadowFactor(data1, shadowFactor));
     });
   })().compute(config.COUNT, [config.WORKGROUP_SIZE]);
 }
@@ -462,6 +517,8 @@ class GrassMaterial extends SpriteNodeMaterial {
     const isVisible = this.ssbo.getVisibility(data1);
     const windNoiseFactor = this.ssbo.getWindNoise(data1);
     const positionNoise = this.ssbo.getPositionNoise(data2);
+    const bakedShadowFactor = this.ssbo.getShadowFactor(data1);
+    const isFar = this.ssbo.getIsFar(data2);
 
     // OPACITY
     this.opacityNode = isVisible;
@@ -549,9 +606,8 @@ class GrassMaterial extends SpriteNodeMaterial {
       baseMask.mul(smoothstep(0.0, 1.0, swayFactor)),
     );
 
-    const shadow = TSLUtils.sampleLightmap(positionWorld).r;
-
-    const withShadow = mix(baseToTip.mul(0.5), baseToTip, shadow);
+    // bakedShadowFactor from SSBO now includes player shadow
+    const withShadow = mix(baseToTip.mul(0.5), baseToTip, bakedShadowFactor);
     this.colorNode = withShadow.mul(windAo).mul(ao);
 
     // const normal = vec3(instanceNoise, baseBending, instanceNoise).normalize();
@@ -569,6 +625,7 @@ class GrassMaterial extends SpriteNodeMaterial {
 
 export default class Grass {
   constructor() {
+    uniforms.uSunDir.value.copy(lightingManager.sunDirection);
     const ssbo = new GrassSsbo();
     const geometry = this.createGeometry(config.SEGMENTS);
     const material = new GrassMaterial(ssbo);
@@ -581,6 +638,7 @@ export default class Grass {
       const dz = player.position.z - grass.position.z;
       uniforms.uPlayerDeltaXZ.value.set(dx, dz);
       uniforms.uPlayerPosition.value.copy(player.position);
+      uniforms.uPlayerRadius.value = player.radius;
       const proj = sceneManager.playerCamera.projectionMatrix;
       uniforms.uFx.value = proj.elements[0];
       uniforms.uFy.value = proj.elements[5];

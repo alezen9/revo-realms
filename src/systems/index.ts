@@ -20,8 +20,12 @@ const init = () => {
   const debugManager = new DebugManager();
   const rendererManager = new RendererManager(debugManager, eventsManager);
   const inputManager = new InputManager();
-  const physicsManager = new PhysicsManager(eventsManager);
-  const timeManager = new TimeManager(eventsManager, inputManager, debugManager);
+  const physicsManager = new PhysicsManager(eventsManager, sceneManager);
+  const timeManager = new TimeManager(
+    eventsManager,
+    inputManager,
+    debugManager,
+  );
   const uiManager = new UIManager();
   const landmarkManager = new LandmarkManager(eventsManager);
   const systemState = new SystemState(debugManager, eventsManager);

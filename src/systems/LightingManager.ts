@@ -6,8 +6,7 @@ import {
   Object3D,
   Vector3,
 } from "three";
-import { Fn, texture, vec2 } from "three/tsl";
-import { assetManager } from ".";
+import { uniform } from "three/tsl";
 import { type SceneManager } from "./SceneManager";
 import { type DebugManager } from "./DebugManager";
 import { type EventsManager } from "./EventsManager";
@@ -32,9 +31,7 @@ const config = {
 
 export class LightingManager {
   private directionalLight: DirectionalLight;
-  // private ambientLight: AmbientLight;
   private hemisphereLight: HemisphereLight;
-  // emissive = new EmissiveIllumination();
   private fog: FogExp2;
 
   sunDirection = config.LIGHT_POSITION_OFFSET.clone().normalize().negate();
@@ -44,13 +41,8 @@ export class LightingManager {
     debugManager: DebugManager,
     eventsManager: EventsManager,
   ) {
-    // this.emissive = new EmissiveIllumination();
-
     this.directionalLight = this.setupDirectionalLighting();
     sceneManager.scene.add(this.directionalLight);
-
-    // this.ambientLight = this.setupAmbientLighting();
-    // sceneManager.scene.add(this.ambientLight);
 
     this.hemisphereLight = this.setupHemisphereLight();
     sceneManager.scene.add(this.hemisphereLight);
@@ -62,7 +54,7 @@ export class LightingManager {
       sceneManager.scene.fog = sceneManager.scene.fog ? null : this.fog;
     });
 
-    eventsManager.on("engine-update", ({ player }) => {
+    eventsManager.on("engine-update-throttle-4x", ({ player }) => {
       this.directionalLight.position
         .copy(player.position)
         .add(config.LIGHT_POSITION_OFFSET);
@@ -74,13 +66,6 @@ export class LightingManager {
   get sunColor() {
     return this.directionalLight.color;
   }
-
-  // private setupAmbientLighting() {
-  //   const ambientLight = new AmbientLight();
-  //   ambientLight.intensity = 0.27;
-  //   ambientLight.color.setRGB(1.0, 0.95, 0.6);
-  //   return ambientLight;
-  // }
 
   private setupHemisphereLight() {
     const hemiLight = new HemisphereLight();
@@ -122,14 +107,6 @@ export class LightingManager {
     const fog = new FogExp2(config.fogColor, config.fogDensity);
     return fog;
   }
-
-  getTerrainShadowFactor = Fn(([mapUv = vec2(0)]) => {
-    const shadowAo = texture(
-      assetManager.resources.terrainShadowAoTexture,
-      mapUv,
-    );
-    return shadowAo.r;
-  });
 
   private debugLight(debugManager: DebugManager, sceneManager: SceneManager) {
     const lightFolder = debugManager.panel.addFolder({ title: "💡 Light" });
