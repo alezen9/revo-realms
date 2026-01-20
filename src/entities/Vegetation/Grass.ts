@@ -43,7 +43,7 @@ import {
 import { TSLUtils } from "../../utils/TSLUtils";
 import { gameTime } from "../../utils/GameTime";
 import { SpriteNodeMaterial } from "three/webgpu";
-import { systemState, eventsManager } from "../../systems";
+import { windManager, eventsManager } from "../../systems";
 import { VegetationSsboUtils } from "./ssboUtils";
 import { LightingManager } from "../../systems/LightingManager";
 
@@ -305,12 +305,8 @@ class GrassSsbo {
 
   private computeWind = Fn(
     ([prevWindXZ = vec2(0), worldPos = vec3(0), positionNoise = float(0)]) => {
-      const dir = systemState.wind.uDirection.negate();
-      const strength = mix(
-        uniforms.uWindStrength,
-        1.5,
-        systemState.wind.uIntensity,
-      );
+      const dir = windManager.uDirection.negate();
+      const strength = mix(uniforms.uWindStrength, 1.5, windManager.uIntensity);
 
       // --- gentle per-instance speed jitter (±10 %)
       const speed = uniforms.uWindSpeed.mul(
@@ -552,7 +548,7 @@ class GrassMaterial extends SpriteNodeMaterial {
     const swayFactor = uv().y.mul(windNoiseFactor);
     const swayOffset = swayAmount.mul(swayFactor);
     // flutter offset
-    const dirXZ = systemState.wind.uDirection;
+    const dirXZ = windManager.uDirection;
     const perp = vec2(dirXZ.y.negate(), dirXZ.x);
     const phase = hash(instanceIndex).mul(PI2);
     const flutter = sin(
@@ -562,10 +558,7 @@ class GrassMaterial extends SpriteNodeMaterial {
       .mul(bendProfile);
     const flutterOffset = vec3(perp.x, 0.0, perp.y).mul(flutter);
     // wind offset
-    const windY = float(1)
-      .sub(h.mul(h))
-      .mul(systemState.wind.uIntensity)
-      .mul(0.25);
+    const windY = float(1).sub(h.mul(h)).mul(windManager.uIntensity).mul(0.25);
     const windOffset = vec3(windXZ.x, windY, windXZ.y).mul(bendProfile);
 
     const pos = bladePosition

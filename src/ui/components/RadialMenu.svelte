@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from "svelte"
-	import { eventsManager, landmarkManager, systemState } from "../../systems"
+	import { eventsManager, landmarkManager, windManager } from "../../systems"
 	import type { Landmark } from "../../systems/LandmarkManager"
 
 	let isVisible = $state(false)
@@ -27,7 +27,7 @@
 		const outerGapRad = toRad(gapAngleDeg)
 		const innerGapRad = Math.min(
 			(outerGapRad * outerRadius) / innerRadius,
-			Math.max(slotAngleRad - 0.02, 0)
+			Math.max(slotAngleRad - 0.02, 0),
 		)
 
 		return items.map((landmark, index) => {
@@ -61,9 +61,9 @@
 	let selectedId = $derived(
 		activeWindTargetId
 			? (landmarks.find(
-					landmark => landmark.windTargetId === activeWindTargetId
+					landmark => landmark.windTargetId === activeWindTargetId,
 				)?.id ?? null)
-			: null
+			: null,
 	)
 	let menuVisible = $derived(isVisible && slots.length > 0)
 	let lastVisibility = false
@@ -71,13 +71,13 @@
 	const getFocusableSlots = () =>
 		Array.from(
 			menuEl?.querySelectorAll<SVGGElement>(
-				".radial-menu__slot[tabindex='0']"
-			) ?? []
+				".radial-menu__slot[tabindex='0']",
+			) ?? [],
 		)
 
 	const handleSlotClick = (landmark: Landmark) => {
 		if (!landmark.hasBeenDiscovered || !landmark.windTargetId) return
-		systemState.wind.activateTargetById(landmark.windTargetId)
+		windManager.activateTargetById(landmark.windTargetId)
 		eventsManager.emit("landmark-selected", landmark.id)
 	}
 
@@ -89,7 +89,7 @@
 			"wind-target-change",
 			(targetId: string | null) => {
 				activeWindTargetId = targetId
-			}
+			},
 		)
 		const handleKeyDown = (event: KeyboardEvent) => {
 			if (event.code === "KeyL" && !event.repeat) {
@@ -106,7 +106,7 @@
 				const focusable = getFocusableSlots()
 				if (!focusable.length) return
 				const currentIndex = focusable.indexOf(
-					document.activeElement as SVGGElement
+					document.activeElement as SVGGElement,
 				)
 				const direction = event.shiftKey ? -1 : 1
 				const nextIndex =
@@ -130,7 +130,7 @@
 		window.addEventListener("pointerdown", handlePointerDown)
 
 		landmarks = landmarkManager.getAll()
-		activeWindTargetId = systemState.wind.activeTargetId
+		activeWindTargetId = windManager.activeTargetId
 
 		return () => {
 			unsubscribeDiscovery()

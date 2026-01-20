@@ -49,7 +49,7 @@ import {
   assetManager,
   rendererManager,
   sceneManager,
-  systemState,
+  windManager,
   eventsManager,
 } from "../../../systems";
 
@@ -314,8 +314,8 @@ class GrassSsbo {
 
   private computeWind = Fn(
     ([prevWindXZ = vec2(0), worldPos = vec3(0), positionNoise = float(0)]) => {
-      const intensity = smoothstep(0.2, 0.5, systemState.wind.uIntensity);
-      const dir = systemState.wind.uDirection.negate();
+      const intensity = smoothstep(0.2, 0.5, windManager.uIntensity);
+      const dir = windManager.uDirection.negate();
       const strength = uniforms.uWindStrength.add(intensity);
 
       // --- gentle per-instance speed jitter (±10 %)
@@ -509,7 +509,7 @@ class GrassMaterial extends SpriteNodeMaterial {
     const swayFactor = uv().y.mul(windNoiseFactor);
     const swayOffset = swayAmount.mul(swayFactor);
     // flutter offset
-    const dirXZ = systemState.wind.uDirection;
+    const dirXZ = windManager.uDirection;
     const perp = vec2(dirXZ.y.negate(), dirXZ.x);
     const phase = hash(instanceIndex).mul(PI2);
     const flutter = sin(

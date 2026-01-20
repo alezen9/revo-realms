@@ -8,9 +8,9 @@ import { LightingManager } from "./LightingManager";
 import { PhysicsManager } from "./PhysicsManager";
 import { RendererManager } from "./RendererManager/RendererManager";
 import { SceneManager } from "./SceneManager";
-import { SystemState } from "./SystemState/SystemState";
 import { UIManager } from "./UIManager";
 import { TimeManager } from "./TimeManager";
+import { WindManager } from "./WindManager";
 
 const init = () => {
   const assetManager = new AssetManager();
@@ -28,12 +28,12 @@ const init = () => {
   );
   const uiManager = new UIManager();
   const landmarkManager = new LandmarkManager(eventsManager);
-  const systemState = new SystemState(debugManager, eventsManager);
   const lightingManager = new LightingManager(
     sceneManager,
     debugManager,
     eventsManager,
   );
+  const windManager = new WindManager(eventsManager);
   return {
     eventsManager,
     lightingManager,
@@ -47,7 +47,7 @@ const init = () => {
     timeManager,
     uiManager,
     landmarkManager,
-    systemState,
+    windManager,
   };
 };
 
@@ -64,5 +64,5 @@ export const {
   timeManager,
   uiManager,
   landmarkManager,
-  systemState,
+  windManager,
 } = init();

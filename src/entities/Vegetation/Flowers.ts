@@ -32,7 +32,7 @@ import {
   rendererManager,
   sceneManager,
   eventsManager,
-  systemState,
+  windManager,
   debugManager,
 } from "../../systems";
 import { VegetationSsboUtils } from "./ssboUtils";
@@ -300,8 +300,8 @@ class FlowerMaterial extends SpriteNodeMaterial {
     const rand2 = hash(instanceIndex.add(33.87));
 
     // Position
-    const windIntensity = systemState.wind.uIntensity;
-    const windDirection = systemState.wind.uDirection;
+    const windIntensity = windManager.uIntensity;
+    const windDirection = windManager.uDirection;
     const timer = gameTime.add(
       gameDeltaTime.mul(float(2).add(windIntensity.mul(0.25))),
     );
