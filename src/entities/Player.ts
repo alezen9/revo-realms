@@ -48,6 +48,14 @@ const getConfig = () => {
     MAX_UPWARD_VELOCITY: 6,
     LINEAR_DAMPING: 1.4,
     ANGULAR_DAMPING: 1.2,
+    // Water physics
+    WATER_SURFACE_Y: -0.5,
+    WATER_DAMPING_LINEAR: 5.0,
+    WATER_DAMPING_ANGULAR: 3.5,
+    WATER_MOVEMENT_MULTIPLIER: 0.5,
+    BUOYANCY_FORCE: 7.25,
+    WATER_VERTICAL_DAMPING: 0.5,
+    WATER_BOB_SUBMERGED_STRENGTH: 2.5,
     JUMP_IMPULSE: new Vector3(0, jumpImpulse, 0),
     LIN_VEL_STRENGTH: 70,
     ANG_VEL_STRENGTH: 50,
@@ -56,13 +64,18 @@ const getConfig = () => {
     FRICTION: 1,
     RESTITUTION: 0.6,
     TURN_SPEED: 2, // radians/sec
-    PLAYER_INITIAL_POSITION: new Vector3(...POSITIONS.campfire),
+    PLAYER_INITIAL_POSITION: new Vector3(...POSITIONS.lake),
     CAMERA_OFFSET: new Vector3(0, 16, 20),
     CAMERA_LERP_FACTOR: 7.5,
     UP: new Vector3(0, 1, 0),
     DOWN: new Vector3(0, -1, 0),
     FORWARD: new Vector3(0, 0, -1),
     RESET_Y: -15,
+    // Game feel
+    FOV_BASE: 45,
+    FOV_MAX: 50,
+    FOV_SPEED_THRESHOLD: 5,
+    FOV_LERP: 3,
   };
 };
 
@@ -92,6 +105,13 @@ export default class Player {
   private wasJumpHeld = false;
   private jumpBufferTimer = 0;
 
+  // Water state
+  private isInWater = false;
+  private waterData: Uint8ClampedArray | null = null;
+  private waterMapWidth = 0;
+  private waterMapHeight = 0;
+  private waterTime = 0;
+
   private rayOrigin = new Vector3();
   private ray = new Ray(this.rayOrigin, config.DOWN);
 
@@ -100,11 +120,8 @@ export default class Player {
   private targetPosition = new Vector3();
   private targetQuaternion = new Quaternion();
 
-  // Squash & stretch (visual only)
-  // private ssCurrent = new Vector3(1, 1, 1); // current visual scale
-  // private ssTarget = new Vector3(1, 1, 1); // target visual scale
-  // private wasOnGround = false; // landing detection
-  // private prevVelY = 0; // impact speed measure
+  // Game feel state
+  // private currentFov = config.FOV_BASE;
 
   constructor() {
     this.mesh = this.createCharacterMesh();
@@ -131,6 +148,7 @@ export default class Player {
       "engine-update-throttle-64x",
       this.resetPlayerPosition.bind(this),
     );
+    this.initWaterDetection();
     this.debugPlayer();
   }
 
@@ -171,13 +189,98 @@ export default class Player {
     });
 
     const camera = folder.addFolder({ title: "Camera" });
-
     camera.addBinding(config.CAMERA_OFFSET, "y", {
       label: "Camera height",
     });
     camera.addBinding(config.CAMERA_OFFSET, "z", {
       label: "Camera distance",
     });
+
+    const water = folder.addFolder({ title: "Water" });
+    water.addBinding(config, "BUOYANCY_FORCE", {
+      label: "Buoyancy",
+      min: 1,
+      max: 20,
+    });
+    water.addBinding(config, "WATER_VERTICAL_DAMPING", {
+      label: "Vertical damp",
+      min: 0,
+      max: 10,
+    });
+    water.addBinding(config, "WATER_BOB_SUBMERGED_STRENGTH", {
+      label: "Bob strength",
+      min: 0,
+      max: 10,
+    });
+
+    // const feel = folder.addFolder({ title: "Game Feel" });
+    // feel.addBinding(config, "FOV_BASE", {
+    //   label: "FOV base",
+    //   min: 40,
+    //   max: 70,
+    // });
+    // feel.addBinding(config, "FOV_MAX", { label: "FOV max", min: 50, max: 90 });
+  }
+
+  private initWaterDetection() {
+    const tex = assetManager.resources.waterMap;
+    if (!tex?.image) return;
+    try {
+      const canvas = document.createElement("canvas");
+      const ctx = canvas.getContext("2d")!;
+      canvas.width = tex.image.width;
+      canvas.height = tex.image.height;
+      ctx.drawImage(tex.image, 0, 0);
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      this.waterData = imageData.data;
+      this.waterMapWidth = canvas.width;
+      this.waterMapHeight = canvas.height;
+    } catch {
+      // Water detection unavailable
+    }
+  }
+
+  private checkIfInWater(): boolean {
+    if (!this.waterData) return false;
+    const pos = this.rigidBody.translation();
+    if (pos.y - config.RADIUS > config.WATER_SURFACE_Y) return false;
+
+    const u = (pos.x + 256) / 512;
+    const v = (pos.z + 256) / 512;
+    const px = Math.floor(u * this.waterMapWidth);
+    const py = Math.floor(v * this.waterMapHeight);
+    const idx = (py * this.waterMapWidth + px) * 4;
+    return this.waterData[idx] > 128;
+  }
+
+  private applyWaterPhysics(delta: number) {
+    this.waterTime += delta;
+
+    const pos = this.rigidBody.translation();
+    const vel = this.rigidBody.linvel();
+    const submergedDepth = config.WATER_SURFACE_Y - (pos.y - config.RADIUS);
+
+    if (submergedDepth <= 0) {
+      this.waterTime = 0;
+      return;
+    }
+
+    const submersionRatio = Math.min(submergedDepth, 1);
+    const edgeFade = Math.min(submergedDepth * 2, 1);
+
+    const buoyancy = submersionRatio * config.BUOYANCY_FORCE * edgeFade;
+    const verticalDamping = vel.y * -config.WATER_VERTICAL_DAMPING * edgeFade;
+
+    // Simple harmonic bob (1 sin instead of 4)
+    const bob =
+      Math.sin(this.waterTime * 4) *
+      config.WATER_BOB_SUBMERGED_STRENGTH *
+      edgeFade;
+
+    this.rigidBody.applyImpulse(
+      { x: 0, y: (buoyancy + verticalDamping + bob) * delta, z: 0 },
+      true,
+    );
   }
 
   private createCharacterMesh() {
@@ -207,55 +310,44 @@ export default class Player {
       .setActiveEvents(ActiveEvents.COLLISION_EVENTS);
   }
 
-  // private updateSquashStretch(delta: number) {
+  // private updateGameFeel(delta: number) {
   //   const vel = this.rigidBody.linvel();
-  //   const upward = Math.max(0, vel.y); // upward speed only
-  //   const maxUp = Math.max(0.0001, config.MAX_UPWARD_VELOCITY);
 
-  //   // --- Base target is neutral ---
-  //   this.ssTarget.set(1, 1, 1);
-
-  //   // --- Stretch while rising ---
-  //   // up to ~+20% on Y and ~-10% on XZ at peak upward speed
-  //   const riseT = Math.min(1, upward / maxUp);
-  //   if (riseT > 0) {
-  //     const yStretch = 1 + 0.4 * riseT;
-  //     const xzSquish = 1 - 0.2 * riseT;
-  //     this.ssTarget.set(xzSquish, yStretch, xzSquish);
-  //   }
-
-  //   // --- Squash on landing (first grounded frame) ---
-  //   if (!this.wasOnGround && this.isOnGround) {
-  //     // impact magnitude; tweak divisor to taste (larger = less squash)
-  //     const impact = Math.min(1, Math.abs(this.prevVelY) / 10);
-  //     // up to ~35% squash at big impacts
-  //     const squash = 0.35 * impact;
-
-  //     // Ensure landing squash “wins” this frame if stronger than rise stretch
-  //     const xz = Math.max(this.ssTarget.x, 1 + squash);
-  //     const y = Math.min(this.ssTarget.y, 1 - squash);
-  //     this.ssTarget.set(xz, y, xz);
-  //   }
-
-  //   // --- Ease current toward target (fast) ---
-  //   // quick response so it feels springy/snappy
-  //   const toTargetLerp = 10 * delta; // ~critically damped feel
-  //   this.ssCurrent.lerp(this.ssTarget, toTargetLerp);
-
-  //   // --- Gentle return to neutral over time ---
-  //   const backToOneLerp = 2 * delta;
-  //   this.ssCurrent.lerp(new Vector3(1, 1, 1), backToOneLerp);
-
-  //   // --- Apply scale to the mesh ---
-  //   this.mesh.scale.copy(this.ssCurrent);
-
-  //   // Save previous frame state for landing detection
-  //   this.wasOnGround = this.isOnGround;
-  //   this.prevVelY = vel.y;
+  //   // FOV based on speed
+  //   const speed = Math.sqrt(vel.x * vel.x + vel.z * vel.z);
+  //   const speedT = MathUtils.clamp(
+  //     (speed - config.FOV_SPEED_THRESHOLD) / config.FOV_SPEED_THRESHOLD,
+  //     0,
+  //     1,
+  //   );
+  //   const targetFov = MathUtils.lerp(config.FOV_BASE, config.FOV_MAX, speedT);
+  //   this.currentFov = MathUtils.lerp(
+  //     this.currentFov,
+  //     targetFov,
+  //     config.FOV_LERP * delta,
+  //   );
+  //   sceneManager.playerCamera.fov = this.currentFov;
+  //   sceneManager.playerCamera.updateProjectionMatrix();
   // }
 
   private update(state: State) {
     const { delta } = state;
+
+    // Water state detection
+    const wasInWater = this.isInWater;
+    this.isInWater = this.checkIfInWater();
+
+    // Switch damping on water entry/exit
+    if (this.isInWater !== wasInWater) {
+      this.rigidBody.setLinearDamping(
+        this.isInWater ? config.WATER_DAMPING_LINEAR : config.LINEAR_DAMPING,
+      );
+      this.rigidBody.setAngularDamping(
+        this.isInWater ? config.WATER_DAMPING_ANGULAR : config.ANGULAR_DAMPING,
+      );
+    }
+
+    if (this.isInWater) this.applyWaterPhysics(delta);
 
     if (this.prevYawInRadians !== this.yawInRadians) {
       this.yawQuaternion.setFromAxisAngle(config.UP, this.yawInRadians);
@@ -264,8 +356,8 @@ export default class Player {
 
     this.updateVerticalMovement(delta);
     this.updateHorizontalMovement(delta);
+    // this.updateGameFeel(delta);
     this.updateCameraPosition(delta);
-    // this.updateSquashStretch(delta);
   }
 
   private updateVerticalMovement(delta: number) {
@@ -291,12 +383,14 @@ export default class Player {
       this.jumpBufferTimer = 0;
     }
 
-    // 4) Mid-air logic (jump cut, fast fall, clamp)
-    const velocity = this.rigidBody.linvel();
-    this.handleJumpCut(isJumpKeyPressed, velocity);
-    this.handleFastFall(delta, velocity, physicsManager.world.gravity.y);
-    this.clampUpwardVelocity(velocity);
-    this.rigidBody.setLinvel(velocity, true);
+    // 4) Mid-air logic (jump cut, fast fall, clamp) - skip in water
+    if (!this.isInWater) {
+      const velocity = this.rigidBody.linvel();
+      this.handleJumpCut(isJumpKeyPressed, velocity);
+      this.handleFastFall(delta, velocity, physicsManager.world.gravity.y);
+      this.clampUpwardVelocity(velocity);
+      this.rigidBody.setLinvel(velocity, true);
+    }
 
     // 5) Save jump key state
     this.wasJumpHeld = isJumpKeyPressed;
@@ -314,6 +408,7 @@ export default class Player {
   }
 
   private canJump(): boolean {
+    if (this.isInWater) return false;
     if (this.isOnGround) return true;
     return this.jumpCount < config.MAX_CONSECUTIVE_JUMPS;
   }
@@ -356,8 +451,9 @@ export default class Player {
     this.newLinVel.copy(this.rigidBody.linvel());
     this.newAngVel.copy(this.rigidBody.angvel());
 
-    const linVelScale = config.LIN_VEL_STRENGTH * delta;
-    const angVelScale = config.ANG_VEL_STRENGTH * delta;
+    const waterMult = this.isInWater ? config.WATER_MOVEMENT_MULTIPLIER : 1;
+    const linVelScale = config.LIN_VEL_STRENGTH * delta * waterMult;
+    const angVelScale = config.ANG_VEL_STRENGTH * delta * waterMult;
 
     if (isForward) {
       this.newLinVel.addScaledVector(this.forwardVec, linVelScale);
