@@ -2,9 +2,9 @@ import { ConeGeometry, Mesh, Vector2, Vector3 } from "three";
 import { atan, positionLocal, rotate, uniform, vec3 } from "three/tsl";
 import { FolderApi } from "tweakpane";
 import { MeshLambertNodeMaterial } from "three/webgpu";
-import { eventsManager, sceneManager, uiManager } from "..";
-import { type State } from "../../Game";
-import type { EventsManager } from "../EventsManager";
+import { eventsManager, sceneManager } from ".";
+import { type State } from "../Game";
+import type { EventsManager } from "./EventsManager";
 
 type WindTarget = {
   id: string;
@@ -17,7 +17,7 @@ type Phase = "idle" | "direction" | "start" | "ramp" | "hold" | "end" | "decay";
 
 const ENABLE_DEBUGGING = false;
 
-export class WindStateTsushima {
+export class WindManager {
   private readonly IS_DEBUGGING_ENABLED =
     import.meta.env.DEV && ENABLE_DEBUGGING;
 
@@ -37,18 +37,13 @@ export class WindStateTsushima {
   private target?: WindTarget;
   private targetPositionXZ = new Vector2(0, 0);
 
-  // debug
-  private folder: FolderApi;
-
   private playerPositionXZ = new Vector2(0, 0);
   private toTargetDir = new Vector2(0, 0);
 
   private HOLD_INTENSITY_TIME_S = 3;
   private accTimer = 0;
 
-  constructor(folder: FolderApi, eventsManager: EventsManager) {
-    this.folder = folder.addFolder({ title: "Wind" });
-
+  constructor(eventsManager: EventsManager) {
     this.IS_DEBUGGING_ENABLED && this.debug(eventsManager);
 
     eventsManager.on("swipe-up", this.handleSwipeUp.bind(this));

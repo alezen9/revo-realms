@@ -33,9 +33,9 @@ import {
   rendererManager,
   debugManager,
   sceneManager,
-  systemState,
   eventsManager,
   landmarkManager,
+  windManager,
 } from "../systems";
 
 export class LakeSurface {
@@ -80,7 +80,7 @@ export class LakeSurface {
     });
 
     // Register wind target and link to landmark
-    const windTargetId = systemState.wind.registerTarget(
+    const windTargetId = windManager.registerTarget(
       "Lake",
       lakeSurface.position,
       90,

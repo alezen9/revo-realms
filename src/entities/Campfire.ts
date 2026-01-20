@@ -6,9 +6,8 @@ import {
   assetManager,
   sceneManager,
   physicsManager,
-  debugManager,
   landmarkManager,
-  systemState,
+  windManager,
 } from "../systems";
 import { MeshStandardNodeMaterial } from "three/webgpu";
 import { normalMap, texture, uv } from "three/tsl";
@@ -71,7 +70,11 @@ export class Campfire {
     });
 
     // Register wind target and link to landmark
-    const windTargetId = systemState.wind.registerTarget("Campfire", campfire.position, 15);
+    const windTargetId = windManager.registerTarget(
+      "Campfire",
+      campfire.position,
+      15,
+    );
     landmarkManager.setWindTargetId(landmarkId, windTargetId);
   }
 }

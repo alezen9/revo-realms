@@ -1,4 +1,9 @@
-import { assetManager, debugManager, systemState, landmarkManager } from "../../systems";
+import {
+  assetManager,
+  debugManager,
+  landmarkManager,
+  windManager,
+} from "../../systems";
 import { Mesh } from "three";
 import { MeshStandardNodeMaterial } from "three/webgpu";
 import { ColliderDesc, RigidBodyDesc } from "@dimforge/rapier3d";
@@ -74,7 +79,11 @@ export default class Berserk {
     });
 
     // Register wind target and link to landmark
-    const windTargetId = systemState.wind.registerTarget("Dragon Slayer", sword.position, 20);
+    const windTargetId = windManager.registerTarget(
+      "Dragon Slayer",
+      sword.position,
+      20,
+    );
     landmarkManager.setWindTargetId(landmarkId, windTargetId);
   }
 
