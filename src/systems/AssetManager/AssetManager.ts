@@ -79,6 +79,9 @@ export class AssetManager {
           tex.colorSpace = resource.colorSpace ?? NoColorSpace;
           if (resource.wrap) tex.wrapS = tex.wrapT = RepeatWrapping;
           tex.anisotropy = resource.anisotropy ?? Texture.DEFAULT_ANISOTROPY;
+          if (resource.minFilter !== undefined) tex.minFilter = resource.minFilter;
+          if (resource.magFilter !== undefined) tex.magFilter = resource.magFilter;
+          if (resource.generateMipmaps !== undefined) tex.generateMipmaps = resource.generateMipmaps;
           // @ts-ignore
           this.resources[resource.name] = tex;
         });

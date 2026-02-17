@@ -1,5 +1,5 @@
-import { CameraHelper, PerspectiveCamera, Scene } from "three";
-import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { CameraHelper, PerspectiveCamera, Scene, MOUSE } from "three";
+import { MapControls } from "three/addons/controls/MapControls.js";
 import { debugManager, eventsManager, rendererManager } from ".";
 import { type EventsManager } from "./EventsManager";
 
@@ -8,7 +8,7 @@ export class SceneManager {
   playerCamera: PerspectiveCamera;
   renderCamera: PerspectiveCamera;
   private cameraHelper?: CameraHelper;
-  private controls?: OrbitControls;
+  private controls?: MapControls;
   private orbitControlsCamera?: PerspectiveCamera;
 
   constructor(eventsManager: EventsManager) {
@@ -48,6 +48,13 @@ export class SceneManager {
         this.cameraHelper.visible = isEnabled;
         eventsManager.emit("engine-camera-change");
       });
+
+    const controlsFolder = folder.addFolder({ title: "Controls" });
+    controlsFolder.addBinding(this.controls, "zoomSpeed", { min: 0.1, max: 5, step: 0.1 });
+    controlsFolder.addBinding(this.controls, "panSpeed", { min: 0.1, max: 10, step: 0.1 });
+    controlsFolder.addBinding(this.controls, "rotateSpeed", { min: 0.1, max: 3, step: 0.1 });
+    controlsFolder.addBinding(this.controls, "screenSpacePanning");
+    controlsFolder.addBinding(this.controls, "dampingFactor", { min: 0.01, max: 0.3, step: 0.01 });
   }
 
   init() {
@@ -57,9 +64,9 @@ export class SceneManager {
     this.scene.add(cameraHelper);
     this.cameraHelper = cameraHelper;
 
-    // Orbit controls
+    // Map controls with orbit-style mouse buttons
     const orbitControlsCamera = this.playerCamera.clone();
-    const controls = new OrbitControls(
+    const controls = new MapControls(
       orbitControlsCamera,
       rendererManager.canvas,
     );
@@ -67,7 +74,19 @@ export class SceneManager {
     orbitControlsCamera.far = 5000;
     this.orbitControlsCamera = orbitControlsCamera;
     controls.enableDamping = true;
+    controls.dampingFactor = 0.05;
     controls.maxPolarAngle = Math.PI / 2.05;
+    controls.minDistance = 0.1;
+    controls.maxDistance = 1000;
+    controls.zoomSpeed = 2;
+    controls.panSpeed = 2;
+    controls.rotateSpeed = 1;
+    // Set mouse buttons: LEFT=rotate, RIGHT=pan (like OrbitControls)
+    controls.mouseButtons = {
+      LEFT: MOUSE.ROTATE,
+      MIDDLE: MOUSE.DOLLY,
+      RIGHT: MOUSE.PAN,
+    };
     controls.enabled = false;
     this.controls = controls;
 
