@@ -1,4 +1,12 @@
-import { CompressedTexture, CubeTexture, SRGBColorSpace, Texture } from "three";
+import {
+  CompressedTexture,
+  CubeTexture,
+  LinearFilter,
+  SRGBColorSpace,
+  Texture,
+  type MagnificationTextureFilter,
+  type MinificationTextureFilter,
+} from "three";
 import { type GLTF } from "three/addons/loaders/GLTFLoader.js";
 // Model
 import realmModelUrl from "/models/realm.glb?url"; // old
@@ -103,6 +111,9 @@ type TextureResourceRaw = {
   colorSpace?: string;
   wrap?: boolean;
   anisotropy?: number;
+  minFilter?: MinificationTextureFilter;
+  magFilter?: MagnificationTextureFilter;
+  generateMipmaps?: boolean;
 };
 
 type GLTFResourceRaw = {
@@ -162,18 +173,27 @@ export const manifest = [
     url: grassMapUrl,
     type: "texture",
     flipY: false,
+    minFilter: LinearFilter,
+    magFilter: LinearFilter,
+    generateMipmaps: false,
   },
   {
     name: "waterMap",
     url: waterMapUrl,
     type: "texture",
     flipY: false,
+    minFilter: LinearFilter,
+    magFilter: LinearFilter,
+    generateMipmaps: false,
   },
   {
     name: "shadowMap",
     url: shadowMapUrl,
     type: "texture",
     flipY: false,
+    minFilter: LinearFilter,
+    magFilter: LinearFilter,
+    generateMipmaps: false,
   },
   {
     name: "terrainNormAo",
