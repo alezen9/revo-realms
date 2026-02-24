@@ -1,12 +1,12 @@
 import { Collider, EventQueue, World } from "@dimforge/rapier3d";
 import { RevoColliderType } from "../types";
-import { audioManager } from ".";
 import { MathUtils, Vector3 } from "three";
 import { LineSegments2 } from "three/examples/jsm/lines/webgpu/LineSegments2.js";
 import { LineSegmentsGeometry } from "three/examples/jsm/Addons.js";
 import { Line2NodeMaterial } from "three/webgpu";
 import type { EventsManager } from "./EventsManager";
 import type { SceneManager } from "./SceneManager";
+import type { AudioManager } from "./AudioManager";
 
 const config = {
   minImpactSq: 5,
@@ -24,11 +24,17 @@ export class PhysicsManager {
   private accumulator = 0;
   private maxStepsPerFrame = 8; // prevent spiral of death
   private _didStep = false;
+  private audioManager: AudioManager;
 
   private dummyVectorLinVel = new Vector3();
   private debugMesh?: LineSegments2;
 
-  constructor(eventsManager: EventsManager, sceneManager: SceneManager) {
+  constructor(
+    eventsManager: EventsManager,
+    sceneManager: SceneManager,
+    audioManager: AudioManager,
+  ) {
+    this.audioManager = audioManager;
     if (this.IS_DEBUGGING_ENABLED) {
       this.debugMesh = this.createDebugMesh();
       sceneManager.scene.add(this.debugMesh);
@@ -81,8 +87,8 @@ export class PhysicsManager {
     const intensity = this.dummyVectorLinVel.lengthSq();
     if (intensity < config.minImpactSq) return;
     const volume = this.impactToVolume(intensity);
-    audioManager.hitWood.setVolume(volume);
-    audioManager.hitWood.play();
+    this.audioManager.hitWood.setVolume(volume);
+    this.audioManager.hitWood.play();
   }
 
   private onCollisionWithStone(playerCollider: Collider) {
@@ -92,28 +98,41 @@ export class PhysicsManager {
     const intensity = this.dummyVectorLinVel.lengthSq();
     if (intensity < config.minImpactSq) return;
     const volume = this.impactToVolume(intensity);
-    audioManager.hitStone.setVolume(volume);
-    audioManager.hitStone.play();
+    this.audioManager.hitStone.setVolume(volume);
+    this.audioManager.hitStone.play();
   }
 
   private handleCollisionSounds() {
     this.eventQueue.drainCollisionEvents((handle1, handle2, started) => {
-      if (audioManager.isMute) return;
+      if (this.audioManager.isMute) return;
+      if (!started) return;
+
       const collider1 = this.world.getCollider(handle1);
       const collider2 = this.world.getCollider(handle2);
+      if (!collider1 || !collider2) return;
 
-      const isPlayer =
-        this.getColliderName(collider1) === RevoColliderType.Player;
-      if (!isPlayer || !started) return;
+      const collider1Type = this.getColliderName(collider1);
+      const collider2Type = this.getColliderName(collider2);
 
-      const collidedWith = this.getColliderName(collider2);
+      let playerCollider: Collider | null = null;
+      let collidedWith: RevoColliderType | undefined;
+
+      if (collider1Type === RevoColliderType.Player) {
+        playerCollider = collider1;
+        collidedWith = collider2Type;
+      } else if (collider2Type === RevoColliderType.Player) {
+        playerCollider = collider2;
+        collidedWith = collider1Type;
+      }
+
+      if (!playerCollider) return;
 
       switch (collidedWith) {
         case RevoColliderType.Wood:
-          this.onCollisionWithWood(collider1);
+          this.onCollisionWithWood(playerCollider);
           break;
         case RevoColliderType.Stone:
-          this.onCollisionWithStone(collider1);
+          this.onCollisionWithStone(playerCollider);
           break;
         default:
           break;
@@ -170,6 +189,6 @@ export class PhysicsManager {
     // clamp accumulator to prevent buildup during long frames
     if (this.accumulator > timestep) this.accumulator = timestep;
 
-    if (audioManager.isReady) this.handleCollisionSounds();
+    if (this.audioManager.isReady) this.handleCollisionSounds();
   }
 }

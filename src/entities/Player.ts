@@ -56,6 +56,10 @@ const getConfig = () => {
     BUOYANCY_FORCE: 7.25,
     WATER_VERTICAL_DAMPING: 0.5,
     WATER_BOB_SUBMERGED_STRENGTH: 2.5,
+    GROUND_RAY_START_ABOVE_BOTTOM: 0.03,
+    GROUND_RAY_MAX_DISTANCE: 0.1,
+    GROUND_CONTACT_THRESHOLD: 0.04,
+    BOUNCE_SETTLE_VERTICAL_SPEED: 0.45,
     JUMP_IMPULSE: new Vector3(0, jumpImpulse, 0),
     LIN_VEL_STRENGTH: 70,
     ANG_VEL_STRENGTH: 50,
@@ -64,7 +68,7 @@ const getConfig = () => {
     FRICTION: 1,
     RESTITUTION: 0.6,
     TURN_SPEED: 2, // radians/sec
-    PLAYER_INITIAL_POSITION: new Vector3(...POSITIONS.lake),
+    PLAYER_INITIAL_POSITION: new Vector3(...POSITIONS.center),
     CAMERA_OFFSET: new Vector3(0, 16, 20),
     CAMERA_LERP_FACTOR: 7.5,
     UP: new Vector3(0, 1, 0),
@@ -386,10 +390,24 @@ export default class Player {
     // 4) Mid-air logic (jump cut, fast fall, clamp) - skip in water
     if (!this.isInWater) {
       const velocity = this.rigidBody.linvel();
+      const initialVelocityY = velocity.y;
+
       this.handleJumpCut(isJumpKeyPressed, velocity);
-      this.handleFastFall(delta, velocity, physicsManager.world.gravity.y);
+      if (!this.isOnGround) {
+        this.handleFastFall(delta, velocity, physicsManager.world.gravity.y);
+      }
       this.clampUpwardVelocity(velocity);
-      this.rigidBody.setLinvel(velocity, true);
+
+      const shouldSettleBounce =
+        this.isOnGround &&
+        !isJumpKeyPressed &&
+        Math.abs(velocity.y) < config.BOUNCE_SETTLE_VERTICAL_SPEED;
+      if (shouldSettleBounce) velocity.y = 0;
+
+      const didVerticalVelocityChange = velocity.y !== initialVelocityY;
+      if (didVerticalVelocityChange) {
+        this.rigidBody.setLinvel(velocity, !shouldSettleBounce);
+      }
     }
 
     // 5) Save jump key state
@@ -397,14 +415,20 @@ export default class Player {
   }
 
   private checkIfGrounded(): boolean {
-    // Cast a ray downward from just below the sphere’s center
+    // Cast from just above the sphere's bottom for stable grounding.
     this.rayOrigin.copy(this.rigidBody.translation());
-    this.rayOrigin.y -= config.RADIUS + 0.01;
-    const maxDistance = 0.2;
-    const hit = physicsManager.world.castRay(this.ray, maxDistance, true);
+    this.rayOrigin.y -= config.RADIUS - config.GROUND_RAY_START_ABOVE_BOTTOM;
+    const hit = physicsManager.world.castRay(
+      this.ray,
+      config.GROUND_RAY_MAX_DISTANCE,
+      true,
+      undefined,
+      undefined,
+      undefined,
+      this.rigidBody,
+    );
     if (!hit) return false;
-    const distanceToGround = hit.timeOfImpact * maxDistance;
-    return distanceToGround < 0.01;
+    return hit.timeOfImpact <= config.GROUND_CONTACT_THRESHOLD;
   }
 
   private canJump(): boolean {
@@ -464,8 +488,11 @@ export default class Player {
       this.newAngVel.addScaledVector(this.torqueAxis, -angVelScale);
     }
 
-    this.rigidBody.setLinvel(this.newLinVel, true);
-    this.rigidBody.setAngvel(this.newAngVel, true);
+    const hasDriveInput = isForward || isBackward;
+    if (hasDriveInput) {
+      this.rigidBody.setLinvel(this.newLinVel, true);
+      this.rigidBody.setAngvel(this.newAngVel, true);
+    }
 
     this.syncMeshWithBody();
   }

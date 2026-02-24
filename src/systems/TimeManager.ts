@@ -6,15 +6,14 @@ import { GameTime } from "../utils/GameTime";
 type TimeState = {
   isPaused: boolean;
   isSlowMotion: boolean;
-  isMenuSlow: boolean;
   slowMotionScale: number;
 };
 
 export class TimeManager {
+  private eventsManager: EventsManager;
   private state: TimeState = {
     isPaused: false,
     isSlowMotion: false,
-    isMenuSlow: false,
     slowMotionScale: 0.125,
   };
   private timeScale = 1;
@@ -22,15 +21,13 @@ export class TimeManager {
   private lastSlowMoState = false;
 
   constructor(
-    private eventsManager: EventsManager,
+    eventsManager: EventsManager,
     inputManager: InputManager,
     debugManager: DebugManager,
   ) {
+    this.eventsManager = eventsManager;
     this.bindControls(inputManager);
     this.setupDebug(debugManager);
-    this.eventsManager.on("radial-menu-visibility", (visible) => {
-      this.setMenuSlow(visible);
-    });
     this.emitInitialState();
   }
 
@@ -65,19 +62,14 @@ export class TimeManager {
     this.updateState({ isSlowMotion });
   }
 
-  setMenuSlow(isMenuSlow: boolean) {
-    this.updateState({ isMenuSlow });
-  }
-
   setSlowMotionScale(scale: number) {
     this.updateState({ slowMotionScale: Math.max(0, scale) });
   }
 
   private computeTimeScale() {
-    const { isPaused, isSlowMotion, isMenuSlow, slowMotionScale } = this.state;
+    const { isPaused, isSlowMotion, slowMotionScale } = this.state;
     if (isPaused) return 0;
-    const isSlowed = isSlowMotion || isMenuSlow;
-    return isSlowed ? slowMotionScale : 1;
+    return isSlowMotion ? slowMotionScale : 1;
   }
 
   private updateState(update: Partial<TimeState>) {

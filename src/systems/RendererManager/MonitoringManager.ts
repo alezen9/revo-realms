@@ -4,10 +4,12 @@ import { type RendererManager } from "./RendererManager";
 export class MonitoringManager {
   stats: Stats;
   private lastSecond = performance.now();
+  private enabled: boolean;
 
   private drawCallsPanel: ReturnType<typeof this.createNumberPanel>;
   private trianglesPanel: ReturnType<typeof this.createNumberPanel>;
   constructor(enabled: boolean) {
+    this.enabled = enabled;
     const stats = new Stats({
       trackGPU: true,
       logsPerSecond: 4,
@@ -18,8 +20,8 @@ export class MonitoringManager {
       precision: 2,
     });
     stats.dom.classList.add("monitoring-panel");
-    if (enabled) document.body.appendChild(stats.dom);
     this.stats = stats;
+    this.attach();
     // @ts-ignore
     this.drawCallsPanel = this.createNumberPanel(
       "# DRAW CALLS",
@@ -32,6 +34,11 @@ export class MonitoringManager {
       "#ffdab9",
       "#163843",
     );
+  }
+
+  attach() {
+    if (!this.enabled || this.stats.dom.isConnected || !document.body) return;
+    document.body.appendChild(this.stats.dom);
   }
 
   private createNumberPanel(name: string, fg: string, bg: string) {

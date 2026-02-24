@@ -53,6 +53,7 @@ class PineTreeBarkMaterial extends MeshLambertNodeMaterial {
   constructor() {
     super();
     this.precision = "lowp";
+    this.forceSinglePass = true;
     const _uv = uv().mul(uniforms.uBarkUvScale);
     const diffuse = texture(assetManager.resources.treeBarkDiffuse, _uv);
     this.colorNode = diffuse.rgb.mul(uniforms.uBarkDiffuseScale);
@@ -65,6 +66,39 @@ class PineTreeBarkMaterial extends MeshLambertNodeMaterial {
 }
 
 export default class PineTree {
+  private createChunkMeshes(
+    colliders: Mesh[],
+    barkGeometry: Mesh["geometry"],
+    canopyGeometry: Mesh["geometry"],
+    barkMaterial: PineTreeBarkMaterial,
+    canopyMaterial: PineTreeCanopyMaterial,
+  ): InstancedMesh[] {
+    if (!colliders.length) return [];
+
+    const barkInstances = new InstancedMesh(
+      barkGeometry,
+      barkMaterial,
+      colliders.length,
+    );
+    const canopyInstances = new InstancedMesh(
+      canopyGeometry,
+      canopyMaterial,
+      colliders.length,
+    );
+
+    colliders.forEach((collider, i) => {
+      barkInstances.setMatrixAt(i, collider.matrix);
+      canopyInstances.setMatrixAt(i, collider.matrix);
+    });
+
+    barkInstances.instanceMatrix.needsUpdate = true;
+    canopyInstances.instanceMatrix.needsUpdate = true;
+    barkInstances.computeBoundingSphere();
+    canopyInstances.computeBoundingSphere();
+
+    return [barkInstances, canopyInstances];
+  }
+
   constructor() {
     // Visual
     this.debug();
@@ -82,17 +116,31 @@ export default class PineTree {
     ) as Mesh[];
 
     const barkMaterial = new PineTreeBarkMaterial();
-    const barkInstances = new InstancedMesh(
-      pineTreeBark.geometry,
-      barkMaterial,
-      colliders.length,
-    );
-
     const canopyMaterial = new PineTreeCanopyMaterial();
-    const canopyInstances = new InstancedMesh(
+
+    const negativeXColliders: Mesh[] = [];
+    const positiveXColliders: Mesh[] = [];
+    colliders.forEach((collider) => {
+      if (collider.position.x < 0) {
+        negativeXColliders.push(collider);
+      } else {
+        positiveXColliders.push(collider);
+      }
+    });
+
+    const negativeChunkMeshes = this.createChunkMeshes(
+      negativeXColliders,
+      pineTreeBark.geometry,
       pineTreeCanopy.geometry,
+      barkMaterial,
       canopyMaterial,
-      colliders.length,
+    );
+    const positiveChunkMeshes = this.createChunkMeshes(
+      positiveXColliders,
+      pineTreeBark.geometry,
+      pineTreeCanopy.geometry,
+      barkMaterial,
+      canopyMaterial,
     );
 
     const baseCollider = colliders[0];
@@ -100,9 +148,7 @@ export default class PineTree {
     const baseRadius = boundingBox.max.x;
     const baseHalfHeight = boundingBox.max.y / 2;
 
-    colliders.forEach((colliderCylinder, i) => {
-      barkInstances.setMatrixAt(i, colliderCylinder.matrix);
-      canopyInstances.setMatrixAt(i, colliderCylinder.matrix);
+    colliders.forEach((colliderCylinder) => {
       // Physics
       const rigidBodyDesc = RigidBodyDesc.fixed()
         .setTranslation(...colliderCylinder.position.toArray())
@@ -118,7 +164,9 @@ export default class PineTree {
       ).setRestitution(0.75);
       physicsManager.world.createCollider(colliderDesc, rigidBody);
     });
-    sceneManager.scene.add(barkInstances, canopyInstances);
+
+    const chunkMeshes = [...negativeChunkMeshes, ...positiveChunkMeshes];
+    if (chunkMeshes.length) sceneManager.scene.add(...chunkMeshes);
   }
 
   private debug() {

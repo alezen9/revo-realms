@@ -1,28 +1,47 @@
 import { PCFShadowMap } from "three";
 import { WebGPURenderer } from "three/webgpu";
-import { MonitoringManager } from "./MonitoringManager";
 import { PostprocessingManager } from "./PostprocessingManager";
-import { sceneManager } from "..";
 import { type DebugManager } from "../DebugManager";
 import { type EventsManager } from "../EventsManager";
+import type { SceneManager } from "../SceneManager";
 
-const ENABLE_MONITORING = true;
 const ENABLE_DEBUGGING = true;
+const IS_DEBUGGING_ENABLED = import.meta.env.DEV && ENABLE_DEBUGGING;
+
+type MonitoringManagerLike = {
+  attach?: () => void;
+  stats: {
+    init: (renderer: WebGPURenderer) => Promise<void>;
+    update: () => void;
+  };
+  updateCustomPanels: (rendererManager: RendererManager) => void;
+};
 
 export class RendererManager {
   renderer: WebGPURenderer;
   canvas: HTMLCanvasElement;
   isWebGPU!: boolean;
+  private sceneManager: SceneManager;
+  private debugManager: DebugManager;
+  private eventsManager: EventsManager;
   private prevFrame: Promise<any> | null = null;
-  private monitoringManager: MonitoringManager;
+  private monitoringManager?: MonitoringManagerLike;
   private postprocessingManager!: PostprocessingManager;
+  private isRenderInFlight = false;
+  private readonly isMonitoringEnabled: boolean;
   private readonly IS_POSTPROCESSING_ENABLED = true;
-  private readonly IS_MONITORING_ENABLED =
-    import.meta.env.DEV && ENABLE_MONITORING;
-  private readonly IS_DEBUGGING_ENABLED =
-    import.meta.env.DEV && ENABLE_DEBUGGING;
 
-  constructor(debugManager: DebugManager, eventsManager: EventsManager) {
+  constructor(
+    sceneManager: SceneManager,
+    debugManager: DebugManager,
+    eventsManager: EventsManager,
+    monitoringManager?: MonitoringManagerLike,
+  ) {
+    this.sceneManager = sceneManager;
+    this.debugManager = debugManager;
+    this.eventsManager = eventsManager;
+    this.monitoringManager = monitoringManager;
+    this.isMonitoringEnabled = !!monitoringManager;
     const canvas = document.createElement("canvas");
     canvas.classList.add("revo-realms");
     document.body.appendChild(canvas);
@@ -31,7 +50,7 @@ export class RendererManager {
     const renderer = new WebGPURenderer({
       canvas,
       antialias: true,
-      trackTimestamp: this.IS_MONITORING_ENABLED,
+      trackTimestamp: this.isMonitoringEnabled,
       powerPreference: "high-performance",
       stencil: false,
       depth: true,
@@ -42,10 +61,9 @@ export class RendererManager {
 
     renderer.toneMappingExposure = 1.5;
     this.renderer = renderer;
-    this.monitoringManager = new MonitoringManager(this.IS_MONITORING_ENABLED);
-    debugManager.setVisibility(this.IS_DEBUGGING_ENABLED);
+    this.debugManager.setVisibility(IS_DEBUGGING_ENABLED);
 
-    eventsManager.on("engine-render-target-resize", (sizes) => {
+    this.eventsManager.on("engine-render-target-resize", (sizes) => {
       // reduce dpr to 85% if postprocessing enabled, min dpr = 1
       const dpr = Math.max(
         this.IS_POSTPROCESSING_ENABLED ? sizes.dpr * 0.85 : sizes.dpr,
@@ -58,10 +76,16 @@ export class RendererManager {
 
   async init() {
     await this.renderer.init();
-    sceneManager.init();
+    this.sceneManager.init(this.canvas, this.debugManager);
     this.isWebGPU = !!(await navigator.gpu?.requestAdapter());
-    this.postprocessingManager = new PostprocessingManager(this.renderer);
-    if (this.IS_MONITORING_ENABLED) {
+    this.postprocessingManager = new PostprocessingManager(
+      this.renderer,
+      this.sceneManager,
+      this.eventsManager,
+      this.debugManager,
+    );
+    if (this.isMonitoringEnabled && this.monitoringManager) {
+      this.monitoringManager.attach?.();
       this.renderer.info.autoReset = false;
       await this.monitoringManager.stats.init(this.renderer);
     }
@@ -72,17 +96,30 @@ export class RendererManager {
       return this.postprocessingManager.renderAsync();
     else
       return this.renderer.renderAsync(
-        sceneManager.scene,
-        sceneManager.renderCamera,
+        this.sceneManager.scene,
+        this.sceneManager.renderCamera,
       );
   }
 
+  async compileSceneOnceAsync() {
+    return this.renderer.compileAsync(
+      this.sceneManager.scene,
+      this.sceneManager.renderCamera,
+    );
+  }
+
+  async renderSceneOnceAsync() {
+    return this.renderSceneAsync();
+  }
+
   private renderWithMonitoring() {
+    const monitoringManager = this.monitoringManager;
+    if (!monitoringManager) return;
     // Consume last frame’s results now (they should be ready)
     this.prevFrame
       ?.then(() => {
-        this.monitoringManager.updateCustomPanels(this);
-        this.monitoringManager.stats.update();
+        monitoringManager.updateCustomPanels(this);
+        monitoringManager.stats.update();
         this.renderer.info.reset();
       })
       .catch((err) => {
@@ -97,8 +134,20 @@ export class RendererManager {
     ]);
   }
 
+  private renderWithoutMonitoring() {
+    if (this.isRenderInFlight) return;
+    this.isRenderInFlight = true;
+    this.renderSceneAsync()
+      .catch((error) => {
+        console.error("[RendererManager] renderAsync failed:", error);
+      })
+      .finally(() => {
+        this.isRenderInFlight = false;
+      });
+  }
+
   async renderAsync() {
-    if (this.IS_MONITORING_ENABLED) this.renderWithMonitoring();
-    else this.renderSceneAsync();
+    if (this.isMonitoringEnabled) this.renderWithMonitoring();
+    else this.renderWithoutMonitoring();
   }
 }

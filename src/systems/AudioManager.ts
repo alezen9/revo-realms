@@ -10,13 +10,14 @@ import ambientUrl from "/audio/ambient/ambient.mp3?url";
 import lakeUrl from "/audio/ambient/lake.mp3?url";
 import hitWoodUrl from "/audio/collisions/hitWood.mp3?url";
 import hitStoneUrl from "/audio/collisions/hitStone.mp3?url";
-import { eventsManager } from ".";
 import { type SceneManager } from "./SceneManager";
+import type { EventsManager } from "./EventsManager";
 
 export class AudioManager {
   // Loaders
   private audioLoader: AudioLoader;
   private audioListener: AudioListener;
+  private eventsManager: EventsManager;
 
   // State
   isReady = false;
@@ -28,11 +29,15 @@ export class AudioManager {
   hitWood!: Audio;
   hitStone!: Audio;
 
-  constructor(sceneManager: SceneManager) {
+  constructor(
+    sceneManager: SceneManager,
+    eventsManager: EventsManager,
+  ) {
+    this.eventsManager = eventsManager;
     const manager = new LoadingManager();
     manager.onProgress = (_, itemsLoaded, itemsTotal) => {
       const percentage = Math.ceil((100 / itemsTotal) * itemsLoaded);
-      eventsManager.emit(
+      this.eventsManager.emit(
         "engine-loading-audio-progress",
         Math.min(percentage, 99),
       );
@@ -94,6 +99,6 @@ export class AudioManager {
     this.hitStone = this.newAudio(res[3], 0, false);
 
     this.isReady = true;
-    eventsManager.emit("engine-loading-audio-progress", 100);
+    this.eventsManager.emit("engine-loading-audio-progress", 100);
   }
 }

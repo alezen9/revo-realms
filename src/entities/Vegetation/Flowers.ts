@@ -220,6 +220,8 @@ class FlowersSsbo {
 }
 
 export default class Flowers {
+  private isComputeInFlight = false;
+
   constructor() {
     const ssbo = new FlowersSsbo();
     const material = new FlowerMaterial(ssbo);
@@ -247,7 +249,16 @@ export default class Flowers {
         uniforms.uCameraForward.value,
       );
       flowers.position.copy(player.position).setY(0);
-      rendererManager.renderer.computeAsync(ssbo.computeUpdate);
+      if (this.isComputeInFlight) return;
+      this.isComputeInFlight = true;
+      rendererManager.renderer
+        .computeAsync(ssbo.computeUpdate)
+        .catch((error) => {
+          console.error("[Flowers] computeAsync failed:", error);
+        })
+        .finally(() => {
+          this.isComputeInFlight = false;
+        });
     });
   }
 

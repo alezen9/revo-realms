@@ -18,7 +18,7 @@ import {
 } from "./resources";
 import { KTX2Loader } from "three/addons/loaders/KTX2Loader.js";
 import { type RendererManager } from "../RendererManager/RendererManager";
-import { eventsManager } from "..";
+import type { EventsManager } from "../EventsManager";
 
 type InternalResources = {
   heightmap: DataTexture;
@@ -35,16 +35,18 @@ export class AssetManager {
   private gltfLoader: GLTFLoader;
   private cubeTextureLoader: CubeTextureLoader;
   private ktx2Loader: KTX2Loader;
+  private eventsManager: EventsManager;
 
   resources = {
     heightmap: new DataTexture(), // placeholder
   } as Resources;
 
-  constructor() {
+  constructor(eventsManager: EventsManager) {
+    this.eventsManager = eventsManager;
     const manager = new LoadingManager();
     manager.onProgress = (_, itemsLoaded, itemsTotal) => {
       const percentage = Math.ceil((100 / itemsTotal) * itemsLoaded);
-      eventsManager.emit(
+      this.eventsManager.emit(
         "engine-loading-resources-progress",
         Math.min(percentage, 100),
       );

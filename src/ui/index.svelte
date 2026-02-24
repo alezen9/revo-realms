@@ -4,7 +4,9 @@
 	import WindIcon from "./components/WindIcon.svelte"
 	import RadialMenu from "./components/RadialMenu.svelte"
 
-	const IS_LOADING_SCREEN_ENABLED = import.meta.env.PROD || true // tweak boolean for dev
+	const openInDev = true
+
+	const IS_LOADING_SCREEN_ENABLED = import.meta.env.PROD || openInDev
 </script>
 
 <div class="ui-root">
