@@ -617,6 +617,8 @@ class GrassMaterial extends SpriteNodeMaterial {
 }
 
 export default class Grass {
+  private isComputeInFlight = false;
+
   constructor() {
     uniforms.uSunDir.value.copy(lightingManager.sunDirection);
     const ssbo = new GrassSsbo();
@@ -642,7 +644,16 @@ export default class Grass {
         uniforms.uCameraForward.value,
       );
       grass.position.copy(player.position).setY(0);
-      rendererManager.renderer.computeAsync(ssbo.computeUpdate);
+      if (this.isComputeInFlight) return;
+      this.isComputeInFlight = true;
+      rendererManager.renderer
+        .computeAsync(ssbo.computeUpdate)
+        .catch((error) => {
+          console.error("[Grass] computeAsync failed:", error);
+        })
+        .finally(() => {
+          this.isComputeInFlight = false;
+        });
     });
 
     this.debugGrass();

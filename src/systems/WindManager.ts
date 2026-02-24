@@ -1,10 +1,9 @@
 import { ConeGeometry, Mesh, Vector2, Vector3 } from "three";
 import { atan, positionLocal, rotate, uniform, vec3 } from "three/tsl";
-import { FolderApi } from "tweakpane";
 import { MeshLambertNodeMaterial } from "three/webgpu";
-import { eventsManager, sceneManager } from ".";
 import { type State } from "../Game";
 import type { EventsManager } from "./EventsManager";
+import type { SceneManager } from "./SceneManager";
 
 type WindTarget = {
   id: string;
@@ -38,16 +37,24 @@ export class WindManager {
   private targetPositionXZ = new Vector2(0, 0);
 
   private playerPositionXZ = new Vector2(0, 0);
+  private hasPlayerPosition = false;
   private toTargetDir = new Vector2(0, 0);
 
   private HOLD_INTENSITY_TIME_S = 3;
   private accTimer = 0;
+  private eventsManager: EventsManager;
+  private sceneManager: SceneManager;
 
-  constructor(eventsManager: EventsManager) {
-    this.IS_DEBUGGING_ENABLED && this.debug(eventsManager);
+  constructor(
+    eventsManager: EventsManager,
+    sceneManager: SceneManager,
+  ) {
+    this.eventsManager = eventsManager;
+    this.sceneManager = sceneManager;
+    this.IS_DEBUGGING_ENABLED && this.debug();
 
-    eventsManager.on("swipe-up", this.handleSwipeUp.bind(this));
-    eventsManager.on(
+    this.eventsManager.on("swipe-up", this.handleSwipeUp.bind(this));
+    this.eventsManager.on(
       "engine-update-throttle-4x",
       this.handleWindBlowing.bind(this),
     );
@@ -58,15 +65,19 @@ export class WindManager {
     this.phase = "direction";
   }
 
-  private directionPhase(player: State["player"]) {
-    this.playerPositionXZ.set(player.position.x, player.position.z);
+  private directionPhase() {
+    if (!this.target) {
+      this.phase = "idle";
+      return;
+    }
+
     this.toTargetDir.subVectors(this.targetPositionXZ, this.playerPositionXZ);
     const lenSq = this.toTargetDir.lengthSq();
 
-    if (lenSq <= (this.target?.radiusSq ?? 0)) {
+    if (lenSq <= this.target.radiusSq) {
       this.target = undefined;
       this.phase = "idle";
-      eventsManager.emit("wind-target-change", null);
+      this.eventsManager.emit("wind-target-change", null);
       return;
     }
 
@@ -102,18 +113,34 @@ export class WindManager {
   }
 
   private startPhase() {
-    eventsManager.emit("game-wind-start");
+    this.eventsManager.emit("game-wind-start");
     this.phase = "ramp";
   }
 
   private endPhase() {
-    eventsManager.emit("game-wind-end");
+    this.eventsManager.emit("game-wind-end");
     this.phase = "decay";
   }
 
-  private handleWindBlowing({ player, delta }: State) {
+  private clearTargetIfReached() {
     if (!this.target) return;
-    if (this.phase === "direction") return this.directionPhase(player);
+    const dx = this.target.position.x - this.playerPositionXZ.x;
+    const dz = this.target.position.z - this.playerPositionXZ.y;
+    const distanceSq = dx * dx + dz * dz;
+
+    if (distanceSq > this.target.radiusSq) return;
+
+    this.target = undefined;
+    this.eventsManager.emit("wind-target-change", null);
+    if (this.phase === "direction") this.phase = "idle";
+  }
+
+  private handleWindBlowing({ player, delta }: State) {
+    this.playerPositionXZ.set(player.position.x, player.position.z);
+    this.hasPlayerPosition = true;
+    this.clearTargetIfReached();
+
+    if (this.phase === "direction") return this.directionPhase();
     if (this.phase === "start") return this.startPhase();
     if (this.phase === "ramp") return this.rampPhase(delta);
     if (this.phase === "hold") return this.holdPhase(delta);
@@ -121,7 +148,7 @@ export class WindManager {
     if (this.phase === "decay") return this.decayPhase(delta);
   }
 
-  private debug(eventsManager: EventsManager) {
+  private debug() {
     const material = new MeshLambertNodeMaterial();
     material.colorNode = vec3(this._uIntensity);
     const angle = atan(this._uDirection.x, this._uDirection.y.negate());
@@ -130,9 +157,9 @@ export class WindManager {
     geom.rotateX(-Math.PI / 2);
     const mesh = new Mesh(geom, material);
 
-    sceneManager.scene.add(mesh);
+    this.sceneManager.scene.add(mesh);
 
-    eventsManager.on("engine-update", ({ player }) => {
+    this.eventsManager.on("engine-update", ({ player }) => {
       mesh.position.copy(player.position).setY(5);
     });
   }
@@ -157,12 +184,21 @@ export class WindManager {
     return targetId;
   }
 
-  activateTargetById(id: string) {
+  activateTargetById(id: string): boolean {
     const target = this.targets.get(id);
-    if (!target) return;
+    if (!target) return false;
+
+    if (this.hasPlayerPosition) {
+      const dx = target.position.x - this.playerPositionXZ.x;
+      const dz = target.position.z - this.playerPositionXZ.y;
+      const distanceSq = dx * dx + dz * dz;
+      if (distanceSq <= target.radiusSq) return false;
+    }
+
     this.target = target;
     this.targetPositionXZ.set(target.position.x, target.position.z);
-    eventsManager.emit("wind-target-change", id);
+    this.eventsManager.emit("wind-target-change", id);
+    return true;
   }
 
   get activeTargetId() {

@@ -1,16 +1,22 @@
 <script lang="ts">
 	import { onMount } from "svelte"
 	import Button from "./Button.svelte"
-	import { audioManager, eventsManager } from "../../systems"
+	import { audioManager, eventsManager, timeManager } from "../../systems"
 	import CreditsDialog from "./CreditsDialog.svelte"
 
 	let isAudioActive = $state(false)
 	let isAudioReady = $state(false)
 	let isCreditsDialogOpen = $state(false)
 
+	const setCreditsDialogOpen = (isOpen: boolean) => {
+		if (isCreditsDialogOpen === isOpen) return
+		isCreditsDialogOpen = isOpen
+		timeManager.setSlowMotionEnabled(isOpen)
+	}
+
 	const onCreditsClick = (e: MouseEvent) => {
 		e.stopPropagation()
-		isCreditsDialogOpen = !isCreditsDialogOpen
+		setCreditsDialogOpen(!isCreditsDialogOpen)
 	}
 
 	const onAudioToggle = async (e: MouseEvent) => {
@@ -21,13 +27,22 @@
 
 	const onDialogClick = (e: MouseEvent) => {
 		e.stopPropagation()
-		isCreditsDialogOpen = (e.target as HTMLElement).tagName !== "DIALOG"
+		const shouldStayOpen = (e.target as HTMLElement).tagName !== "DIALOG"
+		setCreditsDialogOpen(shouldStayOpen)
 	}
 
 	onMount(() => {
-		eventsManager.on("engine-loading-audio-progress", p => {
-			isAudioReady = p === 100
-		})
+		const unsubscribeAudioProgress = eventsManager.on(
+			"engine-loading-audio-progress",
+			p => {
+				isAudioReady = p === 100
+			},
+		)
+
+		return () => {
+			unsubscribeAudioProgress()
+			if (isCreditsDialogOpen) timeManager.setSlowMotionEnabled(false)
+		}
 	})
 </script>
 

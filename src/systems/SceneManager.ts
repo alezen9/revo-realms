@@ -1,17 +1,19 @@
 import { CameraHelper, PerspectiveCamera, Scene, MOUSE } from "three";
 import { MapControls } from "three/addons/controls/MapControls.js";
-import { debugManager, eventsManager, rendererManager } from ".";
 import { type EventsManager } from "./EventsManager";
+import type { DebugManager } from "./DebugManager";
 
 export class SceneManager {
   scene: Scene;
   playerCamera: PerspectiveCamera;
   renderCamera: PerspectiveCamera;
+  private eventsManager: EventsManager;
   private cameraHelper?: CameraHelper;
   private controls?: MapControls;
   private orbitControlsCamera?: PerspectiveCamera;
 
   constructor(eventsManager: EventsManager) {
+    this.eventsManager = eventsManager;
     // Scene
     const scene = new Scene();
     this.scene = scene;
@@ -29,13 +31,13 @@ export class SceneManager {
     // Default render camera
     this.renderCamera = camera;
 
-    eventsManager.on("engine-render-target-resize", (sizes) => {
+    this.eventsManager.on("engine-render-target-resize", (sizes) => {
       this.playerCamera.aspect = sizes.aspect;
       this.playerCamera.updateProjectionMatrix();
     });
   }
 
-  private debugScene() {
+  private debugScene(debugManager: DebugManager) {
     if (!this.controls) return;
     const folder = debugManager.panel.addFolder({ title: "🎥 View", index: 0 });
     folder
@@ -46,18 +48,33 @@ export class SceneManager {
           ? this.orbitControlsCamera
           : this.playerCamera;
         this.cameraHelper.visible = isEnabled;
-        eventsManager.emit("engine-camera-change");
+        this.eventsManager.emit("engine-camera-change");
       });
 
-    const controlsFolder = folder.addFolder({ title: "Controls" });
-    controlsFolder.addBinding(this.controls, "zoomSpeed", { min: 0.1, max: 5, step: 0.1 });
-    controlsFolder.addBinding(this.controls, "panSpeed", { min: 0.1, max: 10, step: 0.1 });
-    controlsFolder.addBinding(this.controls, "rotateSpeed", { min: 0.1, max: 3, step: 0.1 });
-    controlsFolder.addBinding(this.controls, "screenSpacePanning");
-    controlsFolder.addBinding(this.controls, "dampingFactor", { min: 0.01, max: 0.3, step: 0.01 });
+    folder.addBinding(this.controls, "zoomSpeed", {
+      min: 0.1,
+      max: 5,
+      step: 0.1,
+    });
+    folder.addBinding(this.controls, "panSpeed", {
+      min: 0.1,
+      max: 10,
+      step: 0.1,
+    });
+    folder.addBinding(this.controls, "rotateSpeed", {
+      min: 0.1,
+      max: 3,
+      step: 0.1,
+    });
+    folder.addBinding(this.controls, "screenSpacePanning");
+    folder.addBinding(this.controls, "dampingFactor", {
+      min: 0.01,
+      max: 0.3,
+      step: 0.01,
+    });
   }
 
-  init() {
+  init(rendererCanvas: HTMLCanvasElement, debugManager: DebugManager) {
     if (!import.meta.env.DEV) return;
     const cameraHelper = new CameraHelper(this.playerCamera);
     cameraHelper.visible = false;
@@ -68,11 +85,12 @@ export class SceneManager {
     const orbitControlsCamera = this.playerCamera.clone();
     const controls = new MapControls(
       orbitControlsCamera,
-      rendererManager.canvas,
+      rendererCanvas,
     );
     orbitControlsCamera.near = 0.01;
     orbitControlsCamera.far = 5000;
     this.orbitControlsCamera = orbitControlsCamera;
+    controls.screenSpacePanning = true;
     controls.enableDamping = true;
     controls.dampingFactor = 0.05;
     controls.maxPolarAngle = Math.PI / 2.05;
@@ -91,7 +109,7 @@ export class SceneManager {
     this.controls = controls;
 
     // Debug
-    this.debugScene();
+    this.debugScene(debugManager);
   }
 
   update() {

@@ -34,15 +34,12 @@ type GameEvents = {
 type LandmarkEvents = {
   "landmark-discovered": (id: string) => void;
   "landmark-selected": (id: string) => void;
-  "radial-menu-visibility": (visible: boolean) => void;
 };
 
 type Events = EngineEvents &
   InputEvents &
   GameEvents &
-  LandmarkEvents & {
-    "blow-wind": VoidFunction;
-  };
+  LandmarkEvents;
 
 export class EventsManager {
   private emitter = new EventEmitter<Events>();

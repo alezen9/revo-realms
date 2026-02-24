@@ -1,6 +1,11 @@
 <script lang="ts">
 	import { onMount } from "svelte"
-	import { eventsManager, landmarkManager, windManager } from "../../systems"
+	import {
+		eventsManager,
+		landmarkManager,
+		timeManager,
+		windManager,
+	} from "../../systems"
 	import type { Landmark } from "../../systems/LandmarkManager"
 
 	let isVisible = $state(false)
@@ -66,7 +71,6 @@
 			: null,
 	)
 	let menuVisible = $derived(isVisible && slots.length > 0)
-	let lastVisibility = false
 
 	const getFocusableSlots = () =>
 		Array.from(
@@ -77,8 +81,10 @@
 
 	const handleSlotClick = (landmark: Landmark) => {
 		if (!landmark.hasBeenDiscovered || !landmark.windTargetId) return
-		windManager.activateTargetById(landmark.windTargetId)
+		const isActivated = windManager.activateTargetById(landmark.windTargetId)
+		if (!isActivated) return
 		eventsManager.emit("landmark-selected", landmark.id)
+		isVisible = false
 	}
 
 	onMount(() => {
@@ -141,9 +147,10 @@
 	})
 
 	$effect(() => {
-		if (menuVisible === lastVisibility) return
-		lastVisibility = menuVisible
-		eventsManager.emit("radial-menu-visibility", menuVisible)
+		timeManager.setSlowMotionEnabled(menuVisible)
+		return () => {
+			if (menuVisible) timeManager.setSlowMotionEnabled(false)
+		}
 	})
 
 	$effect(() => {

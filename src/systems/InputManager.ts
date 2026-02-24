@@ -1,12 +1,13 @@
-import nipplejs from "nipplejs";
-import { eventsManager } from ".";
+import type { EventsManager } from "./EventsManager";
 
 class KeyboardManager {
   private keysPressed = new Set<string>();
   private keyDownListeners = new Map<string, VoidFunction>();
   private keyUpListeners = new Map<string, VoidFunction>();
+  private eventsManager: EventsManager;
 
-  constructor() {
+  constructor(eventsManager: EventsManager) {
+    this.eventsManager = eventsManager;
     this.keysPressed = new Set();
     this.keyDownListeners = new Map();
     this.keyUpListeners = new Map();
@@ -24,7 +25,7 @@ class KeyboardManager {
     event.stopPropagation();
     if (event.deltaY <= 0 || Math.abs(event.deltaY) <= Math.abs(event.deltaX))
       return;
-    eventsManager.emit("swipe-up");
+    this.eventsManager.emit("swipe-up");
   }
 
   private handleKeyDown(event: KeyboardEvent) {
@@ -61,108 +62,54 @@ class KeyboardManager {
   }
 }
 
-const keyboardManager = new KeyboardManager();
-
-class JoystickManager {
-  private isActive = false;
-  private direction: { x: number; y: number } = { x: 0, y: 0 };
-
-  constructor() {
-    const zone = document.createElement("div");
-    zone.classList.add("joystick-zone");
-    document.body.appendChild(zone);
-
-    const joystick = nipplejs.create({
-      zone,
-      mode: "static",
-      position: { left: "50%", top: "50%" },
-      restOpacity: 0.1,
-      size: 100,
-      threshold: 0.2,
-    });
-
-    joystick.on("start", () => {
-      this.isActive = true;
-    });
-
-    joystick.on("move", (_, data) => {
-      if (!data?.vector) return;
-      this.direction = { x: data.vector.x, y: data.vector.y };
-    });
-
-    joystick.on("end", () => {
-      this.isActive = false;
-      this.direction = { x: 0, y: 0 };
-    });
-  }
-
-  private readonly threshold = 0.2;
-
-  isForward(): boolean {
-    return this.isActive && this.direction.y > -this.threshold;
-  }
-
-  isBackward(): boolean {
-    return this.isActive && this.direction.y < this.threshold;
-  }
-
-  isLeftward(): boolean {
-    return this.isActive && this.direction.x < -this.threshold;
-  }
-
-  isRightward(): boolean {
-    return this.isActive && this.direction.x > this.threshold;
-  }
-}
-
-const joystickManager = new JoystickManager();
-
 export class InputManager {
+  private keyboardManager: KeyboardManager;
+
+  constructor(eventsManager: EventsManager) {
+    this.keyboardManager = new KeyboardManager(eventsManager);
+  }
+
   isForward(): boolean {
     return (
-      keyboardManager.isKeyPressed("KeyW") ||
-      keyboardManager.isKeyPressed("ArrowUp") ||
-      joystickManager.isForward()
+      this.keyboardManager.isKeyPressed("KeyW") ||
+      this.keyboardManager.isKeyPressed("ArrowUp")
     );
   }
 
   isBackward(): boolean {
     return (
-      keyboardManager.isKeyPressed("KeyS") ||
-      keyboardManager.isKeyPressed("ArrowDown") ||
-      joystickManager.isBackward()
+      this.keyboardManager.isKeyPressed("KeyS") ||
+      this.keyboardManager.isKeyPressed("ArrowDown")
     );
   }
 
   isLeftward(): boolean {
     return (
-      keyboardManager.isKeyPressed("KeyA") ||
-      keyboardManager.isKeyPressed("ArrowLeft") ||
-      joystickManager.isLeftward()
+      this.keyboardManager.isKeyPressed("KeyA") ||
+      this.keyboardManager.isKeyPressed("ArrowLeft")
     );
   }
 
   isRightward(): boolean {
     return (
-      keyboardManager.isKeyPressed("KeyD") ||
-      keyboardManager.isKeyPressed("ArrowRight") ||
-      joystickManager.isRightward()
+      this.keyboardManager.isKeyPressed("KeyD") ||
+      this.keyboardManager.isKeyPressed("ArrowRight")
     );
   }
 
   isJumpPressed(): boolean {
-    return keyboardManager.isKeyPressed("Space");
+    return this.keyboardManager.isKeyPressed("Space");
   }
 
   isKeyPressed(code: string): boolean {
-    return keyboardManager.isKeyPressed(code);
+    return this.keyboardManager.isKeyPressed(code);
   }
 
   onKeyDown(code: string, callback: VoidFunction) {
-    keyboardManager.onKeyDown(code, callback);
+    this.keyboardManager.onKeyDown(code, callback);
   }
 
   onKeyUp(code: string, callback: VoidFunction) {
-    keyboardManager.onKeyUp(code, callback);
+    this.keyboardManager.onKeyUp(code, callback);
   }
 }

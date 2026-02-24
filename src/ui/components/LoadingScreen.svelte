@@ -3,20 +3,35 @@
 	import { eventsManager } from "../../systems"
 
 	let progress = $state(0)
-	let coreProgress = $state(0)
-	let resourcesProgress = $state(0)
 
-	$effect(() => {
-		progress = coreProgress + resourcesProgress
-	})
+	let coreProgress = 0
+	let resourcesProgress = 0
 
 	onMount(() => {
-		eventsManager.on("engine-loading-core-progress", p => {
+		let unsubscribeCoreProgress = () => {}
+		let unsubscribeResourcesProgress = () => {}
+		const stopLoadingProgressSubscriptions = () => {
+			unsubscribeCoreProgress()
+			unsubscribeResourcesProgress()
+			unsubscribeCoreProgress = () => {}
+			unsubscribeResourcesProgress = () => {}
+		}
+
+		unsubscribeCoreProgress = eventsManager.on("engine-loading-core-progress", p => {
 			coreProgress = Math.min(Math.ceil(p / 2), 50)
+			progress = coreProgress + resourcesProgress
+			if (progress === 100) stopLoadingProgressSubscriptions()
 		})
-		eventsManager.on("engine-loading-resources-progress", p => {
+
+		unsubscribeResourcesProgress = eventsManager.on("engine-loading-resources-progress", p => {
 			resourcesProgress = Math.min(Math.ceil(p / 2), 50)
+			progress = coreProgress + resourcesProgress
+			if (progress === 100) stopLoadingProgressSubscriptions()
 		})
+
+		return () => {
+			stopLoadingProgressSubscriptions()
+		}
 	})
 </script>
 
@@ -27,7 +42,10 @@
 <style>
 	div {
 		color: white;
-		background-color: black;
+		background:
+			radial-gradient(125% 100% at 12% 16%, rgba(48, 82, 64, 0.44), transparent 58%),
+			radial-gradient(110% 90% at 85% 82%, rgba(46, 75, 88, 0.2), transparent 62%),
+			linear-gradient(155deg, #0d1410 0%, #1f2426 48%, #151b1d 100%);
 		width: 100%;
 		height: 100%;
 		display: grid;
@@ -40,19 +58,18 @@
 	}
 
 	.fade-out {
-		animation: fadeOut 1.75s ease-out forwards;
+		animation: fadeOut 1s ease-out 80ms forwards;
+		will-change: opacity;
 	}
 
 	@keyframes fadeOut {
-		75% {
+		0% {
 			visibility: visible;
 			opacity: 1;
-			display: grid;
 		}
 		100% {
 			visibility: hidden;
 			opacity: 0;
-			display: none;
 		}
 	}
 </style>
