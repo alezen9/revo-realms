@@ -39,7 +39,7 @@ const POSITIONS = {
 };
 
 const getConfig = () => {
-  const jumpImpulse = 75;
+  const jumpImpulse = 100;
   return {
     JUMP_BUFFER_DURATION_IN_SECONDS: 0.2,
     MAX_CONSECUTIVE_JUMPS: 2,
@@ -68,7 +68,7 @@ const getConfig = () => {
     FRICTION: 1,
     RESTITUTION: 0.6,
     TURN_SPEED: 2, // radians/sec
-    PLAYER_INITIAL_POSITION: new Vector3(...POSITIONS.center),
+    PLAYER_INITIAL_POSITION: new Vector3(...POSITIONS.campfire),
     CAMERA_OFFSET: new Vector3(0, 16, 20),
     CAMERA_LERP_FACTOR: 7.5,
     UP: new Vector3(0, 1, 0),
@@ -208,7 +208,6 @@ export default class Player {
       min: 0,
       max: 10,
     });
-
   }
 
   private initWaterDetection() {
@@ -460,7 +459,6 @@ export default class Player {
       this.rigidBody.setLinvel(this.newLinVel, true);
       this.rigidBody.setAngvel(this.newAngVel, true);
     }
-
   }
 
   private syncMeshWithBody() {

@@ -1,3 +1,4 @@
+import { ColliderDesc, RigidBodyDesc } from "@dimforge/rapier3d";
 import { eventsManager, sceneManager } from "../systems";
 import { Frustum, Matrix4, Mesh } from "three";
 
@@ -7,6 +8,11 @@ const findClosest = (goal: number) =>
   COMMON_REFRESH_RATES.reduce((prev, curr) =>
     Math.abs(curr - goal) < Math.abs(prev - goal) ? curr : prev,
   );
+
+type ColliderSetup = {
+  rigidBodyDesc: RigidBodyDesc;
+  colliderDesc: ColliderDesc;
+};
 
 export class Utils {
   static frustum = new Frustum();
@@ -49,5 +55,65 @@ export class Utils {
       );
       this.frustum.setFromProjectionMatrix(this.projScreenMatrix);
     });
+  }
+
+  static createBallCollider(mesh: Mesh): ColliderSetup {
+    const rigidBodyDesc = RigidBodyDesc.fixed()
+      .setTranslation(...mesh.position.toArray())
+      .setRotation(mesh.quaternion);
+
+    if (!mesh.geometry.boundingBox) mesh.geometry.computeBoundingBox();
+    const { min, max } = mesh.geometry.boundingBox!;
+    const radius = 0.5 * (max.x - min.x) * Math.abs(mesh.scale.x);
+    const colliderDesc = ColliderDesc.ball(radius);
+
+    return {
+      rigidBodyDesc,
+      colliderDesc,
+    };
+  }
+
+  static createCylinderCollider(mesh: Mesh): ColliderSetup {
+    const rigidBodyDesc = RigidBodyDesc.fixed()
+      .setTranslation(...mesh.position.toArray())
+      .setRotation(mesh.quaternion);
+
+    if (!mesh.geometry.boundingBox) mesh.geometry.computeBoundingBox();
+    const { min, max } = mesh.geometry.boundingBox!;
+    const radius =
+      0.5 *
+      Math.max(
+        (max.x - min.x) * Math.abs(mesh.scale.x),
+        (max.z - min.z) * Math.abs(mesh.scale.z),
+      );
+    const halfHeight = 0.5 * (max.y - min.y) * Math.abs(mesh.scale.y);
+    const colliderDesc = ColliderDesc.cylinder(halfHeight, radius);
+
+    return {
+      rigidBodyDesc,
+      colliderDesc,
+    };
+  }
+
+  static createCapsuleCollider(mesh: Mesh): ColliderSetup {
+    const rigidBodyDesc = RigidBodyDesc.fixed()
+      .setTranslation(...mesh.position.toArray())
+      .setRotation(mesh.quaternion);
+
+    if (!mesh.geometry.boundingBox) mesh.geometry.computeBoundingBox();
+    const { min, max } = mesh.geometry.boundingBox!;
+    const radius =
+      0.5 *
+      Math.max(
+        (max.x - min.x) * Math.abs(mesh.scale.x),
+        (max.z - min.z) * Math.abs(mesh.scale.z),
+      );
+    const halfHeight = 0.5 * (max.y - min.y) * Math.abs(mesh.scale.y);
+    const colliderDesc = ColliderDesc.capsule(halfHeight, radius);
+
+    return {
+      rigidBodyDesc,
+      colliderDesc,
+    };
   }
 }
