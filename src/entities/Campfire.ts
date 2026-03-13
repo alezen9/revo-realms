@@ -1,5 +1,4 @@
 import { Mesh } from "three";
-import { ColliderDesc, RigidBodyDesc } from "@dimforge/rapier3d";
 import { RevoColliderType } from "../types";
 import ParticleSystem from "../utils/ParticleSystem";
 import {
@@ -11,6 +10,7 @@ import {
 } from "../systems";
 import { MeshStandardNodeMaterial } from "three/webgpu";
 import { normalMap, texture, uv } from "three/tsl";
+import { Utils } from "../utils/Utils";
 
 class CampfireMaterial extends MeshStandardNodeMaterial {
   constructor() {
@@ -49,16 +49,54 @@ export class Campfire {
     sceneManager.scene.add(campfire, fire);
 
     // Physics
-    const rigidBodyDesc = RigidBodyDesc.fixed()
-      .setTranslation(...campfire.position.toArray())
-      .setRotation(campfire.quaternion)
-      .setUserData({ type: RevoColliderType.Stone });
+    const fireColliderMesh =
+      assetManager.resources.worldModel.scene.getObjectByName(
+        "fire_collider",
+      ) as Mesh;
+    const fireCollider = Utils.createBallCollider(fireColliderMesh);
+    fireCollider.rigidBodyDesc.setUserData({ type: RevoColliderType.Stone });
+    fireCollider.colliderDesc.setRestitution(0.75);
+    const fireRigidBody = physicsManager.world.createRigidBody(
+      fireCollider.rigidBodyDesc,
+    );
+    physicsManager.world.createCollider(
+      fireCollider.colliderDesc,
+      fireRigidBody,
+    );
 
-    const rigidBody = physicsManager.world.createRigidBody(rigidBodyDesc);
-    campfire.geometry.computeBoundingSphere();
-    const { radius } = campfire.geometry.boundingSphere!;
-    const colliderDesc = ColliderDesc.ball(radius).setRestitution(0.75);
-    physicsManager.world.createCollider(colliderDesc, rigidBody);
+    const shortLogColliderMesh =
+      assetManager.resources.worldModel.scene.getObjectByName(
+        "log_short_collider",
+      ) as Mesh;
+    const shortLogCollider = Utils.createCylinderCollider(shortLogColliderMesh);
+    shortLogCollider.rigidBodyDesc.setUserData({
+      type: RevoColliderType.Wood,
+    });
+    shortLogCollider.colliderDesc.setRestitution(0.75);
+    const shortLogRigidBody = physicsManager.world.createRigidBody(
+      shortLogCollider.rigidBodyDesc,
+    );
+    physicsManager.world.createCollider(
+      shortLogCollider.colliderDesc,
+      shortLogRigidBody,
+    );
+
+    const longLogColliderMesh =
+      assetManager.resources.worldModel.scene.getObjectByName(
+        "log_long_collider",
+      ) as Mesh;
+    const longLogCollider = Utils.createCylinderCollider(longLogColliderMesh);
+    longLogCollider.rigidBodyDesc.setUserData({
+      type: RevoColliderType.Wood,
+    });
+    longLogCollider.colliderDesc.setRestitution(0.75);
+    const longLogRigidBody = physicsManager.world.createRigidBody(
+      longLogCollider.rigidBodyDesc,
+    );
+    physicsManager.world.createCollider(
+      longLogCollider.colliderDesc,
+      longLogRigidBody,
+    );
 
     // Register landmark for radial menu discovery
     const landmarkId = landmarkManager.register({
