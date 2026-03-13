@@ -74,10 +74,9 @@ class LeavesSsbo {
   // y -> offsetY (0 unused)
   // z -> offsetZ (0 unused)
   // w -> rotation (0 unused)
-  private buffer: ReturnType<typeof instancedArray>;
+  private buffer = instancedArray(config.COUNT, "vec4");
 
   constructor() {
-    this.buffer = instancedArray(config.COUNT, "vec4");
     this.computeUpdate.onInit(({ renderer }) => {
       renderer.computeAsync(this.computeInit);
     });
@@ -87,11 +86,11 @@ class LeavesSsbo {
     return this.buffer;
   }
 
-  getRotation = Fn(([data = vec4(0)]) => {
+  getRotation = Fn(([data = vec4(0)], _builder) => {
     return TSLUtils.unpackAngle(data.w, 0, 12);
   });
 
-  setRotation = Fn(([data = vec4(0), value = float(0)]) => {
+  setRotation = Fn(([data = vec4(0), value = float(0)], _builder) => {
     data.w = TSLUtils.packAngle(data.w, 0, 12, value);
     return data;
   });
@@ -235,24 +234,6 @@ class LeavesSsbo {
     const size = float(config.TILE_SIZE);
     const wrappedX = mod(movedX.add(half), size).sub(half);
     const wrappedZ = mod(movedZ.add(half), size).sub(half);
-
-    // ---- vertical: small bob *velocity* + steady fall, then wrap in band
-    // const yHalf = float(config.HALF_TILE_HEIGHT);
-    // const ySpan = float(config.TILE_HEIGHT);
-
-    // per-leaf seeds
-    // const seedY = hash(instanceIndex.add(97.0));
-    // const phaseY = seedY.mul(PI2);
-
-    // tiny bob velocity (no big sine arcs)
-    // const bobVel = sin(gameTime.mul(0.6).add(phaseY)).mul(0.01); // ~1 cm/step
-
-    // steady downward drift with mild per-leaf variation
-    // const fallVel = float(0.015).add(seedY.mul(0.008)); // ~1.5–2.3 cm/step
-
-    // integrate and wrap into [-yHalf, +yHalf]
-    // const movedY = oy.add(bobVel).sub(fallVel);
-    // const wrappedY = mod(movedY.add(yHalf), ySpan).sub(yHalf);
 
     // accumulate rotation angle in w (use noise to vary omega)
     const omega = float(0.8).add(noiseSample.g.mul(1.2)); // rad/s ≈ 0.8..2.0

@@ -30,9 +30,11 @@ import { assetManager, rendererManager, eventsManager } from "../systems";
 import { gameTime } from "./GameTime";
 import { Utils } from "./Utils";
 
-type ParticleBuffer = ReturnType<typeof instancedArray>;
+const createParticleBuffer = (count: number | Float32Array) =>
+  instancedArray(count, "vec4");
+type ParticleBuffer = ReturnType<typeof createParticleBuffer>;
 
-const _computeFn = Fn(([_]: [ParticleBuffer]) => {
+const _computeFn = Fn(([_]: [ParticleBuffer], _builder) => {
   /* noop */
 });
 
@@ -74,7 +76,7 @@ export default class ParticleSystem extends InstancedMesh {
 
     super(new PlaneGeometry(), undefined, params.count);
 
-    this.mainBuffer = instancedArray(params.count, "vec4"); // holds: vec4 = (x, y, z, alpha)
+    this.mainBuffer = createParticleBuffer(params.count); // holds: vec4 = (x, y, z, alpha)
     this.mainBuffer.setPBO(true);
 
     switch (params.preset) {
@@ -142,7 +144,7 @@ const getFirePresetConfig = (
   const secondaryBuffer = instancedArray(params.count, "float");
   const fireParticlesPersentage = 0.9;
 
-  const onInit = Fn(([_buffer]: [ParticleBuffer]) => {
+  const onInit = Fn(([_buffer]: [ParticleBuffer], _builder) => {
     const rand = hash(instanceIndex.add(12345));
 
     const type = secondaryBuffer.element(instanceIndex);
@@ -150,7 +152,7 @@ const getFirePresetConfig = (
     type.assign(isSpark);
   });
 
-  const onUpdate = Fn(([_buffer]: [ParticleBuffer]) => {
+  const onUpdate = Fn(([_buffer]: [ParticleBuffer], _builder) => {
     const data = _buffer.element(instanceIndex);
     const isSpark = secondaryBuffer.element(instanceIndex);
 

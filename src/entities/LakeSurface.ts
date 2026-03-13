@@ -7,6 +7,7 @@ import {
   dot,
   exp,
   float,
+  int,
   max,
   mix,
   normalize,
@@ -73,7 +74,7 @@ export class LakeSurface {
     // Register landmark for radial menu discovery
     const landmarkId = landmarkManager.register({
       name: "Lake",
-      icon: "🌊",
+      icon: "water",
       position: lakeSurface.position,
       discoveryRadius: 150,
       arrivalRadius: 90,
@@ -268,8 +269,8 @@ class WaterMaterial extends MeshBasicNodeMaterial {
     const webglZNdc = zNdc.mul(2).sub(1).mul(isWebGL);
     const webgpuZNdc = zNdc.mul(this.uniforms.uIsWebGPU);
     const zNdcCompatible = webglZNdc.add(webgpuZNdc);
-    const p3z = cameraProjectionMatrix.element(3).element(2);
-    const p2z = cameraProjectionMatrix.element(2).element(2);
+    const p3z = float(cameraProjectionMatrix.element(int(3)).element(int(2)));
+    const p2z = float(cameraProjectionMatrix.element(int(2)).element(int(2)));
     const zLinear = p3z.div(zNdcCompatible.add(p2z));
     const fragLinear = positionView.z.negate();
     const isUnderWater = step(fragLinear, zLinear);

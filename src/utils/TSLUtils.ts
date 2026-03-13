@@ -37,7 +37,7 @@ export class TSLUtils {
       value = float(0),
       lsb = float(1),
       bias = float(0),
-    ]) => {
+    ], _builder) => {
       const levels = sub(pow(2, bits), 1);
       const qRaw = sub(value, bias).div(max(lsb, EPSILON));
       const q = clamp(round(qRaw), 0, levels);
@@ -67,7 +67,7 @@ export class TSLUtils {
       bits = int(8),
       lsb = float(1),
       bias = float(0),
-    ]) => {
+    ], _builder) => {
       const base = pow(2, offset);
       const span = pow(2, bits);
       const slot = floor(src.div(base));
@@ -84,7 +84,7 @@ export class TSLUtils {
    * @param value [float] value to be stored (in range 0..1)
    */
   static packUnit = Fn(
-    ([dest = float(0), offset = int(0), bits = int(8), value = float(0)]) => {
+    ([dest = float(0), offset = int(0), bits = int(8), value = float(0)], _builder) => {
       const lsb = float(1).div(sub(pow(2, bits), 1)); // 1/(2^bits-1)
       return this.packF32(dest, offset, bits, value, lsb, float(0));
     },
@@ -96,7 +96,7 @@ export class TSLUtils {
    * @param offset [int] location of starting bit index
    * @param bits [int] how many bits it occupies
    */
-  static unpackUnit = Fn(([src = float(0), offset = int(0), bits = int(8)]) => {
+  static unpackUnit = Fn(([src = float(0), offset = int(0), bits = int(8)], _builder) => {
     const lsb = float(1).div(sub(pow(2, bits), 1));
     return this.unpackF32(src, offset, bits, lsb, float(0));
   });
@@ -107,7 +107,7 @@ export class TSLUtils {
    * @param offset [int] location of starting bit index
    * @param value [float] flag to be stored, binary 0/1
    */
-  static packFlag = Fn(([dest = float(0), offset = int(0), value = float(0)]) =>
+  static packFlag = Fn(([dest = float(0), offset = int(0), value = float(0)], _builder) =>
     this.packF32(dest, offset, int(1), value, float(1), float(0)),
   );
 
@@ -116,7 +116,7 @@ export class TSLUtils {
    * @param src [float] source data
    * @param offset [int] location of starting bit index
    */
-  static unpackFlag = Fn(([src = float(0), offset = int(0)]) =>
+  static unpackFlag = Fn(([src = float(0), offset = int(0)], _builder) =>
     this.unpackF32(src, offset, int(1), float(1), float(0)),
   );
 
@@ -127,7 +127,7 @@ export class TSLUtils {
    * @param value [float] angle to be stored in radians
    */
   static packAngle = Fn(
-    ([dest = float(0), offset = int(0), bits = int(9), value = float(0)]) => {
+    ([dest = float(0), offset = int(0), bits = int(9), value = float(0)], _builder) => {
       const levels = sub(pow(2, bits), 1);
       const lsb = PI2.div(levels); // 2π/(2^bits-1)
       // wrap into [0,2π)
@@ -143,7 +143,7 @@ export class TSLUtils {
    * @param bits [int] how many bits it occupies
    */
   static unpackAngle = Fn(
-    ([src = float(0), offset = int(0), bits = int(9)]) => {
+    ([src = float(0), offset = int(0), bits = int(9)], _builder) => {
       const lsb = PI2.div(sub(pow(2, bits), 1));
       return this.unpackF32(src, offset, bits, lsb, float(0));
     },
@@ -157,7 +157,7 @@ export class TSLUtils {
       bits = float(8),
       value = float(0),
       maxAbs = float(1),
-    ]) => {
+    ], _builder) => {
       const levels = sub(pow(2, bits), 1);
       const lsb = maxAbs.mul(2).div(levels); // step
       const bias = maxAbs.negate();
@@ -170,7 +170,7 @@ export class TSLUtils {
       offset = float(0),
       bits = float(8),
       maxAbs = float(1),
-    ]) => {
+    ], _builder) => {
       const lsb = maxAbs.mul(2).div(sub(pow(2, bits), 1));
       const bias = maxAbs.negate();
       return this.unpackF32(packed, offset, bits, lsb, bias);
@@ -194,7 +194,7 @@ export class TSLUtils {
       value = float(0),
       minV = float(0),
       maxV = float(1),
-    ]) => {
+    ], _builder) => {
       const levels = sub(pow(2, bits), 1);
       const lsb = maxV.sub(minV).div(levels);
       return this.packF32(dest, offset, bits, value, lsb, minV);
@@ -216,23 +216,23 @@ export class TSLUtils {
       bits = int(8),
       minV = float(0),
       maxV = float(1),
-    ]) => {
+    ], _builder) => {
       const lsb = maxV.sub(minV).div(sub(pow(2, bits), 1));
       return this.unpackF32(src, offset, bits, lsb, minV);
     },
   );
 
-  static computeMapUvByPosition = Fn(([pos = vec2(0)]) => {
+  static computeMapUvByPosition = Fn(([pos = vec2(0)], _builder) => {
     return pos.add(realmConfig.HALF_MAP_SIZE).div(realmConfig.MAP_SIZE);
   });
 
   static computeAtlasUv = Fn(
-    ([scale = vec2(0), offset = vec2(0), uv = vec2(0)]) => {
+    ([scale = vec2(0), offset = vec2(0), uv = vec2(0)], _builder) => {
       return uv.mul(scale).add(offset);
     },
   );
 
-  static getBakedShadowFactor = Fn(([worldPosXZ = vec2(0)]) => {
+  static getBakedShadowFactor = Fn(([worldPosXZ = vec2(0)], _builder) => {
     const mapUv = this.computeMapUvByPosition(worldPosXZ);
     const shadow = texture(assetManager.resources.shadowMap, mapUv);
     return shadow.r;
@@ -244,7 +244,7 @@ export class TSLUtils {
       playerPos = vec3(0),
       playerRadius = float(0.5),
       sunDir = vec3(0),
-    ]) => {
+    ], _builder) => {
       // sunDir points FROM sun TO scene (e.g., normalized(-1,-1,-1))
       // Find where player center projects onto plane at worldPos.y along sunDir
       // playerPos + sunDir * t = shadowPoint, where shadowPoint.y = worldPos.y
@@ -268,7 +268,7 @@ export class TSLUtils {
 
   // Inputs n1, n2 are tangent-space normals already unpacked to [-1..1] and normalized.
   // (If you sampled from texture, do: n = tex.rgb * 2 - 1; normalize(n);)
-  static blendRNM = Fn(([n1 = vec3(0), n2 = vec3(0)]) => {
+  static blendRNM = Fn(([n1 = vec3(0), n2 = vec3(0)], _builder) => {
     const r = vec3(
       n1.z.mul(n2.x).add(n1.x.mul(n2.z)),
       n1.z.mul(n2.y).add(n1.y.mul(n2.z)),
@@ -278,7 +278,7 @@ export class TSLUtils {
   });
 
   // partial derivatives, inputs n1, n2 are tangent-space normals already unpacked to [-1..1] and normalized.
-  static blendUDN = Fn(([n1 = vec3(0), n2 = vec3(0)]) => {
+  static blendUDN = Fn(([n1 = vec3(0), n2 = vec3(0)], _builder) => {
     return vec3(n1.xy.add(n2.xy), n1.z.mul(n2.z)).normalize();
   });
 }

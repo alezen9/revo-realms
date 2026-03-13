@@ -1,4 +1,4 @@
-import { Clock } from "three";
+import { Timer } from "three";
 import Player from "./entities/Player";
 import RevoRealm from "./realm/RevoRealm";
 import { debounce } from "lodash-es";
@@ -26,6 +26,7 @@ export type Sizes = {
 
 const ENABLE_CAP_FPS = true;
 const AUTO_HALF_FPS_THRESHOLD = 120; // Hz
+const MAX_FRAME_DELTA_SECONDS = 1 / 15;
 
 export default class Game {
   private player: Player;
@@ -76,20 +77,31 @@ export default class Game {
     await this.updateRefreshRate();
     this.debugGame();
     timeManager.reset();
-    const clock = new Clock(true);
+    const timer = new Timer();
+    timer.connect(document);
 
-    const state: State = { delta: clock.getDelta(), player: this.player };
+    const state: State = { delta: 0, player: this.player };
 
     let flip = false;
     let pendingDelta = 0;
 
-    const loop = () => {
-      pendingDelta += clock.getDelta();
+    const loop = (timestamp: DOMHighResTimeStamp) => {
+      timer.update(timestamp);
+      const rawDelta = timer.getDelta();
+      const clampedDelta = Math.min(rawDelta, MAX_FRAME_DELTA_SECONDS);
+      pendingDelta += clampedDelta;
+
       const shouldTick = this.config.halvenFPS ? (flip = !flip) : true;
       if (!shouldTick) return;
+
+      if (timeManager.isPaused) {
+        pendingDelta = 0;
+        return;
+      }
+
       state.delta = timeManager.update(pendingDelta);
       pendingDelta = 0;
-      if (timeManager.isPaused) return;
+
       physicsManager.update(state.delta);
       if (import.meta.env.DEV) sceneManager.update();
       eventsManager.emit("engine-update", state);
@@ -101,6 +113,10 @@ export default class Game {
     this.onResize();
     const resizeObserver = new ResizeObserver(debouncedResize);
     resizeObserver.observe(document.body);
+
+    import.meta.hot?.dispose(() => {
+      resizeObserver.disconnect();
+    });
 
     rendererManager.renderer.setAnimationLoop(loop);
   }

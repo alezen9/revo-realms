@@ -3,12 +3,10 @@ import {
   debugManager,
   landmarkManager,
   windManager,
+  sceneManager,
 } from "../../systems";
 import { Mesh } from "three";
 import { MeshStandardNodeMaterial } from "three/webgpu";
-import { ColliderDesc, RigidBodyDesc } from "@dimforge/rapier3d";
-import { physicsManager, sceneManager } from "../../systems";
-import { RevoColliderType } from "../../types";
 import { color, normalMap, texture, uniform, uv, vec3 } from "three/tsl";
 
 const uniforms = {
@@ -58,48 +56,10 @@ export default class GodOfWar {
 
     sceneManager.scene.add(axe);
 
-    // // Physics
-    // const axeCollider = assetManager.resources.worldModel.scene.getObjectByName(
-    //   "axe_collider",
-    // ) as Mesh;
-    // const rigidBodyDescAxe = RigidBodyDesc.fixed()
-    //   .setTranslation(...axeCollider.position.toArray())
-    //   .setRotation(axeCollider.quaternion)
-    //   .setUserData({ type: RevoColliderType.Wood });
-
-    // const rigidBodyAxe = physicsManager.world.createRigidBody(rigidBodyDescAxe);
-    // const max = axeCollider.geometry.boundingBox!.max;
-    // const colliderDescAxe = ColliderDesc.cuboid(
-    //   max.x,
-    //   max.y,
-    //   max.z,
-    // ).setRestitution(0.75);
-    // physicsManager.world.createCollider(colliderDescAxe, rigidBodyAxe);
-
-    // const trunkCollider =
-    //   assetManager.resources.worldModel.scene.getObjectByName(
-    //     "trunk_collider",
-    //   ) as Mesh;
-    // const { x, y } = trunkCollider.geometry.boundingBox!.max;
-    // const rigidBodyDescTrunk = RigidBodyDesc.fixed()
-    //   .setTranslation(...trunkCollider.position.toArray())
-    //   .setRotation(trunkCollider.quaternion)
-    //   .setUserData({ type: RevoColliderType.Wood });
-
-    // const rigidBodyTrunk =
-    //   physicsManager.world.createRigidBody(rigidBodyDescTrunk);
-    // const radius = x;
-    // const halfHeight = y / 2;
-    // const colliderDescTrunk = ColliderDesc.capsule(
-    //   halfHeight,
-    //   radius,
-    // ).setRestitution(0.75);
-    // physicsManager.world.createCollider(colliderDescTrunk, rigidBodyTrunk);
-
     // Register landmark for radial menu discovery
     const landmarkId = landmarkManager.register({
       name: "Leviathan Axe",
-      icon: "🪓",
+      icon: "axe",
       position: axe.position,
       discoveryRadius: 80,
       arrivalRadius: 20,

@@ -121,13 +121,11 @@ class GrassSsbo {
   // y -> offsetZ (0 unused)
   // z -> 0/12 windX - 12/12 windZ (0 unused)
   // w -> 0/8 current scale - 8/8 original scale - 16/1 shadow - 17/1 visibility - 18/4 wind noise factor (0 unused)
-  private buffer1: ReturnType<typeof instancedArray>;
+  private buffer1 = instancedArray(config.COUNT, "vec4");
   // x -> 0/4 position based noise (20 unused)
-  private buffer2: ReturnType<typeof instancedArray>;
+  private buffer2 = instancedArray(config.COUNT, "float");
 
   constructor() {
-    this.buffer1 = instancedArray(config.COUNT, "vec4");
-    this.buffer2 = instancedArray(config.COUNT, "float");
     this.computeUpdate.onInit(({ renderer }) => {
       renderer.computeAsync(this.computeInit);
     });
@@ -141,13 +139,13 @@ class GrassSsbo {
     return this.buffer2;
   }
 
-  getWind = Fn(([data = vec4(0)]) => {
+  getWind = Fn(([data = vec4(0)], _builder) => {
     const x = TSLUtils.unpackUnits(data.z, 0, 12, -2, 2);
     const z = TSLUtils.unpackUnits(data.z, 12, 12, -2, 2);
     return vec2(x, z);
   });
 
-  getScale = Fn(([data = vec4(0)]) => {
+  getScale = Fn(([data = vec4(0)], _builder) => {
     return TSLUtils.unpackUnits(
       data.w,
       0,
@@ -157,7 +155,7 @@ class GrassSsbo {
     );
   });
 
-  getOriginalScale = Fn(([data = vec4(0)]) => {
+  getOriginalScale = Fn(([data = vec4(0)], _builder) => {
     return TSLUtils.unpackUnits(
       data.w,
       8,
@@ -167,29 +165,29 @@ class GrassSsbo {
     );
   });
 
-  getShadow = Fn(([data = vec4(0)]) => {
+  getShadow = Fn(([data = vec4(0)], _builder) => {
     return TSLUtils.unpackFlag(data.w, 16);
   });
 
-  getVisibility = Fn(([data = vec4(0)]) => {
+  getVisibility = Fn(([data = vec4(0)], _builder) => {
     return TSLUtils.unpackFlag(data.w, 17);
   });
 
-  getWindNoise = Fn(([data = vec4(0)]) => {
+  getWindNoise = Fn(([data = vec4(0)], _builder) => {
     return TSLUtils.unpackUnit(data.w, 18, 6);
   });
 
-  getPositionNoise = Fn(([data = float(0)]) => {
+  getPositionNoise = Fn(([data = float(0)], _builder) => {
     return TSLUtils.unpackUnit(data, 0, 4);
   });
 
-  private setWind = Fn(([data = vec4(0), value = vec2(0)]) => {
+  private setWind = Fn(([data = vec4(0), value = vec2(0)], _builder) => {
     data.z = TSLUtils.packUnits(data.z, 0, 12, value.x, -2, 2);
     data.z = TSLUtils.packUnits(data.z, 12, 12, value.y, -2, 2);
     return data;
   });
 
-  private setScale = Fn(([data = vec4(0), value = float(0)]) => {
+  private setScale = Fn(([data = vec4(0), value = float(0)], _builder) => {
     data.w = TSLUtils.packUnits(
       data.w,
       0,
@@ -201,7 +199,7 @@ class GrassSsbo {
     return data;
   });
 
-  private setOriginalScale = Fn(([data = vec4(0), value = float(0)]) => {
+  private setOriginalScale = Fn(([data = vec4(0), value = float(0)], _builder) => {
     data.w = TSLUtils.packUnits(
       data.w,
       8,
@@ -213,17 +211,17 @@ class GrassSsbo {
     return data;
   });
 
-  private setVisibility = Fn(([data = vec4(0), value = float(0)]) => {
+  private setVisibility = Fn(([data = vec4(0), value = float(0)], _builder) => {
     data.w = TSLUtils.packFlag(data.w, 17, value);
     return data;
   });
 
-  private setWindNoise = Fn(([data = vec4(0), value = float(0)]) => {
+  private setWindNoise = Fn(([data = vec4(0), value = float(0)], _builder) => {
     data.w = TSLUtils.packUnit(data.w, 18, 6, value);
     return data;
   });
 
-  private setPositionNoise = Fn(([data = float(0), value = float(0)]) => {
+  private setPositionNoise = Fn(([data = float(0), value = float(0)], _builder) => {
     return TSLUtils.packUnit(data, 0, 4, value);
   });
 
@@ -269,7 +267,7 @@ class GrassSsbo {
     data1.assign(this.setOriginalScale(data1, randomScale));
   })().compute(config.COUNT, [config.WORKGROUP_SIZE]);
 
-  private computeStochasticKeep = Fn(([worldPos = vec3(0)]) => {
+  private computeStochasticKeep = Fn(([worldPos = vec3(0)], _builder) => {
     // world-space radial thinning (no sqrt)
     const dx = worldPos.x.sub(uniforms.uPlayerPosition.x);
     const dz = worldPos.z.sub(uniforms.uPlayerPosition.z);
@@ -294,7 +292,7 @@ class GrassSsbo {
     return keep;
   });
 
-  private computeVisibility = Fn(([worldPos = vec3(0)]) => {
+  private computeVisibility = Fn(([worldPos = vec3(0)], _builder) => {
     const clipPos = uniforms.uCameraMatrix.mul(vec4(worldPos, 1.0));
     // Convert to normalized device coordinates
     const ndc = clipPos.xyz.div(clipPos.w);
@@ -313,7 +311,7 @@ class GrassSsbo {
   });
 
   private computeWind = Fn(
-    ([prevWindXZ = vec2(0), worldPos = vec3(0), positionNoise = float(0)]) => {
+    ([prevWindXZ = vec2(0), worldPos = vec3(0), positionNoise = float(0)], _builder) => {
       const intensity = smoothstep(0.2, 0.5, windManager.uIntensity);
       const dir = windManager.uDirection.negate();
       const strength = uniforms.uWindStrength.add(intensity);
@@ -359,7 +357,7 @@ class GrassSsbo {
     },
   );
 
-  private computeAlpha = Fn(([worldPos = vec3(0)]) => {
+  private computeAlpha = Fn(([worldPos = vec3(0)], _builder) => {
     const alphaUv = TSLUtils.computeMapUvByPosition(worldPos.xz);
     const alpha = texture(assetManager.resources.terrainTypeTexture, alphaUv).g;
     const threshold = step(0.25, alpha);
@@ -368,7 +366,7 @@ class GrassSsbo {
 
   private computeTrailScale = Fn(
     (
-      [originalScale = float(0), currentScale = float(0), isStepped = float(0)], // isStepped in [0,1]
+      [originalScale = float(0), currentScale = float(0), isStepped = float(0)], _builder, // isStepped in [0,1]
     ) => {
       // Upward relax toward original (no step)
       const up = currentScale.add(
@@ -388,7 +386,7 @@ class GrassSsbo {
     },
   );
 
-  private computeShadow = Fn(([worldPos = vec3(0)]) => {
+  private computeShadow = Fn(([worldPos = vec3(0)], _builder) => {
     const _uv = TSLUtils.computeMapUvByPosition(worldPos.xz);
     const shadowAo = texture(
       assetManager.resources.terrainShadowAoTexture,
@@ -434,20 +432,12 @@ class GrassSsbo {
     );
     data1.assign(this.setScale(data1, newScale));
 
-    // Alpha
-    // const alpha = this.computeAlpha(worldPos);
-    // data1.assign(this.setVisibility(data1, alpha));
-
     // Wind
     const positionNoise = this.getPositionNoise(data2);
     const prevWind = this.getWind(data1);
     const newWind = this.computeWind(prevWind, worldPos, positionNoise);
     data1.assign(this.setWind(data1, newWind.xy)); // Wind displacement
     data1.assign(this.setWindNoise(data1, newWind.z)); // Noise factor
-
-    // // Shadow
-    // const isShadow = this.computeShadow(worldPos);
-    // data.assign(this.setShadow(data, isShadow));
   })().compute(config.COUNT, [config.WORKGROUP_SIZE]);
 }
 

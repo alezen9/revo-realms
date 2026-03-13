@@ -3,12 +3,10 @@ import {
   debugManager,
   landmarkManager,
   windManager,
+  sceneManager,
 } from "../../systems";
 import { Mesh } from "three";
 import { MeshStandardNodeMaterial } from "three/webgpu";
-import { ColliderDesc, RigidBodyDesc } from "@dimforge/rapier3d";
-import { physicsManager, sceneManager } from "../../systems";
-import { RevoColliderType } from "../../types";
 import { normalMap, texture, uniform, uv } from "three/tsl";
 
 const uniforms = {
@@ -51,28 +49,10 @@ export default class Berserk {
     sword.material = new DragonSlayerMaterial();
     sceneManager.scene.add(sword);
 
-    // // Physics
-    // const swordCollider = assetManager.resources.realmModel.scene.getObjectByName(
-    //   "sword_collider",
-    // ) as Mesh;
-    // const rigidBodyDescAxe = RigidBodyDesc.fixed()
-    //   .setTranslation(...swordCollider.position.toArray())
-    //   .setRotation(swordCollider.quaternion)
-    //   .setUserData({ type: RevoColliderType.Wood });
-
-    // const rigidBodyAxe = physicsManager.world.createRigidBody(rigidBodyDescAxe);
-    // const max = swordCollider.geometry.boundingBox!.max;
-    // const colliderDescAxe = ColliderDesc.cuboid(
-    //   max.x,
-    //   max.y,
-    //   max.z,
-    // ).setRestitution(0.75);
-    // physicsManager.world.createCollider(colliderDescAxe, rigidBodyAxe);
-
     // Register landmark for radial menu discovery
     const landmarkId = landmarkManager.register({
       name: "Dragon Slayer",
-      icon: "⚔️",
+      icon: "sword",
       position: sword.position,
       discoveryRadius: 80,
       arrivalRadius: 20,

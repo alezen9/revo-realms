@@ -171,7 +171,7 @@ export class PhysicsManager {
 
   update(delta: number) {
     if (!this.world) return;
-    this.updateDebugMesh();
+    if (this.IS_DEBUGGING_ENABLED) this.updateDebugMesh();
 
     // fixed timestep with accumulator
     this.accumulator += delta;
