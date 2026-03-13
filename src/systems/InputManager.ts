@@ -67,6 +67,10 @@ export class InputManager {
 
   constructor(eventsManager: EventsManager) {
     this.keyboardManager = new KeyboardManager(eventsManager);
+
+    import.meta.hot?.dispose(() => {
+      this.keyboardManager.dispose();
+    });
   }
 
   isForward(): boolean {

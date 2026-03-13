@@ -63,7 +63,7 @@ export class Campfire {
     // Register landmark for radial menu discovery
     const landmarkId = landmarkManager.register({
       name: "Campfire",
-      icon: "🔥",
+      icon: "fire",
       position: campfire.position,
       discoveryRadius: 100,
       arrivalRadius: 15,

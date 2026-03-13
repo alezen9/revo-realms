@@ -68,7 +68,7 @@ export default class DragonBall {
     // Register landmark for radial menu discovery
     const landmarkId = landmarkManager.register({
       name: "Goku Statue",
-      icon: "🐉",
+      icon: "dragonball",
       position: gokuStatue.position,
       discoveryRadius: 80,
       arrivalRadius: 20,

@@ -6,7 +6,12 @@
 		timeManager,
 		windManager,
 	} from "../../systems"
-	import type { Landmark } from "../../systems/LandmarkManager"
+	import type { Landmark, LandmarkIconId } from "../../systems/LandmarkManager"
+	import IconAxe from "./icons/IconAxe.svelte"
+	import IconDragonBall from "./icons/IconDragonBall.svelte"
+	import IconFire from "./icons/IconFire.svelte"
+	import IconSword from "./icons/IconSword.svelte"
+	import IconWater from "./icons/IconWater.svelte"
 
 	let isVisible = $state(false)
 	let landmarks = $state<Landmark[]>([])
@@ -18,7 +23,17 @@
 	const svgSize = 400
 	const center = svgSize / 2
 	const labelRadius = (innerRadius + outerRadius) / 2
+	const discoveredIconX = -13
+	const discoveredIconY = -20
+	const discoveredIconBoxSize = 26
 	let menuEl = $state.raw<HTMLDivElement | null>(null)
+	const landmarkIconComponents = {
+		fire: IconFire,
+		water: IconWater,
+		sword: IconSword,
+		axe: IconAxe,
+		dragonball: IconDragonBall,
+	} as const satisfies Record<LandmarkIconId, typeof IconFire>
 
 	const toRad = (deg: number) => (deg * Math.PI) / 180
 	const toPoint = (radius: number, angleRad: number) => ({
@@ -193,15 +208,31 @@
 				>
 					<path class="radial-menu__arc" d={slot.path} />
 
-					<text
-						class="radial-menu__icon"
-						x={slot.labelX}
-						y={slot.labelY - 6}
-						text-anchor="middle"
-						dominant-baseline="middle"
-					>
-						{landmark.hasBeenDiscovered ? landmark.icon : "?"}
-					</text>
+					{#if landmark.hasBeenDiscovered}
+						{@const IconComponent = landmarkIconComponents[landmark.icon]}
+						<foreignObject
+							class="radial-menu__icon"
+							x={slot.labelX + discoveredIconX}
+							y={slot.labelY + discoveredIconY}
+							width={discoveredIconBoxSize}
+							height={discoveredIconBoxSize}
+							aria-hidden="true"
+						>
+							<div class="radial-menu__icon-box">
+								<IconComponent size="1em" />
+							</div>
+						</foreignObject>
+					{:else}
+						<text
+							class="radial-menu__icon radial-menu__icon--unknown"
+							x={slot.labelX}
+							y={slot.labelY - 6}
+							text-anchor="middle"
+							dominant-baseline="middle"
+						>
+							?
+						</text>
+					{/if}
 
 					{#if landmark.hasBeenDiscovered}
 						<text
@@ -318,27 +349,38 @@
 
 	.radial-menu__icon {
 		font-size: 26px;
-		fill: white;
+		color: white;
 		transition-delay: calc(var(--delay) + 0.1s);
-		/* filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.4)); */
+	}
+
+	.radial-menu__icon-box {
+		width: 100%;
+		height: 100%;
+		display: grid;
+		place-items: center;
+	}
+
+	.radial-menu__icon-box :global(svg) {
+		display: block;
+		opacity: 0.95;
 	}
 
 	.radial-menu.open .radial-menu__icon {
 		opacity: 1;
 	}
 
-	.radial-menu__slot:not(.discovered) .radial-menu__icon {
+	.radial-menu__icon--unknown {
 		font-family: system-ui, sans-serif;
 		font-weight: 300;
 		font-size: 22px;
 	}
 
-	.radial-menu.open .radial-menu__slot:not(.discovered) .radial-menu__icon {
+	.radial-menu.open .radial-menu__icon--unknown {
 		opacity: 0.5;
 	}
 
 	.radial-menu__label {
-		font-size: 9px;
+		font-size: 0.5em;
 		font-family: system-ui, sans-serif;
 		font-weight: 600;
 		text-transform: uppercase;

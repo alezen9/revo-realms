@@ -2,10 +2,17 @@ import { Vector3 } from "three";
 import type { State } from "../Game";
 import type { EventsManager } from "./EventsManager";
 
+export type LandmarkIconId =
+  | "fire"
+  | "water"
+  | "sword"
+  | "axe"
+  | "dragonball";
+
 export type Landmark = {
   id: string;
   name: string;
-  icon: string;
+  icon: LandmarkIconId;
   position: Vector3;
   discoveryRadius: number;
   arrivalRadius: number;

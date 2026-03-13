@@ -84,11 +84,9 @@ class FlowersSsbo {
   // y -> offsetZ (0 unused)
   // z -> 0/12 offsetY - 12/13 visibility (9 unused)
   // w -> noise (0 unused - also not used currently)
-  // private buffer: ReturnType<typeof instancedArray>;
-  private buffer: ReturnType<typeof instancedArray>;
+  private buffer = instancedArray(config.COUNT, "vec4");
 
   constructor() {
-    this.buffer = instancedArray(config.COUNT, "vec4");
     this.computeUpdate.onInit(({ renderer }) => {
       renderer.computeAsync(this.computeInit);
     });
@@ -98,7 +96,7 @@ class FlowersSsbo {
     return this.buffer;
   }
 
-  getYOffset = Fn(([data = vec4(0)]) => {
+  getYOffset = Fn(([data = vec4(0)], _builder) => {
     return TSLUtils.unpackUnits(
       data.z,
       0,
@@ -108,11 +106,11 @@ class FlowersSsbo {
     );
   });
 
-  getVisibility = Fn(([data = vec4(0)]) => {
+  getVisibility = Fn(([data = vec4(0)], _builder) => {
     return TSLUtils.unpackFlag(data.z, 12);
   });
 
-  getNoise = Fn(([data = vec4(0)]) => {
+  getNoise = Fn(([data = vec4(0)], _builder) => {
     const x = TSLUtils.unpackUnit(data.w, 0, 6);
     const y = TSLUtils.unpackUnit(data.w, 6, 6);
     const z = TSLUtils.unpackUnit(data.w, 12, 6);
@@ -120,7 +118,7 @@ class FlowersSsbo {
     return vec4(x, y, z, w);
   });
 
-  private setYOffset = Fn(([data = vec4(0), value = float(0)]) => {
+  private setYOffset = Fn(([data = vec4(0), value = float(0)], _builder) => {
     data.z = TSLUtils.packUnits(
       data.z,
       0,
@@ -132,12 +130,12 @@ class FlowersSsbo {
     return data;
   });
 
-  private setVisibility = Fn(([data = vec4(0), value = float(0)]) => {
+  private setVisibility = Fn(([data = vec4(0), value = float(0)], _builder) => {
     data.z = TSLUtils.packFlag(data.z, 12, value);
     return data;
   });
 
-  private setNoise = Fn(([data = vec4(0), value = vec4(0)]) => {
+  private setNoise = Fn(([data = vec4(0), value = vec4(0)], _builder) => {
     data.w = TSLUtils.packUnit(data.w, 0, 6, value.x);
     data.w = TSLUtils.packUnit(data.w, 6, 6, value.y);
     data.w = TSLUtils.packUnit(data.w, 12, 6, value.z);

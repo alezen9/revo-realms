@@ -75,11 +75,6 @@ const getConfig = () => {
     DOWN: new Vector3(0, -1, 0),
     FORWARD: new Vector3(0, 0, -1),
     RESET_Y: -15,
-    // Game feel
-    FOV_BASE: 45,
-    FOV_MAX: 50,
-    FOV_SPEED_THRESHOLD: 5,
-    FOV_LERP: 3,
   };
 };
 
@@ -123,9 +118,6 @@ export default class Player {
   private prevQuaternion = new Quaternion();
   private targetPosition = new Vector3();
   private targetQuaternion = new Quaternion();
-
-  // Game feel state
-  // private currentFov = config.FOV_BASE;
 
   constructor() {
     this.mesh = this.createCharacterMesh();
@@ -217,24 +209,19 @@ export default class Player {
       max: 10,
     });
 
-    // const feel = folder.addFolder({ title: "Game Feel" });
-    // feel.addBinding(config, "FOV_BASE", {
-    //   label: "FOV base",
-    //   min: 40,
-    //   max: 70,
-    // });
-    // feel.addBinding(config, "FOV_MAX", { label: "FOV max", min: 50, max: 90 });
   }
 
   private initWaterDetection() {
     const tex = assetManager.resources.waterMap;
     if (!tex?.image) return;
+    const image = tex.image as HTMLImageElement;
+    if (!image.width || !image.height) return;
     try {
       const canvas = document.createElement("canvas");
       const ctx = canvas.getContext("2d")!;
-      canvas.width = tex.image.width;
-      canvas.height = tex.image.height;
-      ctx.drawImage(tex.image, 0, 0);
+      canvas.width = image.width;
+      canvas.height = image.height;
+      ctx.drawImage(image, 0, 0);
       const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
       this.waterData = imageData.data;
       this.waterMapWidth = canvas.width;
@@ -314,26 +301,6 @@ export default class Player {
       .setActiveEvents(ActiveEvents.COLLISION_EVENTS);
   }
 
-  // private updateGameFeel(delta: number) {
-  //   const vel = this.rigidBody.linvel();
-
-  //   // FOV based on speed
-  //   const speed = Math.sqrt(vel.x * vel.x + vel.z * vel.z);
-  //   const speedT = MathUtils.clamp(
-  //     (speed - config.FOV_SPEED_THRESHOLD) / config.FOV_SPEED_THRESHOLD,
-  //     0,
-  //     1,
-  //   );
-  //   const targetFov = MathUtils.lerp(config.FOV_BASE, config.FOV_MAX, speedT);
-  //   this.currentFov = MathUtils.lerp(
-  //     this.currentFov,
-  //     targetFov,
-  //     config.FOV_LERP * delta,
-  //   );
-  //   sceneManager.playerCamera.fov = this.currentFov;
-  //   sceneManager.playerCamera.updateProjectionMatrix();
-  // }
-
   private update(state: State) {
     const { delta } = state;
 
@@ -360,7 +327,7 @@ export default class Player {
 
     this.updateVerticalMovement(delta);
     this.updateHorizontalMovement(delta);
-    // this.updateGameFeel(delta);
+    this.syncMeshWithBody();
     this.updateCameraPosition(delta);
   }
 
@@ -494,7 +461,6 @@ export default class Player {
       this.rigidBody.setAngvel(this.newAngVel, true);
     }
 
-    this.syncMeshWithBody();
   }
 
   private syncMeshWithBody() {

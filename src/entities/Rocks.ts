@@ -30,11 +30,10 @@ import { assetManager, rendererManager } from "../systems";
 const COUNT = 20; // Hardcoded, rocks are placed in blender and are less than 20
 
 class RockMaterial extends MeshLambertNodeMaterial {
-  private _noiseBuffer: ReturnType<typeof instancedArray>; // holds: float = (noise)
+  private _noiseBuffer = instancedArray(COUNT, "float"); // holds: float = (noise)
 
   constructor() {
     super();
-    this._noiseBuffer = instancedArray(COUNT, "float");
     this._noiseBuffer.setPBO(true);
     rendererManager.renderer.computeAsync(this.computeInit);
 
