@@ -128,10 +128,11 @@ export default class Player {
     this.rigidBody = physicsManager.world.createRigidBody(
       this.createRigidBodyDesc(),
     );
-    physicsManager.world.createCollider(
+    const collider = physicsManager.world.createCollider(
       this.createColliderDesc(),
       this.rigidBody,
     );
+    collider.userData = { type: RevoColliderType.Player };
 
     // Initialize interpolation state
     this.prevPosition.copy(this.rigidBody.translation());
@@ -288,8 +289,7 @@ export default class Player {
     return RigidBodyDesc.dynamic()
       .setTranslation(x, y, z)
       .setLinearDamping(config.LINEAR_DAMPING)
-      .setAngularDamping(config.ANGULAR_DAMPING)
-      .setUserData({ type: RevoColliderType.Player });
+      .setAngularDamping(config.ANGULAR_DAMPING);
   }
 
   private createColliderDesc() {

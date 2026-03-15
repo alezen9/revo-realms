@@ -1,7 +1,7 @@
 import { InstancedMesh, Mesh } from "three";
 import { assetManager } from "../../systems";
 import { MeshStandardNodeMaterial } from "three/webgpu";
-import { ColliderDesc, RigidBodyDesc } from "@dimforge/rapier3d";
+import { ColliderDesc } from "@dimforge/rapier3d";
 import { RevoColliderType } from "../../types";
 import { physicsManager, sceneManager } from "../../systems";
 import { texture, uniform, uv } from "three/tsl";
@@ -43,14 +43,13 @@ export default class Naruto {
     kunais.forEach((kunai, i) => {
       instances.setMatrixAt(i, kunai.matrix);
       // Physics
-      const rigidBodyDesc = RigidBodyDesc.fixed()
+      const colliderDesc = ColliderDesc.cuboid(x, y, z)
         .setTranslation(...kunai.position.toArray())
         .setRotation(kunai.quaternion)
-        .setUserData({ type: RevoColliderType.Wood });
-
-      const rigidBody = physicsManager.world.createRigidBody(rigidBodyDesc);
-      const colliderDesc = ColliderDesc.cuboid(x, y, z).setRestitution(0.75);
-      physicsManager.world.createCollider(colliderDesc, rigidBody);
+        .setRestitution(0.75);
+      physicsManager.world.createCollider(colliderDesc).userData = {
+        type: RevoColliderType.Wood,
+      };
     });
 
     sceneManager.scene.add(instances);
