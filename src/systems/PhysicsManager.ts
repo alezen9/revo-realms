@@ -1,9 +1,15 @@
-import { Collider, EventQueue, World } from "@dimforge/rapier3d";
+import {
+  Collider,
+  EventQueue,
+  QueryFilterFlags,
+  World,
+} from "@dimforge/rapier3d";
 import { RevoColliderType } from "../types";
 import { MathUtils, Vector3 } from "three";
 import { LineSegments2 } from "three/examples/jsm/lines/webgpu/LineSegments2.js";
 import { LineSegmentsGeometry } from "three/examples/jsm/Addons.js";
 import { Line2NodeMaterial } from "three/webgpu";
+import type { DebugManager } from "./DebugManager";
 import type { EventsManager } from "./EventsManager";
 import type { SceneManager } from "./SceneManager";
 import type { AudioManager } from "./AudioManager";
@@ -13,13 +19,11 @@ const config = {
   maxImpactSq: 400,
   minImpactVolume: 0.01,
   maxImpactVolume: 0.25,
-  debugRefreshInterval: 1 / 240,
 };
 
 export class PhysicsManager {
   world!: World;
   private eventQueue!: EventQueue;
-  private readonly IS_DEBUGGING_ENABLED = true;
   private baseTimestep = 1 / 60; // 60Hz fixed timestep (standard for games)
   private timeScale = 1;
   private accumulator = 0;
@@ -27,19 +31,24 @@ export class PhysicsManager {
   private _didStep = false;
   private audioManager: AudioManager;
   private sceneManager: SceneManager;
-  private debugRefreshAccumulator = 0;
 
   private dummyVectorLinVel = new Vector3();
-  private debugMesh?: LineSegments2;
-  private debugGeometry?: LineSegmentsGeometry;
+  private fixedDebugMesh?: LineSegments2;
+  private dynamicDebugMesh?: LineSegments2;
+  private dynamicDebugGeometry?: LineSegmentsGeometry;
+  private debug = {
+    enabled: true,
+  };
 
   constructor(
     eventsManager: EventsManager,
     sceneManager: SceneManager,
     audioManager: AudioManager,
+    debugManager: DebugManager,
   ) {
     this.audioManager = audioManager;
     this.sceneManager = sceneManager;
+    this.setupDebug(debugManager);
     eventsManager.on("engine-time-scale", (scale) => {
       this.setTimeScale(scale);
     });
@@ -66,16 +75,25 @@ export class PhysicsManager {
     if (this.world.timestep !== timestep) this.world.timestep = timestep;
   }
 
-  private getColliderName(collider: Collider) {
-    return collider.userData?.type;
+  private setupDebug(debugManager: DebugManager) {
+    const folder = debugManager.panel.addFolder({
+      title: "⚙️ Physics",
+      expanded: false,
+    });
+
+    folder
+      .addBinding(this.debug, "enabled", { label: "Debug render" })
+      .on("change", ({ value }) => this.setDebugEnabled(value));
   }
 
-  private getDebugAttributes() {
-    if (!this.debugGeometry) return null;
-    const instanceStart = this.debugGeometry.attributes.instanceStart;
-    const instanceEnd = this.debugGeometry.attributes.instanceEnd;
-    const positions = instanceStart.array;
-    return { instanceStart, instanceEnd, positions };
+  private setDebugEnabled(enabled: boolean) {
+    this.debug.enabled = enabled;
+    if (this.fixedDebugMesh) this.fixedDebugMesh.visible = enabled;
+    if (this.dynamicDebugMesh) this.dynamicDebugMesh.visible = enabled;
+  }
+
+  private getColliderName(collider: Collider) {
+    return collider.userData?.type;
   }
 
   private impactToVolume(intensity: number): number {
@@ -152,36 +170,63 @@ export class PhysicsManager {
   private createDebugMesh(positions: Float32Array) {
     const geometry = new LineSegmentsGeometry();
     geometry.setPositions(positions);
-    this.debugGeometry = geometry;
 
     const material = new Line2NodeMaterial();
 
     const debugMesh = new LineSegments2(geometry, material);
     debugMesh.frustumCulled = false;
-    return debugMesh;
+    return { debugMesh, geometry };
   }
 
-  private updateDebugMesh() {
-    const debugBuffer = this.world.debugRender();
+  private createFixedDebugMesh() {
+    if (this.fixedDebugMesh) return;
+
+    const debugBuffer = this.world.debugRender(QueryFilterFlags.ONLY_FIXED);
     if (!debugBuffer.vertices.length) return;
 
-    if (!this.debugMesh) {
-      this.debugMesh = this.createDebugMesh(debugBuffer.vertices);
-      this.sceneManager.scene.add(this.debugMesh);
+    const { debugMesh } = this.createDebugMesh(debugBuffer.vertices);
+    this.fixedDebugMesh = debugMesh;
+    debugMesh.visible = this.debug.enabled;
+    this.sceneManager.scene.add(debugMesh);
+  }
+
+  private updateDynamicDebugMesh() {
+    const debugBuffer = this.world.debugRender(QueryFilterFlags.EXCLUDE_FIXED);
+    if (!debugBuffer.vertices.length) return;
+
+    if (!this.dynamicDebugMesh) {
+      const { debugMesh, geometry } = this.createDebugMesh(
+        debugBuffer.vertices,
+      );
+      this.dynamicDebugMesh = debugMesh;
+      this.dynamicDebugGeometry = geometry;
+      debugMesh.visible = this.debug.enabled;
+      this.sceneManager.scene.add(debugMesh);
       return;
     }
 
-    const debugAttributes = this.getDebugAttributes();
-    if (!this.debugGeometry || !debugAttributes) return;
+    if (!this.dynamicDebugGeometry) return;
+    const instanceStart = this.dynamicDebugGeometry.attributes.instanceStart;
+    const instanceEnd = this.dynamicDebugGeometry.attributes.instanceEnd;
+    const positions = instanceStart.array;
 
-    if (debugAttributes.positions.length !== debugBuffer.vertices.length) {
-      this.debugGeometry.setPositions(debugBuffer.vertices);
+    if (positions.length !== debugBuffer.vertices.length) {
+      this.dynamicDebugGeometry.setPositions(debugBuffer.vertices);
       return;
     }
 
-    debugAttributes.positions.set(debugBuffer.vertices);
-    debugAttributes.instanceStart.needsUpdate = true;
-    debugAttributes.instanceEnd.needsUpdate = true;
+    positions.set(debugBuffer.vertices);
+    instanceStart.needsUpdate = true;
+    instanceEnd.needsUpdate = true;
+  }
+
+  private updateDebug() {
+    if (!this.debug.enabled) return;
+
+    this.createFixedDebugMesh();
+    if (!this._didStep) return;
+
+    this.updateDynamicDebugMesh();
   }
 
   // interpolation factor (0-1) for smooth rendering between physics steps
@@ -214,16 +259,7 @@ export class PhysicsManager {
     // clamp accumulator to prevent buildup during long frames
     if (this.accumulator > timestep) this.accumulator = timestep;
 
-    if (this.IS_DEBUGGING_ENABLED && this._didStep) {
-      this.debugRefreshAccumulator += delta;
-      if (
-        !this.debugMesh ||
-        this.debugRefreshAccumulator >= config.debugRefreshInterval
-      ) {
-        this.updateDebugMesh();
-        this.debugRefreshAccumulator = 0;
-      }
-    }
+    this.updateDebug();
 
     if (this.audioManager.isReady) this.handleCollisionSounds();
   }

@@ -35,6 +35,7 @@ const init = () => {
     eventsManager,
     sceneManager,
     audioManager,
+    debugManager,
   );
   const timeManager = new TimeManager(
     eventsManager,
