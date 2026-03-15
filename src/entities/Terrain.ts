@@ -305,11 +305,6 @@ class InnerTerrain {
     );
     assetManager.resources.heightmap.copy(heightMap);
 
-    const rigidBodyDesc = RigidBodyDesc.fixed()
-      .setTranslation(0, -displacement, 0)
-      .setUserData({ type: RevoColliderType.Terrain });
-    const rigidBody = physicsManager.world.createRigidBody(rigidBodyDesc);
-
     const colliderDesc = ColliderDesc.heightfield(
       rowsCount - 1,
       rowsCount - 1,
@@ -321,10 +316,13 @@ class InnerTerrain {
       },
       HeightFieldFlags.FIX_INTERNAL_EDGES,
     )
+      .setTranslation(0, -displacement, 0)
       .setFriction(1)
       .setRestitution(0.2);
 
-    physicsManager.world.createCollider(colliderDesc, rigidBody);
+    physicsManager.world.createCollider(colliderDesc).userData = {
+      type: RevoColliderType.Terrain,
+    };
 
     return displacement;
   }
@@ -358,8 +356,7 @@ class OuterTerrain {
         0,
         -20, // out of the physics world
         0,
-      )
-      .setUserData({ type: RevoColliderType.Terrain });
+      );
     const rigidBody = physicsManager.world.createRigidBody(rigidBodyDesc);
 
     const halfSize = 2;
@@ -371,7 +368,9 @@ class OuterTerrain {
     )
       .setFriction(1)
       .setRestitution(0.2);
-    physicsManager.world.createCollider(colliderDesc, rigidBody);
+    physicsManager.world.createCollider(colliderDesc, rigidBody).userData = {
+      type: RevoColliderType.Terrain,
+    };
     return rigidBody;
   }
 

@@ -16,7 +16,7 @@ import {
   uv,
   vec3,
 } from "three/tsl";
-import { ColliderDesc, RigidBodyDesc } from "@dimforge/rapier3d";
+import { ColliderDesc } from "@dimforge/rapier3d";
 import { RevoColliderType } from "../../types";
 import { gameTime } from "../../utils/GameTime";
 
@@ -150,19 +150,15 @@ export default class PineTree {
 
     colliders.forEach((colliderCylinder) => {
       // Physics
-      const rigidBodyDesc = RigidBodyDesc.fixed()
-        .setTranslation(...colliderCylinder.position.toArray())
-        .setRotation(colliderCylinder.quaternion)
-        .setUserData({ type: RevoColliderType.Wood });
-
-      const rigidBody = physicsManager.world.createRigidBody(rigidBodyDesc);
       const radius = baseRadius * colliderCylinder.scale.x;
       const halfHeight = baseHalfHeight * colliderCylinder.scale.y;
-      const colliderDesc = ColliderDesc.capsule(
-        halfHeight,
-        radius,
-      ).setRestitution(0.75);
-      physicsManager.world.createCollider(colliderDesc, rigidBody);
+      const colliderDesc = ColliderDesc.capsule(halfHeight, radius)
+        .setTranslation(...colliderCylinder.position.toArray())
+        .setRotation(colliderCylinder.quaternion)
+        .setRestitution(0.75);
+      physicsManager.world.createCollider(colliderDesc).userData = {
+        type: RevoColliderType.Wood,
+      };
     });
 
     const chunkMeshes = [...negativeChunkMeshes, ...positiveChunkMeshes];

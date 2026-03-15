@@ -16,10 +16,6 @@ const config = {
   debugRefreshInterval: 1 / 240,
 };
 
-type ColliderUserData = {
-  type?: RevoColliderType;
-};
-
 export class PhysicsManager {
   world!: World;
   private eventQueue!: EventQueue;
@@ -71,10 +67,7 @@ export class PhysicsManager {
   }
 
   private getColliderName(collider: Collider) {
-    const userData = collider?.parent?.()?.userData as
-      | ColliderUserData
-      | undefined;
-    return userData?.type;
+    return collider.userData?.type;
   }
 
   private getDebugAttributes() {

@@ -25,7 +25,7 @@ import {
   Vector2,
 } from "three/webgpu";
 import { assetManager } from "../../systems";
-import { ColliderDesc, RigidBodyDesc } from "@dimforge/rapier3d";
+import { ColliderDesc } from "@dimforge/rapier3d";
 import { TSLUtils } from "../../utils/TSLUtils";
 import { RevoColliderType } from "../../types";
 import { debugManager, sceneManager, physicsManager } from "../../systems";
@@ -137,19 +137,15 @@ export default class Trees {
       barkInstances.setMatrixAt(i, colliderCylinder.matrix);
       canopyInstances.setMatrixAt(i, colliderCylinder.matrix);
       // Physics
-      const rigidBodyDesc = RigidBodyDesc.fixed()
-        .setTranslation(...colliderCylinder.position.toArray())
-        .setRotation(colliderCylinder.quaternion)
-        .setUserData({ type: RevoColliderType.Wood });
-
-      const rigidBody = physicsManager.world.createRigidBody(rigidBodyDesc);
       const radius = baseRadius * colliderCylinder.scale.x;
       const halfHeight = baseHalfHeight * colliderCylinder.scale.y;
-      const colliderDesc = ColliderDesc.capsule(
-        halfHeight,
-        radius,
-      ).setRestitution(0.75);
-      physicsManager.world.createCollider(colliderDesc, rigidBody);
+      const colliderDesc = ColliderDesc.capsule(halfHeight, radius)
+        .setTranslation(...colliderCylinder.position.toArray())
+        .setRotation(colliderCylinder.quaternion)
+        .setRestitution(0.75);
+      physicsManager.world.createCollider(colliderDesc).userData = {
+        type: RevoColliderType.Wood,
+      };
     });
     sceneManager.scene.add(barkInstances, canopyInstances);
 

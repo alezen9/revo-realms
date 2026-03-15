@@ -21,7 +21,7 @@ import {
   NormalMapNode,
   Vector2,
 } from "three/webgpu";
-import { ColliderDesc, RigidBodyDesc } from "@dimforge/rapier3d";
+import { ColliderDesc } from "@dimforge/rapier3d";
 import { debugManager, physicsManager, sceneManager } from "../systems";
 import { TSLUtils } from "../utils/TSLUtils";
 import { RevoColliderType } from "../types";
@@ -155,17 +155,18 @@ export default class Rocks {
     colliders.forEach((colliderSphere, i) => {
       instances.setMatrixAt(i, colliderSphere.matrix);
       // Physics
-      const rigidBodyDesc = RigidBodyDesc.fixed()
+      if (!colliderSphere.geometry.boundingBox) {
+        colliderSphere.geometry.computeBoundingBox();
+      }
+      const { min, max } = colliderSphere.geometry.boundingBox!;
+      const radius = 0.5 * (max.x - min.x) * Math.abs(colliderSphere.scale.x);
+      const colliderDesc = ColliderDesc.ball(radius)
         .setTranslation(...colliderSphere.position.toArray())
         .setRotation(colliderSphere.quaternion)
-        .setUserData({ type: RevoColliderType.Stone });
-
-      const rigidBody = physicsManager.world.createRigidBody(rigidBodyDesc);
-      colliderSphere.geometry.computeBoundingBox();
-      const radius =
-        colliderSphere.geometry.boundingBox!.max.x * colliderSphere.scale.x;
-      const colliderDesc = ColliderDesc.ball(radius).setRestitution(0.75);
-      physicsManager.world.createCollider(colliderDesc, rigidBody);
+        .setRestitution(0.75);
+      physicsManager.world.createCollider(colliderDesc).userData = {
+        type: RevoColliderType.Stone,
+      };
     });
     sceneManager.scene.add(instances, ...newRocks);
   }

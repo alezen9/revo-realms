@@ -6,7 +6,7 @@ import {
 } from "../../systems";
 import { Mesh } from "three";
 import { MeshStandardNodeMaterial } from "three/webgpu";
-import { ColliderDesc, RigidBodyDesc } from "@dimforge/rapier3d";
+import { ColliderDesc } from "@dimforge/rapier3d";
 import { physicsManager, sceneManager } from "../../systems";
 import { RevoColliderType } from "../../types";
 import { mix, normalMap, texture, uniform, uv, vec3 } from "three/tsl";
@@ -53,17 +53,16 @@ export default class DragonBall {
     const collider = assetManager.resources.worldModel.scene.getObjectByName(
       "goku_statue_collider",
     ) as Mesh;
-    const rigidBodyDesc = RigidBodyDesc.fixed()
-      .setTranslation(...collider.position.toArray())
-      .setRotation(collider.quaternion)
-      .setUserData({ type: RevoColliderType.Stone });
-
-    const rigidBody = physicsManager.world.createRigidBody(rigidBodyDesc);
     const hx = 0.5 * collider.scale.x;
     const hy = 0.5 * collider.scale.y;
     const hz = 0.5 * collider.scale.z;
-    const colliderDesc = ColliderDesc.cuboid(hx, hy, hz).setRestitution(0.75);
-    physicsManager.world.createCollider(colliderDesc, rigidBody);
+    const colliderDesc = ColliderDesc.cuboid(hx, hy, hz)
+      .setTranslation(...collider.position.toArray())
+      .setRotation(collider.quaternion)
+      .setRestitution(0.75);
+    physicsManager.world.createCollider(colliderDesc).userData = {
+      type: RevoColliderType.Stone,
+    };
 
     // Register landmark for radial menu discovery
     const landmarkId = landmarkManager.register({
