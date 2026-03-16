@@ -1,6 +1,6 @@
 import Grass from "./Grass";
 import Flowers from "./Flowers";
-import PineTree from "./PineTree";
+import PineTrees from "./PineTrees";
 import WaterLilies from "./WaterLilies";
 import Trees from "./Trees";
 import { BigTree } from "./BigTree";
@@ -12,7 +12,7 @@ export default class Vegetation {
   constructor() {
     new Grass();
     new Flowers();
-    new PineTree();
+    new PineTrees();
     // new WaterLilies();
     // new Trees();
     // new Leaves(); // not ready yet but pretty good already

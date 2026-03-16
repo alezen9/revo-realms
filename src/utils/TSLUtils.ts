@@ -16,7 +16,7 @@ import {
   EPSILON,
   smoothstep,
 } from "three/tsl";
-import { realmConfig } from "../realm/RevoRealm";
+import { realmConfig } from "../realm/config";
 import { assetManager } from "../systems";
 
 export class TSLUtils {
