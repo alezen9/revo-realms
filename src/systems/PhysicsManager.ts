@@ -36,9 +36,7 @@ export class PhysicsManager {
   private fixedDebugMesh?: LineSegments2;
   private dynamicDebugMesh?: LineSegments2;
   private dynamicDebugGeometry?: LineSegmentsGeometry;
-  private debug = {
-    enabled: true,
-  };
+  private debug = { enabled: false };
 
   constructor(
     eventsManager: EventsManager,

@@ -58,7 +58,6 @@ import berserkORMUrl from "/textures/new-world/cool-stuff/berserk/orm_512.ktx2?u
 // Dragon Ball
 import gokuStatueDiffuseUrl from "/textures/new-world/cool-stuff/dragon-ball/diffuse_1k.ktx2?url";
 import gokuStatueNormalUrl from "/textures/new-world/cool-stuff/dragon-ball/normal_1k.ktx2?url";
-import gokuStatueARMUrl from "/textures/new-world/cool-stuff/dragon-ball/arm_1k.ktx2?url";
 // One Piece
 import onePieceAtlasUrl from "/textures/realm/onePieceAtlas.webp?url";
 // Naruto
@@ -320,12 +319,6 @@ export const manifest = [
     type: "ktx2",
     flipY: false,
     wrap: true,
-  },
-  {
-    name: "gokuStatueARM",
-    url: gokuStatueARMUrl,
-    type: "ktx2",
-    flipY: false,
   },
 
   // -----------------------------------------------

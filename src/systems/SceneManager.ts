@@ -39,7 +39,11 @@ export class SceneManager {
 
   private debugScene(debugManager: DebugManager) {
     if (!this.controls) return;
-    const folder = debugManager.panel.addFolder({ title: "🎥 View", index: 0 });
+    const folder = debugManager.panel.addFolder({
+      title: "🎥 View",
+      index: 0,
+      expanded: false,
+    });
     folder
       .addBinding(this.controls, "enabled", { label: "Enable orbit controls" })
       .on("change", ({ value: isEnabled }) => {
@@ -83,10 +87,7 @@ export class SceneManager {
 
     // Map controls with orbit-style mouse buttons
     const orbitControlsCamera = this.playerCamera.clone();
-    const controls = new MapControls(
-      orbitControlsCamera,
-      rendererCanvas,
-    );
+    const controls = new MapControls(orbitControlsCamera, rendererCanvas);
     orbitControlsCamera.near = 0.01;
     orbitControlsCamera.far = 5000;
     this.orbitControlsCamera = orbitControlsCamera;
