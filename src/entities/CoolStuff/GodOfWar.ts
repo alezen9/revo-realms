@@ -7,7 +7,7 @@ import {
 } from "../../systems";
 import { Mesh } from "three";
 import { MeshStandardNodeMaterial } from "three/webgpu";
-import { color, normalMap, texture, uniform, uv, vec3 } from "three/tsl";
+import { color, normalMap, texture, uniform, uv } from "three/tsl";
 
 const uniforms = {
   uDiffuseScale: uniform(4),

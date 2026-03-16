@@ -1,3 +1,5 @@
+import type { Pane } from "tweakpane";
+
 const NOOP_BINDING = {
   on: () => NOOP_BINDING,
 };
@@ -5,8 +7,9 @@ const NOOP_BINDING = {
 const NOOP_PANEL = {
   hidden: true,
   addFolder: () => NOOP_PANEL,
+  // @ts-expect-error
   addBinding: () => NOOP_BINDING,
-};
+} satisfies Pane;
 
 type DebugPaneLike = {
   hidden: boolean;
@@ -18,14 +21,14 @@ type DebugPaneLike = {
 };
 
 export class DebugManager {
-  panel: DebugPaneLike = NOOP_PANEL;
+  panel: Pane = NOOP_PANEL;
   isEnabled = false;
 
   setVisibility(_visible: boolean) {}
 }
 
 export class DevDebugManager extends DebugManager {
-  constructor(panel: DebugPaneLike) {
+  constructor(panel: Pane) {
     super();
     panel.element?.parentElement?.classList.add("debug-panel");
     panel.hidden = false;

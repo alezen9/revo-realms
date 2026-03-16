@@ -14,26 +14,22 @@ import { mix, normalMap, texture, uniform, uv, vec3 } from "three/tsl";
 const uniforms = {
   uDiffuseScale: uniform(1.15),
   uNormalScale: uniform(1.5),
-  uMetalnessScale: uniform(1),
-  uRoughnessScale: uniform(1.5),
   uUvScale: uniform(4.75),
 };
+
 class GokuStatueMaterial extends MeshStandardNodeMaterial {
   constructor() {
     super();
     this.precision = "lowp";
-    const arm = texture(assetManager.resources.gokuStatueARM, uv());
 
     const _uv = uv().mul(uniforms.uUvScale);
     const diffuse = texture(assetManager.resources.concreteDiffuse, _uv);
-    const color = mix(vec3(0), diffuse.rgb, arm.r);
+    const shadow = texture(assetManager.resources.concreteDiffuse, uv());
+    const color = mix(vec3(0), diffuse.rgb, shadow.a);
     this.colorNode = color.mul(uniforms.uDiffuseScale);
 
     const normal = texture(assetManager.resources.concreteNormal, _uv);
     this.normalNode = normalMap(normal.rgb, uniforms.uNormalScale);
-
-    this.metalnessNode = arm.b.mul(uniforms.uMetalnessScale);
-    this.roughnessNode = arm.g.mul(uniforms.uRoughnessScale);
   }
 }
 
@@ -97,14 +93,6 @@ export default class DragonBall {
     });
     folder.addBinding(uniforms.uNormalScale, "value", {
       label: "Normal scale",
-      min: 0,
-    });
-    folder.addBinding(uniforms.uMetalnessScale, "value", {
-      label: "Metalness scale",
-      min: 0,
-    });
-    folder.addBinding(uniforms.uRoughnessScale, "value", {
-      label: "Roughness scale",
       min: 0,
     });
   }

@@ -45,7 +45,7 @@ const getConfig = () => {
     MAX_CONSECUTIVE_JUMPS: 2,
     JUMP_CUT_MULTIPLIER: 0.15,
     FALL_MULTIPLIER: 2.75,
-    MAX_UPWARD_VELOCITY: 6,
+    MAX_UPWARD_VELOCITY: 8.5,
     LINEAR_DAMPING: 1.4,
     ANGULAR_DAMPING: 1.2,
     // Water physics
@@ -68,7 +68,7 @@ const getConfig = () => {
     FRICTION: 1,
     RESTITUTION: 0.6,
     TURN_SPEED: 2, // radians/sec
-    PLAYER_INITIAL_POSITION: new Vector3(...POSITIONS.lake),
+    PLAYER_INITIAL_POSITION: new Vector3(...POSITIONS.dragonball),
     CAMERA_OFFSET: new Vector3(0, 16, 20),
     CAMERA_LERP_FACTOR: 7.5,
     UP: new Vector3(0, 1, 0),
