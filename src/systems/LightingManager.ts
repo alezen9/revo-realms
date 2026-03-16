@@ -6,7 +6,6 @@ import {
   Object3D,
   Vector3,
 } from "three";
-import { uniform } from "three/tsl";
 import { type SceneManager } from "./SceneManager";
 import { type DebugManager } from "./DebugManager";
 import { type EventsManager } from "./EventsManager";

@@ -24,7 +24,7 @@ import {
   RedFormat,
   Vector3,
 } from "three/webgpu";
-import { realmConfig } from "../realm/RevoRealm";
+import { realmConfig } from "../realm/config";
 import {
   ColliderDesc,
   HeightFieldFlags,

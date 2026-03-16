@@ -1,0 +1,10 @@
+const MAP_SIZE = 512;
+
+export const realmConfig = Object.freeze({
+  MAP_SIZE,
+  HALF_MAP_SIZE: MAP_SIZE / 2,
+  KINTOUN_ACTIVATION_THRESHOLD: 2,
+  HALF_FLOOR_THICKNESS: 0.3,
+  OUTER_MAP_SIZE: MAP_SIZE * 3,
+  OUTER_HALF_MAP_SIZE: MAP_SIZE * 1.5,
+});
