@@ -99,7 +99,7 @@ const uniforms = {
   uTipColor: uniform(new Color().setRGB(0.29, 0.47, 0.04)),
   uColorMixFactor: uniform(0.125),
   uColorVariationStrength: uniform(2.75),
-  uAoScale: uniform(0.5),
+  uAoScale: uniform(3),
   uAoRimSmoothness: uniform(5),
   uAoRadius: uniform(25),
   uAoRadiusSquared: uniform(25 * 25),

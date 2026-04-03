@@ -10,11 +10,8 @@ export default class PortfolioRealm {
   constructor() {
     new Compass();
     new Terrain();
-    // new Monuments();
     new Vegetation();
-    // new Rocks();
     new CoolStuff();
-
     new LakeSurface();
     new Campfire();
   }
