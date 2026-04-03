@@ -9,7 +9,6 @@ import {
 } from "three";
 import { type GLTF } from "three/addons/loaders/GLTFLoader.js";
 // Model
-import realmModelUrl from "/models/realm.glb?url"; // old
 import worldModelUrl from "/models/sekai.glb?url"; // new
 // Environment
 import pxUrl from "/textures/environment/px.webp?url";
@@ -18,36 +17,10 @@ import pyUrl from "/textures/environment/py.webp?url";
 import nyUrl from "/textures/environment/ny.webp?url";
 import pzUrl from "/textures/environment/pz.webp?url";
 import nzUrl from "/textures/environment/nz.webp?url";
-// Noise
-// Terrain
-import terrainTypeUrl from "/textures/realm/terrainType.webp?url";
-import waterNormalUrl from "/textures/realm/waterNormal.webp?url";
-// Shadowmap
-import terrainShadowAoUrl from "/textures/realm/terrainShadowAo.webp?url";
-// Water lilies
-import waterLiliesDiffuseUrl from "/textures/realm/waterLiliesDiffuse.webp?url";
-import waterLiliesAlphaUrl from "/textures/realm/waterLiliesAlpha.webp?url";
 
-// Rocks
-import rocksDiffuseUrl from "/textures/new-world/rocks/diffuse.png?url";
-import rocksNormalUrl from "/textures/new-world/rocks/normal.png?url";
-
-import waterLilyDiffuseUrl from "/textures/new-world/water-lily/diffuse.png?url";
-import waterLilyNormalUrl from "/textures/new-world/water-lily/normal.png?url";
-// Flowers
-import flowerAtlasUrl from "/textures/new-world/terrain/flowerAtlas.ktx2?url";
-// Stones
-import stoneAtlasUrl from "/textures/realm/stoneAtlas.webp?url";
-// Trees
-import treeBarkDiffuseUrl from "/textures/realm/barkDiffuse.webp?url";
-import treeBarkNormalUrl from "/textures/realm/barkNormal.webp?url";
-import treeCanopyDiffuseUrl from "/textures/realm/canopyDiffuse.webp?url";
-import treeCanopyNormalUrl from "/textures/realm/canopyNormal.webp?url";
+// Water
+import waterNormalUrl from "/textures/new-world/water/water_normal.ktx2?url";
 // God of War
-import godOfWarAxeDiffuseUrl from "/textures/new-world/cool-stuff/god-of-war/axe_diff_emissive_1k.ktx2?url";
-import godOfWarTrunkDiffuseUrl from "/textures/new-world/cool-stuff/god-of-war/trunk_diffuse_512.ktx2?url";
-import godOfWarTrunkNormalUrl from "/textures/new-world/cool-stuff/god-of-war/trunk_normal_512.ktx2?url";
-
 import leviathanDiffuseEmissiveUrl from "/textures/new-world/cool-stuff/leviathan/diffuse_emissive_1k.ktx2?url";
 import leviathanNormalUrl from "/textures/new-world/cool-stuff/leviathan/normal_512.ktx2?url";
 import leviathanORMUrl from "/textures/new-world/cool-stuff/leviathan/orm_512.ktx2?url";
@@ -58,11 +31,6 @@ import berserkORMUrl from "/textures/new-world/cool-stuff/berserk/orm_512.ktx2?u
 // Dragon Ball
 import gokuStatueDiffuseUrl from "/textures/new-world/cool-stuff/dragon-ball/diffuse_1k.ktx2?url";
 import gokuStatueNormalUrl from "/textures/new-world/cool-stuff/dragon-ball/normal_1k.ktx2?url";
-// One Piece
-import onePieceAtlasUrl from "/textures/realm/onePieceAtlas.webp?url";
-// Naruto
-import kunaiDiffuseUrl from "/textures/realm/kunaiDiffuse.webp?url";
-import kunaiMRUrl from "/textures/realm/kunaiMR.webp?url";
 // Campfire
 import campfireDiffuseUrl from "/textures/new-world/campfire/diffuse_2k.ktx2?url";
 import campfireNormalRoughnessUrl from "/textures/new-world/campfire/normalRoughness_2k.ktx2?url";
@@ -75,10 +43,6 @@ import playerNormalUrl from "/textures/new-world/player/football/normal_512.ktx2
 import edelweissUrl from "/textures/new-world/flowers/edelweiss_128.ktx2?url";
 // Pine Tree
 import pineTreeDiffuseUrl from "/textures/new-world/pine-tree/diffuse_2k.ktx2?url";
-// import pineTreeNormalUrl from "/textures/new-world/pine-tree/normal.ktx2?url";
-// import pineTreeARMUrl from "/textures/new-world/pine-tree/arm.ktx2?url";
-// Leaf
-import leafDiffuseUrl from "/textures/realm/leafDiffuse.webp?url";
 
 // Tree
 import _treeCanopyDiffuseUrl from "/textures/new-world/tree/canopy_diffuse_512_uastc.ktx2?url";
@@ -138,11 +102,12 @@ export type ResourceRaw =
   | CubeTextureResourceRaw
   | CompressedTextureResourceRaw;
 
+const isDev = import.meta.env.DEV;
+
 export const manifest = [
   // -----------------------------------------------
   // Core
   // -----------------------------------------------
-  { name: "realmModel", url: realmModelUrl, type: "gltf" }, // old
   { name: "worldModel", url: worldModelUrl, type: "gltf" },
   {
     name: "noiseAtlas", // super_noise_low / super_perlin / grainy / cracks
@@ -156,13 +121,17 @@ export const manifest = [
     type: "cubeTexture",
     colorSpace: SRGBColorSpace,
   },
-  {
-    name: "uvChecker", // only for debug
-    url: uvCheckerUrl,
-    type: "ktx2",
-    wrap: true,
-    colorSpace: SRGBColorSpace,
-  },
+  ...(isDev
+    ? ([
+        {
+          name: "uvChecker", // only for debug
+          url: uvCheckerUrl,
+          type: "ktx2",
+          wrap: true,
+          colorSpace: SRGBColorSpace,
+        },
+      ] as const)
+    : []),
 
   // -----------------------------------------------
   // Terrain
@@ -211,7 +180,7 @@ export const manifest = [
   // -----------------------------------------------
   // Water
   // -----------------------------------------------
-  { name: "waterNormal", url: waterNormalUrl, type: "texture" },
+  { name: "waterNormal", url: waterNormalUrl, type: "ktx2" },
 
   // -----------------------------------------------
   // Campfire
@@ -238,27 +207,6 @@ export const manifest = [
   // -----------------------------------------------
   // God of War
   // -----------------------------------------------
-  {
-    name: "godOfWarAxeDiffuse",
-    url: godOfWarAxeDiffuseUrl,
-    type: "ktx2",
-    flipY: false,
-  },
-  {
-    name: "godOfWarTrunkDiffuse",
-    url: godOfWarTrunkDiffuseUrl,
-    type: "ktx2",
-    flipY: false,
-    colorSpace: SRGBColorSpace,
-  },
-
-  {
-    name: "godOfWarTrunkNormal",
-    url: godOfWarTrunkNormalUrl,
-    type: "ktx2",
-    flipY: false,
-  },
-
   {
     name: "leviathanAxeDiffuseEmissive",
     url: leviathanDiffuseEmissiveUrl,
@@ -350,13 +298,13 @@ export const manifest = [
     wrap: true,
     colorSpace: SRGBColorSpace,
   },
-  {
-    name: "treeCanopyDiffuse",
-    url: _treeCanopyDiffuseUrl,
-    type: "ktx2",
-    flipY: false,
-    colorSpace: SRGBColorSpace,
-  },
+  // {
+  //   name: "treeCanopyDiffuse",
+  //   url: _treeCanopyDiffuseUrl,
+  //   type: "ktx2",
+  //   flipY: false,
+  //   colorSpace: SRGBColorSpace,
+  // },
   {
     name: "treeBarkNormal",
     url: _treeBarkNormalUrl,
@@ -364,29 +312,12 @@ export const manifest = [
     flipY: false,
     wrap: true,
   },
-  {
-    name: "treeCanopyNormal",
-    url: _treeCanopyNormalUrl,
-    type: "ktx2",
-    flipY: false,
-  },
-
-  // -----------------------------------------------
-  // Water lilies
-  // -----------------------------------------------
-  {
-    name: "waterLilyDiffuse",
-    url: waterLilyDiffuseUrl,
-    type: "texture",
-    flipY: false,
-    // colorSpace: SRGBColorSpace,
-  },
-  {
-    name: "waterLilyNormal",
-    url: waterLilyNormalUrl,
-    type: "texture",
-    flipY: false,
-  },
+  // {
+  //   name: "treeCanopyNormal",
+  //   url: _treeCanopyNormalUrl,
+  //   type: "ktx2",
+  //   flipY: false,
+  // },
 
   // -----------------------------------------------
   // Pine Tree
@@ -398,118 +329,15 @@ export const manifest = [
     flipY: false,
     // colorSpace: SRGBColorSpace, // on purpose a bit dimmed, otherwise it's too vibrant
   },
-  // {
-  //   name: "pineTreeNormal",
-  //   url: pineTreeNormalUrl,
-  //   type: "ktx2",
-  //   flipY: false,
-  // },
-  // {
-  //   name: "pineTreeARM",
-  //   url: pineTreeARMUrl,
-  //   type: "ktx2",
-  //   flipY: false,
-  // },
 
   // -----------------------------------------------
   // Flowers
   // -----------------------------------------------
   {
-    name: "flowers",
-    url: flowerAtlasUrl,
-    type: "ktx2",
-    colorSpace: SRGBColorSpace,
-  },
-  {
     name: "edelweiss",
     url: edelweissUrl,
     type: "ktx2",
     colorSpace: SRGBColorSpace,
-  },
-
-  // -----------------------------------------------
-  // Stones
-  // -----------------------------------------------
-  { name: "stoneAtlas", url: stoneAtlasUrl, type: "texture", flipY: false },
-
-  {
-    name: "rocksDiffuse",
-    url: rocksDiffuseUrl,
-    type: "texture",
-    flipY: false,
-    colorSpace: SRGBColorSpace,
-  },
-  { name: "rocksNormal", url: rocksNormalUrl, type: "texture", flipY: false },
-
-  // -----------------------------------------------
-  // Trees
-  // -----------------------------------------------
-  {
-    name: "canopyDiffuse",
-    url: treeCanopyDiffuseUrl,
-    type: "texture",
-    flipY: false,
-  },
-  {
-    name: "canopyNormal",
-    url: treeCanopyNormalUrl,
-    type: "texture",
-    flipY: false,
-  },
-  {
-    name: "barkDiffuse",
-    url: treeBarkDiffuseUrl,
-    type: "texture",
-    flipY: false,
-    colorSpace: SRGBColorSpace,
-  },
-  { name: "barkNormal", url: treeBarkNormalUrl, type: "texture", flipY: false },
-  // -----------------------------------------------
-  // One Piece
-  // -----------------------------------------------
-  {
-    name: "onePieceAtlas",
-    url: onePieceAtlasUrl,
-    type: "texture",
-    flipY: false,
-  },
-
-  // -----------------------------------------------
-  // Naruto
-  // -----------------------------------------------
-  {
-    name: "kunaiDiffuse",
-    url: kunaiDiffuseUrl,
-    type: "texture",
-    flipY: false,
-    colorSpace: SRGBColorSpace,
-  },
-  { name: "kunaiMR", url: kunaiMRUrl, type: "texture", flipY: false },
-
-  // -----------------------------------------------
-  // Leaf
-  // -----------------------------------------------
-  {
-    name: "leafDiffuse",
-    url: leafDiffuseUrl,
-    type: "texture",
-    colorSpace: SRGBColorSpace,
-  },
-
-  // -----------------------------------------------
-  // Terrain
-  // -----------------------------------------------
-  {
-    name: "terrainTypeTexture",
-    url: terrainTypeUrl,
-    type: "texture",
-    flipY: false,
-  },
-  {
-    name: "terrainShadowAoTexture",
-    url: terrainShadowAoUrl,
-    type: "texture",
-    flipY: false,
   },
 ] as const satisfies ResourceRaw[];
 
