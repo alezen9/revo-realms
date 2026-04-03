@@ -2,6 +2,8 @@ import { Vector3 } from "three";
 import type { State } from "../Game";
 import type { EventsManager } from "./EventsManager";
 
+const REVEAL_ALL_LANDMARKS = true;
+
 export type LandmarkIconId =
   | "fire"
   | "water"
@@ -40,7 +42,7 @@ export class LandmarkManager {
     const landmark: Landmark = {
       ...registration,
       id,
-      hasBeenDiscovered: false,
+      hasBeenDiscovered: REVEAL_ALL_LANDMARKS,
     };
     this.landmarks.set(id, landmark);
     return id;

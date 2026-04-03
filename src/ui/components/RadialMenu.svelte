@@ -114,6 +114,7 @@
 		)
 		const handleKeyDown = (event: KeyboardEvent) => {
 			if (event.code === "KeyL" && !event.repeat) {
+				landmarks = landmarkManager.getAll()
 				isVisible = !isVisible
 				return
 			}
