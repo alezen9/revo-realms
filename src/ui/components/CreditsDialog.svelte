@@ -14,6 +14,11 @@
 <dialog {...rest} bind:this={el}>
 	<div class="credits-content">
 		<h1>Acknowledgements</h1>
+		<p class="credits-status">
+			This list is currently being refreshed, so it may be slightly out of date,
+			sorry about that. Some credits may still reference resources no longer
+			used in the project, and a few active ones may still be missing for now.
+		</p>
 
 		<div class="gratitude">
 			<p>
@@ -394,6 +399,16 @@
 
 	dialog .credits-content h1 {
 		margin-bottom: 1rem;
+	}
+
+	dialog .credits-content .credits-status {
+		margin-top: -0.5rem;
+		margin-bottom: 0.75rem;
+		padding: 0.75rem 1rem;
+		border-radius: 7px;
+		background-color: #ffffff14;
+		color: #d7c8a3;
+		line-height: 1.35rem;
 	}
 
 	dialog .asset h2 span {
