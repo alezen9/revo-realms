@@ -5,6 +5,7 @@
 	import Toggles from "./components/Toggles.svelte"
 	import WindIcon from "./components/WindIcon.svelte"
 	import RadialMenu from "./components/RadialMenu.svelte"
+	import WipBadge from "./components/WipBadge.svelte"
 
 	const openInDev = true
 
@@ -13,6 +14,7 @@
 
 <div class="ui-root">
 	<Toggles />
+	<WipBadge />
 	<Compass />
 	<KeyboardHints />
 	{#if IS_LOADING_SCREEN_ENABLED}

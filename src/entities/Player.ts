@@ -68,7 +68,7 @@ const getConfig = () => {
     FRICTION: 1,
     RESTITUTION: 0.6,
     TURN_SPEED: 2, // radians/sec
-    PLAYER_INITIAL_POSITION: new Vector3(...POSITIONS.lake),
+    PLAYER_INITIAL_POSITION: new Vector3(...POSITIONS.dragonball),
     CAMERA_OFFSET: new Vector3(0, 16, 20),
     CAMERA_LERP_FACTOR: 7.5,
     UP: new Vector3(0, 1, 0),
