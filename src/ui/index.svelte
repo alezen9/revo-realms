@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Compass from "./components/Compass.svelte"
 	import LoadingScreen from "./components/LoadingScreen.svelte"
 	import Toggles from "./components/Toggles.svelte"
 	import WindIcon from "./components/WindIcon.svelte"
@@ -11,6 +12,7 @@
 
 <div class="ui-root">
 	<Toggles />
+	<Compass />
 	{#if IS_LOADING_SCREEN_ENABLED}
 		<LoadingScreen />
 	{/if}

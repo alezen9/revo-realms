@@ -44,37 +44,6 @@ hr {
   margin: 1rem 0;
 }
 
-/**
-Compass
-**/
-.compass-container {
-  --opacity: 0;
-  --size: min(10vh, 7.5vw);
-  --padding: 1rem;
-  position: fixed;
-  bottom: var(--padding);
-  right: var(--padding);
-  opacity: var(--opacity);
-  width: var(--size);
-  height: var(--size);
-  filter: drop-shadow(0 0 10px black);
-  transition: opacity 0.5s ease-in-out;
-  pointer-events: none;
-}
-.compass {
-  position: absolute;
-  width: 100%;
-}
-
-.compass-arrow {
-  --yaw: 0;
-  position: absolute;
-  width: 100%;
-  transform: rotateZ(calc(var(--yaw) + 180deg));
-  will-change: transform;
-  transition: transform 0.15s linear;
-}
-
 .wind-icon-container {
   pointer-events: none;
   z-index: 10;
