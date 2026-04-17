@@ -33,7 +33,7 @@ import gokuStatueDiffuseUrl from "/textures/new-world/cool-stuff/dragon-ball/dif
 import gokuStatueNormalUrl from "/textures/new-world/cool-stuff/dragon-ball/normal_1k.ktx2?url";
 // Campfire
 import campfireDiffuseUrl from "/textures/new-world/campfire/diffuse_2k.ktx2?url";
-import campfireNormalRoughnessUrl from "/textures/new-world/campfire/normalRoughness_2k.ktx2?url";
+import campfireNormalRoughnessUrl from "/textures/new-world/campfire/normalRoughness_1k.ktx2?url";
 // Fire
 import fireSpritesUrl from "/textures/new-world/fire/fireSprites_128_etc1s.ktx2?url";
 // Player
@@ -55,9 +55,15 @@ import terrainNormAoUrl from "/textures/new-world/terrain/groundNormalAO_1k.ktx2
 import normVeinWaterUrl from "/textures/new-world/water/water_normal_vein_uastc.ktx2?url";
 import noiseAtlasUrl from "/textures/new-world/noise/noise_atlas.ktx2?url";
 
-import grassMapUrl from "/textures/new-world/terrain/grass-map.png?url";
-import waterMapUrl from "/textures/new-world/terrain/water-map.png?url";
-import shadowMapUrl from "/textures/new-world/terrain/shadow-map.png?url";
+// dev
+// import grassMapUrl from "/textures/new-world/terrain/grass-map.png?url";
+// import waterMapUrl from "/textures/new-world/terrain/water-map.png?url";
+// import shadowMapUrl from "/textures/new-world/terrain/shadow-map.png?url";
+
+// prod
+import grassMapUrl from "/textures/new-world/terrain/grass-map.webp?url";
+import waterMapUrl from "/textures/new-world/terrain/water-map.webp?url";
+import shadowMapUrl from "/textures/new-world/terrain/shadow-map.webp?url";
 
 type ResourceType = {
   texture: Texture;
