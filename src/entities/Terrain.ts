@@ -43,7 +43,7 @@ import {
 } from "../systems";
 
 const uniforms = {
-  uGrassTerrainColor: uniform(new Color().setRGB(0.29, 0.38, 0.13)),
+  uGrassTerrainColor: uniform(new Color().setRGB(0.28, 0.21, 0.0)),
   uWaterSandColor: uniform(new Color().setRGB(0.7, 0.55, 0.29)),
   uTerrainColor: uniform(new Color().setRGB(0.7, 0.55, 0.29)),
   uGrassNormalScale: uniform(1.25),
@@ -351,12 +351,11 @@ class OuterTerrain {
   }
 
   private createKintoun() {
-    const rigidBodyDesc = RigidBodyDesc.kinematicPositionBased()
-      .setTranslation(
-        0,
-        -20, // out of the physics world
-        0,
-      );
+    const rigidBodyDesc = RigidBodyDesc.kinematicPositionBased().setTranslation(
+      0,
+      -20, // out of the physics world
+      0,
+    );
     const rigidBody = physicsManager.world.createRigidBody(rigidBodyDesc);
 
     const halfSize = 2;

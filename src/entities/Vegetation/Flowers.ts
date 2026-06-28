@@ -211,7 +211,7 @@ class FlowersSsbo {
       data.assign(this.setYOffset(data, yOffset));
 
       // Alpha
-      const alphaVisibility = VegetationSsboUtils.computeAlpha(worldPos);
+      const alphaVisibility = VegetationSsboUtils.computeGrassMask(worldPos);
       data.assign(this.setVisibility(data, alphaVisibility));
     });
   })().compute(config.COUNT, [config.WORKGROUP_SIZE]);

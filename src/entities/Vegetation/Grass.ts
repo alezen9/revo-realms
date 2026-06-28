@@ -32,6 +32,8 @@ import {
   remap,
   fract,
   INFINITY,
+  max,
+  min,
 } from "three/tsl";
 import {
   assetManager,
@@ -120,7 +122,7 @@ class GrassSsbo {
   // z -> 0/12 windX - 12/12 windZ (0 unused)
   // w -> 0/8 current scale - 8/8 original scale - 16/1 shadow - 17/1 visibility - 18/6 wind noise factor (1 unused)
   private buffer1 = instancedArray(config.COUNT, "vec4");
-  // x -> 0/4 position based noise - 4/1 is far - 5/19 offsetY (0 unused)
+  // x -> 0/4 position based noise - 4/20 offsetY
   private buffer2 = instancedArray(config.COUNT, "float");
 
   constructor() {
@@ -140,8 +142,8 @@ class GrassSsbo {
   getYOffset = Fn(([data = float(0)], _builder) => {
     return TSLUtils.unpackUnits(
       data,
-      5,
-      19,
+      4,
+      20,
       0,
       Math.ceil(assetManager.resources.heightmap.userData.max),
     );
@@ -158,7 +160,7 @@ class GrassSsbo {
       data.w,
       0,
       8,
-      uniforms.uTrailMinScale,
+      0,
       uniforms.uBladeMaxScale,
     );
   });
@@ -189,15 +191,11 @@ class GrassSsbo {
     return TSLUtils.unpackFlag(data.w, 16);
   });
 
-  getIsFar = Fn(([data = float(0)], _builder) => {
-    return TSLUtils.unpackFlag(data, 4);
-  });
-
   private setYOffset = Fn(([data = float(0), value = float(0)], _builder) => {
     return TSLUtils.packUnits(
       data,
-      5,
-      19,
+      4,
+      20,
       value,
       0,
       Math.ceil(assetManager.resources.heightmap.userData.max),
@@ -216,7 +214,7 @@ class GrassSsbo {
       0,
       8,
       value,
-      uniforms.uTrailMinScale,
+      0,
       uniforms.uBladeMaxScale,
     );
     return data;
@@ -258,10 +256,6 @@ class GrassSsbo {
       return data;
     },
   );
-
-  private setIsFar = Fn(([data = float(0), value = float(0)], _builder) => {
-    return TSLUtils.packFlag(data, 4, value);
-  });
 
   private computeInit = Fn(() => {
     const data1 = this.buffer1.element(instanceIndex);
@@ -355,28 +349,6 @@ class GrassSsbo {
     },
   );
 
-  private computeTrailScale = Fn(
-    (
-      [originalScale = float(0), currentScale = float(0), isStepped = float(0)],
-      _builder, // isStepped in [0,1]
-    ) => {
-      // Upward relax toward original (no step)
-      const up = currentScale.add(
-        originalScale.sub(currentScale).mul(uniforms.uTrailGrowthRate),
-      );
-
-      // Downward crush toward min (when stepped)
-      const down = currentScale.add(
-        uniforms.uTrailMinScale.sub(currentScale).mul(uniforms.uKDown),
-      );
-
-      // Blend by contact (branchless). If your isStepped is hard 0/1, this still works.
-      const blended = mix(up, down, isStepped);
-
-      return blended;
-    },
-  );
-
   private computeShadowFactor = Fn(
     ([grassWorldPos = vec3(0), playerPos = vec3(0)], _builder) => {
       // Baked shadow from lightmap
@@ -407,15 +379,31 @@ class GrassSsbo {
     const data2 = this.buffer2.element(instanceIndex);
 
     // Position
+    const oldOffset = vec2(data1.x, data1.y);
     const pos = VegetationSsboUtils.wrapPosition(
-      vec2(data1.x, data1.y),
+      oldOffset,
       uniforms.uPlayerDeltaXZ,
       config.TILE_SIZE,
     );
+    const wrappedX = step(config.TILE_HALF_SIZE, abs(pos.x.sub(oldOffset.x)));
+    const wrappedZ = step(config.TILE_HALF_SIZE, abs(pos.z.sub(oldOffset.y)));
+    const wrapped = max(wrappedX, wrappedZ);
+
     data1.x = pos.x;
     data1.y = pos.z;
 
     const worldPos = pos.add(uniforms.uPlayerPosition);
+    const grassScale = VegetationSsboUtils.computeGrassScale(worldPos);
+    const currentScale = this.getScale(data1);
+    const originalScale = this.getOriginalScale(data1);
+    const baseScale = originalScale.mul(grassScale);
+    const recoveredScale = mix(
+      currentScale,
+      baseScale,
+      uniforms.uTrailGrowthRate,
+    );
+    const resetScale = mix(recoveredScale, baseScale, wrapped);
+    data1.assign(this.setScale(data1, resetScale));
 
     // Visibility
     const stochasticKeep = VegetationSsboUtils.computeStochasticKeep(
@@ -438,12 +426,11 @@ class GrassSsbo {
     ).mul(stochasticKeep);
     data1.assign(this.setVisibility(data1, isVisible));
     data1.assign(this.setShadowFactor(data1, 1));
-    data2.assign(this.setIsFar(data2, 0));
 
     // Soft culling
     If(isVisible, () => {
-      // Alpha
-      const alpha = VegetationSsboUtils.computeAlpha(worldPos);
+      // Scale
+      const alpha = step(0.05, grassScale);
       data1.assign(this.setVisibility(data1, alpha));
 
       // Y offset
@@ -453,7 +440,6 @@ class GrassSsbo {
       // Compute distance to player
       const diff = worldPos.xz.sub(uniforms.uPlayerPosition.xz);
       const distSq = diff.dot(diff);
-      data2.assign(this.setIsFar(data2, distSq.lessThan(100).toFloat()));
 
       // Check if the player is on the ground
       const isPlayerGrounded = step(
@@ -468,14 +454,13 @@ class GrassSsbo {
         .mul(isPlayerGrounded);
 
       // Trail
-      const currentScale = this.getScale(data1);
-      const originalScale = this.getOriginalScale(data1);
-      const newScale = this.computeTrailScale(
-        originalScale,
-        currentScale,
-        contact,
+      const crushedScale = min(baseScale, uniforms.uTrailMinScale);
+      const nextScale = mix(
+        resetScale,
+        crushedScale,
+        uniforms.uKDown.mul(contact),
       );
-      data1.assign(this.setScale(data1, newScale));
+      data1.assign(this.setScale(data1, nextScale));
 
       // Wind
       const positionNoise = this.getPositionNoise(data2);
@@ -521,10 +506,9 @@ class GrassMaterial extends SpriteNodeMaterial {
     const windNoiseFactor = this.ssbo.getWindNoise(data1);
     const positionNoise = this.ssbo.getPositionNoise(data2);
     const bakedShadowFactor = this.ssbo.getShadowFactor(data1);
-    const isFar = this.ssbo.getIsFar(data2);
 
     // OPACITY
-    this.opacityNode = isVisible;
+    // this.opacityNode = isVisible;
 
     // SCALE
     const scaleX = positionNoise.remap(0, 1, 0.5, 1.5);

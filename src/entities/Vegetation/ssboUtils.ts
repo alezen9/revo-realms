@@ -27,13 +27,16 @@ export class VegetationSsboUtils {
    * @returns `int` Flag keep/discard based on stochastic keep
    */
   static computeStochasticKeep = Fn(
-    ([
-      worldPos = vec3(0),
-      playerPosition = vec3(0),
-      R0 = float(0),
-      R1 = float(0),
-      pMin = float(0),
-    ], _builder) => {
+    (
+      [
+        worldPos = vec3(0),
+        playerPosition = vec3(0),
+        R0 = float(0),
+        R1 = float(0),
+        pMin = float(0),
+      ],
+      _builder,
+    ) => {
       // world-space radial thinning (no sqrt)
       const dx = worldPos.x.sub(playerPosition.x);
       const dz = worldPos.z.sub(playerPosition.z);
@@ -70,16 +73,19 @@ export class VegetationSsboUtils {
    * @returns `int` Flag inside/outside camera frustum
    */
   static computeVisibility = Fn(
-    ([
-      worldPos = vec3(0),
-      cameraMatrix = mat4(),
-      fX = float(0),
-      fY = float(0),
-      r = float(0),
-      padNdcX = float(0),
-      padNdcYNear = float(0),
-      padNdcYFar = float(0),
-    ], _builder) => {
+    (
+      [
+        worldPos = vec3(0),
+        cameraMatrix = mat4(),
+        fX = float(0),
+        fY = float(0),
+        r = float(0),
+        padNdcX = float(0),
+        padNdcYNear = float(0),
+        padNdcYFar = float(0),
+      ],
+      _builder,
+    ) => {
       const one = float(1);
 
       const clip = cameraMatrix.mul(vec4(worldPos, 1.0));
@@ -110,13 +116,17 @@ export class VegetationSsboUtils {
 
   /**
    * @param worldPos vec3
-   * @returns `float` Alpha based on grassMap
+   * @returns `float` Grass scale based on grassMap
    */
-  static computeAlpha = Fn(([worldPos = vec3(0)], _builder) => {
+  static computeGrassScale = Fn(([worldPos = vec3(0)], _builder) => {
     const uv = TSLUtils.computeMapUvByPosition(worldPos.xz);
-    const alpha = texture(assetManager.resources.grassMap, uv).g;
-    const threshold = step(0.25, alpha);
-    return threshold;
+    const scale = texture(assetManager.resources.grassMap, uv).g;
+    return scale;
+  });
+
+  static computeGrassMask = Fn(([worldPos = vec3(0)], _builder) => {
+    const scale = this.computeGrassScale(worldPos);
+    return step(0.25, scale);
   });
 
   /**
@@ -137,7 +147,10 @@ export class VegetationSsboUtils {
    * @returns `vec3` Wrapped position
    */
   static wrapPosition = Fn(
-    ([posXZ = vec2(0), playerDeltaXZ = vec2(0), tileSize = float(0)], _builder) => {
+    (
+      [posXZ = vec2(0), playerDeltaXZ = vec2(0), tileSize = float(0)],
+      _builder,
+    ) => {
       const halfTile = tileSize.div(2);
       const newOffsetX = mod(
         posXZ.x.sub(playerDeltaXZ.x).add(halfTile),
