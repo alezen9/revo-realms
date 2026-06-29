@@ -8,6 +8,7 @@ import {
   max,
   mix,
   mod,
+  smoothstep,
   step,
   texture,
   vec2,
@@ -24,6 +25,13 @@ export class VegetationSsboUtils {
    * @param R0 float
    * @param R1 float
    * @param pMin float
+   * @param grassScale float
+   * @param bladeHeight float
+   * @param cameraMatrix mat4
+   * @param fY float
+   * @param lowGrassKeep float
+   * @param projectedMin float
+   * @param projectedFull float
    * @returns `int` Flag keep/discard based on stochastic keep
    */
   static computeStochasticKeep = Fn(
@@ -34,6 +42,13 @@ export class VegetationSsboUtils {
         R0 = float(0),
         R1 = float(0),
         pMin = float(0),
+        grassScale = float(1),
+        bladeHeight = float(1),
+        cameraMatrix = mat4(),
+        fY = float(1),
+        lowGrassKeep = float(0.55),
+        projectedMin = float(0.012),
+        projectedFull = float(0.055),
       ],
       _builder,
     ) => {
@@ -51,8 +66,22 @@ export class VegetationSsboUtils {
         .div(max(R1Sq.sub(R0Sq), EPSILON))
         .clamp();
 
-      // keep probability from 1 → pMin
-      const p = mix(1, pMin, t);
+      const pDistance = mix(1, pMin, t);
+      const pHeight = mix(lowGrassKeep, 1, grassScale);
+
+      const clip = cameraMatrix.mul(vec4(worldPos, 1.0));
+      const eyeDepthAbs = clip.w.abs().max(EPSILON);
+      const projectedBladeHeight = fY
+        .mul(bladeHeight)
+        .mul(grassScale)
+        .div(eyeDepthAbs);
+      const pScreen = smoothstep(
+        projectedMin,
+        projectedFull,
+        projectedBladeHeight,
+      );
+
+      const p = pDistance.mul(pHeight).mul(pScreen);
 
       // deterministic RNG per blade (stable under wrap)
       const rnd = hash(float(instanceIndex).mul(0.73));

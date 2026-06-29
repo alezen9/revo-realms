@@ -17,6 +17,10 @@ type MonitoringManagerLike = {
   updateCustomPanels: (rendererManager: RendererManager) => void;
 };
 
+type ShadowMapWithTransmission = WebGPURenderer["shadowMap"] & {
+  transmitted: boolean;
+};
+
 export class RendererManager {
   renderer: WebGPURenderer;
   canvas: HTMLCanvasElement;
@@ -24,10 +28,8 @@ export class RendererManager {
   private sceneManager: SceneManager;
   private debugManager: DebugManager;
   private eventsManager: EventsManager;
-  private prevFrame: Promise<any> | null = null;
   private monitoringManager?: MonitoringManagerLike;
   private postprocessingManager!: PostprocessingManager;
-  private isRenderInFlight = false;
   private readonly isMonitoringEnabled: boolean;
   private readonly IS_POSTPROCESSING_ENABLED = true;
 
@@ -50,13 +52,14 @@ export class RendererManager {
     const renderer = new WebGPURenderer({
       canvas,
       antialias: true,
-      trackTimestamp: this.isMonitoringEnabled,
+      trackTimestamp: false,
       powerPreference: "high-performance",
       stencil: false,
       depth: true,
     });
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = PCFShadowMap;
+    (renderer.shadowMap as ShadowMapWithTransmission).transmitted = true;
     renderer.setClearColor(0x000000, 1);
 
     renderer.toneMappingExposure = 1.5;
@@ -86,16 +89,14 @@ export class RendererManager {
     );
     if (this.isMonitoringEnabled && this.monitoringManager) {
       this.monitoringManager.attach?.();
-      this.renderer.info.autoReset = false;
       await this.monitoringManager.stats.init(this.renderer);
     }
   }
 
-  private async renderSceneAsync() {
-    if (this.IS_POSTPROCESSING_ENABLED)
-      return this.postprocessingManager.renderAsync();
+  private renderScene() {
+    if (this.IS_POSTPROCESSING_ENABLED) this.postprocessingManager.render();
     else
-      return this.renderer.renderAsync(
+      this.renderer.render(
         this.sceneManager.scene,
         this.sceneManager.renderCamera,
       );
@@ -109,41 +110,19 @@ export class RendererManager {
   }
 
   async renderSceneOnceAsync() {
-    return this.renderSceneAsync();
+    this.renderScene();
   }
 
   private renderWithMonitoring() {
     const monitoringManager = this.monitoringManager;
     if (!monitoringManager) return;
-    // Consume last frame’s results now (they should be ready)
-    this.prevFrame
-      ?.then(() => {
-        monitoringManager.updateCustomPanels(this);
-        monitoringManager.stats.update();
-        this.renderer.info.reset();
-      })
-      .catch((err) => {
-        console.error("[renderWithMonitoring] previous frame error:", err);
-      });
-
-    // Set current as previous for next loop
-    this.prevFrame = Promise.all([
-      this.renderer.resolveTimestampsAsync("compute"),
-      this.renderSceneAsync(),
-      this.renderer.resolveTimestampsAsync("render"),
-    ]);
+    this.renderScene();
+    monitoringManager.updateCustomPanels(this);
+    monitoringManager.stats.update();
   }
 
   private renderWithoutMonitoring() {
-    if (this.isRenderInFlight) return;
-    this.isRenderInFlight = true;
-    this.renderSceneAsync()
-      .catch((error) => {
-        console.error("[RendererManager] renderAsync failed:", error);
-      })
-      .finally(() => {
-        this.isRenderInFlight = false;
-      });
+    this.renderScene();
   }
 
   async renderAsync() {

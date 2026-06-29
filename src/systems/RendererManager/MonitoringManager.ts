@@ -6,12 +6,12 @@ export class MonitoringManager {
   private lastSecond = performance.now();
   private enabled: boolean;
 
-  private drawCallsPanel: ReturnType<typeof this.createNumberPanel>;
-  private trianglesPanel: ReturnType<typeof this.createNumberPanel>;
+  private drawCallsPanel?: ReturnType<typeof this.createNumberPanel>;
+  private trianglesPanel?: ReturnType<typeof this.createNumberPanel>;
   constructor(enabled: boolean) {
     this.enabled = enabled;
     const stats = new Stats({
-      trackGPU: true,
+      trackGPU: false,
       logsPerSecond: 4,
       graphsPerSecond: 30,
       samplesLog: 40,
@@ -22,13 +22,11 @@ export class MonitoringManager {
     stats.dom.classList.add("monitoring-panel");
     this.stats = stats;
     this.attach();
-    // @ts-ignore
     this.drawCallsPanel = this.createNumberPanel(
       "# DRAW CALLS",
       "#fff",
       "#333",
     );
-    // @ts-ignore
     this.trianglesPanel = this.createNumberPanel(
       "# TRIANGLES",
       "#ffdab9",
@@ -79,12 +77,14 @@ export class MonitoringManager {
   }
 
   updateCustomPanels(rendererManager: RendererManager) {
+    if (!this.drawCallsPanel || !this.trianglesPanel) return;
     const now = performance.now();
     if (now - this.lastSecond < 1000) return;
+
+    this.lastSecond = now;
     const { render } = rendererManager.renderer.info;
     this.drawCallsPanel.update(render.drawCalls, 0);
     this.trianglesPanel.update(render.triangles, 0);
-    this.lastSecond = now;
   }
 }
 

@@ -112,6 +112,9 @@ const uniforms = {
   uR0: uniform(10),
   uR1: uniform(60),
   uPMin: uniform(0.1),
+  uLowGrassKeep: uniform(0.55),
+  uProjectedMin: uniform(0.012),
+  uProjectedFull: uniform(0.055),
   // Rotation
   uBaseBending: uniform(2),
 };
@@ -156,13 +159,7 @@ class GrassSsbo {
   });
 
   getScale = Fn(([data = vec4(0)], _builder) => {
-    return TSLUtils.unpackUnits(
-      data.w,
-      0,
-      8,
-      0,
-      uniforms.uBladeMaxScale,
-    );
+    return TSLUtils.unpackUnits(data.w, 0, 8, 0, uniforms.uBladeMaxScale);
   });
 
   getOriginalScale = Fn(([data = vec4(0)], _builder) => {
@@ -412,6 +409,13 @@ class GrassSsbo {
       uniforms.uR0,
       uniforms.uR1,
       uniforms.uPMin,
+      grassScale,
+      config.BLADE_HEIGHT,
+      uniforms.uCameraMatrix,
+      uniforms.uFy,
+      uniforms.uLowGrassKeep,
+      uniforms.uProjectedMin,
+      uniforms.uProjectedFull,
     );
 
     const isVisible = VegetationSsboUtils.computeVisibility(
@@ -759,6 +763,24 @@ export default class Grass {
       min: 0,
       max: 1,
       step: 0.01,
+    });
+    stochastic.addBinding(uniforms.uLowGrassKeep, "value", {
+      label: "Low grass keep",
+      min: 0,
+      max: 1,
+      step: 0.01,
+    });
+    stochastic.addBinding(uniforms.uProjectedMin, "value", {
+      label: "Projected min",
+      min: 0,
+      max: 0.2,
+      step: 0.001,
+    });
+    stochastic.addBinding(uniforms.uProjectedFull, "value", {
+      label: "Projected full",
+      min: 0,
+      max: 0.2,
+      step: 0.001,
     });
 
     const trail = folder.addFolder({ title: "Trail" });
