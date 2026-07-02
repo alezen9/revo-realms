@@ -27,6 +27,7 @@ import {
   Vector2,
   Vector3,
 } from "three/webgpu";
+import type { Node } from "three/webgpu";
 import {
   assetManager,
   rendererManager,
@@ -76,13 +77,13 @@ const uniforms = {
   // tint
   uColor1: uniform(new Color().setRGB(0.02, 0.14, 0.33)),
   uColor2: uniform(new Color().setRGB(0.99, 0.64, 0.0)),
-  uColorStrength: uniform(0.275),
+  uBrightness: uniform(1),
 };
 
 class FlowersSsbo {
   // x -> offsetX (0 unused)
   // y -> offsetZ (0 unused)
-  // z -> 0/12 offsetY - 12/13 visibility (9 unused)
+  // z -> 0/12 offsetY - 12/1 visibility - 13/6 grass scale (5 unused)
   // w -> noise (0 unused - also not used currently)
   private buffer = instancedArray(config.COUNT, "vec4");
 
@@ -96,7 +97,7 @@ class FlowersSsbo {
     return this.buffer;
   }
 
-  getYOffset = Fn(([data = vec4(0)], _builder) => {
+  getYOffset = Fn<[data: Node<"vec4">], Node<"float">>(([data]) => {
     return TSLUtils.unpackUnits(
       data.z,
       0,
@@ -106,11 +107,15 @@ class FlowersSsbo {
     );
   });
 
-  getVisibility = Fn(([data = vec4(0)], _builder) => {
+  getVisibility = Fn<[data: Node<"vec4">], Node<"float">>(([data]) => {
     return TSLUtils.unpackFlag(data.z, 12);
   });
 
-  getNoise = Fn(([data = vec4(0)], _builder) => {
+  getGrassScale = Fn<[data: Node<"vec4">], Node<"float">>(([data]) => {
+    return TSLUtils.unpackUnit(data.z, 13, 6);
+  });
+
+  getNoise = Fn<[data: Node<"vec4">], Node<"vec4">>(([data]) => {
     const x = TSLUtils.unpackUnit(data.w, 0, 6);
     const y = TSLUtils.unpackUnit(data.w, 6, 6);
     const z = TSLUtils.unpackUnit(data.w, 12, 6);
@@ -118,7 +123,10 @@ class FlowersSsbo {
     return vec4(x, y, z, w);
   });
 
-  private setYOffset = Fn(([data = vec4(0), value = float(0)], _builder) => {
+  private setYOffset = Fn<
+    [data: Node<"vec4">, value: Node<"float">],
+    Node<"vec4">
+  >(([data, value]) => {
     data.z = TSLUtils.packUnits(
       data.z,
       0,
@@ -130,12 +138,26 @@ class FlowersSsbo {
     return data;
   });
 
-  private setVisibility = Fn(([data = vec4(0), value = float(0)], _builder) => {
+  private setVisibility = Fn<
+    [data: Node<"vec4">, value: Node<"float">],
+    Node<"vec4">
+  >(([data, value]) => {
     data.z = TSLUtils.packFlag(data.z, 12, value);
     return data;
   });
 
-  private setNoise = Fn(([data = vec4(0), value = vec4(0)], _builder) => {
+  private setGrassScale = Fn<
+    [data: Node<"vec4">, value: Node<"float">],
+    Node<"vec4">
+  >(([data, value]) => {
+    data.z = TSLUtils.packUnit(data.z, 13, 6, value);
+    return data;
+  });
+
+  private setNoise = Fn<
+    [data: Node<"vec4">, value: Node<"vec4">],
+    Node<"vec4">
+  >(([data, value]) => {
     data.w = TSLUtils.packUnit(data.w, 0, 6, value.x);
     data.w = TSLUtils.packUnit(data.w, 6, 6, value.y);
     data.w = TSLUtils.packUnit(data.w, 12, 6, value.z);
@@ -190,11 +212,14 @@ class FlowersSsbo {
     data.y = pos.z;
 
     const worldPos = pos.add(uniforms.uPlayerPosition);
-
-    // Visibility
-    const isVisible = VegetationSsboUtils.computeVisibility(
+    const clipPosition = VegetationSsboUtils.computeClipPosition(
       worldPos,
       uniforms.uCameraMatrix,
+    );
+
+    // Visibility
+    const isVisible = VegetationSsboUtils.computeVisibilityFromClip(
+      clipPosition,
       uniforms.uFx,
       uniforms.uFy,
       config.FLOWER_BOUNDING_SPHERE_RADIUS,
@@ -210,9 +235,11 @@ class FlowersSsbo {
       const yOffset = VegetationSsboUtils.computeYOffset(worldPos);
       data.assign(this.setYOffset(data, yOffset));
 
-      // Alpha
-      const alphaVisibility = VegetationSsboUtils.computeGrassMask(worldPos);
-      data.assign(this.setVisibility(data, alphaVisibility));
+      // Grass scale
+      const grassScale = VegetationSsboUtils.computeGrassScale(worldPos);
+      const grassVisibility = step(0.05, grassScale);
+      data.assign(this.setGrassScale(data, grassScale));
+      data.assign(this.setVisibility(data, grassVisibility));
     });
   })().compute(config.COUNT, [config.WORKGROUP_SIZE]);
 }
@@ -276,9 +303,11 @@ export default class Flowers {
       view: "color",
       color: { type: "float" },
     });
-    folder.addBinding(uniforms.uColorStrength, "value", {
-      label: "Color strength",
+    folder.addBinding(uniforms.uBrightness, "value", {
+      label: "Brightness",
       min: 0,
+      max: 3,
+      step: 0.01,
     });
   }
 }
@@ -300,6 +329,7 @@ class FlowerMaterial extends SpriteNodeMaterial {
 
     const data = this.ssbo.computeBuffer.element(instanceIndex);
     const isVisible = this.ssbo.getVisibility(data);
+    const grassScale = this.ssbo.getGrassScale(data);
     // const noise = this.ssbo.getNoise(data);
     const x = data.x;
     const y = this.ssbo.getYOffset(data);
@@ -322,7 +352,7 @@ class FlowerMaterial extends SpriteNodeMaterial {
       .mul(INFINITY)
       .mul(float(1).sub(isVisible));
     const offsetX = x.add(windDirection.x.mul(windIntensity).mul(0.5));
-    const baseHeight = rand1.add(rand2).add(0.25).clamp();
+    const baseHeight = rand1.add(rand2).add(0.25).clamp().mul(grassScale);
     const offsetY = y.add(baseHeight);
     const offsetZ = z.add(windDirection.y.mul(windIntensity).mul(0.5));
     const basePosition = vec3(offsetX, offsetY, offsetZ);
@@ -331,14 +361,12 @@ class FlowerMaterial extends SpriteNodeMaterial {
     // Size
     this.scaleNode = vec3(
       rand1.remap(0, 1, config.MIN_SCALE, config.MAX_SCALE),
-    );
+    ).mul(grassScale.remap(0, 1, 0.6, 1));
 
     // Diffuse
     const flower = texture(assetManager.resources.edelweiss, uv());
     const tint = mix(uniforms.uColor1, uniforms.uColor2, rand2);
-    const sign = step(rand2, rand1).mul(2).sub(1);
-    const color = mix(tint, flower.rgb, rand1.add(rand2.mul(sign)));
-    this.colorNode = color.mul(uniforms.uColorStrength);
+    this.colorNode = tint.mul(flower.rgb).mul(uniforms.uBrightness);
 
     // Opacity
     this.opacityNode = isVisible.mul(flower.a);

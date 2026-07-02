@@ -1,5 +1,5 @@
 import { ACESFilmicToneMapping, NoToneMapping } from "three";
-import { PostProcessing, WebGPURenderer } from "three/webgpu";
+import { RenderPipeline, WebGPURenderer } from "three/webgpu";
 import {
   mix,
   pass,
@@ -16,7 +16,7 @@ import type { SceneManager } from "../SceneManager";
 
 const LUMINANCE_WEIGHTS = vec3(0.2126, 0.7152, 0.0722);
 
-export class PostprocessingManager extends PostProcessing {
+export class PostprocessingManager extends RenderPipeline {
   private scenePass: ReturnType<typeof pass>;
   private uSaturation = uniform(1.0);
   private saturationTarget = 1.0;
@@ -33,6 +33,7 @@ export class PostprocessingManager extends PostProcessing {
     debugManager: DebugManager,
   ) {
     super(renderer);
+    renderer.toneMappingExposure = 2;
     this.sceneManager = sceneManager;
     this.eventsManager = eventsManager;
     this.debugManager = debugManager;
@@ -41,7 +42,10 @@ export class PostprocessingManager extends PostProcessing {
       title: "⭐️ Postprocessing",
       expanded: false,
     });
-    this.scenePass = pass(this.sceneManager.scene, this.sceneManager.renderCamera);
+    this.scenePass = pass(
+      this.sceneManager.scene,
+      this.sceneManager.renderCamera,
+    );
 
     const passes = this.makeGraph();
     this.outputNode = passes;
@@ -77,6 +81,12 @@ export class PostprocessingManager extends PostProcessing {
     });
     this.debugFolder.addBinding(bloomPass.threshold, "value", {
       label: "Bloom threshold",
+    });
+    this.debugFolder.addBinding(this.renderer, "toneMappingExposure", {
+      label: "Exposure",
+      min: 0,
+      max: 2,
+      step: 0.01,
     });
 
     const withBloomHDR = colorHDR.add(bloomPass);

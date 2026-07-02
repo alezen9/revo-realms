@@ -1,10 +1,9 @@
 import {
   EPSILON,
   float,
+  floor,
   Fn,
   hash,
-  instanceIndex,
-  mat4,
   max,
   mix,
   mod,
@@ -15,8 +14,55 @@ import {
   vec3,
   vec4,
 } from "three/tsl";
+import type { Node } from "three/webgpu";
 import { TSLUtils } from "../../utils/TSLUtils";
 import { assetManager } from "../../systems";
+
+type StochasticKeepArgs = [
+  worldPos: Node<"vec3">,
+  playerPosition: Node<"vec3">,
+  R0: Node<"float">,
+  R1: Node<"float">,
+  pMin: Node<"float">,
+  bladeHeight: Node<"float">,
+  clipPosition: Node<"vec4">,
+  fY: Node<"float">,
+  projectedMin: Node<"float">,
+  projectedFull: Node<"float">,
+  spacing: Node<"float">,
+  previousKeep: Node<"float">,
+  hysteresis: Node<"float">,
+];
+type ClipPositionArgs = [
+  worldPos: Node<"vec3">,
+  cameraMatrix: Node<"mat4">,
+];
+type VisibilityArgs = [
+  worldPos: Node<"vec3">,
+  cameraMatrix: Node<"mat4">,
+  fX: Node<"float">,
+  fY: Node<"float">,
+  r: Node<"float">,
+  padNdcX: Node<"float">,
+  padNdcYNear: Node<"float">,
+  padNdcYFar: Node<"float">,
+];
+type VisibilityFromClipArgs = [
+  clipPosition: Node<"vec4">,
+  fX: Node<"float">,
+  fY: Node<"float">,
+  r: Node<"float">,
+  padNdcX: Node<"float">,
+  padNdcYNear: Node<"float">,
+  padNdcYFar: Node<"float">,
+];
+type WrapPositionArgs = [
+  posXZ: Node<"vec2">,
+  playerDeltaXZ: Node<"vec2">,
+  tileSize: Node<"float">,
+];
+
+const GRASS_MAP_CUTOFF = 0.25;
 
 export class VegetationSsboUtils {
   /**
@@ -25,33 +71,32 @@ export class VegetationSsboUtils {
    * @param R0 float
    * @param R1 float
    * @param pMin float
-   * @param grassScale float
    * @param bladeHeight float
-   * @param cameraMatrix mat4
+   * @param clipPosition vec4
    * @param fY float
-   * @param lowGrassKeep float
    * @param projectedMin float
    * @param projectedFull float
+   * @param spacing float
+   * @param previousKeep float
+   * @param hysteresis float
    * @returns `int` Flag keep/discard based on stochastic keep
    */
-  static computeStochasticKeep = Fn(
-    (
-      [
-        worldPos = vec3(0),
-        playerPosition = vec3(0),
-        R0 = float(0),
-        R1 = float(0),
-        pMin = float(0),
-        grassScale = float(1),
-        bladeHeight = float(1),
-        cameraMatrix = mat4(),
-        fY = float(1),
-        lowGrassKeep = float(0.55),
-        projectedMin = float(0.012),
-        projectedFull = float(0.055),
-      ],
-      _builder,
-    ) => {
+  static computeStochasticKeep = Fn<StochasticKeepArgs, Node<"float">>(
+    ([
+      worldPos,
+      playerPosition,
+      R0,
+      R1,
+      pMin,
+      bladeHeight,
+      clipPosition,
+      fY,
+      projectedMin,
+      projectedFull,
+      spacing,
+      previousKeep,
+      hysteresis,
+    ]) => {
       // world-space radial thinning (no sqrt)
       const dx = worldPos.x.sub(playerPosition.x);
       const dz = worldPos.z.sub(playerPosition.z);
@@ -67,13 +112,10 @@ export class VegetationSsboUtils {
         .clamp();
 
       const pDistance = mix(1, pMin, t);
-      const pHeight = mix(lowGrassKeep, 1, grassScale);
 
-      const clip = cameraMatrix.mul(vec4(worldPos, 1.0));
-      const eyeDepthAbs = clip.w.abs().max(EPSILON);
+      const eyeDepthAbs = clipPosition.w.abs().max(EPSILON);
       const projectedBladeHeight = fY
         .mul(bladeHeight)
-        .mul(grassScale)
         .div(eyeDepthAbs);
       const pScreen = smoothstep(
         projectedMin,
@@ -81,13 +123,20 @@ export class VegetationSsboUtils {
         projectedBladeHeight,
       );
 
-      const p = pDistance.mul(pHeight).mul(pScreen);
+      const p = pDistance.mul(pScreen);
 
-      // deterministic RNG per blade (stable under wrap)
-      const rnd = hash(float(instanceIndex).mul(0.73));
+      const cell = floor(worldPos.xz.div(spacing));
+      const rnd = hash(cell.x.mul(12.9898).add(cell.y.mul(78.233)));
 
-      const keep = step(rnd, p);
-      return keep;
+      const enterKeep = step(rnd.add(hysteresis), p);
+      const stayKeep = step(rnd.sub(hysteresis), p);
+      return mix(enterKeep, stayKeep, previousKeep);
+    },
+  );
+
+  static computeClipPosition = Fn<ClipPositionArgs, Node<"vec4">>(
+    ([worldPos, cameraMatrix]) => {
+      return cameraMatrix.mul(vec4(worldPos, 1.0));
     },
   );
 
@@ -101,28 +150,30 @@ export class VegetationSsboUtils {
    * @param padNdcY float (affects only near)
    * @returns `int` Flag inside/outside camera frustum
    */
-  static computeVisibility = Fn(
-    (
-      [
-        worldPos = vec3(0),
-        cameraMatrix = mat4(),
-        fX = float(0),
-        fY = float(0),
-        r = float(0),
-        padNdcX = float(0),
-        padNdcYNear = float(0),
-        padNdcYFar = float(0),
-      ],
-      _builder,
-    ) => {
+  static computeVisibility = Fn<VisibilityArgs, Node<"float">>(
+    ([worldPos, cameraMatrix, fX, fY, r, padNdcX, padNdcYNear, padNdcYFar]) => {
+      const clipPosition = this.computeClipPosition(worldPos, cameraMatrix);
+      return this.computeVisibilityFromClip(
+        clipPosition,
+        fX,
+        fY,
+        r,
+        padNdcX,
+        padNdcYNear,
+        padNdcYFar,
+      );
+    },
+  );
+
+  static computeVisibilityFromClip = Fn<VisibilityFromClipArgs, Node<"float">>(
+    ([clipPosition, fX, fY, r, padNdcX, padNdcYNear, padNdcYFar]) => {
       const one = float(1);
 
-      const clip = cameraMatrix.mul(vec4(worldPos, 1.0));
-      const invW = one.div(clip.w);
-      const ndc = clip.xyz.mul(invW);
+      const invW = one.div(clipPosition.w);
+      const ndc = clipPosition.xyz.mul(invW);
 
       // works for WebGL and WebGPU
-      const eyeDepthAbs = clip.w.abs().max(EPSILON); // epsilon only to avoid div-by-zero, not to inflate radius
+      const eyeDepthAbs = clipPosition.w.abs().max(EPSILON); // epsilon only to avoid div-by-zero, not to inflate radius
 
       const rNdcX = fX.mul(r).div(eyeDepthAbs).add(padNdcX);
       const rNdcY = fY.mul(r).div(eyeDepthAbs);
@@ -147,27 +198,45 @@ export class VegetationSsboUtils {
    * @param worldPos vec3
    * @returns `float` Grass scale based on grassMap
    */
-  static computeGrassScale = Fn(([worldPos = vec3(0)], _builder) => {
-    const uv = TSLUtils.computeMapUvByPosition(worldPos.xz);
-    const scale = texture(assetManager.resources.grassMap, uv).g;
-    return scale;
-  });
+  static computeGrassMapValue = Fn<[worldPos: Node<"vec3">], Node<"float">>(
+    ([worldPos]) => {
+      const uv = TSLUtils.computeMapUvByPosition(worldPos.xz);
+      return texture(assetManager.resources.grassMap, uv).g;
+    },
+  );
 
-  static computeGrassMask = Fn(([worldPos = vec3(0)], _builder) => {
-    const scale = this.computeGrassScale(worldPos);
-    return step(0.25, scale);
-  });
+  static computeGrassScale = Fn<[worldPos: Node<"vec3">], Node<"float">>(
+    ([worldPos]) => {
+      const mapValue = this.computeGrassMapValue(worldPos);
+      const mask = step(GRASS_MAP_CUTOFF, mapValue);
+      const height = mapValue
+        .sub(GRASS_MAP_CUTOFF)
+        .div(1 - GRASS_MAP_CUTOFF)
+        .clamp();
+
+      return height.mul(mask);
+    },
+  );
+
+  static computeGrassMask = Fn<[worldPos: Node<"vec3">], Node<"float">>(
+    ([worldPos]) => {
+      const mapValue = this.computeGrassMapValue(worldPos);
+      return step(GRASS_MAP_CUTOFF, mapValue);
+    },
+  );
 
   /**
    * @param worldPos vec3
    * @returns `float` Height based on terrain heightmap
    */
-  static computeYOffset = Fn(([worldPos = vec3(0)], _builder) => {
-    const uv = TSLUtils.computeMapUvByPosition(worldPos.xz);
-    const fixedUv = vec2(uv.x, float(1).sub(uv.y));
-    const height = texture(assetManager.resources.heightmap, fixedUv).r;
-    return height;
-  });
+  static computeYOffset = Fn<[worldPos: Node<"vec3">], Node<"float">>(
+    ([worldPos]) => {
+      const uv = TSLUtils.computeMapUvByPosition(worldPos.xz);
+      const fixedUv = vec2(uv.x, float(1).sub(uv.y));
+      const height = texture(assetManager.resources.heightmap, fixedUv).r;
+      return height;
+    },
+  );
 
   /**
    * @param posXZ vec2
@@ -175,11 +244,8 @@ export class VegetationSsboUtils {
    * @param tileSize float
    * @returns `vec3` Wrapped position
    */
-  static wrapPosition = Fn(
-    (
-      [posXZ = vec2(0), playerDeltaXZ = vec2(0), tileSize = float(0)],
-      _builder,
-    ) => {
+  static wrapPosition = Fn<WrapPositionArgs, Node<"vec3">>(
+    ([posXZ, playerDeltaXZ, tileSize]) => {
       const halfTile = tileSize.div(2);
       const newOffsetX = mod(
         posXZ.x.sub(playerDeltaXZ.x).add(halfTile),

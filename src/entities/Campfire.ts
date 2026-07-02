@@ -56,7 +56,8 @@ export class Campfire {
     if (!fireColliderMesh.geometry.boundingBox) {
       fireColliderMesh.geometry.computeBoundingBox();
     }
-    const { min: fireMin, max: fireMax } = fireColliderMesh.geometry.boundingBox!;
+    const { min: fireMin, max: fireMax } =
+      fireColliderMesh.geometry.boundingBox!;
     const fireRadius =
       0.5 * (fireMax.x - fireMin.x) * Math.abs(fireColliderMesh.scale.x);
     const fireColliderDesc = ColliderDesc.ball(fireRadius)
@@ -79,11 +80,15 @@ export class Campfire {
     const shortLogRadius =
       0.5 *
       Math.max(
-        (shortLogMax.x - shortLogMin.x) * Math.abs(shortLogColliderMesh.scale.x),
-        (shortLogMax.z - shortLogMin.z) * Math.abs(shortLogColliderMesh.scale.z),
+        (shortLogMax.x - shortLogMin.x) *
+          Math.abs(shortLogColliderMesh.scale.x),
+        (shortLogMax.z - shortLogMin.z) *
+          Math.abs(shortLogColliderMesh.scale.z),
       );
     const shortLogHalfHeight =
-      0.5 * (shortLogMax.y - shortLogMin.y) * Math.abs(shortLogColliderMesh.scale.y);
+      0.5 *
+      (shortLogMax.y - shortLogMin.y) *
+      Math.abs(shortLogColliderMesh.scale.y);
     const shortLogColliderDesc = ColliderDesc.cylinder(
       shortLogHalfHeight,
       shortLogRadius,
@@ -111,7 +116,9 @@ export class Campfire {
         (longLogMax.z - longLogMin.z) * Math.abs(longLogColliderMesh.scale.z),
       );
     const longLogHalfHeight =
-      0.5 * (longLogMax.y - longLogMin.y) * Math.abs(longLogColliderMesh.scale.y);
+      0.5 *
+      (longLogMax.y - longLogMin.y) *
+      Math.abs(longLogColliderMesh.scale.y);
     const longLogColliderDesc = ColliderDesc.cylinder(
       longLogHalfHeight,
       longLogRadius,

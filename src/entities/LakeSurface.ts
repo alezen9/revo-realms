@@ -1,16 +1,17 @@
 import { Color, Mesh, Vector2, Vector3 } from "three";
 import { MeshBasicNodeMaterial } from "three/webgpu";
 import {
+  cameraFar,
+  cameraNear,
   cameraPosition,
-  cameraProjectionMatrix,
   cubeTexture,
   dot,
   exp,
   float,
-  int,
   max,
   mix,
   normalize,
+  perspectiveDepthToViewZ,
   positionView,
   positionWorld,
   pow,
@@ -31,7 +32,6 @@ import {
   assetManager,
   audioManager,
   lightingManager,
-  rendererManager,
   debugManager,
   sceneManager,
   eventsManager,
@@ -49,7 +49,6 @@ export class LakeSurface {
       uTworld: uniform(new Vector3(1, 0, 0)),
       uBworld: uniform(new Vector3(0, 0, -1)),
       uNworld: uniform(new Vector3(0, 1, 0)),
-      uIsWebGPU: uniform(1),
     };
 
     lakeSurface.material = new WaterMaterial(uniforms);
@@ -63,7 +62,6 @@ export class LakeSurface {
     uniforms.uNworld.value
       .transformDirection(lakeSurface.matrixWorld)
       .normalize();
-    uniforms.uIsWebGPU.value = Number(rendererManager.isWebGPU);
 
     const geom = lakeSurface.geometry;
     const bsLocal = geom.boundingSphere!;
@@ -118,7 +116,6 @@ class WaterMaterial extends MeshBasicNodeMaterial {
     uInscatterStrength: uniform(0.85),
     uAbsorptionScale: uniform(15),
     uMinOpacity: uniform(0.5),
-    uIsWebGPU: uniform(1),
     uHighlightsSpread: uniform(0.35),
     uDepthOpacityScale: uniform(0.1),
     uHighlightsDepthOpacityScale: uniform(0.05),
@@ -265,13 +262,11 @@ class WaterMaterial extends MeshBasicNodeMaterial {
 
     // 1. depth
     const zNdc = viewportDepthTexture(screenUV).r;
-    const isWebGL = float(1).sub(this.uniforms.uIsWebGPU);
-    const webglZNdc = zNdc.mul(2).sub(1).mul(isWebGL);
-    const webgpuZNdc = zNdc.mul(this.uniforms.uIsWebGPU);
-    const zNdcCompatible = webglZNdc.add(webgpuZNdc);
-    const p3z = float(cameraProjectionMatrix.element(int(3)).element(int(2)));
-    const p2z = float(cameraProjectionMatrix.element(int(2)).element(int(2)));
-    const zLinear = p3z.div(zNdcCompatible.add(p2z));
+    const zLinear = perspectiveDepthToViewZ(
+      zNdc,
+      cameraNear,
+      cameraFar,
+    ).negate();
     const fragLinear = positionView.z.negate();
     const isUnderWater = step(fragLinear, zLinear);
     const fragmentDepth = zLinear.sub(fragLinear);
@@ -286,10 +281,11 @@ class WaterMaterial extends MeshBasicNodeMaterial {
     const distortion = tsn.xy.mul(distortionStrength); // tangent tilt, not outward, drives wobble
     const refractedScreenUv = screenUV.add(distortion.mul(isUnderWater));
     const zNdcRefr = viewportDepthTexture(refractedScreenUv).r;
-    const webglZNdcRefr = zNdcRefr.mul(2).sub(1).mul(isWebGL);
-    const webgpuZNdcRefr = zNdcRefr.mul(this.uniforms.uIsWebGPU);
-    const zNdcCompatibleRefr = webglZNdcRefr.add(webgpuZNdcRefr);
-    const zLinearRefr = p3z.div(zNdcCompatibleRefr.add(p2z));
+    const zLinearRefr = perspectiveDepthToViewZ(
+      zNdcRefr,
+      cameraNear,
+      cameraFar,
+    ).negate();
     const isSafe = step(fragLinear, zLinearRefr);
     const fragmentDepthRefr = zLinearRefr.sub(fragLinear);
     const waterDepthRefr = fragmentDepthRefr
@@ -330,7 +326,9 @@ class WaterMaterial extends MeshBasicNodeMaterial {
     const tintColor = this.uniforms.uInscatterTint.mul(
       this.uniforms.uInscatterStrength,
     );
-    const throughWater = mix(tintColor, screenColor, transmittance);
+    const throughWater = tintColor
+      .mul(float(1).sub(transmittance))
+      .add(screenColor.mul(transmittance));
 
     // 6. surface highlights
     const tsnHighlights = vec3(

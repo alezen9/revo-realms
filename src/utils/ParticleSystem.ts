@@ -33,8 +33,9 @@ import { Utils } from "./Utils";
 const createParticleBuffer = (count: number | Float32Array) =>
   instancedArray(count, "vec4");
 type ParticleBuffer = ReturnType<typeof createParticleBuffer>;
+type ParticleComputeArgs = [buffer: ParticleBuffer];
 
-const _computeFn = Fn(([_]: [ParticleBuffer], _builder) => {
+const _computeFn = Fn<ParticleComputeArgs, void>(([_]) => {
   /* noop */
 });
 
@@ -144,7 +145,7 @@ const getFirePresetConfig = (
   const secondaryBuffer = instancedArray(params.count, "float");
   const fireParticlesPersentage = 0.9;
 
-  const onInit = Fn(([_buffer]: [ParticleBuffer], _builder) => {
+  const onInit = Fn<ParticleComputeArgs, void>(([_buffer]) => {
     const rand = hash(instanceIndex.add(12345));
 
     const type = secondaryBuffer.element(instanceIndex);
@@ -152,7 +153,7 @@ const getFirePresetConfig = (
     type.assign(isSpark);
   });
 
-  const onUpdate = Fn(([_buffer]: [ParticleBuffer], _builder) => {
+  const onUpdate = Fn<ParticleComputeArgs, void>(([_buffer]) => {
     const data = _buffer.element(instanceIndex);
     const isSpark = secondaryBuffer.element(instanceIndex);
 

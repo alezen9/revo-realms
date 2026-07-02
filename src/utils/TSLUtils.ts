@@ -1,6 +1,5 @@
 import {
   Fn,
-  vec2,
   float,
   pow,
   floor,
@@ -12,12 +11,77 @@ import {
   round,
   vec3,
   texture,
-  int,
   EPSILON,
   smoothstep,
 } from "three/tsl";
+import type { Node } from "three/webgpu";
 import { realmConfig } from "../realm/config";
 import { assetManager } from "../systems";
+
+type FloatNode = Node<"float">;
+type Vec2Node = Node<"vec2">;
+type Vec3Node = Node<"vec3">;
+
+type PackF32Args = [
+  dest: FloatNode,
+  offset: FloatNode,
+  bits: FloatNode,
+  value: FloatNode,
+  lsb: FloatNode,
+  bias: FloatNode,
+];
+type UnpackF32Args = [
+  src: FloatNode,
+  offset: FloatNode,
+  bits: FloatNode,
+  lsb: FloatNode,
+  bias: FloatNode,
+];
+type PackUnitArgs = [
+  dest: FloatNode,
+  offset: FloatNode,
+  bits: FloatNode,
+  value: FloatNode,
+];
+type UnpackUnitArgs = [src: FloatNode, offset: FloatNode, bits: FloatNode];
+type PackFlagArgs = [dest: FloatNode, offset: FloatNode, value: FloatNode];
+type UnpackFlagArgs = [src: FloatNode, offset: FloatNode];
+type PackSignedArgs = [
+  packed: FloatNode,
+  offset: FloatNode,
+  bits: FloatNode,
+  value: FloatNode,
+  maxAbs: FloatNode,
+];
+type UnpackSignedArgs = [
+  packed: FloatNode,
+  offset: FloatNode,
+  bits: FloatNode,
+  maxAbs: FloatNode,
+];
+type PackUnitsArgs = [
+  dest: FloatNode,
+  offset: FloatNode,
+  bits: FloatNode,
+  value: FloatNode,
+  minV: FloatNode,
+  maxV: FloatNode,
+];
+type UnpackUnitsArgs = [
+  src: FloatNode,
+  offset: FloatNode,
+  bits: FloatNode,
+  minV: FloatNode,
+  maxV: FloatNode,
+];
+type AtlasUvArgs = [scale: Vec2Node, offset: Vec2Node, uv: Vec2Node];
+type PlayerShadowArgs = [
+  worldPos: Vec3Node,
+  playerPos: Vec3Node,
+  playerRadius: FloatNode,
+  sunDir: Vec3Node,
+];
+type BlendNormalsArgs = [n1: Vec3Node, n2: Vec3Node];
 
 export class TSLUtils {
   /**
@@ -29,15 +93,8 @@ export class TSLUtils {
    * @param lsb [float]
    * @param bias [float]
    */
-  private static packF32 = Fn(
-    ([
-      dest = float(0),
-      offset = int(0),
-      bits = int(8),
-      value = float(0),
-      lsb = float(1),
-      bias = float(0),
-    ], _builder) => {
+  private static packF32 = Fn<PackF32Args, FloatNode>(
+    ([dest, offset, bits, value, lsb, bias]) => {
       const levels = sub(pow(2, bits), 1);
       const qRaw = sub(value, bias).div(max(lsb, EPSILON));
       const q = clamp(round(qRaw), 0, levels);
@@ -60,14 +117,8 @@ export class TSLUtils {
    * @param lsb [float]
    * @param bias [float]
    */
-  private static unpackF32 = Fn(
-    ([
-      src = float(0),
-      offset = int(0),
-      bits = int(8),
-      lsb = float(1),
-      bias = float(0),
-    ], _builder) => {
+  private static unpackF32 = Fn<UnpackF32Args, FloatNode>(
+    ([src, offset, bits, lsb, bias]) => {
       const base = pow(2, offset);
       const span = pow(2, bits);
       const slot = floor(src.div(base));
@@ -83,8 +134,8 @@ export class TSLUtils {
    * @param bits [int] how many bits it should occupy
    * @param value [float] value to be stored (in range 0..1)
    */
-  static packUnit = Fn(
-    ([dest = float(0), offset = int(0), bits = int(8), value = float(0)], _builder) => {
+  static packUnit = Fn<PackUnitArgs, FloatNode>(
+    ([dest, offset, bits, value]) => {
       const lsb = float(1).div(sub(pow(2, bits), 1)); // 1/(2^bits-1)
       return this.packF32(dest, offset, bits, value, lsb, float(0));
     },
@@ -96,7 +147,7 @@ export class TSLUtils {
    * @param offset [int] location of starting bit index
    * @param bits [int] how many bits it occupies
    */
-  static unpackUnit = Fn(([src = float(0), offset = int(0), bits = int(8)], _builder) => {
+  static unpackUnit = Fn<UnpackUnitArgs, FloatNode>(([src, offset, bits]) => {
     const lsb = float(1).div(sub(pow(2, bits), 1));
     return this.unpackF32(src, offset, bits, lsb, float(0));
   });
@@ -107,8 +158,8 @@ export class TSLUtils {
    * @param offset [int] location of starting bit index
    * @param value [float] flag to be stored, binary 0/1
    */
-  static packFlag = Fn(([dest = float(0), offset = int(0), value = float(0)], _builder) =>
-    this.packF32(dest, offset, int(1), value, float(1), float(0)),
+  static packFlag = Fn<PackFlagArgs, FloatNode>(([dest, offset, value]) =>
+    this.packF32(dest, offset, float(1), value, float(1), float(0)),
   );
 
   /**
@@ -116,8 +167,8 @@ export class TSLUtils {
    * @param src [float] source data
    * @param offset [int] location of starting bit index
    */
-  static unpackFlag = Fn(([src = float(0), offset = int(0)], _builder) =>
-    this.unpackF32(src, offset, int(1), float(1), float(0)),
+  static unpackFlag = Fn<UnpackFlagArgs, FloatNode>(([src, offset]) =>
+    this.unpackF32(src, offset, float(1), float(1), float(0)),
   );
 
   /**
@@ -126,8 +177,8 @@ export class TSLUtils {
    * @param offset [int] location of starting bit index
    * @param value [float] angle to be stored in radians
    */
-  static packAngle = Fn(
-    ([dest = float(0), offset = int(0), bits = int(9), value = float(0)], _builder) => {
+  static packAngle = Fn<PackUnitArgs, FloatNode>(
+    ([dest, offset, bits, value]) => {
       const levels = sub(pow(2, bits), 1);
       const lsb = PI2.div(levels); // 2π/(2^bits-1)
       // wrap into [0,2π)
@@ -142,35 +193,22 @@ export class TSLUtils {
    * @param offset [int] location of starting bit index
    * @param bits [int] how many bits it occupies
    */
-  static unpackAngle = Fn(
-    ([src = float(0), offset = int(0), bits = int(9)], _builder) => {
-      const lsb = PI2.div(sub(pow(2, bits), 1));
-      return this.unpackF32(src, offset, bits, lsb, float(0));
-    },
-  );
+  static unpackAngle = Fn<UnpackUnitArgs, FloatNode>(([src, offset, bits]) => {
+    const lsb = PI2.div(sub(pow(2, bits), 1));
+    return this.unpackF32(src, offset, bits, lsb, float(0));
+  });
 
   // Signed range [-A..+A]
-  static packSigned = Fn(
-    ([
-      packed = float(0),
-      offset = float(0),
-      bits = float(8),
-      value = float(0),
-      maxAbs = float(1),
-    ], _builder) => {
+  static packSigned = Fn<PackSignedArgs, FloatNode>(
+    ([packed, offset, bits, value, maxAbs]) => {
       const levels = sub(pow(2, bits), 1);
       const lsb = maxAbs.mul(2).div(levels); // step
       const bias = maxAbs.negate();
       return this.packF32(packed, offset, bits, value, lsb, bias);
     },
   );
-  static unpackSigned = Fn(
-    ([
-      packed = float(0),
-      offset = float(0),
-      bits = float(8),
-      maxAbs = float(1),
-    ], _builder) => {
+  static unpackSigned = Fn<UnpackSignedArgs, FloatNode>(
+    ([packed, offset, bits, maxAbs]) => {
       const lsb = maxAbs.mul(2).div(sub(pow(2, bits), 1));
       const bias = maxAbs.negate();
       return this.unpackF32(packed, offset, bits, lsb, bias);
@@ -186,15 +224,8 @@ export class TSLUtils {
    * @param minV [float] min (included)
    * @param maxV [float] max (included)
    */
-  static packUnits = Fn(
-    ([
-      dest = float(0),
-      offset = int(0),
-      bits = int(8),
-      value = float(0),
-      minV = float(0),
-      maxV = float(1),
-    ], _builder) => {
+  static packUnits = Fn<PackUnitsArgs, FloatNode>(
+    ([dest, offset, bits, value, minV, maxV]) => {
       const levels = sub(pow(2, bits), 1);
       const lsb = maxV.sub(minV).div(levels);
       return this.packF32(dest, offset, bits, value, lsb, minV);
@@ -209,42 +240,31 @@ export class TSLUtils {
    * @param minV [float] min (included)
    * @param maxV [float] max (included)
    */
-  static unpackUnits = Fn(
-    ([
-      src = float(0),
-      offset = int(0),
-      bits = int(8),
-      minV = float(0),
-      maxV = float(1),
-    ], _builder) => {
+  static unpackUnits = Fn<UnpackUnitsArgs, FloatNode>(
+    ([src, offset, bits, minV, maxV]) => {
       const lsb = maxV.sub(minV).div(sub(pow(2, bits), 1));
       return this.unpackF32(src, offset, bits, lsb, minV);
     },
   );
 
-  static computeMapUvByPosition = Fn(([pos = vec2(0)], _builder) => {
+  static computeMapUvByPosition = Fn<[pos: Vec2Node], Vec2Node>(([pos]) => {
     return pos.add(realmConfig.HALF_MAP_SIZE).div(realmConfig.MAP_SIZE);
   });
 
-  static computeAtlasUv = Fn(
-    ([scale = vec2(0), offset = vec2(0), uv = vec2(0)], _builder) => {
-      return uv.mul(scale).add(offset);
+  static computeAtlasUv = Fn<AtlasUvArgs, Vec2Node>(([scale, offset, uv]) => {
+    return uv.mul(scale).add(offset);
+  });
+
+  static getBakedShadowFactor = Fn<[worldPosXZ: Vec2Node], FloatNode>(
+    ([worldPosXZ]) => {
+      const mapUv = this.computeMapUvByPosition(worldPosXZ);
+      const shadow = texture(assetManager.resources.shadowMap, mapUv);
+      return shadow.r;
     },
   );
 
-  static getBakedShadowFactor = Fn(([worldPosXZ = vec2(0)], _builder) => {
-    const mapUv = this.computeMapUvByPosition(worldPosXZ);
-    const shadow = texture(assetManager.resources.shadowMap, mapUv);
-    return shadow.r;
-  });
-
-  static getPlayerShadowFactor = Fn(
-    ([
-      worldPos = vec3(0),
-      playerPos = vec3(0),
-      playerRadius = float(0.5),
-      sunDir = vec3(0),
-    ], _builder) => {
+  static getPlayerShadowFactor = Fn<PlayerShadowArgs, FloatNode>(
+    ([worldPos, playerPos, playerRadius, sunDir]) => {
       // sunDir points FROM sun TO scene (e.g., normalized(-1,-1,-1))
       // Find where player center projects onto plane at worldPos.y along sunDir
       // playerPos + sunDir * t = shadowPoint, where shadowPoint.y = worldPos.y
@@ -268,7 +288,7 @@ export class TSLUtils {
 
   // Inputs n1, n2 are tangent-space normals already unpacked to [-1..1] and normalized.
   // (If you sampled from texture, do: n = tex.rgb * 2 - 1; normalize(n);)
-  static blendRNM = Fn(([n1 = vec3(0), n2 = vec3(0)], _builder) => {
+  static blendRNM = Fn<BlendNormalsArgs, Vec3Node>(([n1, n2]) => {
     const r = vec3(
       n1.z.mul(n2.x).add(n1.x.mul(n2.z)),
       n1.z.mul(n2.y).add(n1.y.mul(n2.z)),
@@ -278,7 +298,7 @@ export class TSLUtils {
   });
 
   // partial derivatives, inputs n1, n2 are tangent-space normals already unpacked to [-1..1] and normalized.
-  static blendUDN = Fn(([n1 = vec3(0), n2 = vec3(0)], _builder) => {
+  static blendUDN = Fn<BlendNormalsArgs, Vec3Node>(([n1, n2]) => {
     return vec3(n1.xy.add(n2.xy), n1.z.mul(n2.z)).normalize();
   });
 }

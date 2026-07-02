@@ -1,5 +1,7 @@
 import {
   float,
+  Fn,
+  If,
   mix,
   normalMap,
   positionWorld,
@@ -22,6 +24,7 @@ import {
   MeshLambertNodeMaterial,
   NoColorSpace,
   RedFormat,
+  type Node,
   Vector3,
 } from "three/webgpu";
 import { realmConfig } from "../realm/config";
@@ -43,16 +46,52 @@ import {
 } from "../systems";
 
 const uniforms = {
-  uGrassTerrainColor: uniform(new Color().setRGB(0.28, 0.21, 0.0)),
+  uGrassTerrainColor: uniform(new Color().setRGB(0.21, 0.34, 0.22)),
   uWaterSandColor: uniform(new Color().setRGB(0.7, 0.55, 0.29)),
   uTerrainColor: uniform(new Color().setRGB(0.7, 0.55, 0.29)),
   uGrassNormalScale: uniform(1.25),
-  uTerrainNormalScale: uniform(0.25),
+  uTerrainNormalScale: uniform(1),
   uWaterNormalScale: uniform(0.35),
   uCausticsHighlightScale: uniform(0.4),
   uCausticsUv1Scale: uniform(31.53),
   uCausticsUv2Scale: uniform(58.71),
 };
+
+type CausticsArgs = [
+  vUv: Node<"vec2">,
+  depth: Node<"float">,
+  isWater: Node<"float">,
+];
+
+const computeCausticsColor = Fn<CausticsArgs, Node<"vec3">>(
+  ([vUv, depth, isWater]) => {
+    const causticsColor = vec3(0).toVar();
+
+    If(isWater, () => {
+      const timer = gameTime.mul(0.15);
+      const uv1 = vUv
+        .mul(uniforms.uCausticsUv1Scale)
+        .add(vec2(timer, 0))
+        .fract();
+      const noiseA = texture(assetManager.resources.noiseAtlas, uv1, 1).a;
+      const uv2 = vUv
+        .mul(uniforms.uCausticsUv2Scale)
+        .add(vec2(0, timer.negate()))
+        .fract();
+      const noiseB = texture(assetManager.resources.noiseAtlas, uv2, 3).a;
+      const caustics = noiseA.add(noiseB);
+      const caustics3 = caustics.mul(caustics).mul(caustics);
+      const depthFalloff = smoothstep(-1, 7.5, depth);
+      const adjustedCaustics = caustics3.mul(float(1).sub(depthFalloff));
+      const causticsHighlightColor = vec3(0.3, 0.4, 0.5).mul(
+        uniforms.uCausticsHighlightScale,
+      );
+      causticsColor.assign(causticsHighlightColor.mul(adjustedCaustics));
+    });
+
+    return causticsColor;
+  },
+);
 
 class TerainMaterial extends MeshLambertNodeMaterial {
   constructor() {
@@ -119,16 +158,19 @@ class TerainMaterial extends MeshLambertNodeMaterial {
   private createMaterial() {
     this.precision = "lowp";
     const worldUv = TSLUtils.computeMapUvByPosition(positionWorld.xz);
-    const noise = texture(assetManager.resources.noiseAtlas, worldUv.mul(10));
+    const terrainNoiseUv = TSLUtils.computeAtlasUv(
+      vec2(0.5),
+      vec2(0, 0),
+      worldUv.mul(6).fract(),
+    );
+    const noise = texture(assetManager.resources.noiseAtlas, terrainNoiseUv);
     const vUv = varying(worldUv);
 
     // LAND
-    const isGrass = texture(assetManager.resources.grassMap, vUv).r;
-    const smoothIsGrass = smoothstep(0, 0.2, isGrass.mul(noise.b));
-    const grassColor = mix(
-      uniforms.uTerrainColor,
-      uniforms.uGrassTerrainColor,
-      noise.b,
+    const isGrass = texture(assetManager.resources.grassMap, vUv).g;
+    const smoothIsGrass = smoothstep(0.05, 0.35, isGrass);
+    const grassColor = uniforms.uGrassTerrainColor.mul(
+      mix(0.86, 1.12, noise.b),
     );
     const terrainColor = mix(uniforms.uTerrainColor, grassColor, smoothIsGrass);
 
@@ -138,27 +180,7 @@ class TerainMaterial extends MeshLambertNodeMaterial {
     const blendFactor = smoothstep(0, 8, depth);
     const waterTint = vec3(0.35, 0.45, 0.55).mul(0.65);
 
-    const timer = gameTime.mul(0.15);
-    const uv1 = vUv.mul(uniforms.uCausticsUv1Scale).add(vec2(timer, 0)).fract();
-    const noiseA = texture(assetManager.resources.noiseAtlas, uv1, 1).a;
-    const uv2 = vUv
-      .mul(uniforms.uCausticsUv2Scale)
-      .add(vec2(0, timer.negate()))
-      .fract();
-    const noiseB = texture(assetManager.resources.noiseAtlas, uv2, 3).a;
-    const caustics = noiseA.add(noiseB);
-    const caustics3 = caustics.mul(caustics).mul(caustics);
-    const depthFalloff = smoothstep(-1, 7.5, depth);
-    const adjustedCaustics = caustics3.mul(float(1).sub(depthFalloff));
-    const causticsHighlightColor = vec3(0.3, 0.4, 0.5).mul(
-      uniforms.uCausticsHighlightScale,
-    );
-    const causticsShadowColor = vec3(0, 0, 0);
-    const causticsColor = mix(
-      causticsShadowColor,
-      causticsHighlightColor,
-      adjustedCaustics,
-    );
+    const causticsColor = computeCausticsColor(vUv, depth, isWater);
 
     const shallowBoost = smoothstep(0.0, 1.5, depth);
     const sandHighlight = vec3(1.0, 0.9, 0.7).mul(0.1).mul(shallowBoost);
@@ -171,7 +193,7 @@ class TerainMaterial extends MeshLambertNodeMaterial {
 
     const final = mix(terrainColor, waterColor, isWater);
     const shadowFactor = TSLUtils.getBakedShadowFactor(positionWorld.xz);
-    const withShadow = mix(final.mul(0.5), final, shadowFactor);
+    const withShadow = mix(final.mul(0.62), final, shadowFactor);
     this.colorNode = withShadow;
 
     // NORMAL
@@ -188,6 +210,14 @@ class TerainMaterial extends MeshLambertNodeMaterial {
     );
     this.normalNode = normalMap(norAo.rgb, normalScale);
     this.aoNode = norAo.a;
+  }
+}
+
+class OuterTerrainMaterial extends MeshLambertNodeMaterial {
+  constructor() {
+    super();
+    this.precision = "lowp";
+    this.colorNode = uniforms.uGrassTerrainColor;
   }
 }
 
@@ -333,9 +363,9 @@ class OuterTerrain {
   private kintoun: RigidBody; // Kintoun = Flying Nimbus cloud from dragon ball
   private kintounPosition = new Vector3();
 
-  constructor(material: TerainMaterial) {
+  constructor() {
     this.outerFloor = this.createOuterFloorVisual();
-    this.outerFloor.material = material;
+    this.outerFloor.material = new OuterTerrainMaterial();
     this.kintoun = this.createKintoun();
     sceneManager.scene.add(this.outerFloor);
 
@@ -346,7 +376,8 @@ class OuterTerrain {
     const mesh = assetManager.resources.worldModel.scene.getObjectByName(
       "terrain-outer",
     ) as Mesh;
-    mesh.frustumCulled = false;
+    mesh.geometry.computeBoundingSphere();
+    mesh.geometry.computeBoundingBox();
     return mesh;
   }
 
@@ -410,6 +441,6 @@ export default class Terrain {
   constructor() {
     const terrainMaterial = new TerainMaterial();
     new InnerTerrain(terrainMaterial);
-    new OuterTerrain(terrainMaterial);
+    new OuterTerrain();
   }
 }

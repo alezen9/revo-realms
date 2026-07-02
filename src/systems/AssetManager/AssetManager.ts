@@ -87,12 +87,10 @@ export class AssetManager {
             tex.magFilter = resource.magFilter;
           if (resource.generateMipmaps !== undefined)
             tex.generateMipmaps = resource.generateMipmaps;
-          // @ts-ignore
           this.resources[resource.name] = tex;
         });
       case "gltf":
         return this.gltfLoader.loadAsync(resource.url).then((gltf) => {
-          // @ts-ignore
           this.resources[resource.name] = gltf;
         });
       case "cubeTexture":
@@ -100,7 +98,6 @@ export class AssetManager {
           .loadAsync(resource.urls)
           .then((cubeTex) => {
             cubeTex.colorSpace = resource.colorSpace ?? NoColorSpace;
-            // @ts-ignore
             this.resources[resource.name] = cubeTex;
           });
       default:
@@ -109,8 +106,8 @@ export class AssetManager {
   };
 
   async initAsync(rendererManager: RendererManager) {
-    await this.ktx2Loader.detectSupportAsync(rendererManager.renderer);
-    const promises = manifest.map((res) => this.getResource(res));
+    this.ktx2Loader.detectSupport(rendererManager.renderer);
+    const promises = manifest.map(this.getResource);
     await Promise.all(promises);
   }
 }

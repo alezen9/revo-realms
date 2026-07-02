@@ -30,7 +30,7 @@ const uniforms = {
 };
 
 const config = {
-  chunkSize: realmConfig.MAP_SIZE / 4,
+  chunkSize: realmConfig.MAP_SIZE / 8,
 };
 
 class PineTreeCanopyMaterial extends MeshLambertNodeMaterial {
@@ -39,7 +39,7 @@ class PineTreeCanopyMaterial extends MeshLambertNodeMaterial {
     this.precision = "lowp";
     this.forceSinglePass = true;
 
-    const windWeight = attribute("_windweight");
+    const windWeight = attribute<"float">("_windweight");
 
     const diffuse = texture(assetManager.resources.pineTreeDiffuse, uv());
     this.colorNode = diffuse.rgb.mul(uniforms.uCanopyDiffuseScale);

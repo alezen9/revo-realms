@@ -24,7 +24,6 @@ type ShadowMapWithTransmission = WebGPURenderer["shadowMap"] & {
 export class RendererManager {
   renderer: WebGPURenderer;
   canvas: HTMLCanvasElement;
-  isWebGPU!: boolean;
   private sceneManager: SceneManager;
   private debugManager: DebugManager;
   private eventsManager: EventsManager;
@@ -80,7 +79,6 @@ export class RendererManager {
   async init() {
     await this.renderer.init();
     this.sceneManager.init(this.canvas, this.debugManager);
-    this.isWebGPU = !!(await navigator.gpu?.requestAdapter());
     this.postprocessingManager = new PostprocessingManager(
       this.renderer,
       this.sceneManager,
