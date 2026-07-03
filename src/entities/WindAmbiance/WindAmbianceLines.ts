@@ -42,66 +42,75 @@ import {
 import { VegetationSsboUtils } from "../Vegetation/ssboUtils";
 import type { WindAmbianceUniforms } from "./WindAmbiance";
 
-const config = {
-  LINE_COUNT: 24,
-  LINE_SEGMENTS: 36,
-  FIELD_SIZE: 170,
-  FIELD_HALF_SIZE: 85,
-  EDGE_FADE_SIZE: 24,
-  LINE_LIFETIME: 4.8,
-  LINE_SPEED: 18,
-  RESPAWN_DELAY: 2.2,
-  WORKGROUP_SIZE: 64,
+const getConfig = () => {
+  const LINE_COUNT = 24;
+  const LINE_SEGMENTS = 36;
+  const FIELD_SIZE = 170;
+
+  return {
+    LINE_COUNT,
+    LINE_SEGMENTS,
+    FIELD_SIZE,
+    FIELD_HALF_SIZE: FIELD_SIZE / 2,
+    EDGE_FADE_SIZE: 24,
+    LINE_LIFETIME: 4.8,
+    LINE_SPEED: 18,
+    RESPAWN_DELAY: 2.2,
+    WORKGROUP_SIZE: 64,
+  };
 };
 
-const createLineGeometry = () => {
-  const rowCount = config.LINE_SEGMENTS + 1;
-  const vertexCount = rowCount * 2;
-  const indexCount = config.LINE_SEGMENTS * 6;
-  const positions = new Float32Array(vertexCount * 3);
-  const uvs = new Float32Array(vertexCount * 2);
-  const indices = new Uint16Array(indexCount);
+const config = getConfig();
 
-  let indexCursor = 0;
-  for (let row = 0; row < rowCount; row++) {
-    const progress = row / config.LINE_SEGMENTS;
-    const leftIndex = row * 2;
-    const rightIndex = leftIndex + 1;
+class WindLineGeometry extends BufferGeometry {
+  constructor() {
+    super();
 
-    positions[leftIndex * 3 + 0] = -0.5;
-    positions[leftIndex * 3 + 2] = progress;
-    positions[rightIndex * 3 + 0] = 0.5;
-    positions[rightIndex * 3 + 2] = progress;
+    const rowCount = config.LINE_SEGMENTS + 1;
+    const vertexCount = rowCount * 2;
+    const indexCount = config.LINE_SEGMENTS * 6;
+    const positions = new Float32Array(vertexCount * 3);
+    const uvs = new Float32Array(vertexCount * 2);
+    const indices = new Uint16Array(indexCount);
 
-    uvs[leftIndex * 2 + 0] = 0;
-    uvs[leftIndex * 2 + 1] = progress;
-    uvs[rightIndex * 2 + 0] = 1;
-    uvs[rightIndex * 2 + 1] = progress;
+    let indexCursor = 0;
+    for (let row = 0; row < rowCount; row++) {
+      const progress = row / config.LINE_SEGMENTS;
+      const leftIndex = row * 2;
+      const rightIndex = leftIndex + 1;
 
-    if (row === 0) continue;
+      positions[leftIndex * 3 + 0] = -0.5;
+      positions[leftIndex * 3 + 2] = progress;
+      positions[rightIndex * 3 + 0] = 0.5;
+      positions[rightIndex * 3 + 2] = progress;
 
-    const previousLeftIndex = (row - 1) * 2;
-    const previousRightIndex = previousLeftIndex + 1;
-    indices[indexCursor++] = previousLeftIndex;
-    indices[indexCursor++] = previousRightIndex;
-    indices[indexCursor++] = rightIndex;
-    indices[indexCursor++] = previousLeftIndex;
-    indices[indexCursor++] = rightIndex;
-    indices[indexCursor++] = leftIndex;
+      uvs[leftIndex * 2 + 0] = 0;
+      uvs[leftIndex * 2 + 1] = progress;
+      uvs[rightIndex * 2 + 0] = 1;
+      uvs[rightIndex * 2 + 1] = progress;
+
+      if (row === 0) continue;
+
+      const previousLeftIndex = (row - 1) * 2;
+      const previousRightIndex = previousLeftIndex + 1;
+      indices[indexCursor++] = previousLeftIndex;
+      indices[indexCursor++] = previousRightIndex;
+      indices[indexCursor++] = rightIndex;
+      indices[indexCursor++] = previousLeftIndex;
+      indices[indexCursor++] = rightIndex;
+      indices[indexCursor++] = leftIndex;
+    }
+
+    const positionAttribute = new BufferAttribute(positions, 3);
+    positionAttribute.setUsage(StaticDrawUsage);
+    this.setAttribute("position", positionAttribute);
+
+    const uvAttribute = new BufferAttribute(uvs, 2);
+    uvAttribute.setUsage(StaticDrawUsage);
+    this.setAttribute("uv", uvAttribute);
+    this.setIndex(new Uint16BufferAttribute(indices, 1));
   }
-
-  const geometry = new BufferGeometry();
-  const positionAttribute = new BufferAttribute(positions, 3);
-  positionAttribute.setUsage(StaticDrawUsage);
-  geometry.setAttribute("position", positionAttribute);
-
-  const uvAttribute = new BufferAttribute(uvs, 2);
-  uvAttribute.setUsage(StaticDrawUsage);
-  geometry.setAttribute("uv", uvAttribute);
-  geometry.setIndex(new Uint16BufferAttribute(indices, 1));
-
-  return geometry;
-};
+}
 
 export default class WindAmbianceLines {
   private buffer = instancedArray(config.LINE_COUNT, "vec4");
@@ -115,8 +124,8 @@ export default class WindAmbianceLines {
     this.computeInit = this.createComputeInit();
     this.computeUpdate = this.createComputeUpdate();
     this.mesh = new InstancedMesh(
-      createLineGeometry(),
-      this.createMaterial(),
+      new WindLineGeometry(),
+      new WindLineMaterial(this, this.uniforms),
       config.LINE_COUNT,
     );
     this.mesh.visible = false;
@@ -126,6 +135,10 @@ export default class WindAmbianceLines {
     this.computeUpdate.onInit(({ renderer }) => {
       renderer.computeAsync(this.computeInit);
     });
+  }
+
+  get computeBuffer() {
+    return this.buffer;
   }
 
   syncPlayerPosition(playerPosition: Vector3) {
@@ -147,120 +160,6 @@ export default class WindAmbianceLines {
 
   update() {
     return rendererManager.renderer.computeAsync(this.computeUpdate);
-  }
-
-  private createMaterial() {
-    const material = new MeshBasicNodeMaterial();
-    material.precision = "lowp";
-    material.transparent = true;
-    material.depthWrite = false;
-    material.forceSinglePass = true;
-    material.side = DoubleSide;
-
-    const data = this.buffer.element(instanceIndex);
-    const lineIndex = float(instanceIndex);
-    const lineAge = data.w;
-    const lineSeed = hash(lineIndex.add(this.uniforms.uEventSeed.mul(97.13)));
-    const windDirection = windManager.uDirection;
-    const sideDirection = vec2(windDirection.y.negate(), windDirection.x);
-    const windForward = vec3(windDirection.x, 0, windDirection.y);
-    const windSide = vec3(sideDirection.x, 0, sideDirection.y);
-    const curveProgress = uv().y;
-    const edgeDistance = abs(uv().x.mul(2).sub(1));
-    const sideSign = uv().x.mul(2).sub(1);
-    const isAlive = step(0, lineAge);
-    const lifeProgress = lineAge.div(config.LINE_LIFETIME).clamp();
-    const lifeFade = smoothstep(0, 0.12, lifeProgress).mul(
-      float(1).sub(smoothstep(0.82, 1, lifeProgress)),
-    );
-    const relativeXZ = data.xz;
-    const fieldDistance = max(
-      abs(relativeXZ.dot(windDirection)),
-      abs(relativeXZ.dot(sideDirection)),
-    );
-    const fieldFade = float(1).sub(
-      smoothstep(
-        config.FIELD_HALF_SIZE - config.EDGE_FADE_SIZE,
-        config.FIELD_HALF_SIZE,
-        fieldDistance,
-      ),
-    );
-    const lengthVariation = mix(0.68, 1.38, hash(lineIndex.add(13.73)));
-    const widthVariation = mix(0.72, 1.2, hash(lineIndex.add(31.19)));
-    const lineLength = mix(34, 72, lengthVariation).mul(
-      mix(0.9, 1.14, windManager.uIntensity),
-    );
-    const headProgress = smoothstep(0, 0.36, lifeProgress).mul(1.18);
-    const tailProgress = smoothstep(0.48, 1, lifeProgress).mul(1.18).sub(0.18);
-    const headMask = float(1).sub(
-      smoothstep(headProgress, headProgress.add(0.08), curveProgress),
-    );
-    const tailMask = smoothstep(
-      tailProgress,
-      tailProgress.add(0.08),
-      curveProgress,
-    );
-    const revealMask = headMask.mul(tailMask);
-    const tipProfile = sin(curveProgress.mul(PI)).clamp();
-    const bodyProfile = smoothstep(0.08, 0.38, curveProgress).mul(
-      float(1).sub(smoothstep(0.62, 0.96, curveProgress)),
-    );
-    const widthProfile = tipProfile
-      .mul(mix(0.025, 0.42, bodyProfile))
-      .mul(revealMask);
-    const lineVisibility = isAlive
-      .mul(lifeFade)
-      .mul(fieldFade)
-      .mul(this.uniforms.uEffectFade);
-    const agePhase = lifeProgress.mul(PI2).add(lineSeed.mul(PI2));
-    const snakeA = sin(curveProgress.mul(PI).mul(1.4).add(agePhase));
-    const snakeB = sin(
-      curveProgress.mul(PI2).mul(1.15).add(lineSeed.mul(11.7)),
-    );
-    const sideOffset = snakeA
-      .mul(lineLength.mul(0.035))
-      .add(snakeB.mul(lineLength.mul(0.018)));
-    const heightOffset = sin(curveProgress.mul(PI2).add(agePhase.mul(0.8)))
-      .mul(this.uniforms.uHeight)
-      .mul(0.16);
-    const centerOffset = windForward
-      .mul(curveProgress.sub(0.48).mul(lineLength))
-      .add(windSide.mul(sideOffset))
-      .add(vec3(0, heightOffset, 0));
-    const widthTwist = sin(
-      curveProgress.mul(PI2).mul(1.7).add(lineSeed.mul(PI2)),
-    ).mul(0.18);
-    const widthAxis = normalize(
-      windSide.mul(cos(widthTwist)).add(vec3(0, sin(widthTwist), 0)),
-    );
-    const lineWidth = widthProfile
-      .mul(widthVariation)
-      .mul(lineLength)
-      .mul(0.013)
-      .mul(lineVisibility);
-
-    material.positionNode = data.xyz
-      .add(centerOffset)
-      .add(widthAxis.mul(sideSign).mul(lineWidth));
-
-    const edgeFade = float(1).sub(smoothstep(0.08, 0.92, edgeDistance));
-    const brushNoiseUv = vec2(
-      curveProgress.mul(0.33).add(lineSeed),
-      edgeDistance.add(lifeProgress.mul(0.17)).add(lineSeed.mul(1.9)),
-    );
-    const brushNoise = texture(
-      assetManager.resources.noiseAtlas,
-      brushNoiseUv,
-    ).r;
-    const brushBreakup = smoothstep(0.08, 0.68, brushNoise);
-    material.colorNode = this.uniforms.uColor;
-    material.opacityNode = float(0.075)
-      .mul(lineVisibility)
-      .mul(revealMask)
-      .mul(edgeFade)
-      .mul(brushBreakup);
-
-    return material;
   }
 
   private createComputeInit() {
@@ -384,5 +283,120 @@ export default class WindAmbianceLines {
       data.z = finalXZ.y;
       data.w = mix(age, resetAge, shouldRespawn);
     })().compute(config.LINE_COUNT, [config.WORKGROUP_SIZE]);
+  }
+}
+
+class WindLineMaterial extends MeshBasicNodeMaterial {
+  constructor(lines: WindAmbianceLines, uniforms: WindAmbianceUniforms) {
+    super();
+
+    this.precision = "lowp";
+    this.transparent = true;
+    this.depthWrite = false;
+    this.forceSinglePass = true;
+    this.side = DoubleSide;
+
+    const data = lines.computeBuffer.element(instanceIndex);
+    const lineIndex = float(instanceIndex);
+    const lineAge = data.w;
+    const lineSeed = hash(lineIndex.add(uniforms.uEventSeed.mul(97.13)));
+    const windDirection = windManager.uDirection;
+    const sideDirection = vec2(windDirection.y.negate(), windDirection.x);
+    const windForward = vec3(windDirection.x, 0, windDirection.y);
+    const windSide = vec3(sideDirection.x, 0, sideDirection.y);
+    const curveProgress = uv().y;
+    const edgeDistance = abs(uv().x.mul(2).sub(1));
+    const sideSign = uv().x.mul(2).sub(1);
+    const isAlive = step(0, lineAge);
+    const lifeProgress = lineAge.div(config.LINE_LIFETIME).clamp();
+    const lifeFade = smoothstep(0, 0.12, lifeProgress).mul(
+      float(1).sub(smoothstep(0.82, 1, lifeProgress)),
+    );
+    const relativeXZ = data.xz;
+    const fieldDistance = max(
+      abs(relativeXZ.dot(windDirection)),
+      abs(relativeXZ.dot(sideDirection)),
+    );
+    const fieldFade = float(1).sub(
+      smoothstep(
+        config.FIELD_HALF_SIZE - config.EDGE_FADE_SIZE,
+        config.FIELD_HALF_SIZE,
+        fieldDistance,
+      ),
+    );
+    const lengthVariation = mix(0.68, 1.38, hash(lineIndex.add(13.73)));
+    const widthVariation = mix(0.72, 1.2, hash(lineIndex.add(31.19)));
+    const lineLength = mix(34, 72, lengthVariation).mul(
+      mix(0.9, 1.14, windManager.uIntensity),
+    );
+    const headProgress = smoothstep(0, 0.36, lifeProgress).mul(1.18);
+    const tailProgress = smoothstep(0.48, 1, lifeProgress).mul(1.18).sub(0.18);
+    const headMask = float(1).sub(
+      smoothstep(headProgress, headProgress.add(0.08), curveProgress),
+    );
+    const tailMask = smoothstep(
+      tailProgress,
+      tailProgress.add(0.08),
+      curveProgress,
+    );
+    const revealMask = headMask.mul(tailMask);
+    const tipProfile = sin(curveProgress.mul(PI)).clamp();
+    const bodyProfile = smoothstep(0.08, 0.38, curveProgress).mul(
+      float(1).sub(smoothstep(0.62, 0.96, curveProgress)),
+    );
+    const widthProfile = tipProfile
+      .mul(mix(0.025, 0.42, bodyProfile))
+      .mul(revealMask);
+    const lineVisibility = isAlive
+      .mul(lifeFade)
+      .mul(fieldFade)
+      .mul(uniforms.uEffectFade);
+    const agePhase = lifeProgress.mul(PI2).add(lineSeed.mul(PI2));
+    const snakeA = sin(curveProgress.mul(PI).mul(1.4).add(agePhase));
+    const snakeB = sin(
+      curveProgress.mul(PI2).mul(1.15).add(lineSeed.mul(11.7)),
+    );
+    const sideOffset = snakeA
+      .mul(lineLength.mul(0.035))
+      .add(snakeB.mul(lineLength.mul(0.018)));
+    const heightOffset = sin(curveProgress.mul(PI2).add(agePhase.mul(0.8)))
+      .mul(uniforms.uHeight)
+      .mul(0.16);
+    const centerOffset = windForward
+      .mul(curveProgress.sub(0.48).mul(lineLength))
+      .add(windSide.mul(sideOffset))
+      .add(vec3(0, heightOffset, 0));
+    const widthTwist = sin(
+      curveProgress.mul(PI2).mul(1.7).add(lineSeed.mul(PI2)),
+    ).mul(0.18);
+    const widthAxis = normalize(
+      windSide.mul(cos(widthTwist)).add(vec3(0, sin(widthTwist), 0)),
+    );
+    const lineWidth = widthProfile
+      .mul(widthVariation)
+      .mul(lineLength)
+      .mul(0.013)
+      .mul(lineVisibility);
+
+    this.positionNode = data.xyz
+      .add(centerOffset)
+      .add(widthAxis.mul(sideSign).mul(lineWidth));
+
+    const edgeFade = float(1).sub(smoothstep(0.08, 0.92, edgeDistance));
+    const brushNoiseUv = vec2(
+      curveProgress.mul(0.33).add(lineSeed),
+      edgeDistance.add(lifeProgress.mul(0.17)).add(lineSeed.mul(1.9)),
+    );
+    const brushNoise = texture(
+      assetManager.resources.noiseAtlas,
+      brushNoiseUv,
+    ).r;
+    const brushBreakup = smoothstep(0.08, 0.68, brushNoise);
+    this.colorNode = uniforms.uColor;
+    this.opacityNode = float(0.075)
+      .mul(lineVisibility)
+      .mul(revealMask)
+      .mul(edgeFade)
+      .mul(brushBreakup);
   }
 }
