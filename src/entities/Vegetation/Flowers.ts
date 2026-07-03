@@ -44,9 +44,9 @@ const getConfig = () => {
   const FLOWER_WIDTH = 0.5;
   const FLOWER_HEIGHT = 1;
   const TILE_SIZE = 150;
-  const FLOWERS_PER_SIDE = 64;
-  const MIN_SCALE = 0.125;
-  const MAX_SCALE = 0.2;
+  const FLOWERS_PER_SIDE = 128;
+  const MIN_SCALE = 0.05;
+  const MAX_SCALE = 0.15;
   return {
     MIN_SCALE,
     MAX_SCALE,
