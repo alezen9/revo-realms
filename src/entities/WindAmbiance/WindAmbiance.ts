@@ -1,6 +1,11 @@
 import { Color, Vector2, Vector3 } from "three/webgpu";
 import { uniform } from "three/tsl";
-import { debugManager, eventsManager, windManager } from "../../systems";
+import {
+  debugManager,
+  eventsManager,
+  prewarmManager,
+  windManager,
+} from "../../systems";
 import WindAmbianceLines from "./WindAmbianceLines";
 import WindAmbianceParticles from "./WindAmbianceParticles";
 
@@ -33,6 +38,11 @@ export default class WindAmbiance {
   private eventSeed = 0;
 
   constructor() {
+    prewarmManager.registerTask({
+      prepare: () => this.lines.preparePrewarmAsync(),
+      restore: () => this.lines.restorePrewarm(),
+    });
+
     eventsManager.on("engine-update", ({ player, delta }) => {
       const deltaX = player.position.x - this.meshAnchor.x;
       const deltaZ = player.position.z - this.meshAnchor.z;

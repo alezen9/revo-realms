@@ -15,13 +15,23 @@ type FrustumCullState = {
   frustumCulled: boolean;
 };
 
+type PrewarmTask = {
+  prepare: () => void | Promise<void>;
+  restore: () => void;
+};
+
 export class PrewarmManager {
   private rendererManager: RendererManager;
   private sceneManager: SceneManager;
+  private tasks: PrewarmTask[] = [];
 
   constructor(rendererManager: RendererManager, sceneManager: SceneManager) {
     this.rendererManager = rendererManager;
     this.sceneManager = sceneManager;
+  }
+
+  registerTask(task: PrewarmTask) {
+    this.tasks.push(task);
   }
 
   private collectFrustumCullStates() {
@@ -57,12 +67,14 @@ export class PrewarmManager {
 
     const restoreOnce = () => {
       if (restored) return;
+      this.tasks.forEach((task) => task.restore());
       this.restoreFrustumCullStates(states);
       restored = true;
     };
 
     const prewarmPromise = (async (): Promise<StartupPrewarmResult> => {
       try {
+        for (const task of this.tasks) await task.prepare();
         await this.rendererManager.compileSceneOnceAsync();
         if (!timedOut) await this.rendererManager.renderSceneOnceAsync();
         restoreOnce();

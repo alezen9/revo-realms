@@ -43,10 +43,10 @@ import { VegetationSsboUtils } from "../Vegetation/ssboUtils";
 import type { WindAmbianceUniforms } from "./WindAmbiance";
 
 const config = {
-  LINE_COUNT: 8,
+  LINE_COUNT: 24,
   LINE_SEGMENTS: 36,
-  FIELD_SIZE: 130,
-  FIELD_HALF_SIZE: 65,
+  FIELD_SIZE: 170,
+  FIELD_HALF_SIZE: 85,
   EDGE_FADE_SIZE: 24,
   LINE_LIFETIME: 4.8,
   LINE_SPEED: 18,
@@ -134,6 +134,15 @@ export default class WindAmbianceLines {
 
   setVisible(isVisible: boolean) {
     this.mesh.visible = isVisible;
+  }
+
+  async preparePrewarmAsync() {
+    this.mesh.visible = true;
+    await this.update();
+  }
+
+  restorePrewarm() {
+    this.mesh.visible = false;
   }
 
   update() {
@@ -227,7 +236,7 @@ export default class WindAmbianceLines {
     const lineWidth = widthProfile
       .mul(widthVariation)
       .mul(lineLength)
-      .mul(0.016)
+      .mul(0.013)
       .mul(lineVisibility);
 
     material.positionNode = data.xyz
@@ -245,7 +254,7 @@ export default class WindAmbianceLines {
     ).r;
     const brushBreakup = smoothstep(0.08, 0.68, brushNoise);
     material.colorNode = this.uniforms.uColor;
-    material.opacityNode = float(0.22)
+    material.opacityNode = float(0.075)
       .mul(lineVisibility)
       .mul(revealMask)
       .mul(edgeFade)
