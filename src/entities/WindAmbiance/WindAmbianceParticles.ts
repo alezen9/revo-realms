@@ -39,7 +39,7 @@ export const createWindParticleUniforms = () => ({
   uEffectFade: uniform(0),
   uResetAll: uniform(0),
   uEventSeed: uniform(0),
-  uSpeed: uniform(0.58),
+  uSpeed: uniform(0.5),
   uHeight: uniform(5.5),
 });
 

@@ -10,6 +10,7 @@ import {
   instanceIndex,
   mix,
   sin,
+  smoothstep,
   step,
   texture,
   uniform,
@@ -37,7 +38,7 @@ import {
   debugManager,
 } from "../../systems";
 import { VegetationSsboUtils } from "./ssboUtils";
-import { gameDeltaTime, gameTime } from "../../utils/GameTime";
+import { gameTime } from "../../utils/GameTime";
 import { TSLUtils } from "../../utils/TSLUtils";
 
 const getConfig = () => {
@@ -78,6 +79,11 @@ const uniforms = {
   uColor1: uniform(new Color().setRGB(0.02, 0.14, 0.33)),
   uColor2: uniform(new Color().setRGB(0.99, 0.64, 0.0)),
   uBrightness: uniform(1),
+  // wind
+  uWindAmbientStrength: uniform(0.5),
+  uWindDirectionalStrength: uniform(0.45),
+  uWindSwaySpeed: uniform(0.9),
+  uWindVerticalBobStrength: uniform(0.1),
 };
 
 class FlowersSsbo {
@@ -309,6 +315,30 @@ export default class Flowers {
       max: 3,
       step: 0.01,
     });
+    folder.addBinding(uniforms.uWindAmbientStrength, "value", {
+      label: "Wind ambient",
+      min: 0,
+      max: 0.5,
+      step: 0.01,
+    });
+    folder.addBinding(uniforms.uWindDirectionalStrength, "value", {
+      label: "Wind directional",
+      min: 0,
+      max: 1,
+      step: 0.01,
+    });
+    folder.addBinding(uniforms.uWindSwaySpeed, "value", {
+      label: "Wind speed",
+      min: 0,
+      max: 3,
+      step: 0.01,
+    });
+    folder.addBinding(uniforms.uWindVerticalBobStrength, "value", {
+      label: "Wind vertical bob",
+      min: 0,
+      max: 0.2,
+      step: 0.005,
+    });
   }
 }
 
@@ -330,32 +360,63 @@ class FlowerMaterial extends SpriteNodeMaterial {
     const data = this.ssbo.computeBuffer.element(instanceIndex);
     const isVisible = this.ssbo.getVisibility(data);
     const grassScale = this.ssbo.getGrassScale(data);
-    // const noise = this.ssbo.getNoise(data);
+    const noise = this.ssbo.getNoise(data);
     const x = data.x;
     const y = this.ssbo.getYOffset(data);
     const z = data.y;
 
     const rand1 = hash(instanceIndex.add(9234));
     const rand2 = hash(instanceIndex.add(33.87));
+    const rand3 = hash(float(instanceIndex).add(noise.r.mul(97.13)));
 
     // Position
     const windIntensity = windManager.uIntensity;
     const windDirection = windManager.uDirection;
-    const timer = gameTime.add(
-      gameDeltaTime.mul(float(2).add(windIntensity.mul(0.25))),
+    const windEvent = windIntensity.sub(0.1).div(0.9).clamp();
+    const timer = gameTime.mul(uniforms.uWindSwaySpeed);
+    const windTravel = x.mul(windDirection.x).add(z.mul(windDirection.y));
+    const travelWave = sin(
+      windTravel.mul(0.16).sub(timer.mul(2.2)).add(rand3.mul(6.28318)),
+    )
+      .mul(0.5)
+      .add(0.5);
+    const directionalWave = smoothstep(0.28, 0.88, travelWave);
+    const responseVariation = mix(0.55, 1.15, noise.g).mul(
+      mix(0.72, 1.05, rand1),
     );
-    const swayX = sin(timer.add(rand1.mul(100))).mul(0.25);
-    const swayY = rand2.mul(0.5);
-    const swayZ = cos(timer.mul(2).add(rand2.mul(33.76))).mul(0.15);
+    const ambientPhase = timer.add(rand1.mul(100)).add(noise.b.mul(12.0));
+    const ambientSway = uniforms.uWindAmbientStrength
+      .mul(mix(0.45, 1.0, noise.a))
+      .mul(grassScale);
+    const directionalSway = uniforms.uWindDirectionalStrength
+      .mul(windEvent)
+      .mul(directionalWave)
+      .mul(responseVariation)
+      .mul(grassScale);
+    const sideDirection = vec2(windDirection.y.negate(), windDirection.x);
+    const sideSway = sin(ambientPhase.mul(1.35))
+      .mul(ambientSway)
+      .mul(mix(0.12, 0.42, rand2));
+    const windLean = windDirection.mul(directionalSway);
+    const ambientLean = windDirection
+      .mul(sin(ambientPhase).mul(ambientSway))
+      .add(sideDirection.mul(sideSway));
+    const swayX = ambientLean.x.add(windLean.x);
+    const swayY = rand2
+      .mul(0.28)
+      .add(
+        sin(ambientPhase.mul(1.7).add(rand3.mul(6.28318))).mul(
+          uniforms.uWindVerticalBobStrength.mul(grassScale),
+        ),
+      );
+    const swayZ = ambientLean.y.add(windLean.y);
     const swayOffset = vec3(swayX, swayY, swayZ);
     const offscreenOffset = uniforms.uCameraForward
       .mul(INFINITY)
       .mul(float(1).sub(isVisible));
-    const offsetX = x.add(windDirection.x.mul(windIntensity).mul(0.5));
     const baseHeight = rand1.add(rand2).add(0.25).clamp().mul(grassScale);
     const offsetY = y.add(baseHeight);
-    const offsetZ = z.add(windDirection.y.mul(windIntensity).mul(0.5));
-    const basePosition = vec3(offsetX, offsetY, offsetZ);
+    const basePosition = vec3(x, offsetY, z);
     this.positionNode = basePosition.add(swayOffset).add(offscreenOffset);
 
     // Size
