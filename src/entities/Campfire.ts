@@ -36,11 +36,12 @@ export class Campfire {
 
     const fire = new ParticleSystem({
       preset: "fire",
-      count: 1024,
+      count: 2048,
       height: 1.85,
       coneFactor: 1.25,
       speed: 0.5,
       radius: 0.85,
+      scale: 0.65,
       bloom: 1.5,
       workGroupSize: 256,
     });

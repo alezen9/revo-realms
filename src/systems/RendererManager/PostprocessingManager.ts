@@ -13,18 +13,19 @@ import { bloom } from "three/addons/tsl/display/BloomNode.js";
 import type { DebugManager } from "../DebugManager";
 import type { EventsManager } from "../EventsManager";
 import type { SceneManager } from "../SceneManager";
+import type { FolderApi } from "tweakpane";
 
 const LUMINANCE_WEIGHTS = vec3(0.2126, 0.7152, 0.0722);
 
 export class PostprocessingManager extends RenderPipeline {
   private scenePass: ReturnType<typeof pass>;
-  private uSaturation = uniform(1.0);
-  private saturationTarget = 1.0;
+  private uSaturation = uniform(1);
+  private saturationTarget = 1;
   private saturationLerpSpeed = 14;
   private sceneManager: SceneManager;
   private eventsManager: EventsManager;
   private debugManager: DebugManager;
-  private debugFolder;
+  private debugFolder: FolderApi;
 
   constructor(
     renderer: WebGPURenderer,

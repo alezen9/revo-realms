@@ -695,7 +695,7 @@ export default class Grass {
     grass.frustumCulled = false;
     sceneManager.scene.add(grass);
 
-    eventsManager.on("engine-update-throttle-2x", ({ player }) => {
+    eventsManager.on("engine-update-throttle-4x", ({ player }) => {
       const dx = player.position.x - grass.position.x;
       const dz = player.position.z - grass.position.z;
       uniforms.uPlayerDeltaXZ.value.set(dx, dz);

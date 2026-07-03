@@ -4,9 +4,16 @@ import { type Sizes, type State } from "../Game";
 type UpdateEvent = (state: State) => void;
 type ResizeEvent = (sizes: Sizes) => void;
 
-const throttle = [2, 4, 16, 64] as const;
+const throttleLanes = [
+  { interval: 2, offset: 0 },
+  { interval: 4, offset: 1 },
+  { interval: 16, offset: 5 },
+  { interval: 64, offset: 17 },
+] as const;
+
+type ThrottleInterval = (typeof throttleLanes)[number]["interval"];
 type ThrottledEvents = {
-  [T in (typeof throttle)[number] as `engine-update-throttle-${T}x`]: UpdateEvent;
+  [T in ThrottleInterval as `engine-update-throttle-${T}x`]: UpdateEvent;
 };
 
 type EngineEvents = {
@@ -43,30 +50,37 @@ type Events = EngineEvents &
 
 export class EventsManager {
   private emitter = new EventEmitter<Events>();
+  private frameIndex = 0;
+  private throttledDeltaByInterval = new Map<ThrottleInterval, number>();
 
   constructor() {
-    throttle.forEach((n) => this.updateThrottled(n));
+    this.updateThrottled();
 
     import.meta.hot?.dispose(() => {
       this.removeAllListeners();
     });
   }
 
-  private updateThrottled(n: (typeof throttle)[number]) {
-    let frame = 0;
-    let accDelta = 0;
-
+  private updateThrottled() {
     this.on("engine-update", ({ player, delta }) => {
-      accDelta += delta;
-      frame++;
-      if (frame < n) return;
+      this.frameIndex++;
 
-      this.emit(`engine-update-throttle-${n}x`, {
-        player,
-        delta: accDelta,
-      } as State);
-      frame = 0;
-      accDelta = 0;
+      for (const lane of throttleLanes) {
+        const { interval, offset } = lane;
+        const accDelta =
+          (this.throttledDeltaByInterval.get(interval) ?? 0) + delta;
+        this.throttledDeltaByInterval.set(interval, accDelta);
+
+        const canEmit = this.frameIndex >= interval + offset;
+        if (!canEmit) continue;
+        if ((this.frameIndex - offset) % interval !== 0) continue;
+
+        this.emit(`engine-update-throttle-${interval}x`, {
+          player,
+          delta: accDelta,
+        } as State);
+        this.throttledDeltaByInterval.set(interval, 0);
+      }
     });
   }
 

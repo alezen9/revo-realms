@@ -39,7 +39,7 @@ export const createWindParticleUniforms = () => ({
   uEffectFade: uniform(0),
   uResetAll: uniform(0),
   uEventSeed: uniform(0),
-  uSpeed: uniform(0.5),
+  uSpeed: uniform(0.35),
   uHeight: uniform(5.5),
 });
 
@@ -372,7 +372,7 @@ class WindParticleMaterial extends SpriteNodeMaterial {
     );
     const sizeRandom = hash(particleSeed.add(127.31));
     const smallParticleSize = mix(0.012, 0.052, sizeRandom);
-    const largeParticleSize = mix(0.06, 0.13, hash(particleSeed.add(129.43)));
+    const largeParticleSize = mix(0.06, 0.09, hash(particleSeed.add(129.43)));
     const particleSize = mix(
       smallParticleSize,
       largeParticleSize,

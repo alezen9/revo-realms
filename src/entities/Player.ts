@@ -6,6 +6,7 @@ import {
   Ray,
   type Vector,
   ActiveEvents,
+  CoefficientCombineRule,
 } from "@dimforge/rapier3d";
 import { type State } from "../Game";
 import {
@@ -39,42 +40,43 @@ const POSITIONS = {
 };
 
 const getConfig = () => {
-  const jumpImpulse = 100;
   return {
     JUMP_BUFFER_DURATION_IN_SECONDS: 0.2,
+    COYOTE_TIME_IN_SECONDS: 0.1,
     MAX_CONSECUTIVE_JUMPS: 2,
-    JUMP_CUT_MULTIPLIER: 0.15,
-    FALL_MULTIPLIER: 2.75,
-    MAX_UPWARD_VELOCITY: 8,
-    LINEAR_DAMPING: 1.4,
-    ANGULAR_DAMPING: 1.2,
+    JUMP_VELOCITY_IN_METERS_PER_SECOND: 9.8,
+    DOUBLE_JUMP_VELOCITY_IN_METERS_PER_SECOND: 8.6,
+    JUMP_CUT_MULTIPLIER: 0.62,
+    JUMP_GROUNDING_LOCK_TIME_IN_SECONDS: 0.08,
+    FALL_MULTIPLIER: 2.05,
+    LINEAR_DAMPING_IN_INVERSE_SECONDS: 1.15,
+    ANGULAR_DAMPING_IN_INVERSE_SECONDS: 0.65,
     // Water physics
-    WATER_SURFACE_Y: -0.5,
-    WATER_DAMPING_LINEAR: 5.0,
-    WATER_DAMPING_ANGULAR: 3.5,
+    WATER_SURFACE_Y_IN_METERS: -0.5,
+    WATER_DAMPING_LINEAR_IN_INVERSE_SECONDS: 5.0,
+    WATER_DAMPING_ANGULAR_IN_INVERSE_SECONDS: 3.5,
     WATER_MOVEMENT_MULTIPLIER: 0.5,
-    BUOYANCY_FORCE: 7.25,
-    WATER_VERTICAL_DAMPING: 0.5,
-    WATER_BOB_SUBMERGED_STRENGTH: 2.5,
-    GROUND_RAY_START_ABOVE_BOTTOM: 0.03,
-    GROUND_RAY_MAX_DISTANCE: 0.1,
-    GROUND_CONTACT_THRESHOLD: 0.04,
-    BOUNCE_SETTLE_VERTICAL_SPEED: 0.45,
-    JUMP_IMPULSE: new Vector3(0, jumpImpulse, 0),
-    LIN_VEL_STRENGTH: 60,
-    ANG_VEL_STRENGTH: 45,
-    RADIUS: 0.5,
-    MASS: 0.5,
+    BUOYANCY_FORCE_IN_NEWTONS: 7.25,
+    WATER_VERTICAL_DAMPING_IN_INVERSE_SECONDS: 0.5,
+    WATER_BOB_FORCE_IN_NEWTONS: 2.5,
+    GROUND_RAY_START_ABOVE_BOTTOM_IN_METERS: 0.03,
+    GROUND_RAY_MAX_DISTANCE_IN_METERS: 0.1,
+    GROUND_CONTACT_THRESHOLD_IN_METERS: 0.04,
+    BOUNCE_SETTLE_VERTICAL_SPEED_IN_METERS_PER_SECOND: 0.85,
+    LIN_VEL_STRENGTH_IN_METERS_PER_SECOND_SQUARED: 55,
+    ANG_VEL_STRENGTH_IN_RADIANS_PER_SECOND_SQUARED: 55,
+    RADIUS_IN_METERS: 0.5,
+    MASS_IN_KILOGRAMS: 0.5,
     FRICTION: 1,
-    RESTITUTION: 0.6,
-    TURN_SPEED: 2, // radians/sec
-    PLAYER_INITIAL_POSITION: new Vector3(...POSITIONS.dragonball),
+    RESTITUTION: 0.52,
+    TURN_SPEED_IN_RADIANS_PER_SECOND: 2,
+    PLAYER_INITIAL_POSITION: new Vector3(...POSITIONS.campfire),
     CAMERA_OFFSET: new Vector3(0, 16, 20),
     CAMERA_LERP_FACTOR: 7.5,
     UP: new Vector3(0, 1, 0),
     DOWN: new Vector3(0, -1, 0),
     FORWARD: new Vector3(0, 0, -1),
-    RESET_Y: -15,
+    RESET_Y_IN_METERS: -15,
   };
 };
 
@@ -97,12 +99,15 @@ export default class Player {
   private newAngVel = new Vector3();
   private torqueAxis = new Vector3();
   private forwardVec = new Vector3();
+  private jumpImpulse = new Vector3();
 
   // Player State
   private isOnGround = false;
   private jumpCount = 0;
   private wasJumpHeld = false;
   private jumpBufferTimer = 0;
+  private coyoteTimer = 0;
+  private groundingLockTimer = 0;
 
   // Water state
   private isInWater = false;
@@ -151,7 +156,7 @@ export default class Player {
 
   private resetPlayerPosition(state: State) {
     const { player } = state;
-    if (player.position.y > config.RESET_Y) return;
+    if (player.position.y > config.RESET_Y_IN_METERS) return;
     this.rigidBody.setLinvel({ x: 0, y: 0, z: 0 }, false);
     this.rigidBody.setAngvel({ x: 0, y: 0, z: 0 }, false);
     this.rigidBody.setTranslation(config.PLAYER_INITIAL_POSITION, true);
@@ -164,17 +169,37 @@ export default class Player {
       expanded: false,
     });
     const physics = folder.addFolder({ title: "Physics" });
-    physics.addBinding(config, "LIN_VEL_STRENGTH", {
+    physics.addBinding(config, "LIN_VEL_STRENGTH_IN_METERS_PER_SECOND_SQUARED", {
       label: "Linear velocity",
       min: 5,
       max: 100,
     });
-    physics.addBinding(config, "ANG_VEL_STRENGTH", {
+    physics.addBinding(config, "ANG_VEL_STRENGTH_IN_RADIANS_PER_SECOND_SQUARED", {
       label: "Angular velocity",
       min: 5,
       max: 100,
     });
-    physics.addBinding(config, "ANGULAR_DAMPING", {
+    physics.addBinding(config, "JUMP_VELOCITY_IN_METERS_PER_SECOND", {
+      label: "Jump velocity",
+      min: 1,
+      max: 14,
+    });
+    physics.addBinding(config, "DOUBLE_JUMP_VELOCITY_IN_METERS_PER_SECOND", {
+      label: "Double jump",
+      min: 1,
+      max: 14,
+    });
+    physics.addBinding(config, "JUMP_CUT_MULTIPLIER", {
+      label: "Jump cut",
+      min: 0.1,
+      max: 1,
+    });
+    physics.addBinding(config, "COYOTE_TIME_IN_SECONDS", {
+      label: "Coyote time",
+      min: 0,
+      max: 0.3,
+    });
+    physics.addBinding(config, "ANGULAR_DAMPING_IN_INVERSE_SECONDS", {
       label: "Angular damping",
       min: 0,
       max: 5,
@@ -194,17 +219,17 @@ export default class Player {
     });
 
     const water = folder.addFolder({ title: "Water" });
-    water.addBinding(config, "BUOYANCY_FORCE", {
+    water.addBinding(config, "BUOYANCY_FORCE_IN_NEWTONS", {
       label: "Buoyancy",
       min: 1,
       max: 20,
     });
-    water.addBinding(config, "WATER_VERTICAL_DAMPING", {
+    water.addBinding(config, "WATER_VERTICAL_DAMPING_IN_INVERSE_SECONDS", {
       label: "Vertical damp",
       min: 0,
       max: 10,
     });
-    water.addBinding(config, "WATER_BOB_SUBMERGED_STRENGTH", {
+    water.addBinding(config, "WATER_BOB_FORCE_IN_NEWTONS", {
       label: "Bob strength",
       min: 0,
       max: 10,
@@ -234,7 +259,8 @@ export default class Player {
   private checkIfInWater(): boolean {
     if (!this.waterData) return false;
     const pos = this.rigidBody.translation();
-    if (pos.y - config.RADIUS > config.WATER_SURFACE_Y) return false;
+    if (pos.y - config.RADIUS_IN_METERS > config.WATER_SURFACE_Y_IN_METERS)
+      return false;
 
     const u = (pos.x + 256) / 512;
     const v = (pos.z + 256) / 512;
@@ -249,7 +275,8 @@ export default class Player {
 
     const pos = this.rigidBody.translation();
     const vel = this.rigidBody.linvel();
-    const submergedDepth = config.WATER_SURFACE_Y - (pos.y - config.RADIUS);
+    const submergedDepth =
+      config.WATER_SURFACE_Y_IN_METERS - (pos.y - config.RADIUS_IN_METERS);
 
     if (submergedDepth <= 0) {
       this.waterTime = 0;
@@ -259,13 +286,15 @@ export default class Player {
     const submersionRatio = Math.min(submergedDepth, 1);
     const edgeFade = Math.min(submergedDepth * 2, 1);
 
-    const buoyancy = submersionRatio * config.BUOYANCY_FORCE * edgeFade;
-    const verticalDamping = vel.y * -config.WATER_VERTICAL_DAMPING * edgeFade;
+    const buoyancy =
+      submersionRatio * config.BUOYANCY_FORCE_IN_NEWTONS * edgeFade;
+    const verticalDamping =
+      vel.y * -config.WATER_VERTICAL_DAMPING_IN_INVERSE_SECONDS * edgeFade;
 
     // Simple harmonic bob (1 sin instead of 4)
     const bob =
       Math.sin(this.waterTime * 4) *
-      config.WATER_BOB_SUBMERGED_STRENGTH *
+      config.WATER_BOB_FORCE_IN_NEWTONS *
       edgeFade;
 
     this.rigidBody.applyImpulse(
@@ -288,15 +317,16 @@ export default class Player {
     const { x, y, z } = config.PLAYER_INITIAL_POSITION;
     return RigidBodyDesc.dynamic()
       .setTranslation(x, y, z)
-      .setLinearDamping(config.LINEAR_DAMPING)
-      .setAngularDamping(config.ANGULAR_DAMPING);
+      .setLinearDamping(config.LINEAR_DAMPING_IN_INVERSE_SECONDS)
+      .setAngularDamping(config.ANGULAR_DAMPING_IN_INVERSE_SECONDS);
   }
 
   private createColliderDesc() {
-    return ColliderDesc.ball(config.RADIUS)
+    return ColliderDesc.ball(config.RADIUS_IN_METERS)
       .setRestitution(config.RESTITUTION)
+      .setRestitutionCombineRule(CoefficientCombineRule.Max)
       .setFriction(config.FRICTION)
-      .setMass(config.MASS)
+      .setMass(config.MASS_IN_KILOGRAMS)
       .setActiveEvents(ActiveEvents.COLLISION_EVENTS);
   }
 
@@ -310,10 +340,14 @@ export default class Player {
     // Switch damping on water entry/exit
     if (this.isInWater !== wasInWater) {
       this.rigidBody.setLinearDamping(
-        this.isInWater ? config.WATER_DAMPING_LINEAR : config.LINEAR_DAMPING,
+        this.isInWater
+          ? config.WATER_DAMPING_LINEAR_IN_INVERSE_SECONDS
+          : config.LINEAR_DAMPING_IN_INVERSE_SECONDS,
       );
       this.rigidBody.setAngularDamping(
-        this.isInWater ? config.WATER_DAMPING_ANGULAR : config.ANGULAR_DAMPING,
+        this.isInWater
+          ? config.WATER_DAMPING_ANGULAR_IN_INVERSE_SECONDS
+          : config.ANGULAR_DAMPING_IN_INVERSE_SECONDS,
       );
     }
 
@@ -333,13 +367,16 @@ export default class Player {
   private updateVerticalMovement(delta: number) {
     const isJumpKeyPressed = inputManager.isJumpPressed();
 
-    // 1) Ground check
-    this.isOnGround = this.checkIfGrounded();
+    this.groundingLockTimer = Math.max(0, this.groundingLockTimer - delta);
+    this.isOnGround = this.groundingLockTimer === 0 && this.checkIfGrounded();
+
     if (this.isOnGround) {
       this.jumpCount = 0;
+      this.coyoteTimer = config.COYOTE_TIME_IN_SECONDS;
+    } else {
+      this.coyoteTimer = Math.max(0, this.coyoteTimer - delta);
     }
 
-    // 2) Jump buffer
     const justPressedThisFrame = isJumpKeyPressed && !this.wasJumpHeld;
     if (justPressedThisFrame) {
       this.jumpBufferTimer = config.JUMP_BUFFER_DURATION_IN_SECONDS;
@@ -347,13 +384,11 @@ export default class Player {
       this.jumpBufferTimer = Math.max(0, this.jumpBufferTimer - delta);
     }
 
-    // 3) Jump attempt
     if (this.jumpBufferTimer > 0 && this.canJump()) {
       this.performJump();
       this.jumpBufferTimer = 0;
     }
 
-    // 4) Mid-air logic (jump cut, fast fall, clamp) - skip in water
     if (!this.isInWater) {
       const velocity = this.rigidBody.linvel();
       const initialVelocityY = velocity.y;
@@ -362,31 +397,33 @@ export default class Player {
       if (!this.isOnGround) {
         this.handleFastFall(delta, velocity, physicsManager.world.gravity.y);
       }
-      this.clampUpwardVelocity(velocity);
 
-      const shouldSettleBounce =
+      if (
         this.isOnGround &&
         !isJumpKeyPressed &&
-        Math.abs(velocity.y) < config.BOUNCE_SETTLE_VERTICAL_SPEED;
-      if (shouldSettleBounce) velocity.y = 0;
+        Math.abs(velocity.y) <
+          config.BOUNCE_SETTLE_VERTICAL_SPEED_IN_METERS_PER_SECOND
+      ) {
+        velocity.y = 0;
+      }
 
       const didVerticalVelocityChange = velocity.y !== initialVelocityY;
       if (didVerticalVelocityChange) {
-        this.rigidBody.setLinvel(velocity, !shouldSettleBounce);
+        this.rigidBody.setLinvel(velocity, true);
       }
     }
 
-    // 5) Save jump key state
     this.wasJumpHeld = isJumpKeyPressed;
   }
 
   private checkIfGrounded(): boolean {
     // Cast from just above the sphere's bottom for stable grounding.
     this.rayOrigin.copy(this.rigidBody.translation());
-    this.rayOrigin.y -= config.RADIUS - config.GROUND_RAY_START_ABOVE_BOTTOM;
+    this.rayOrigin.y -=
+      config.RADIUS_IN_METERS - config.GROUND_RAY_START_ABOVE_BOTTOM_IN_METERS;
     const hit = physicsManager.world.castRay(
       this.ray,
-      config.GROUND_RAY_MAX_DISTANCE,
+      config.GROUND_RAY_MAX_DISTANCE_IN_METERS,
       true,
       undefined,
       undefined,
@@ -394,18 +431,28 @@ export default class Player {
       this.rigidBody,
     );
     if (!hit) return false;
-    return hit.timeOfImpact <= config.GROUND_CONTACT_THRESHOLD;
+    return hit.timeOfImpact <= config.GROUND_CONTACT_THRESHOLD_IN_METERS;
   }
 
   private canJump(): boolean {
     if (this.isInWater) return false;
-    if (this.isOnGround) return true;
+    if (this.isOnGround || this.coyoteTimer > 0) return true;
     return this.jumpCount < config.MAX_CONSECUTIVE_JUMPS;
   }
 
   private performJump() {
-    this.rigidBody.applyImpulse(config.JUMP_IMPULSE, true);
+    const velocity = this.rigidBody.linvel();
+    const jumpVelocity =
+      this.jumpCount === 0
+        ? config.JUMP_VELOCITY_IN_METERS_PER_SECOND
+        : config.DOUBLE_JUMP_VELOCITY_IN_METERS_PER_SECOND;
+    const velocityChange = Math.max(0, jumpVelocity - velocity.y);
+    this.jumpImpulse.set(0, velocityChange * config.MASS_IN_KILOGRAMS, 0);
+    this.rigidBody.applyImpulse(this.jumpImpulse, true);
     this.jumpCount += 1;
+    this.coyoteTimer = 0;
+    this.groundingLockTimer = config.JUMP_GROUNDING_LOCK_TIME_IN_SECONDS;
+    this.isOnGround = false;
   }
 
   private handleJumpCut(isJumpKeyPressed: boolean, velocity: Vector) {
@@ -420,19 +467,16 @@ export default class Player {
     velocity.y -= extraDown;
   }
 
-  private clampUpwardVelocity(velocity: Vector) {
-    if (velocity.y <= config.MAX_UPWARD_VELOCITY) return;
-    velocity.y = config.MAX_UPWARD_VELOCITY;
-  }
-
   private updateHorizontalMovement(delta: number) {
     const isForward = inputManager.isForward();
     const isBackward = inputManager.isBackward();
     const isLeftward = inputManager.isLeftward();
     const isRightward = inputManager.isRightward();
 
-    if (isLeftward) this.yawInRadians += config.TURN_SPEED * delta;
-    if (isRightward) this.yawInRadians -= config.TURN_SPEED * delta;
+    if (isLeftward)
+      this.yawInRadians += config.TURN_SPEED_IN_RADIANS_PER_SECOND * delta;
+    if (isRightward)
+      this.yawInRadians -= config.TURN_SPEED_IN_RADIANS_PER_SECOND * delta;
 
     this.forwardVec.copy(config.FORWARD).applyQuaternion(this.yawQuaternion);
 
@@ -442,8 +486,14 @@ export default class Player {
     this.newAngVel.copy(this.rigidBody.angvel());
 
     const waterMult = this.isInWater ? config.WATER_MOVEMENT_MULTIPLIER : 1;
-    const linVelScale = config.LIN_VEL_STRENGTH * delta * waterMult;
-    const angVelScale = config.ANG_VEL_STRENGTH * delta * waterMult;
+    const linVelScale =
+      config.LIN_VEL_STRENGTH_IN_METERS_PER_SECOND_SQUARED *
+      delta *
+      waterMult;
+    const angVelScale =
+      config.ANG_VEL_STRENGTH_IN_RADIANS_PER_SECOND_SQUARED *
+      delta *
+      waterMult;
 
     if (isForward) {
       this.newLinVel.addScaledVector(this.forwardVec, linVelScale);
@@ -514,7 +564,7 @@ export default class Player {
   }
 
   get radius() {
-    return config.RADIUS;
+    return config.RADIUS_IN_METERS;
   }
 }
 

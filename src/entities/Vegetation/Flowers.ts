@@ -78,7 +78,7 @@ const uniforms = {
   // tint
   uColor1: uniform(new Color().setRGB(0.02, 0.14, 0.33)),
   uColor2: uniform(new Color().setRGB(0.99, 0.64, 0.0)),
-  uBrightness: uniform(1),
+  uBrightness: uniform(0.6),
   // wind
   uWindAmbientStrength: uniform(0.2),
   uWindDirectionalStrength: uniform(0.45),
