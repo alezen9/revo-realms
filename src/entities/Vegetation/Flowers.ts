@@ -80,10 +80,10 @@ const uniforms = {
   uColor2: uniform(new Color().setRGB(0.99, 0.64, 0.0)),
   uBrightness: uniform(1),
   // wind
-  uWindAmbientStrength: uniform(0.5),
+  uWindAmbientStrength: uniform(0.2),
   uWindDirectionalStrength: uniform(0.45),
   uWindSwaySpeed: uniform(0.9),
-  uWindVerticalBobStrength: uniform(0.1),
+  uWindVerticalBobStrength: uniform(0.02),
 };
 
 class FlowersSsbo {

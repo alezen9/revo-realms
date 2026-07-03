@@ -939,8 +939,11 @@ export default class Grass {
     const indices = new Uint8Array(indexCount);
     const normals = new Float32Array(vertexCount * 3);
 
-    // simple taper: ~linear → narrower toward tip; tweak as you like
-    const taper = (t: number) => halfWidthBase * (1.0 - 0.7 * t); // t in [0..1]
+    const taper = (t: number) => {
+      const baseGrow = Math.min(1, 0.28 + 0.72 * (t / 0.26));
+      const tipTaper = Math.pow(1 - t, 1.22);
+      return halfWidthBase * baseGrow * tipTaper;
+    };
 
     // build rows
     let idx = 0; // write cursor for indices
