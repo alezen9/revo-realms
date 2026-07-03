@@ -1,33 +1,22 @@
-import { Color, Vector2, Vector3 } from "three/webgpu";
-import { uniform } from "three/tsl";
+import { Vector3 } from "three/webgpu";
 import {
   debugManager,
   eventsManager,
   prewarmManager,
   windManager,
 } from "../../systems";
-import WindAmbianceLines from "./WindAmbianceLines";
-import WindAmbianceParticles from "./WindAmbianceParticles";
+import WindAmbianceLines, { createWindLineUniforms } from "./WindAmbianceLines";
+import WindAmbianceParticles, {
+  createWindParticleUniforms,
+} from "./WindAmbianceParticles";
 
 const config = {
   WIND_INTENSITY_THRESHOLD: 0.3,
 };
 
-export class WindAmbianceUniforms {
-  uPlayerDeltaXZ = uniform(new Vector2(0, 0));
-  uPlayerPosition = uniform(new Vector3());
-  uDelta = uniform(0);
-  uEffectFade = uniform(0);
-  uResetAll = uniform(0);
-  uEventSeed = uniform(0);
-  uColor = uniform(new Color().setRGB(0.78, 0.76, 0.68));
-  uSpeed = uniform(0.58);
-  uHeight = uniform(5.5);
-}
-
 export default class WindAmbiance {
-  private lineUniforms = new WindAmbianceUniforms();
-  private particleUniforms = new WindAmbianceUniforms();
+  private lineUniforms = createWindLineUniforms();
+  private particleUniforms = createWindParticleUniforms();
   private particles = new WindAmbianceParticles(this.particleUniforms);
   private lines = new WindAmbianceLines(this.lineUniforms);
   private meshAnchor = new Vector3();
@@ -54,20 +43,8 @@ export default class WindAmbiance {
       const deltaZ = player.position.z - this.meshAnchor.z;
       this.meshAnchor.copy(player.position).setY(0);
 
-      this.syncUniforms(
-        this.lineUniforms,
-        player.position,
-        deltaX,
-        deltaZ,
-        delta,
-      );
-      this.syncUniforms(
-        this.particleUniforms,
-        player.position,
-        deltaX,
-        deltaZ,
-        delta,
-      );
+      this.syncLineUniforms(player.position, deltaX, deltaZ, delta);
+      this.syncParticleUniforms(player.position, deltaX, deltaZ, delta);
       this.particles.syncPlayerPosition(this.meshAnchor);
       this.lines.syncPlayerPosition(this.meshAnchor);
 
@@ -98,19 +75,28 @@ export default class WindAmbiance {
     this.debug();
   }
 
-  private syncUniforms(
-    uniforms: WindAmbianceUniforms,
+  private syncLineUniforms(
     playerPosition: Vector3,
     deltaX: number,
     deltaZ: number,
     delta: number,
   ) {
-    uniforms.uPlayerDeltaXZ.value.set(deltaX, deltaZ);
-    uniforms.uPlayerPosition.value.copy(playerPosition);
-    uniforms.uDelta.value = delta;
-    uniforms.uEventSeed.value = this.eventSeed;
-    uniforms.uSpeed.value = this.lineUniforms.uSpeed.value;
-    uniforms.uHeight.value = this.lineUniforms.uHeight.value;
+    this.lineUniforms.uPlayerDeltaXZ.value.set(deltaX, deltaZ);
+    this.lineUniforms.uPlayerPosition.value.copy(playerPosition);
+    this.lineUniforms.uDelta.value = delta;
+    this.lineUniforms.uEventSeed.value = this.eventSeed;
+  }
+
+  private syncParticleUniforms(
+    playerPosition: Vector3,
+    deltaX: number,
+    deltaZ: number,
+    delta: number,
+  ) {
+    this.particleUniforms.uPlayerDeltaXZ.value.set(deltaX, deltaZ);
+    this.particleUniforms.uPlayerPosition.value.copy(playerPosition);
+    this.particleUniforms.uDelta.value = delta;
+    this.particleUniforms.uEventSeed.value = this.eventSeed;
   }
 
   private updateLines() {
@@ -159,13 +145,25 @@ export default class WindAmbiance {
       color: { type: "float" },
     });
     folder.addBinding(this.lineUniforms.uSpeed, "value", {
-      label: "Speed",
+      label: "Line speed",
       min: 0,
       max: 3,
       step: 0.01,
     });
     folder.addBinding(this.lineUniforms.uHeight, "value", {
-      label: "Height",
+      label: "Line height",
+      min: 0.5,
+      max: 12,
+      step: 0.1,
+    });
+    folder.addBinding(this.particleUniforms.uSpeed, "value", {
+      label: "Particle speed",
+      min: 0,
+      max: 3,
+      step: 0.01,
+    });
+    folder.addBinding(this.particleUniforms.uHeight, "value", {
+      label: "Particle height",
       min: 0.5,
       max: 12,
       step: 0.1,

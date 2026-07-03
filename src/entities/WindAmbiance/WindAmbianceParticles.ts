@@ -16,6 +16,7 @@ import {
   smoothstep,
   step,
   uv,
+  uniform,
   vec2,
   vec3,
   vec4,
@@ -25,11 +26,24 @@ import {
   InstancedMesh,
   PlaneGeometry,
   SpriteNodeMaterial,
+  Vector2,
   Vector3,
 } from "three/webgpu";
 import { rendererManager, sceneManager, windManager } from "../../systems";
 import { VegetationSsboUtils } from "../Vegetation/ssboUtils";
-import type { WindAmbianceUniforms } from "./WindAmbiance";
+
+export const createWindParticleUniforms = () => ({
+  uPlayerDeltaXZ: uniform(new Vector2(0, 0)),
+  uPlayerPosition: uniform(new Vector3()),
+  uDelta: uniform(0),
+  uEffectFade: uniform(0),
+  uResetAll: uniform(0),
+  uEventSeed: uniform(0),
+  uSpeed: uniform(0.58),
+  uHeight: uniform(5.5),
+});
+
+type WindParticleUniforms = ReturnType<typeof createWindParticleUniforms>;
 
 const getConfig = () => {
   const PARTICLES_PER_SIDE = 64;
@@ -53,11 +67,11 @@ const config = getConfig();
 
 class WindParticleState {
   private buffer = instancedArray(config.PARTICLE_COUNT, "vec4");
-  private uniforms: WindAmbianceUniforms;
+  private uniforms: WindParticleUniforms;
   private computeInit: ComputeNode;
   private computeUpdate: ComputeNode;
 
-  constructor(uniforms: WindAmbianceUniforms) {
+  constructor(uniforms: WindParticleUniforms) {
     this.uniforms = uniforms;
     this.computeInit = this.createComputeInit();
     this.computeUpdate = this.createComputeUpdate();
@@ -275,7 +289,7 @@ class WindParticleState {
 }
 
 class WindParticleMaterial extends SpriteNodeMaterial {
-  constructor(state: WindParticleState, uniforms: WindAmbianceUniforms) {
+  constructor(state: WindParticleState, uniforms: WindParticleUniforms) {
     super();
 
     this.precision = "lowp";
@@ -383,7 +397,7 @@ export default class WindAmbianceParticles {
   private state: WindParticleState;
   private mesh: InstancedMesh;
 
-  constructor(uniforms: WindAmbianceUniforms) {
+  constructor(uniforms: WindParticleUniforms) {
     this.state = new WindParticleState(uniforms);
     this.mesh = new InstancedMesh(
       new PlaneGeometry(1, 1),

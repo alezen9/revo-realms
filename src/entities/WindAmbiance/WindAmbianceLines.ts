@@ -1,9 +1,11 @@
 import {
   BufferAttribute,
   BufferGeometry,
+  Color,
   DoubleSide,
   StaticDrawUsage,
   Uint16BufferAttribute,
+  Vector2,
   Vector3,
 } from "three";
 import {
@@ -24,6 +26,7 @@ import {
   step,
   texture,
   uv,
+  uniform,
   vec2,
   vec3,
   vec4,
@@ -40,7 +43,20 @@ import {
   windManager,
 } from "../../systems";
 import { VegetationSsboUtils } from "../Vegetation/ssboUtils";
-import type { WindAmbianceUniforms } from "./WindAmbiance";
+
+export const createWindLineUniforms = () => ({
+  uPlayerDeltaXZ: uniform(new Vector2(0, 0)),
+  uPlayerPosition: uniform(new Vector3()),
+  uDelta: uniform(0),
+  uEffectFade: uniform(0),
+  uResetAll: uniform(0),
+  uEventSeed: uniform(0),
+  uColor: uniform(new Color().setRGB(0.78, 0.76, 0.68)),
+  uSpeed: uniform(0.25),
+  uHeight: uniform(7),
+});
+
+type WindLineUniforms = ReturnType<typeof createWindLineUniforms>;
 
 const getConfig = () => {
   const LINE_COUNT = 24;
@@ -115,11 +131,11 @@ class WindLineGeometry extends BufferGeometry {
 export default class WindAmbianceLines {
   private buffer = instancedArray(config.LINE_COUNT, "vec4");
   private mesh: InstancedMesh;
-  private uniforms: WindAmbianceUniforms;
+  private uniforms: WindLineUniforms;
   private computeInit: ComputeNode;
   private computeUpdate: ComputeNode;
 
-  constructor(uniforms: WindAmbianceUniforms) {
+  constructor(uniforms: WindLineUniforms) {
     this.uniforms = uniforms;
     this.computeInit = this.createComputeInit();
     this.computeUpdate = this.createComputeUpdate();
@@ -287,7 +303,7 @@ export default class WindAmbianceLines {
 }
 
 class WindLineMaterial extends MeshBasicNodeMaterial {
-  constructor(lines: WindAmbianceLines, uniforms: WindAmbianceUniforms) {
+  constructor(lines: WindAmbianceLines, uniforms: WindLineUniforms) {
     super();
 
     this.precision = "lowp";
