@@ -5,6 +5,7 @@ import {
   prewarmManager,
   windManager,
 } from "../../systems";
+import { type State } from "../../Game";
 import WindAmbianceLines, { createWindLineUniforms } from "./WindAmbianceLines";
 import WindAmbianceParticles, {
   createWindParticleUniforms,
@@ -29,6 +30,12 @@ export default class WindAmbiance {
   private eventSeed = 0;
 
   constructor() {
+    this.registerPrewarmTasks();
+    eventsManager.on("engine-update", this.onEngineUpdate);
+    this.debug();
+  }
+
+  private registerPrewarmTasks() {
     prewarmManager.registerTask({
       prepare: () => this.lines.preparePrewarmAsync(),
       restore: () => this.lines.restorePrewarm(),
@@ -37,42 +44,44 @@ export default class WindAmbiance {
       prepare: () => this.particles.preparePrewarmAsync(),
       restore: () => this.particles.restorePrewarm(),
     });
+  }
 
-    eventsManager.on("engine-update", ({ player, delta }) => {
-      const deltaX = player.position.x - this.meshAnchor.x;
-      const deltaZ = player.position.z - this.meshAnchor.z;
-      this.meshAnchor.copy(player.position).setY(0);
+  private onEngineUpdate = ({ player, delta }: State) => {
+    const deltaX = player.position.x - this.meshAnchor.x;
+    const deltaZ = player.position.z - this.meshAnchor.z;
+    this.meshAnchor.copy(player.position).setY(0);
 
-      this.syncLineUniforms(player.position, deltaX, deltaZ, delta);
-      this.syncParticleUniforms(player.position, deltaX, deltaZ, delta);
-      this.particles.syncPlayerPosition(this.meshAnchor);
-      this.lines.syncPlayerPosition(this.meshAnchor);
+    this.syncLineUniforms(player.position, deltaX, deltaZ, delta);
+    this.syncParticleUniforms(player.position, deltaX, deltaZ, delta);
+    this.particles.syncPlayerPosition(this.meshAnchor);
+    this.lines.syncPlayerPosition(this.meshAnchor);
 
-      const isActive =
-        windManager.uIntensity.value > config.WIND_INTENSITY_THRESHOLD + 0.08;
+    const isActive =
+      windManager.uIntensity.value > config.WIND_INTENSITY_THRESHOLD + 0.08;
 
-      if (isActive && !this.wasActive) {
-        this.eventSeed += 1;
-        this.shouldResetLines = true;
-        this.shouldResetParticles = true;
-      }
+    this.syncFadeState(isActive, delta);
 
-      this.effectFade += delta * (isActive ? 3.5 : -1.4);
-      this.effectFade = Math.max(0, Math.min(1, this.effectFade));
-      this.lineUniforms.uEffectFade.value = this.effectFade;
-      this.particleUniforms.uEffectFade.value = this.effectFade;
-      this.wasActive = isActive;
+    const isVisible = this.effectFade > 0.001 || isActive;
+    this.particles.setVisible(isVisible);
+    this.lines.setVisible(isVisible);
+    if (!isVisible) return;
 
-      const isVisible = this.effectFade > 0.001 || isActive;
-      this.particles.setVisible(isVisible);
-      this.lines.setVisible(isVisible);
-      if (!isVisible) return;
+    this.updateLines();
+    this.updateParticles();
+  };
 
-      this.updateLines();
-      this.updateParticles();
-    });
+  private syncFadeState(isActive: boolean, delta: number) {
+    if (isActive && !this.wasActive) {
+      this.eventSeed += 1;
+      this.shouldResetLines = true;
+      this.shouldResetParticles = true;
+    }
 
-    this.debug();
+    this.effectFade += delta * (isActive ? 3.5 : -1.4);
+    this.effectFade = Math.max(0, Math.min(1, this.effectFade));
+    this.lineUniforms.uEffectFade.value = this.effectFade;
+    this.particleUniforms.uEffectFade.value = this.effectFade;
+    this.wasActive = isActive;
   }
 
   private syncLineUniforms(

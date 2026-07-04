@@ -37,6 +37,7 @@ import {
   windManager,
   debugManager,
 } from "../../systems";
+import { type State } from "../../Game";
 import { VegetationSsboUtils } from "./ssboUtils";
 import { gameTime } from "../../utils/GameTime";
 import { TSLUtils } from "../../utils/TSLUtils";
@@ -251,46 +252,61 @@ class FlowersSsbo {
 }
 
 export default class Flowers {
+  private ssbo = new FlowersSsbo();
+  private mesh: InstancedMesh;
   private isComputeInFlight = false;
 
   constructor() {
-    const ssbo = new FlowersSsbo();
-    const material = new FlowerMaterial(ssbo);
-    const flowers = new InstancedMesh(
+    this.mesh = this.createMesh();
+    sceneManager.scene.add(this.mesh);
+
+    this.debug();
+    eventsManager.on("engine-update-throttle-16x", this.onEngineUpdate);
+  }
+
+  private createMesh() {
+    const material = new FlowerMaterial(this.ssbo);
+    const mesh = new InstancedMesh(
       new PlaneGeometry(1, 1),
       material,
       config.COUNT,
     );
-    sceneManager.scene.add(flowers);
+    return mesh;
+  }
 
-    this.debug();
+  private onEngineUpdate = ({ player }: State) => {
+    this.syncFrameUniforms(player.position);
+    this.mesh.position.copy(player.position).setY(0);
+    this.updateSsbo();
+  };
 
-    eventsManager.on("engine-update-throttle-16x", ({ player }) => {
-      const dx = player.position.x - flowers.position.x;
-      const dz = player.position.z - flowers.position.z;
-      uniforms.uPlayerDeltaXZ.value.set(dx, dz);
-      uniforms.uPlayerPosition.value.copy(player.position);
-      const proj = sceneManager.playerCamera.projectionMatrix;
-      uniforms.uFx.value = proj.elements[0];
-      uniforms.uFy.value = proj.elements[5];
-      uniforms.uCameraMatrix.value
-        .copy(proj)
-        .multiply(sceneManager.playerCamera.matrixWorldInverse);
-      sceneManager.playerCamera.getWorldDirection(
-        uniforms.uCameraForward.value,
-      );
-      flowers.position.copy(player.position).setY(0);
-      if (this.isComputeInFlight) return;
-      this.isComputeInFlight = true;
-      rendererManager.renderer
-        .computeAsync(ssbo.computeUpdate)
-        .catch((error) => {
-          console.error("[Flowers] computeAsync failed:", error);
-        })
-        .finally(() => {
-          this.isComputeInFlight = false;
-        });
-    });
+  private syncFrameUniforms(playerPosition: Vector3) {
+    const dx = playerPosition.x - this.mesh.position.x;
+    const dz = playerPosition.z - this.mesh.position.z;
+    uniforms.uPlayerDeltaXZ.value.set(dx, dz);
+    uniforms.uPlayerPosition.value.copy(playerPosition);
+
+    const projectionMatrix = sceneManager.playerCamera.projectionMatrix;
+    uniforms.uFx.value = projectionMatrix.elements[0];
+    uniforms.uFy.value = projectionMatrix.elements[5];
+    uniforms.uCameraMatrix.value
+      .copy(projectionMatrix)
+      .multiply(sceneManager.playerCamera.matrixWorldInverse);
+    sceneManager.playerCamera.getWorldDirection(uniforms.uCameraForward.value);
+  }
+
+  private updateSsbo() {
+    if (this.isComputeInFlight) return;
+
+    this.isComputeInFlight = true;
+    rendererManager.renderer
+      .computeAsync(this.ssbo.computeUpdate)
+      .catch((error) => {
+        console.error("[Flowers] computeAsync failed:", error);
+      })
+      .finally(() => {
+        this.isComputeInFlight = false;
+      });
   }
 
   private debug() {

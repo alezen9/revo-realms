@@ -399,14 +399,19 @@ export default class WindAmbianceParticles {
 
   constructor(uniforms: WindParticleUniforms) {
     this.state = new WindParticleState(uniforms);
-    this.mesh = new InstancedMesh(
+    this.mesh = this.createMesh(uniforms);
+    sceneManager.scene.add(this.mesh);
+  }
+
+  private createMesh(uniforms: WindParticleUniforms) {
+    const mesh = new InstancedMesh(
       new PlaneGeometry(1, 1),
       new WindParticleMaterial(this.state, uniforms),
       config.PARTICLE_COUNT,
     );
-    this.mesh.visible = false;
-    this.mesh.frustumCulled = false;
-    sceneManager.scene.add(this.mesh);
+    mesh.visible = false;
+    mesh.frustumCulled = false;
+    return mesh;
   }
 
   syncPlayerPosition(playerPosition: Vector3) {

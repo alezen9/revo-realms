@@ -139,15 +139,23 @@ export default class WindAmbianceLines {
     this.uniforms = uniforms;
     this.computeInit = this.createComputeInit();
     this.computeUpdate = this.createComputeUpdate();
-    this.mesh = new InstancedMesh(
+    this.mesh = this.createMesh();
+    sceneManager.scene.add(this.mesh);
+    this.registerComputeInit();
+  }
+
+  private createMesh() {
+    const mesh = new InstancedMesh(
       new WindLineGeometry(),
       new WindLineMaterial(this, this.uniforms),
       config.LINE_COUNT,
     );
-    this.mesh.visible = false;
-    this.mesh.frustumCulled = false;
-    sceneManager.scene.add(this.mesh);
+    mesh.visible = false;
+    mesh.frustumCulled = false;
+    return mesh;
+  }
 
+  private registerComputeInit() {
     this.computeUpdate.onInit(({ renderer }) => {
       renderer.computeAsync(this.computeInit);
     });
