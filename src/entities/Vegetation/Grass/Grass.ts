@@ -43,7 +43,7 @@ export default class Grass {
   private onEngineUpdate = ({ player }: State) => {
     this.accumulatePlayerDelta(player);
     this.syncPlayerAndCameraUniforms(player);
-    this.updateSsbo();
+    this.updateSsboAsync();
     this.mesh.position.copy(player.position).setY(0);
   };
 
@@ -67,7 +67,7 @@ export default class Grass {
     sceneManager.playerCamera.getWorldDirection(uniforms.uCameraForward.value);
   }
 
-  private updateSsbo() {
+  private async updateSsboAsync() {
     if (this.isComputeInFlight) return;
 
     this.computePlayerDeltaXZ.copy(this.pendingPlayerDeltaXZ);
@@ -75,14 +75,14 @@ export default class Grass {
     uniforms.uPlayerDeltaXZ.value.copy(this.computePlayerDeltaXZ);
 
     this.isComputeInFlight = true;
-    rendererManager.renderer
-      .computeAsync(this.ssbo.computeUpdate)
-      .catch((error) => {
-        console.error("[Grass] computeAsync failed:", error);
-        this.pendingPlayerDeltaXZ.add(this.computePlayerDeltaXZ);
-      })
-      .finally(() => {
-        this.isComputeInFlight = false;
-      });
+
+    try {
+      await rendererManager.renderer.computeAsync(this.ssbo.computeUpdate);
+    } catch (error) {
+      console.error("[Grass] computeAsync failed:", error);
+      this.pendingPlayerDeltaXZ.add(this.computePlayerDeltaXZ);
+    } finally {
+      this.isComputeInFlight = false;
+    }
   }
 }
