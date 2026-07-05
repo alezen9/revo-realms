@@ -1,4 +1,4 @@
-import Grass from "./Grass";
+import Grass from "./Grass/Grass";
 import Flowers from "./Flowers";
 import PineTrees from "./PineTrees";
 
