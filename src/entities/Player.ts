@@ -86,7 +86,7 @@ const getConfig = () => {
     MAX_SQUASH_DEFORMATION: 0.4,
     WATER_SQUASH_MULTIPLIER: 0.25,
 
-    PLAYER_INITIAL_POSITION: new Vector3(...POSITIONS.campfire),
+    PLAYER_INITIAL_POSITION: new Vector3(...POSITIONS.dragonball),
     CAMERA_OFFSET: new Vector3(0, 16, 20),
     CAMERA_LERP_FACTOR: 7.5,
     UP: new Vector3(0, 1, 0),
@@ -304,8 +304,7 @@ export default class Player {
     const position = this.rigidBody.translation();
     const velocity = this.rigidBody.linvel();
     const bottomY = position.y - config.RADIUS_IN_METERS;
-    const submergedDepth =
-      config.WATER_SURFACE_Y_IN_METERS - bottomY;
+    const submergedDepth = config.WATER_SURFACE_Y_IN_METERS - bottomY;
 
     if (submergedDepth <= 0) {
       this.waterTime = 0;
@@ -365,11 +364,10 @@ export default class Player {
 
       const verticalSpeed = Math.abs(velocity.y);
       const isSlowBounce =
-        verticalSpeed < config.BOUNCE_SETTLE_VERTICAL_SPEED_IN_METERS_PER_SECOND;
+        verticalSpeed <
+        config.BOUNCE_SETTLE_VERTICAL_SPEED_IN_METERS_PER_SECOND;
       const shouldSettleBounce =
-        this.isOnGround &&
-        !isJumpKeyPressed &&
-        isSlowBounce;
+        this.isOnGround && !isJumpKeyPressed && isSlowBounce;
 
       if (shouldSettleBounce) velocity.y = 0;
 

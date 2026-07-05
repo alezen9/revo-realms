@@ -21,6 +21,7 @@ import {
   vec3,
   vec4,
 } from "three/tsl";
+import { Color } from "three";
 import {
   type ComputeNode,
   InstancedMesh,
@@ -39,6 +40,7 @@ export const createWindParticleUniforms = () => ({
   uEffectFade: uniform(0),
   uResetAll: uniform(0),
   uEventSeed: uniform(0),
+  uColor: uniform(new Color().setRGB(0.38, 0.43, 0.39)),
   uSpeed: uniform(0.35),
   uHeight: uniform(5.5),
 });
@@ -383,12 +385,11 @@ class WindParticleMaterial extends SpriteNodeMaterial {
       .mul(lifeFade)
       .mul(fieldFade)
       .mul(uniforms.uEffectFade);
-    const coolGrey = vec3(0.42, 0.42, 0.39);
-    const lightGrey = vec3(0.68, 0.68, 0.63);
+    const colorVariation = mix(0.62, 0.92, hash(particleSeed.add(131.83)));
 
     this.positionNode = vec3(data.x, visibleY, data.z);
     this.scaleNode = particleSize.mul(visibility);
-    this.colorNode = mix(coolGrey, lightGrey, hash(particleSeed.add(131.83)));
+    this.colorNode = uniforms.uColor.mul(colorVariation);
     this.opacityNode = particleMask.mul(isAlive).mul(isOnGrass);
   }
 }
@@ -400,7 +401,6 @@ export default class WindAmbianceParticles {
   constructor(uniforms: WindParticleUniforms) {
     this.state = new WindParticleState(uniforms);
     this.mesh = this.createMesh(uniforms);
-    sceneManager.scene.add(this.mesh);
   }
 
   private createMesh(uniforms: WindParticleUniforms) {
@@ -420,15 +420,21 @@ export default class WindAmbianceParticles {
 
   setVisible(isVisible: boolean) {
     this.mesh.visible = isVisible;
+    if (isVisible) {
+      if (this.mesh.parent !== sceneManager.scene) sceneManager.scene.add(this.mesh);
+      return;
+    }
+
+    if (this.mesh.parent) sceneManager.scene.remove(this.mesh);
   }
 
   async preparePrewarmAsync() {
-    this.mesh.visible = true;
+    this.setVisible(true);
     await this.update();
   }
 
   restorePrewarm() {
-    this.mesh.visible = false;
+    this.setVisible(false);
   }
 
   update() {

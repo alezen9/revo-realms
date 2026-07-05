@@ -61,13 +61,14 @@ export default class WindAmbiance {
 
     this.syncFadeState(isActive, delta);
 
-    const isVisible = this.effectFade > 0.001 || isActive;
-    this.particles.setVisible(isVisible);
-    this.lines.setVisible(isVisible);
-    if (!isVisible) return;
+    const areLinesVisible = this.effectFade > 0.001 || isActive;
+    const areParticlesVisible = this.effectFade > 0.001 || isActive;
+    this.particles.setVisible(areParticlesVisible);
+    this.lines.setVisible(areLinesVisible);
+    if (!areLinesVisible && !areParticlesVisible) return;
 
-    this.updateLines();
-    this.updateParticles();
+    if (areLinesVisible) this.updateLines();
+    if (areParticlesVisible) this.updateParticles();
   };
 
   private syncFadeState(isActive: boolean, delta: number) {
@@ -149,7 +150,7 @@ export default class WindAmbiance {
     });
 
     folder.addBinding(this.lineUniforms.uColor, "value", {
-      label: "Color",
+      label: "Line color",
       view: "color",
       color: { type: "float" },
     });
@@ -164,6 +165,11 @@ export default class WindAmbiance {
       min: 0.5,
       max: 12,
       step: 0.1,
+    });
+    folder.addBinding(this.particleUniforms.uColor, "value", {
+      label: "Particle color",
+      view: "color",
+      color: { type: "float" },
     });
     folder.addBinding(this.particleUniforms.uSpeed, "value", {
       label: "Particle speed",

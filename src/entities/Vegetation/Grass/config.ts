@@ -1,18 +1,13 @@
-import {
-  Color,
-  Matrix4,
-  Vector2,
-  Vector3,
-} from "three";
+import { Color, Matrix4, Vector2, Vector3 } from "three";
 import { uniform } from "three/tsl";
 
 const getConfig = () => {
-  const BLADE_WIDTH = 0.065;
+  const BLADE_WIDTH = 0.15;
   const BLADE_HEIGHT = 1.75;
   const TILE_SIZE = 130;
   const BLADES_PER_SIDE = 512 + 512; // power of 2 is optimal, divisible by wg also good
   return {
-    SEGMENTS: 3,
+    SEGMENTS: 4,
     BLADE_WIDTH,
     BLADE_HEIGHT,
     BLADE_BOUNDING_SPHERE_RADIUS: BLADE_HEIGHT,
@@ -61,6 +56,8 @@ export const uniforms = {
   uTipColor: uniform(new Color().setRGB(0.5, 0.27, 0.13)),
   uColorMixFactor: uniform(0.15),
   uColorVariationStrength: uniform(2),
+  uRoundnessStrength: uniform(0.055),
+  uRoundnessPower: uniform(2.2),
   uAoScale: uniform(0.5),
   uAoRimSmoothness: uniform(5),
   uAoRadius: uniform(15),
@@ -76,5 +73,6 @@ export const uniforms = {
   uStochasticHysteresis: uniform(0.11),
   // Rotation
   uBaseBending: uniform(2.5),
+  uSpriteRotationRandomness: uniform(0.05),
 };
 export type GrassUniforms = typeof uniforms;

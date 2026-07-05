@@ -6,6 +6,7 @@ import {
   hash,
   instanceIndex,
   mix,
+  pow,
   sin,
   smoothstep,
   uv,
@@ -20,6 +21,7 @@ import { GrassSsbo } from "./GrassSsbo";
 
 export class GrassMaterial extends SpriteNodeMaterial {
   private ssbo: GrassSsbo;
+
   constructor(ssbo: GrassSsbo) {
     super();
     this.ssbo = ssbo;
@@ -51,10 +53,20 @@ export class GrassMaterial extends SpriteNodeMaterial {
     // SCALE
     const scaleX = positionNoise.remap(0, 1, 0.5, 1.5);
     const bladeScale = vec3(scaleX, scaleY, 1);
-    this.scaleNode = mix(vec3(0), bladeScale, isVisible);
+    const visibleScale = mix(vec3(0), bladeScale, isVisible);
+    this.scaleNode = visibleScale;
+    const scaleWindFactor = mix(
+      0.25,
+      1.0,
+      smoothstep(uniforms.uBladeMinScale, uniforms.uBladeMaxScale, scaleY),
+    );
 
     // ROTATION
     const instanceNoise = hash(instanceIndex.add(196.4356)).sub(0.5).mul(0.25);
+    const spriteRotation = hash(instanceIndex.add(284.7821))
+      .sub(0.5)
+      .mul(2)
+      .mul(uniforms.uSpriteRotationRandomness);
     const h = uv().y;
     const bendProfile = h.mul(h).mul(uniforms.uBaseBending);
     const baseBending = positionNoise
@@ -62,7 +74,8 @@ export class GrassMaterial extends SpriteNodeMaterial {
       .mul(0.25)
       .add(instanceNoise)
       .mul(bendProfile);
-    this.rotationNode = vec3(baseBending, 0, 0);
+    const rotation = spriteRotation.add(baseBending);
+    this.rotationNode = rotation;
 
     // POSITION
     // fragment cull
@@ -73,13 +86,18 @@ export class GrassMaterial extends SpriteNodeMaterial {
     const bladePosition = vec3(offsetX, offsetY, offsetZ);
     // sway effect
     const randomPhase = positionNoise.mul(PI2);
-    const swayA = sin(gameTime.mul(1.35).add(randomPhase));
+    const heightPhase = h
+      .mul(h)
+      .mul(0.55)
+      .mul(mix(0.75, 1.35, windNoiseFactor));
+    const swayA = sin(gameTime.mul(1.35).add(randomPhase).add(heightPhase));
     const swayB = sin(
       gameTime
         .mul(2.15)
         .add(offsetX.mul(0.17))
         .add(offsetZ.mul(0.11))
-        .add(randomPhase.mul(1.7)),
+        .add(randomPhase.mul(1.7))
+        .add(heightPhase.mul(1.6)),
     ).mul(0.45);
     const swayEnvelope = mix(0.75, 1.35, windNoiseFactor);
     const swayAmount = swayA
@@ -100,14 +118,20 @@ export class GrassMaterial extends SpriteNodeMaterial {
       .add(offsetX.mul(0.13))
       .add(offsetZ.mul(0.07));
     const flutter = sin(
-      gameTime.mul(uniforms.uWindSpeed.mul(1.7)).add(phase.mul(1.3)),
+      gameTime
+        .mul(uniforms.uWindSpeed.mul(1.7))
+        .add(phase.mul(1.3))
+        .add(heightPhase.mul(2.2)),
     )
       .mul(0.025)
       .mul(windNoiseFactor)
-      .mul(bendProfile);
+      .mul(bendProfile)
+      .mul(scaleWindFactor);
     const flutterOffset = vec3(perp.x, 0.0, perp.y).mul(flutter);
     // wind offset
-    const windOffset = vec3(windXZ.x, 0, windXZ.y).mul(bendProfile);
+    const windOffset = vec3(windXZ.x, 0, windXZ.y).mul(
+      bendProfile.mul(scaleWindFactor),
+    );
 
     const pos = bladePosition
       .add(offscreenOffset)
@@ -148,6 +172,12 @@ export class GrassMaterial extends SpriteNodeMaterial {
     const withShadow = mix(baseToTip.mul(0.5), baseToTip, bakedShadowFactor);
     const windShadeColor = withShadow.mul(uniforms.uTipColor).mul(1.35);
     const windShaded = mix(withShadow, windShadeColor, windShadeAmount);
-    this.colorNode = windShaded.mul(ao);
+    const roundnessEdge = pow(edge, uniforms.uRoundnessPower);
+    const edgeRoundnessShade = roundnessEdge
+      .mul(uniforms.uRoundnessStrength)
+      .mul(0.5);
+    const roundedColor = windShaded.mul(float(1).sub(edgeRoundnessShade));
+
+    this.colorNode = roundedColor.mul(ao);
   }
 }

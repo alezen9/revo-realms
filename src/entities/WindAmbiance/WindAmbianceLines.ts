@@ -51,7 +51,7 @@ export const createWindLineUniforms = () => ({
   uEffectFade: uniform(0),
   uResetAll: uniform(0),
   uEventSeed: uniform(0),
-  uColor: uniform(new Color().setRGB(0.78, 0.76, 0.68)),
+  uColor: uniform(new Color().setRGB(0.62, 0.7, 0.64)),
   uSpeed: uniform(0.25),
   uHeight: uniform(7),
 });
