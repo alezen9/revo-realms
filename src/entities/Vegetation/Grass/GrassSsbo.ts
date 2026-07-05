@@ -250,7 +250,7 @@ export class GrassSsbo {
     const gustTime = sin(gameTime.mul(0.35).add(positionNoise.mul(PI2)))
       .mul(0.5)
       .add(0.5);
-    const windEvent = windManager.uIntensity.sub(0.1).div(0.9).clamp();
+    const windEvent = windManager.uIntensityDirectional;
     const windTravel = worldPos.x.mul(bendDir.x).add(worldPos.z.mul(bendDir.y));
     const travelWave = sin(
       windTravel

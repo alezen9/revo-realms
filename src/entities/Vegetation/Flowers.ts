@@ -386,9 +386,8 @@ class FlowerMaterial extends SpriteNodeMaterial {
     const rand3 = hash(float(instanceIndex).add(noise.r.mul(97.13)));
 
     // Position
-    const windIntensity = windManager.uIntensity;
     const windDirection = windManager.uDirection;
-    const windEvent = windIntensity.sub(0.1).div(0.9).clamp();
+    const windEvent = windManager.uIntensityDirectional;
     const timer = gameTime.mul(uniforms.uWindSwaySpeed);
     const windTravel = x.mul(windDirection.x).add(z.mul(windDirection.y));
     const travelWave = sin(

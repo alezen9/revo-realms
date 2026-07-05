@@ -6,6 +6,7 @@
 	import WindIcon from "./components/WindIcon.svelte"
 	import RadialMenu from "./components/RadialMenu.svelte"
 	import WipBadge from "./components/WipBadge.svelte"
+	import MonitoringOverlay from "./components/MonitoringOverlay.svelte"
 
 	const openInDev = true
 
@@ -22,6 +23,7 @@
 	{/if}
 	<WindIcon />
 	<RadialMenu />
+	<MonitoringOverlay />
 </div>
 
 <style>

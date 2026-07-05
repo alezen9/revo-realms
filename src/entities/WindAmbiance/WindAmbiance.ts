@@ -12,7 +12,7 @@ import WindAmbianceParticles, {
 } from "./WindAmbianceParticles";
 
 const config = {
-  WIND_INTENSITY_THRESHOLD: 0.3,
+  LINE_ACTIVE_INTENSITY_THRESHOLD: 0.31,
 };
 
 export default class WindAmbiance {
@@ -24,13 +24,13 @@ export default class WindAmbiance {
   private isLineComputeInFlight = false;
   private isParticleComputeInFlight = false;
   private shouldResetLines = false;
-  private shouldResetParticles = false;
-  private wasActive = false;
+  private wereLinesActive = false;
   private effectFade = 0;
   private eventSeed = 0;
 
   constructor() {
     this.registerPrewarmTasks();
+    this.particles.show();
     eventsManager.on("engine-update", this.onEngineUpdate);
     this.debug();
   }
@@ -51,38 +51,34 @@ export default class WindAmbiance {
     const deltaZ = player.position.z - this.meshAnchor.z;
     this.meshAnchor.copy(player.position).setY(0);
 
+    const intensityDirectional = windManager.uIntensityDirectional.value;
+    const areLinesActive =
+      intensityDirectional > config.LINE_ACTIVE_INTENSITY_THRESHOLD;
+
+    this.syncFadeState(areLinesActive, delta);
+
     this.syncLineUniforms(player.position, deltaX, deltaZ, delta);
     this.syncParticleUniforms(player.position, deltaX, deltaZ, delta);
     this.particles.syncPlayerPosition(this.meshAnchor);
     this.lines.syncPlayerPosition(this.meshAnchor);
 
-    const isActive =
-      windManager.uIntensity.value > config.WIND_INTENSITY_THRESHOLD + 0.08;
-
-    this.syncFadeState(isActive, delta);
-
-    const areLinesVisible = this.effectFade > 0.001 || isActive;
-    const areParticlesVisible = this.effectFade > 0.001 || isActive;
-    this.particles.setVisible(areParticlesVisible);
+    const areLinesVisible = this.effectFade > 0.001 || areLinesActive;
     this.lines.setVisible(areLinesVisible);
-    if (!areLinesVisible && !areParticlesVisible) return;
 
     if (areLinesVisible) this.updateLines();
-    if (areParticlesVisible) this.updateParticles();
+    this.updateParticles();
   };
 
-  private syncFadeState(isActive: boolean, delta: number) {
-    if (isActive && !this.wasActive) {
+  private syncFadeState(areLinesActive: boolean, delta: number) {
+    if (areLinesActive && !this.wereLinesActive) {
       this.eventSeed += 1;
       this.shouldResetLines = true;
-      this.shouldResetParticles = true;
     }
 
-    this.effectFade += delta * (isActive ? 3.5 : -1.4);
+    this.effectFade += delta * (areLinesActive ? 3.5 : -1.4);
     this.effectFade = Math.max(0, Math.min(1, this.effectFade));
     this.lineUniforms.uEffectFade.value = this.effectFade;
-    this.particleUniforms.uEffectFade.value = this.effectFade;
-    this.wasActive = isActive;
+    this.wereLinesActive = areLinesActive;
   }
 
   private syncLineUniforms(
@@ -106,7 +102,6 @@ export default class WindAmbiance {
     this.particleUniforms.uPlayerDeltaXZ.value.set(deltaX, deltaZ);
     this.particleUniforms.uPlayerPosition.value.copy(playerPosition);
     this.particleUniforms.uDelta.value = delta;
-    this.particleUniforms.uEventSeed.value = this.eventSeed;
   }
 
   private updateLines() {
@@ -129,8 +124,6 @@ export default class WindAmbiance {
   private updateParticles() {
     if (this.isParticleComputeInFlight) return;
 
-    this.particleUniforms.uResetAll.value = this.shouldResetParticles ? 1 : 0;
-    this.shouldResetParticles = false;
     this.isParticleComputeInFlight = true;
     this.particles
       .update()
@@ -138,7 +131,6 @@ export default class WindAmbiance {
         console.error("[WindAmbiance] particle computeAsync failed:", error);
       })
       .finally(() => {
-        this.particleUniforms.uResetAll.value = 0;
         this.isParticleComputeInFlight = false;
       });
   }
@@ -182,6 +174,12 @@ export default class WindAmbiance {
       min: 0.5,
       max: 12,
       step: 0.1,
+    });
+    folder.addBinding(this.particleUniforms.uSize, "value", {
+      label: "Particle size",
+      min: 0.25,
+      max: 4,
+      step: 0.01,
     });
   }
 }

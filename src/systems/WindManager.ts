@@ -1,4 +1,4 @@
-import { ConeGeometry, Mesh, Vector2, Vector3 } from "three";
+import { ConeGeometry, MathUtils, Mesh, Vector2, Vector3 } from "three";
 import { atan, positionLocal, rotate, uniform, vec3 } from "three/tsl";
 import { MeshLambertNodeMaterial } from "three/webgpu";
 import { type State } from "../Game";
@@ -22,10 +22,10 @@ export class WindManager {
 
   // uniforms
   private _uDirection = uniform(new Vector2(0, -1));
-  private _uIntensity = uniform(0.1);
+  private _uIntensityBase = uniform(0.1);
+  private _uIntensityDirectional = uniform(0);
 
   private phase: Phase = "idle";
-  private readonly AMBIENT_INTENSITY = 0.1;
   private readonly MAX_INTENSITY = 1;
   private readonly RAMP_RATE = 1.5;
   private readonly DECAY_RATE = 0.85;
@@ -54,10 +54,7 @@ export class WindManager {
     this.IS_DEBUGGING_ENABLED && this.debug();
 
     this.eventsManager.on("swipe-up", this.handleSwipeUp.bind(this));
-    this.eventsManager.on(
-      "engine-update-throttle-4x",
-      this.handleWindBlowing.bind(this),
-    );
+    this.eventsManager.on("engine-update", this.handleWindBlowing.bind(this));
   }
 
   private handleSwipeUp() {
@@ -88,12 +85,13 @@ export class WindManager {
   }
 
   private rampPhase(delta: number) {
-    this._uIntensity.value += delta * this.RAMP_RATE;
-    this._uIntensity.value = Math.min(
-      this._uIntensity.value,
+    this._uIntensityDirectional.value = MathUtils.clamp(
+      this._uIntensityDirectional.value + delta * this.RAMP_RATE,
+      0,
       this.MAX_INTENSITY,
     );
-    if (this._uIntensity.value === this.MAX_INTENSITY) this.phase = "hold";
+    if (this._uIntensityDirectional.value === this.MAX_INTENSITY)
+      this.phase = "hold";
   }
 
   private holdPhase(delta: number) {
@@ -104,12 +102,12 @@ export class WindManager {
   }
 
   private decayPhase(delta: number) {
-    this._uIntensity.value -= delta * this.DECAY_RATE;
-    this._uIntensity.value = Math.max(
-      this._uIntensity.value,
-      this.AMBIENT_INTENSITY,
+    this._uIntensityDirectional.value = MathUtils.clamp(
+      this._uIntensityDirectional.value - delta * this.DECAY_RATE,
+      0,
+      this.MAX_INTENSITY,
     );
-    if (this._uIntensity.value === this.AMBIENT_INTENSITY) this.phase = "idle";
+    if (this._uIntensityDirectional.value === 0) this.phase = "idle";
   }
 
   private startPhase() {
@@ -150,7 +148,7 @@ export class WindManager {
 
   private debug() {
     const material = new MeshLambertNodeMaterial();
-    material.colorNode = vec3(this._uIntensity);
+    material.colorNode = vec3(this._uIntensityDirectional);
     const angle = atan(this._uDirection.x, this._uDirection.y.negate());
     material.positionNode = rotate(positionLocal, vec3(0, angle, 0));
     const geom = new ConeGeometry(1, 3);
@@ -167,8 +165,11 @@ export class WindManager {
   get uDirection() {
     return this._uDirection;
   }
-  get uIntensity() {
-    return this._uIntensity;
+  get uIntensityBase() {
+    return this._uIntensityBase;
+  }
+  get uIntensityDirectional() {
+    return this._uIntensityDirectional;
   }
 
   registerTarget(label: string, position: Vector3, radius: number): string {

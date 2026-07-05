@@ -3,14 +3,14 @@ import Player from "./entities/Player";
 import RevoRealm from "./realm/RevoRealm";
 import { debounce } from "lodash-es";
 import {
-  debugManager,
+  frameScheduler,
   physicsManager,
   rendererManager,
   sceneManager,
   eventsManager,
   timeManager,
+  monitoringManager,
 } from "./systems";
-import { Utils } from "./utils/Utils";
 
 export type State = {
   delta: number;
@@ -24,30 +24,12 @@ export type Sizes = {
   aspect: number;
 };
 
-const ENABLE_CAP_FPS = true;
-const AUTO_HALF_FPS_THRESHOLD = 120; // Hz
-const MAX_FRAME_DELTA_SECONDS = 1 / 15;
-
 export default class Game {
   private player: Player;
-  private readonly IS_CAP_FPS_ENABLED = import.meta.env.DEV && ENABLE_CAP_FPS;
-  private config = {
-    halvenFPS: false,
-  };
 
   constructor() {
     this.player = new Player();
     new RevoRealm();
-  }
-
-  private debugGame() {
-    const folder = debugManager.panel.addFolder({
-      title: "⚡️ Performance",
-      expanded: false,
-    });
-    folder.addBinding(this.config, "halvenFPS", {
-      label: "Halven FPS",
-    });
   }
 
   private getSizes(): Sizes {
@@ -61,51 +43,41 @@ export default class Game {
     };
   }
 
-  private async updateRefreshRate() {
-    if (!this.IS_CAP_FPS_ENABLED) return;
-    const refreshRate = await Utils.getRefreshRate();
-    this.config.halvenFPS = refreshRate > AUTO_HALF_FPS_THRESHOLD;
-  }
-
   private onResize() {
     const sizes = this.getSizes();
     eventsManager.emit("engine-render-target-resize", sizes);
-    this.updateRefreshRate();
   }
 
   async startLoop() {
-    await this.updateRefreshRate();
-    this.debugGame();
     timeManager.reset();
     const timer = new Timer();
     timer.connect(document);
 
     const state: State = { delta: 0, player: this.player };
 
-    let flip = false;
-    let pendingDelta = 0;
-
     const loop = (timestamp: DOMHighResTimeStamp) => {
       timer.update(timestamp);
-      const rawDelta = timer.getDelta();
-      const clampedDelta = Math.min(rawDelta, MAX_FRAME_DELTA_SECONDS);
-      pendingDelta += clampedDelta;
-
-      const shouldTick = this.config.halvenFPS ? (flip = !flip) : true;
-      if (!shouldTick) return;
 
       if (timeManager.isPaused) {
-        pendingDelta = 0;
+        frameScheduler.reset();
         return;
       }
 
-      state.delta = timeManager.update(pendingDelta);
-      pendingDelta = 0;
+      const frame = frameScheduler.update(timer.getDelta());
+      if (!frame.shouldTick) return;
 
+      const frameWorkStart = performance.now();
+      state.delta = timeManager.update(frame.delta);
+
+      eventsManager.emit("engine-pre-physics-update", state);
       physicsManager.update(state.delta);
+      eventsManager.emit("engine-post-physics-update", state);
       if (import.meta.env.DEV) sceneManager.update();
       eventsManager.emit("engine-update", state);
       rendererManager.renderAsync();
+      const frameWorkDuration = (performance.now() - frameWorkStart) / 1000;
+      frameScheduler.recordFrameWorkDuration(frameWorkDuration);
+      monitoringManager?.sample();
     };
 
     // resize & start

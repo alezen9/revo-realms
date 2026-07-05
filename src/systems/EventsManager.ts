@@ -17,6 +17,8 @@ type ThrottledEvents = {
 };
 
 type EngineEvents = {
+  "engine-pre-physics-update": UpdateEvent;
+  "engine-post-physics-update": UpdateEvent;
   "engine-update": UpdateEvent;
   "engine-camera-change": VoidFunction;
   "engine-render-target-resize": ResizeEvent;

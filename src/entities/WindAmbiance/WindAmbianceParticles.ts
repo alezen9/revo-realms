@@ -37,12 +37,10 @@ export const createWindParticleUniforms = () => ({
   uPlayerDeltaXZ: uniform(new Vector2(0, 0)),
   uPlayerPosition: uniform(new Vector3()),
   uDelta: uniform(0),
-  uEffectFade: uniform(0),
-  uResetAll: uniform(0),
-  uEventSeed: uniform(0),
-  uColor: uniform(new Color().setRGB(0.38, 0.43, 0.39)),
+  uColor: uniform(new Color().setRGB(0.24, 0.3, 0.27)),
   uSpeed: uniform(0.35),
   uHeight: uniform(5.5),
+  uSize: uniform(1.65),
 });
 
 type WindParticleUniforms = ReturnType<typeof createWindParticleUniforms>;
@@ -152,6 +150,8 @@ class WindParticleState {
       const row = floor(particleIndex.div(config.PARTICLES_PER_SIDE));
       const col = particleIndex.sub(row.mul(config.PARTICLES_PER_SIDE));
       const windDirection = windManager.uDirection;
+      const windIntensity = windManager.uIntensityDirectional;
+      const particleStrength = smoothstep(0, 1, windIntensity);
       const sideDirection = vec2(windDirection.y.negate(), windDirection.x);
       const wrappedPosition = VegetationSsboUtils.wrapPosition(
         vec2(data.x, data.z),
@@ -160,12 +160,12 @@ class WindParticleState {
       );
       const previousAge = data.w;
       const age = previousAge.add(
-        this.uniforms.uDelta.mul(this.uniforms.uSpeed),
+        this.uniforms.uDelta
+          .mul(this.uniforms.uSpeed)
+          .mul(mix(0.64, 1.08, particleStrength)),
       );
       const isAlive = step(0, age);
-      const particleSeed = hash(
-        particleIndex.add(this.uniforms.uEventSeed.mul(41.19)),
-      );
+      const particleSeed = hash(particleIndex.add(41.19));
       const lifetime = mix(
         config.PARTICLE_LIFETIME * 0.72,
         config.PARTICLE_LIFETIME * 1.38,
@@ -183,7 +183,8 @@ class WindParticleState {
         .mul(this.uniforms.uSpeed)
         .mul(speedVariation)
         .mul(mix(0.76, 1.22, forwardPulse))
-        .mul(mix(0.82, 1.18, windManager.uIntensity));
+        .mul(mix(0.64, 1.18, particleStrength));
+      const chaosStrength = mix(0.38, 1, particleStrength);
       const sidePhaseA = age
         .mul(mix(2.1, 5.8, hash(particleSeed.add(13.83))))
         .add(particleSeed.mul(PI2));
@@ -199,7 +200,8 @@ class WindParticleState {
         .mul(mix(4.5, 15.0, hash(particleSeed.add(19.73))))
         .add(cos(sidePhaseB).mul(mix(2.5, 11.0, hash(particleSeed.add(37.91)))))
         .add(sin(sidePhaseC).mul(mix(3.5, 13.0, hash(particleSeed.add(52.73)))))
-        .mul(this.uniforms.uSpeed);
+        .mul(this.uniforms.uSpeed)
+        .mul(chaosStrength);
       const travel = windDirection
         .mul(forwardVelocity)
         .add(sideDirection.mul(sideVelocity))
@@ -211,10 +213,7 @@ class WindParticleState {
       const outsideForward = step(config.FIELD_HALF_SIZE, abs(forwardDistance));
       const outsideSide = step(config.FIELD_HALF_SIZE, abs(sideDistance));
       const expired = step(lifetime, age);
-      const shouldRespawn = max(
-        max(max(expired, outsideForward), outsideSide),
-        this.uniforms.uResetAll,
-      );
+      const shouldRespawn = max(max(expired, outsideForward), outsideSide);
 
       data.x = nextXZ.x;
       data.z = nextXZ.y;
@@ -223,25 +222,13 @@ class WindParticleState {
       If(shouldRespawn, () => {
         const respawnForwardJitter = hash(particleSeed.add(43.13));
         const respawnSideJitter = hash(particleSeed.add(53.71));
-        const resetForwardJitter = hash(particleIndex.add(47.53));
-        const resetSideJitter = hash(particleIndex.add(61.19));
         const respawnForward = row
           .add(respawnForwardJitter)
           .div(config.PARTICLES_PER_SIDE)
           .mul(config.FIELD_HALF_SIZE * 0.82)
           .sub(config.FIELD_HALF_SIZE * 1.04);
-        const resetForward = row
-          .add(resetForwardJitter)
-          .div(config.PARTICLES_PER_SIDE)
-          .mul(config.FIELD_SIZE)
-          .sub(config.FIELD_HALF_SIZE);
         const respawnSide = col
           .add(respawnSideJitter)
-          .div(config.PARTICLES_PER_SIDE)
-          .mul(config.FIELD_SIZE)
-          .sub(config.FIELD_HALF_SIZE);
-        const resetSide = col
-          .add(resetSideJitter)
           .div(config.PARTICLES_PER_SIDE)
           .mul(config.FIELD_SIZE)
           .sub(config.FIELD_HALF_SIZE);
@@ -250,18 +237,9 @@ class WindParticleState {
         )
           .mul(config.PARTICLE_SPACING)
           .mul(1.8);
-        const finalSpawnForward = mix(
-          respawnForward,
-          resetForward,
-          this.uniforms.uResetAll,
-        );
-        const finalSpawnSide = mix(
-          respawnSide,
-          resetSide,
-          this.uniforms.uResetAll,
-        ).add(laneWarp);
+        const finalSpawnSide = respawnSide.add(laneWarp);
         const spawnXZ = windDirection
-          .mul(finalSpawnForward)
+          .mul(respawnForward)
           .add(sideDirection.mul(finalSpawnSide));
         const worldPos = vec3(spawnXZ.x, 0, spawnXZ.y).add(
           this.uniforms.uPlayerPosition,
@@ -277,14 +255,11 @@ class WindParticleState {
         const respawnAge = hash(particleSeed.add(71.91))
           .mul(config.RESPAWN_DELAY)
           .negate();
-        const resetAge = hash(particleIndex.add(79.57))
-          .mul(config.PARTICLE_LIFETIME + config.RESPAWN_DELAY)
-          .sub(config.RESPAWN_DELAY);
 
         data.x = spawnXZ.x;
         data.y = yOffset.add(height).mul(isOnGrass);
         data.z = spawnXZ.y;
-        data.w = mix(respawnAge, resetAge, this.uniforms.uResetAll);
+        data.w = respawnAge;
       });
     })().compute(config.PARTICLE_COUNT, [config.WORKGROUP_SIZE]);
   }
@@ -298,13 +273,13 @@ class WindParticleMaterial extends SpriteNodeMaterial {
     this.transparent = false;
     this.depthWrite = true;
     this.forceSinglePass = true;
-    this.alphaTest = 0.34;
+    this.alphaTest = 0.5;
 
     const data = state.computeBuffer.element(instanceIndex);
     const particleIndex = float(instanceIndex);
-    const particleSeed = hash(
-      particleIndex.add(uniforms.uEventSeed.mul(41.19)),
-    );
+    const particleSeed = hash(particleIndex.add(41.19));
+    const windIntensity = windManager.uIntensityDirectional;
+    const particleStrength = smoothstep(0, 1, windIntensity);
     const windDirection = windManager.uDirection;
     const sideDirection = vec2(windDirection.y.negate(), windDirection.x);
     const relativeXZ = data.xz;
@@ -326,10 +301,6 @@ class WindParticleMaterial extends SpriteNodeMaterial {
       config.PARTICLE_LIFETIME * 1.38,
       hash(particleSeed.add(5.17)),
     );
-    const lifeProgress = data.w.div(lifetime).clamp();
-    const lifeFade = smoothstep(0, 0.16, lifeProgress).mul(
-      float(1).sub(smoothstep(0.74, 1, lifeProgress)),
-    );
     const verticalPhaseA = data.w
       .mul(mix(2.7, 6.2, hash(particleSeed.add(83.61))))
       .add(particleSeed.mul(PI2));
@@ -349,7 +320,8 @@ class WindParticleMaterial extends SpriteNodeMaterial {
             .add(data.w.mul(mix(1.5, 3.9, hash(particleSeed.add(114.11))))),
         ).mul(mix(0.16, 0.95, hash(particleSeed.add(118.93)))),
       )
-      .mul(isAlive);
+      .mul(isAlive)
+      .mul(mix(0.38, 1, particleStrength));
     const verticalScatter = hash(particleSeed.add(121.71))
       .sub(0.5)
       .mul(uniforms.uHeight)
@@ -364,33 +336,28 @@ class WindParticleMaterial extends SpriteNodeMaterial {
     const radialDistanceSq = centeredUv.x
       .mul(centeredUv.x)
       .add(centeredUv.y.mul(centeredUv.y));
-    const edgeNoise = sin(centeredUv.x.mul(17.0).add(particleSeed.mul(PI2)))
-      .add(
-        cos(centeredUv.y.mul(19.0).add(hash(particleSeed.add(3.7)).mul(PI2))),
-      )
-      .mul(0.055);
-    const particleMask = float(1).sub(
-      smoothstep(0.52, 0.84, radialDistanceSq.add(edgeNoise)),
-    );
+    const particleMask = step(radialDistanceSq, 0.64);
     const sizeRandom = hash(particleSeed.add(127.31));
-    const smallParticleSize = mix(0.012, 0.052, sizeRandom);
-    const largeParticleSize = mix(0.06, 0.09, hash(particleSeed.add(129.43)));
+    const smallParticleSize = mix(0.024, 0.054, sizeRandom);
+    const largeParticleSize = mix(0.058, 0.084, hash(particleSeed.add(129.43)));
     const particleSize = mix(
       smallParticleSize,
       largeParticleSize,
       step(0.72, sizeRandom),
-    );
-    const visibility = isAlive
+    ).mul(uniforms.uSize);
+    const lifeVisibility = float(1).sub(step(lifetime, data.w));
+    const fieldVisibility = step(0.001, fieldFade);
+    const scale = isAlive
       .mul(isOnGrass)
-      .mul(lifeFade)
-      .mul(fieldFade)
-      .mul(uniforms.uEffectFade);
-    const colorVariation = mix(0.62, 0.92, hash(particleSeed.add(131.83)));
+      .mul(lifeVisibility)
+      .mul(fieldVisibility)
+      .mul(particleStrength);
+    const colorVariation = mix(0.48, 0.72, hash(particleSeed.add(131.83)));
 
     this.positionNode = vec3(data.x, visibleY, data.z);
-    this.scaleNode = particleSize.mul(visibility);
+    this.scaleNode = particleSize.mul(scale);
     this.colorNode = uniforms.uColor.mul(colorVariation);
-    this.opacityNode = particleMask.mul(isAlive).mul(isOnGrass);
+    this.opacityNode = particleMask;
   }
 }
 
@@ -418,24 +385,18 @@ export default class WindAmbianceParticles {
     this.mesh.position.copy(playerPosition);
   }
 
-  setVisible(isVisible: boolean) {
-    this.mesh.visible = isVisible;
-    if (isVisible) {
-      if (this.mesh.parent !== sceneManager.scene) sceneManager.scene.add(this.mesh);
-      return;
-    }
-
-    if (this.mesh.parent) sceneManager.scene.remove(this.mesh);
+  show() {
+    this.mesh.visible = true;
+    if (this.mesh.parent !== sceneManager.scene)
+      sceneManager.scene.add(this.mesh);
   }
 
   async preparePrewarmAsync() {
-    this.setVisible(true);
+    this.show();
     await this.update();
   }
 
-  restorePrewarm() {
-    this.setVisible(false);
-  }
+  restorePrewarm() {}
 
   update() {
     return rendererManager.renderer.computeAsync(this.state.updateNode);

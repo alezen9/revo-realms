@@ -24,7 +24,7 @@ export default class Grass {
     this.mesh = this.createMesh();
     sceneManager.scene.add(this.mesh);
 
-    eventsManager.on("engine-update-throttle-4x", this.onEngineUpdate);
+    eventsManager.on("engine-update-throttle-2x", this.onEngineUpdate);
     debugGrass(uniforms, config);
   }
 

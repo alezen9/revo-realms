@@ -88,7 +88,9 @@ const getConfig = () => {
 
     PLAYER_INITIAL_POSITION: new Vector3(...POSITIONS.dragonball),
     CAMERA_OFFSET: new Vector3(0, 16, 20),
-    CAMERA_LERP_FACTOR: 7.5,
+    CAMERA_POSITION_FOLLOW_SPEED_IN_INVERSE_SECONDS: 12,
+    CAMERA_TARGET_FOLLOW_SPEED_IN_INVERSE_SECONDS: 18,
+    CAMERA_ROTATION_FOLLOW_SPEED_IN_INVERSE_SECONDS: 10,
     UP: new Vector3(0, 1, 0),
     DOWN: new Vector3(0, -1, 0),
     FORWARD: new Vector3(0, 0, -1),
@@ -113,6 +115,8 @@ export default class Player {
   private desiredCameraPosition = new Vector3();
   private smoothedCameraTarget = new Vector3();
   private desiredTargetPosition = new Vector3();
+  private cameraYawInRadians = 0;
+  private cameraYawQuaternion = new Quaternion();
 
   private yawInRadians = 0;
   private yawQuaternion = new Quaternion();
@@ -177,7 +181,14 @@ export default class Player {
     this.targetQuaternion.copy(this.prevQuaternion);
     this.previousVelocity.copy(this.rigidBody.linvel());
 
-    eventsManager.on("engine-update", this.update.bind(this));
+    eventsManager.on(
+      "engine-pre-physics-update",
+      this.updateBeforePhysics.bind(this),
+    );
+    eventsManager.on(
+      "engine-post-physics-update",
+      this.updateAfterPhysics.bind(this),
+    );
     eventsManager.on(
       "engine-update-throttle-64x",
       this.resetPlayerPosition.bind(this),
@@ -220,7 +231,7 @@ export default class Player {
       .setActiveEvents(ActiveEvents.COLLISION_EVENTS);
   }
 
-  private update(state: State) {
+  private updateBeforePhysics(state: State) {
     const { delta } = state;
 
     this.updateWaterState(delta);
@@ -231,6 +242,11 @@ export default class Player {
     this.updateVerticalMovement(delta);
     this.updateHorizontalMovement(delta);
     this.updateSquashState(delta, wasOnGround);
+  }
+
+  private updateAfterPhysics(state: State) {
+    const { delta } = state;
+
     this.syncMeshWithBody(delta);
     this.updateCameraPosition(delta);
   }
@@ -597,15 +613,17 @@ export default class Player {
       this.targetQuaternion.copy(this.rigidBody.rotation());
     }
 
+    const renderAlpha = physicsManager.didStep ? 1 : physicsManager.alpha;
+
     this.visualRoot.position.lerpVectors(
       this.prevPosition,
       this.targetPosition,
-      physicsManager.alpha,
+      renderAlpha,
     );
     this.bodyQuaternion.slerpQuaternions(
       this.prevQuaternion,
       this.targetQuaternion,
-      physicsManager.alpha,
+      renderAlpha,
     );
     this.applySquashTransform(delta);
   }
@@ -625,20 +643,50 @@ export default class Player {
   }
 
   private updateCameraPosition(delta: number) {
+    this.updateCameraYaw(delta);
+
     this.desiredCameraPosition
       .copy(config.CAMERA_OFFSET)
-      .applyQuaternion(this.yawQuaternion)
+      .applyQuaternion(this.cameraYawQuaternion)
       .add(this.visualRoot.position);
 
-    const lerpFactor = config.CAMERA_LERP_FACTOR * delta;
-    this.smoothedCameraPosition.lerp(this.desiredCameraPosition, lerpFactor);
+    const positionLerpFactor =
+      1 -
+      Math.exp(
+        -config.CAMERA_POSITION_FOLLOW_SPEED_IN_INVERSE_SECONDS * delta,
+      );
+    this.smoothedCameraPosition.lerp(
+      this.desiredCameraPosition,
+      positionLerpFactor,
+    );
 
     this.desiredTargetPosition.copy(this.visualRoot.position);
     this.desiredTargetPosition.y += 1;
-    this.smoothedCameraTarget.lerp(this.desiredTargetPosition, lerpFactor);
+    const targetLerpFactor =
+      1 -
+      Math.exp(-config.CAMERA_TARGET_FOLLOW_SPEED_IN_INVERSE_SECONDS * delta);
+    this.smoothedCameraTarget.lerp(
+      this.desiredTargetPosition,
+      targetLerpFactor,
+    );
 
     sceneManager.playerCamera.position.copy(this.smoothedCameraPosition);
     sceneManager.playerCamera.lookAt(this.smoothedCameraTarget);
+  }
+
+  private updateCameraYaw(delta: number) {
+    const yawDelta = Math.atan2(
+      Math.sin(this.yawInRadians - this.cameraYawInRadians),
+      Math.cos(this.yawInRadians - this.cameraYawInRadians),
+    );
+    const rotationLerpFactor =
+      1 -
+      Math.exp(
+        -config.CAMERA_ROTATION_FOLLOW_SPEED_IN_INVERSE_SECONDS * delta,
+      );
+
+    this.cameraYawInRadians += yawDelta * rotationLerpFactor;
+    this.cameraYawQuaternion.setFromAxisAngle(config.UP, this.cameraYawInRadians);
   }
 
   private resetPlayerPosition(state: State) {
@@ -655,6 +703,8 @@ export default class Player {
     this.visualRoot.scale.set(1, 1, 1);
     this.visualRoot.quaternion.identity();
     this.mesh.quaternion.identity();
+    this.cameraYawInRadians = this.yawInRadians;
+    this.cameraYawQuaternion.setFromAxisAngle(config.UP, this.cameraYawInRadians);
     this.previousVelocity.set(0, 0, 0);
     this.squashScale.set(1, 1, 1);
     this.targetSquashScale.set(1, 1, 1);
@@ -742,6 +792,36 @@ export default class Player {
     camera.addBinding(config.CAMERA_OFFSET, "z", {
       label: "Camera distance",
     });
+    camera.addBinding(
+      config,
+      "CAMERA_POSITION_FOLLOW_SPEED_IN_INVERSE_SECONDS",
+      {
+        label: "Position follow",
+        min: 1,
+        max: 40,
+        step: 0.5,
+      },
+    );
+    camera.addBinding(
+      config,
+      "CAMERA_TARGET_FOLLOW_SPEED_IN_INVERSE_SECONDS",
+      {
+        label: "Target follow",
+        min: 1,
+        max: 50,
+        step: 0.5,
+      },
+    );
+    camera.addBinding(
+      config,
+      "CAMERA_ROTATION_FOLLOW_SPEED_IN_INVERSE_SECONDS",
+      {
+        label: "Rotation follow",
+        min: 1,
+        max: 50,
+        step: 0.5,
+      },
+    );
 
     const visuals = folder.addFolder({ title: "Visuals" });
     visuals.addBinding(config, "ACCELERATION_SQUASH_STRENGTH", {

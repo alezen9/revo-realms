@@ -351,7 +351,7 @@ class WindLineMaterial extends MeshBasicNodeMaterial {
     const lengthVariation = mix(0.68, 1.38, hash(lineIndex.add(13.73)));
     const widthVariation = mix(0.72, 1.2, hash(lineIndex.add(31.19)));
     const lineLength = mix(34, 72, lengthVariation).mul(
-      mix(0.9, 1.14, windManager.uIntensity),
+      mix(0.9, 1.14, windManager.uIntensityDirectional),
     );
     const headProgress = smoothstep(0, 0.36, lifeProgress).mul(1.18);
     const tailProgress = smoothstep(0.48, 1, lifeProgress).mul(1.18).sub(0.18);
