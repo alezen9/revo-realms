@@ -18,7 +18,7 @@
 	onMount(() => {
 		let relativeAngle = 0
 
-		const unsubscribe = eventsManager.on("engine-update-throttle-16x", ({ player }) => {
+		const unsubscribe = eventsManager.on("engine-render-update-throttle-16x", ({ player }) => {
 			const isFarX = Math.abs(player.position.x) > distanceThreshold
 			const isFarZ = Math.abs(player.position.z) > distanceThreshold
 			const isFar = isFarX || isFarZ

@@ -1,9 +1,10 @@
-const DEFAULT_TARGET_FPS = 120;
+const DEFAULT_TARGET_FPS = 60;
 const CALIBRATION_FRAME_COUNT = 61;
 const MAX_REFRESH_SAMPLE_SECONDS = 0.05;
 const REFRESH_RATES = [
   30, 48, 50, 60, 72, 75, 90, 100, 120, 144, 165, 180, 240,
 ] as const;
+const MIN_RENDER_FPS_OPTION = 30;
 
 export class FrameScheduler {
   shouldRender = false;
@@ -29,9 +30,27 @@ export class FrameScheduler {
     return this.initPromise;
   }
 
-  setTargetFps(targetFps: number) {
-    this.targetFps = targetFps;
-    if (this.isInitialized) this.updateCadence();
+  setRenderDivisor(divisor: number) {
+    this.divisor = Math.max(1, divisor);
+    this.effectiveFps = this.refreshHz / this.divisor;
+    this.targetFps = this.effectiveFps;
+    this.displayFrame = 0;
+    this.shouldRender = false;
+  }
+
+  getRenderCadences() {
+    const cadences: { divisor: number; fps: number }[] = [];
+    let divisor = 1;
+
+    while (this.refreshHz / divisor >= MIN_RENDER_FPS_OPTION) {
+      cadences.push({
+        divisor,
+        fps: this.refreshHz / divisor,
+      });
+      divisor++;
+    }
+
+    return cadences;
   }
 
   update() {
@@ -93,6 +112,7 @@ export class FrameScheduler {
   private updateCadence() {
     this.divisor = Math.max(1, Math.ceil(this.refreshHz / this.targetFps));
     this.effectiveFps = this.refreshHz / this.divisor;
+    this.targetFps = this.effectiveFps;
     this.displayFrame = 0;
     this.shouldRender = false;
   }

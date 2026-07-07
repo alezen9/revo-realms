@@ -155,6 +155,7 @@ export default class Player {
   private jumpStretchImpulse = 0;
   private landingSquashImpulse = 0;
   private impactSquashImpulse = 0;
+  private wasOnGroundBeforePhysics = false;
 
   constructor() {
     this.mesh = this.createCharacterMesh();
@@ -178,9 +179,14 @@ export default class Player {
     this.targetQuaternion.copy(this.prevQuaternion);
     this.previousVelocity.copy(this.rigidBody.linvel());
 
-    eventsManager.on("engine-update", this.update.bind(this));
     eventsManager.on(
-      "engine-update-throttle-64x",
+      "engine-before-physics",
+      this.updateBeforePhysics.bind(this),
+    );
+    eventsManager.on("engine-after-physics", this.updateAfterPhysics.bind(this));
+    eventsManager.on("engine-render-update", this.updateRender.bind(this));
+    eventsManager.on(
+      "engine-render-update-throttle-64x",
       this.resetPlayerPosition.bind(this),
     );
     this.loadWaterMask();
@@ -221,17 +227,32 @@ export default class Player {
       .setActiveEvents(ActiveEvents.COLLISION_EVENTS);
   }
 
-  private update(state: State) {
+  private updateBeforePhysics(state: State) {
     const { delta } = state;
 
     this.updateWaterState(delta);
     this.updateYaw(delta);
     this.updateYawQuaternion();
 
-    const wasOnGround = this.isOnGround;
+    this.wasOnGroundBeforePhysics = this.isOnGround;
     this.updateVerticalMovement(delta);
     this.updateHorizontalMovement(delta);
-    this.updateSquashState(delta, wasOnGround);
+  }
+
+  private updateAfterPhysics(state: State) {
+    const { delta } = state;
+
+    if (physicsScheduler.didStep) {
+      this.isOnGround = this.groundingLockTimer === 0 && this.checkIfGrounded();
+    }
+
+    this.updateSquashState(delta, this.wasOnGroundBeforePhysics);
+    this.capturePhysicsTarget();
+  }
+
+  private updateRender(state: State) {
+    const { delta } = state;
+
     this.syncMeshWithBody(delta);
     this.updateCameraPosition(delta);
   }
@@ -590,14 +611,16 @@ export default class Player {
     this.impactSquashImpulse *= decay;
   }
 
-  private syncMeshWithBody(delta: number) {
+  private capturePhysicsTarget() {
     if (physicsScheduler.didStep) {
       this.prevPosition.copy(this.targetPosition);
       this.prevQuaternion.copy(this.targetQuaternion);
       this.targetPosition.copy(this.rigidBody.translation());
       this.targetQuaternion.copy(this.rigidBody.rotation());
     }
+  }
 
+  private syncMeshWithBody(delta: number) {
     this.visualRoot.position.lerpVectors(
       this.prevPosition,
       this.targetPosition,

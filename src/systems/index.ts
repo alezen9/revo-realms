@@ -39,7 +39,7 @@ const init = () => {
     audioManager,
     debugManager,
   );
-  const physicsScheduler = new PhysicsScheduler(eventsManager, physicsManager);
+  const physicsScheduler = new PhysicsScheduler();
   const monitoringManager = createMonitoringManager(
     eventsManager,
     rendererManager,

@@ -41,12 +41,14 @@ export class MonitoringManager {
       this.emitSnapshot,
       SNAPSHOT_INTERVAL_MS,
     );
+    this.eventsManager.on("engine-after-physics", () => {
+      this.physicsStepCount++;
+    });
     import.meta.hot?.dispose(this.dispose);
   }
 
   sample(renderTimestamp: DOMHighResTimeStamp) {
     this.frameCount++;
-    this.physicsStepCount += this.physicsScheduler.steps;
 
     this.targetFps = this.frameScheduler.targetFps;
     this.effectiveFps = this.frameScheduler.effectiveFps;

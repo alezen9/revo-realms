@@ -369,7 +369,7 @@ class OuterTerrain {
     this.kintoun = this.createKintoun();
     sceneManager.scene.add(this.outerFloor);
 
-    eventsManager.on("engine-update", this.update.bind(this));
+    eventsManager.on("engine-render-update", this.update.bind(this));
   }
 
   private createOuterFloorVisual() {

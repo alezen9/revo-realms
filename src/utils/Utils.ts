@@ -42,7 +42,7 @@ export class Utils {
    * Call only once
    */
   static init() {
-    eventsManager.on("engine-update-throttle-16x", () => {
+    eventsManager.on("engine-render-update-throttle-16x", () => {
       this.projScreenMatrix.multiplyMatrices(
         sceneManager.playerCamera.projectionMatrix,
         sceneManager.playerCamera.matrixWorldInverse,

@@ -31,7 +31,7 @@ export default class WindAmbiance {
 
   constructor() {
     this.registerPrewarmTasks();
-    eventsManager.on("engine-update", this.onEngineUpdate);
+    eventsManager.on("engine-render-update", this.onEngineUpdate);
     this.debug();
   }
 

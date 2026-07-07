@@ -205,17 +205,16 @@ export class PhysicsManager {
     this.updateDynamicDebugMesh();
   }
 
-  step(timestep: number) {
+  step() {
     if (!this.world) return false;
-    if (this.world.timestep !== timestep) this.world.timestep = timestep;
     this.world.step(this.eventQueue);
     return true;
   }
 
-  completeStepBatch(didStep: boolean) {
+  completeStep() {
     if (!this.world) return;
 
-    this.didStep = didStep;
+    this.didStep = true;
     this.updateDebug();
 
     if (this.audioManager.isReady) this.handleCollisionSounds();

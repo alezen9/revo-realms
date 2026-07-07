@@ -91,7 +91,7 @@ export class RendererManager {
     this.renderScene();
   }
 
-  async renderAsync() {
+  render() {
     this.renderScene();
   }
 }

@@ -38,11 +38,13 @@ const throttleLanes = [
 
 type ThrottleInterval = (typeof throttleLanes)[number]["interval"];
 type ThrottledEvents = {
-  [T in ThrottleInterval as `engine-update-throttle-${T}x`]: UpdateEvent;
+  [T in ThrottleInterval as `engine-render-update-throttle-${T}x`]: UpdateEvent;
 };
 
 type EngineEvents = {
-  "engine-update": UpdateEvent;
+  "engine-before-physics": UpdateEvent;
+  "engine-after-physics": UpdateEvent;
+  "engine-render-update": UpdateEvent;
   "engine-camera-change": VoidFunction;
   "engine-render-target-resize": ResizeEvent;
   "engine-loading-resources-progress": (percentage: number) => void;
@@ -88,7 +90,7 @@ export class EventsManager {
   }
 
   private updateThrottled() {
-    this.on("engine-update", ({ player, delta }) => {
+    this.on("engine-render-update", ({ player, delta }) => {
       this.frameIndex++;
 
       for (const lane of throttleLanes) {
@@ -101,7 +103,7 @@ export class EventsManager {
         if (!canEmit) continue;
         if ((this.frameIndex - offset) % interval !== 0) continue;
 
-        this.emit(`engine-update-throttle-${interval}x`, {
+        this.emit(`engine-render-update-throttle-${interval}x`, {
           player,
           delta: accDelta,
         } as State);
