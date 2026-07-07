@@ -22,13 +22,12 @@ const init = () => {
   const frameScheduler = new FrameScheduler();
   const sceneManager = new SceneManager(eventsManager);
   const debugManager = createDebugManager();
-  const monitoringManager = createMonitoringManager();
+  const monitoringManager = createMonitoringManager(eventsManager);
 
   const rendererManager = new RendererManager(
     sceneManager,
     debugManager,
     eventsManager,
-    monitoringManager,
   );
   const prewarmManager = new PrewarmManager(rendererManager, sceneManager);
   const assetManager = new AssetManager(eventsManager);
@@ -58,6 +57,7 @@ const init = () => {
     lightingManager,
     sceneManager,
     rendererManager,
+    monitoringManager,
     prewarmManager,
     assetManager,
     audioManager,
@@ -77,6 +77,7 @@ export const {
   lightingManager,
   sceneManager,
   rendererManager,
+  monitoringManager,
   prewarmManager,
   assetManager,
   audioManager,

@@ -2,6 +2,7 @@
 	import Compass from "./components/Compass.svelte"
 	import KeyboardHints from "./components/KeyboardHints.svelte"
 	import LoadingScreen from "./components/LoadingScreen.svelte"
+	import MonitoringPanel from "./components/MonitoringPanel.svelte"
 	import Toggles from "./components/Toggles.svelte"
 	import WindIcon from "./components/WindIcon.svelte"
 	import RadialMenu from "./components/RadialMenu.svelte"
@@ -14,6 +15,7 @@
 
 <div class="ui-root">
 	<Toggles />
+	<MonitoringPanel />
 	<WipBadge />
 	<Compass />
 	<KeyboardHints />

@@ -34,10 +34,6 @@ body {
   left: 0.5rem;
 }
 
-body:has(.monitoring-panel) .debug-panel {
-  left: 110px;
-}
-
 hr {
   border: 0.1px solid;
   border-color: #d4d3d34e;

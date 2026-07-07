@@ -8,15 +8,6 @@ import type { SceneManager } from "../SceneManager";
 const ENABLE_DEBUGGING = true;
 const IS_DEBUGGING_ENABLED = import.meta.env.DEV && ENABLE_DEBUGGING;
 
-type MonitoringManagerLike = {
-  attach?: () => void;
-  stats: {
-    init: (renderer: WebGPURenderer) => Promise<void>;
-    update: () => void;
-  };
-  updateCustomPanels: (rendererManager: RendererManager) => void;
-};
-
 type ShadowMapWithTransmission = WebGPURenderer["shadowMap"] & {
   transmitted: boolean;
 };
@@ -27,22 +18,17 @@ export class RendererManager {
   private sceneManager: SceneManager;
   private debugManager: DebugManager;
   private eventsManager: EventsManager;
-  private monitoringManager?: MonitoringManagerLike;
   private postprocessingManager!: PostprocessingManager;
-  private readonly isMonitoringEnabled: boolean;
   private readonly IS_POSTPROCESSING_ENABLED = true;
 
   constructor(
     sceneManager: SceneManager,
     debugManager: DebugManager,
     eventsManager: EventsManager,
-    monitoringManager?: MonitoringManagerLike,
   ) {
     this.sceneManager = sceneManager;
     this.debugManager = debugManager;
     this.eventsManager = eventsManager;
-    this.monitoringManager = monitoringManager;
-    this.isMonitoringEnabled = !!monitoringManager;
     const canvas = document.createElement("canvas");
     canvas.classList.add("revo-realms");
     document.body.appendChild(canvas);
@@ -85,10 +71,6 @@ export class RendererManager {
       this.eventsManager,
       this.debugManager,
     );
-    if (this.isMonitoringEnabled && this.monitoringManager) {
-      this.monitoringManager.attach?.();
-      await this.monitoringManager.stats.init(this.renderer);
-    }
   }
 
   private renderScene() {
@@ -111,20 +93,7 @@ export class RendererManager {
     this.renderScene();
   }
 
-  private renderWithMonitoring() {
-    const monitoringManager = this.monitoringManager;
-    if (!monitoringManager) return;
-    this.renderScene();
-    monitoringManager.updateCustomPanels(this);
-    monitoringManager.stats.update();
-  }
-
-  private renderWithoutMonitoring() {
-    this.renderScene();
-  }
-
   async renderAsync() {
-    if (this.isMonitoringEnabled) this.renderWithMonitoring();
-    else this.renderWithoutMonitoring();
+    this.renderScene();
   }
 }

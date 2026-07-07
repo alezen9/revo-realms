@@ -4,6 +4,7 @@ import RevoRealm from "./realm/RevoRealm";
 import { debounce } from "lodash-es";
 import {
   debugManager,
+  monitoringManager,
   physicsScheduler,
   rendererManager,
   sceneManager,
@@ -101,6 +102,11 @@ export default class Game {
       if (import.meta.env.DEV) sceneManager.update();
       eventsManager.emit("engine-update", state);
       rendererManager.renderAsync();
+      monitoringManager?.sample({
+        rendererManager,
+        frameScheduler,
+        physicsScheduler,
+      });
     };
 
     // resize & start

@@ -1,91 +1,123 @@
-import Stats from "stats-gl";
+import type { FrameScheduler } from "../FrameScheduler";
+import type { PhysicsScheduler } from "../PhysicsScheduler";
+import type { EventsManager, MonitoringSnapshot } from "../EventsManager";
 import { type RendererManager } from "./RendererManager";
 
+const SNAPSHOT_INTERVAL_MS = 1000;
+
+type MonitoringSample = {
+  rendererManager: RendererManager;
+  frameScheduler: FrameScheduler;
+  physicsScheduler: PhysicsScheduler;
+};
+
 export class MonitoringManager {
-  stats: Stats;
-  private lastSecond = performance.now();
+  private eventsManager: EventsManager;
+  private lastSnapshotUpdate = performance.now();
+  private lastSampleTime = 0;
+  private frameCount = 0;
+  private physicsStepCount = 0;
+  private frameMsSum = 0;
+  private frameMsCount = 0;
+  private currentFrameMs = 0;
+  private targetFps = 0;
+  private effectiveFps = 0;
+  private refreshHz = 0;
+  private divisor = 1;
+  private alpha = 0;
+  private drawCalls = 0;
+  private triangles = 0;
   private enabled: boolean;
+  private snapshotInterval?: ReturnType<typeof window.setInterval>;
 
-  private drawCallsPanel?: ReturnType<typeof this.createNumberPanel>;
-  private trianglesPanel?: ReturnType<typeof this.createNumberPanel>;
-  constructor(enabled: boolean) {
+  constructor(eventsManager: EventsManager, enabled: boolean) {
+    this.eventsManager = eventsManager;
     this.enabled = enabled;
-    const stats = new Stats({
-      trackGPU: false,
-      logsPerSecond: 4,
-      graphsPerSecond: 30,
-      samplesLog: 40,
-      samplesGraph: 10,
-      horizontal: false,
-      precision: 2,
-    });
-    stats.dom.classList.add("monitoring-panel");
-    this.stats = stats;
-    this.attach();
-    this.drawCallsPanel = this.createNumberPanel(
-      "# DRAW CALLS",
-      "#fff",
-      "#333",
-    );
-    this.trianglesPanel = this.createNumberPanel(
-      "# TRIANGLES",
-      "#ffdab9",
-      "#163843",
-    );
+    if (this.enabled) {
+      this.snapshotInterval = window.setInterval(
+        this.emitSnapshot,
+        SNAPSHOT_INTERVAL_MS,
+      );
+      import.meta.hot?.dispose(this.dispose);
+    }
   }
 
-  attach() {
-    if (!this.enabled || this.stats.dom.isConnected || !document.body) return;
-    document.body.appendChild(this.stats.dom);
+  sample(sample: MonitoringSample) {
+    const { rendererManager, frameScheduler, physicsScheduler } = sample;
+    const now = performance.now();
+
+    this.frameCount++;
+    this.physicsStepCount += physicsScheduler.steps;
+
+    if (this.lastSampleTime > 0) {
+      this.currentFrameMs = now - this.lastSampleTime;
+      this.frameMsSum += this.currentFrameMs;
+      this.frameMsCount++;
+    }
+    this.lastSampleTime = now;
+
+    this.targetFps = frameScheduler.targetFps;
+    this.effectiveFps = frameScheduler.effectiveFps;
+    this.refreshHz = frameScheduler.refreshHz;
+    this.divisor = frameScheduler.divisor;
+    this.alpha = physicsScheduler.alpha;
+
+    const { render } = rendererManager.renderer.info;
+    this.drawCalls = render.drawCalls;
+    this.triangles = render.triangles;
   }
 
-  private createNumberPanel(name: string, fg: string, bg: string) {
-    const panel = this.stats.addPanel(new Stats.Panel(name, fg, bg));
+  private emitSnapshot = () => {
+    if (!this.enabled) return;
+    const now = performance.now();
+    const elapsedMs = now - this.lastSnapshotUpdate;
+    if (this.frameCount === 0) {
+      this.lastSnapshotUpdate = now;
+      return;
+    }
 
-    panel.update = (value) => {
-      const ctx = panel.canvas.getContext("2d");
-      if (!ctx) return;
+    const elapsedSeconds = elapsedMs / 1000;
+    const currentFps = this.frameCount / elapsedSeconds;
+    const averageFrameMs =
+      this.frameMsCount > 0 ? this.frameMsSum / this.frameMsCount : 0;
+    const physicsRate = this.physicsStepCount / elapsedSeconds;
 
-      const { width, height } = panel.canvas;
-
-      // Clear background
-      ctx.clearRect(0, 0, width, height);
-      ctx.fillStyle = bg;
-      ctx.fillRect(0, 0, width, height);
-      ctx.fillStyle = fg;
-
-      // Store original font (used by Stats-GL for the title)
-      const originalFont = ctx.font;
-
-      // Title (default font, positioned normally)
-      ctx.textAlign = "left";
-      ctx.textBaseline = "top";
-      ctx.fillText(panel.name, 4, 4);
-
-      // Change font for the number
-      ctx.font = "bold 20px Arial"; // Bigger font for the value
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      const v = formatter.format(value);
-      ctx.fillText(`${v}`, width / 2, height / 1.65);
-
-      // Restore original font for consistency
-      ctx.font = originalFont;
+    const snapshot: MonitoringSnapshot = {
+      fps: {
+        current: currentFps,
+        effective: this.effectiveFps,
+        target: this.targetFps,
+      },
+      frame: {
+        currentMs: this.currentFrameMs,
+        budgetMs: 1000 / this.targetFps,
+        averageMs: averageFrameMs,
+      },
+      sync: {
+        refreshHz: this.refreshHz,
+        divisor: this.divisor,
+        alpha: this.alpha,
+      },
+      physics: {
+        rate: physicsRate,
+      },
+      render: {
+        calls: this.drawCalls,
+        triangles: this.triangles,
+      },
     };
 
-    return panel;
-  }
+    this.eventsManager.emit("engine-monitoring-update", snapshot);
+    this.lastSnapshotUpdate = now;
+    this.frameCount = 0;
+    this.physicsStepCount = 0;
+    this.frameMsSum = 0;
+    this.frameMsCount = 0;
+  };
 
-  updateCustomPanels(rendererManager: RendererManager) {
-    if (!this.drawCallsPanel || !this.trianglesPanel) return;
-    const now = performance.now();
-    if (now - this.lastSecond < 1000) return;
-
-    this.lastSecond = now;
-    const { render } = rendererManager.renderer.info;
-    this.drawCallsPanel.update(render.drawCalls, 0);
-    this.trianglesPanel.update(render.triangles, 0);
-  }
+  private dispose = () => {
+    if (!this.snapshotInterval) return;
+    window.clearInterval(this.snapshotInterval);
+    this.snapshotInterval = undefined;
+  };
 }
-
-const formatter = new Intl.NumberFormat("en-US", { notation: "compact" });

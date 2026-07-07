@@ -4,6 +4,31 @@ import { type Sizes, type State } from "../Game";
 type UpdateEvent = (state: State) => void;
 type ResizeEvent = (sizes: Sizes) => void;
 
+export type MonitoringSnapshot = {
+  fps: {
+    current: number;
+    effective: number;
+    target: number;
+  };
+  frame: {
+    currentMs: number;
+    budgetMs: number;
+    averageMs: number;
+  };
+  sync: {
+    refreshHz: number;
+    divisor: number;
+    alpha: number;
+  };
+  physics: {
+    rate: number;
+  };
+  render: {
+    calls: number;
+    triangles: number;
+  };
+};
+
 const throttleLanes = [
   { interval: 2, offset: 0 },
   { interval: 4, offset: 1 },
@@ -23,6 +48,7 @@ type EngineEvents = {
   "engine-loading-resources-progress": (percentage: number) => void;
   "engine-loading-audio-progress": (percentage: number) => void;
   "engine-loading-core-progress": (percentage: number) => void;
+  "engine-monitoring-update": (snapshot: MonitoringSnapshot) => void;
   "engine-time-scale": (scale: number) => void;
   "engine-pause-change": (paused: boolean) => void;
   "engine-slowmo-change": (enabled: boolean) => void;

@@ -10,6 +10,7 @@ export class PhysicsScheduler {
   private timestep = BASE_TIMESTEP;
   private accumulator = 0;
   private _didStep = false;
+  steps = 0;
 
   constructor(
     eventsManager: EventsManager,
@@ -35,17 +36,20 @@ export class PhysicsScheduler {
 
   update(delta: number) {
     this.accumulator += delta;
-    let steps = 0;
+    this.steps = 0;
 
-    while (this.accumulator >= this.timestep && steps < MAX_STEPS_PER_FRAME) {
+    while (
+      this.accumulator >= this.timestep &&
+      this.steps < MAX_STEPS_PER_FRAME
+    ) {
       const didStep = this.physicsManager.step(this.timestep);
       if (!didStep) break;
 
       this.accumulator -= this.timestep;
-      steps++;
+      this.steps++;
     }
 
-    this._didStep = steps > 0;
+    this._didStep = this.steps > 0;
     if (this.accumulator > this.timestep) this.accumulator = this.timestep;
     this.physicsManager.completeStepBatch(this._didStep);
   }
