@@ -10,7 +10,6 @@ import { LineSegments2 } from "three/examples/jsm/lines/webgpu/LineSegments2.js"
 import { LineSegmentsGeometry } from "three/examples/jsm/Addons.js";
 import { Line2NodeMaterial } from "three/webgpu";
 import type { DebugManager } from "./DebugManager";
-import type { EventsManager } from "./EventsManager";
 import type { SceneManager } from "./SceneManager";
 import type { AudioManager } from "./AudioManager";
 
@@ -24,13 +23,9 @@ const config = {
 export class PhysicsManager {
   world!: World;
   private eventQueue!: EventQueue;
-  private baseTimestep = 1 / 60; // 60Hz fixed timestep (standard for games)
-  private timeScale = 1;
-  private accumulator = 0;
-  private maxStepsPerFrame = 8; // prevent spiral of death
-  private _didStep = false;
   private audioManager: AudioManager;
   private sceneManager: SceneManager;
+  private didStep = false;
 
   private dummyVectorLinVel = new Vector3();
   private fixedDebugMesh?: LineSegments2;
@@ -39,7 +34,6 @@ export class PhysicsManager {
   private debug = { enabled: false };
 
   constructor(
-    eventsManager: EventsManager,
     sceneManager: SceneManager,
     audioManager: AudioManager,
     debugManager: DebugManager,
@@ -47,30 +41,14 @@ export class PhysicsManager {
     this.audioManager = audioManager;
     this.sceneManager = sceneManager;
     this.setupDebug(debugManager);
-    eventsManager.on("engine-time-scale", (scale) => {
-      this.setTimeScale(scale);
-    });
   }
 
   async initAsync() {
     return import("@dimforge/rapier3d").then(() => {
       this.world = new World({ x: 0, y: -9.81, z: 0 });
       this.eventQueue = new EventQueue(true);
-      this.world.timestep = this.baseTimestep;
-      this.applyTimeScale();
+      this.world.timestep = 1 / 60;
     });
-  }
-
-  setTimeScale(scale: number) {
-    this.timeScale = Math.max(0, scale);
-    this.applyTimeScale();
-  }
-
-  private applyTimeScale() {
-    if (!this.world) return;
-    if (this.timeScale === 0) return;
-    const timestep = this.baseTimestep * this.timeScale;
-    if (this.world.timestep !== timestep) this.world.timestep = timestep;
   }
 
   private setupDebug(debugManager: DebugManager) {
@@ -222,41 +200,22 @@ export class PhysicsManager {
     if (!this.debug.enabled) return;
 
     this.createFixedDebugMesh();
-    if (!this._didStep) return;
+    if (!this.didStep) return;
 
     this.updateDynamicDebugMesh();
   }
 
-  // interpolation factor (0-1) for smooth rendering between physics steps
-  get alpha() {
-    if (!this.world) return 1;
-    return this.accumulator / this.world.timestep;
+  step(timestep: number) {
+    if (!this.world) return false;
+    if (this.world.timestep !== timestep) this.world.timestep = timestep;
+    this.world.step(this.eventQueue);
+    return true;
   }
 
-  // use to update prev state
-  get didStep() {
-    return this._didStep;
-  }
-
-  update(delta: number) {
+  completeStepBatch(didStep: boolean) {
     if (!this.world) return;
 
-    // fixed timestep with accumulator
-    this.accumulator += delta;
-    const timestep = this.world.timestep;
-    let steps = 0;
-
-    while (this.accumulator >= timestep && steps < this.maxStepsPerFrame) {
-      this.world.step(this.eventQueue);
-      this.accumulator -= timestep;
-      steps++;
-    }
-
-    this._didStep = steps > 0;
-
-    // clamp accumulator to prevent buildup during long frames
-    if (this.accumulator > timestep) this.accumulator = timestep;
-
+    this.didStep = didStep;
     this.updateDebug();
 
     if (this.audioManager.isReady) this.handleCollisionSounds();

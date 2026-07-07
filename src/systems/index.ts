@@ -1,10 +1,12 @@
 import { AssetManager } from "./AssetManager/AssetManager";
 import { AudioManager } from "./AudioManager";
 import { EventsManager } from "./EventsManager";
+import { FrameScheduler } from "./FrameScheduler";
 import { InputManager } from "./InputManager";
 import { LandmarkManager } from "./LandmarkManager";
 import { LightingManager } from "./LightingManager";
 import { PhysicsManager } from "./PhysicsManager";
+import { PhysicsScheduler } from "./PhysicsScheduler";
 import { RendererManager } from "./RendererManager/RendererManager";
 import { SceneManager } from "./SceneManager";
 import { TimeManager } from "./TimeManager";
@@ -17,6 +19,7 @@ import {
 
 const init = () => {
   const eventsManager = new EventsManager();
+  const frameScheduler = new FrameScheduler();
   const sceneManager = new SceneManager(eventsManager);
   const debugManager = createDebugManager();
   const monitoringManager = createMonitoringManager();
@@ -32,11 +35,11 @@ const init = () => {
   const audioManager = new AudioManager(sceneManager, eventsManager);
   const inputManager = new InputManager(eventsManager);
   const physicsManager = new PhysicsManager(
-    eventsManager,
     sceneManager,
     audioManager,
     debugManager,
   );
+  const physicsScheduler = new PhysicsScheduler(eventsManager, physicsManager);
   const timeManager = new TimeManager(
     eventsManager,
     inputManager,
@@ -51,6 +54,7 @@ const init = () => {
   const windManager = new WindManager(eventsManager, sceneManager);
   return {
     eventsManager,
+    frameScheduler,
     lightingManager,
     sceneManager,
     rendererManager,
@@ -60,6 +64,7 @@ const init = () => {
     debugManager,
     inputManager,
     physicsManager,
+    physicsScheduler,
     timeManager,
     landmarkManager,
     windManager,
@@ -68,6 +73,7 @@ const init = () => {
 
 export const {
   eventsManager,
+  frameScheduler,
   lightingManager,
   sceneManager,
   rendererManager,
@@ -77,6 +83,7 @@ export const {
   debugManager,
   inputManager,
   physicsManager,
+  physicsScheduler,
   timeManager,
   landmarkManager,
   windManager,

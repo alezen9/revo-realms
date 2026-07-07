@@ -27,6 +27,7 @@ import {
   inputManager,
   lightingManager,
   physicsManager,
+  physicsScheduler,
   sceneManager,
 } from "../systems";
 import { TSLUtils } from "../utils/TSLUtils";
@@ -590,7 +591,7 @@ export default class Player {
   }
 
   private syncMeshWithBody(delta: number) {
-    if (physicsManager.didStep) {
+    if (physicsScheduler.didStep) {
       this.prevPosition.copy(this.targetPosition);
       this.prevQuaternion.copy(this.targetQuaternion);
       this.targetPosition.copy(this.rigidBody.translation());
@@ -600,12 +601,12 @@ export default class Player {
     this.visualRoot.position.lerpVectors(
       this.prevPosition,
       this.targetPosition,
-      physicsManager.alpha,
+      physicsScheduler.alpha,
     );
     this.bodyQuaternion.slerpQuaternions(
       this.prevQuaternion,
       this.targetQuaternion,
-      physicsManager.alpha,
+      physicsScheduler.alpha,
     );
     this.applySquashTransform(delta);
   }

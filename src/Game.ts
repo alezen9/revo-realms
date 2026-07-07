@@ -4,13 +4,13 @@ import RevoRealm from "./realm/RevoRealm";
 import { debounce } from "lodash-es";
 import {
   debugManager,
-  physicsManager,
+  physicsScheduler,
   rendererManager,
   sceneManager,
   eventsManager,
   timeManager,
+  frameScheduler,
 } from "./systems";
-import { Utils } from "./utils/Utils";
 
 export type State = {
   delta: number;
@@ -24,15 +24,12 @@ export type Sizes = {
   aspect: number;
 };
 
-const ENABLE_CAP_FPS = true;
-const AUTO_HALF_FPS_THRESHOLD = 120; // Hz
 const MAX_FRAME_DELTA_SECONDS = 1 / 15;
 
 export default class Game {
   private player: Player;
-  private readonly IS_CAP_FPS_ENABLED = import.meta.env.DEV && ENABLE_CAP_FPS;
   private config = {
-    halvenFPS: false,
+    targetFps: 120,
   };
 
   constructor() {
@@ -45,9 +42,15 @@ export default class Game {
       title: "⚡️ Performance",
       expanded: false,
     });
-    folder.addBinding(this.config, "halvenFPS", {
-      label: "Halven FPS",
-    });
+    folder
+      .addBinding(this.config, "targetFps", {
+        label: "Target FPS",
+        options: {
+          "60": 60,
+          "120": 120,
+        },
+      })
+      .on("change", ({ value }) => frameScheduler.setTargetFps(value));
   }
 
   private getSizes(): Sizes {
@@ -61,20 +64,13 @@ export default class Game {
     };
   }
 
-  private async updateRefreshRate() {
-    if (!this.IS_CAP_FPS_ENABLED) return;
-    const refreshRate = await Utils.getRefreshRate();
-    this.config.halvenFPS = refreshRate > AUTO_HALF_FPS_THRESHOLD;
-  }
-
   private onResize() {
     const sizes = this.getSizes();
     eventsManager.emit("engine-render-target-resize", sizes);
-    this.updateRefreshRate();
   }
 
   async startLoop() {
-    await this.updateRefreshRate();
+    await frameScheduler.initAsync(this.config.targetFps);
     this.debugGame();
     timeManager.reset();
     const timer = new Timer();
@@ -82,7 +78,6 @@ export default class Game {
 
     const state: State = { delta: 0, player: this.player };
 
-    let flip = false;
     let pendingDelta = 0;
 
     const loop = (timestamp: DOMHighResTimeStamp) => {
@@ -91,8 +86,8 @@ export default class Game {
       const clampedDelta = Math.min(rawDelta, MAX_FRAME_DELTA_SECONDS);
       pendingDelta += clampedDelta;
 
-      const shouldTick = this.config.halvenFPS ? (flip = !flip) : true;
-      if (!shouldTick) return;
+      frameScheduler.update();
+      if (!frameScheduler.shouldRender) return;
 
       if (timeManager.isPaused) {
         pendingDelta = 0;
@@ -102,7 +97,7 @@ export default class Game {
       state.delta = timeManager.update(pendingDelta);
       pendingDelta = 0;
 
-      physicsManager.update(state.delta);
+      physicsScheduler.update(state.delta);
       if (import.meta.env.DEV) sceneManager.update();
       eventsManager.emit("engine-update", state);
       rendererManager.renderAsync();

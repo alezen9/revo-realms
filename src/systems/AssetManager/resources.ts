@@ -61,7 +61,7 @@ import noiseAtlasUrl from "/textures/new-world/noise/noise_atlas.ktx2?url";
 // import shadowMapUrl from "/textures/new-world/terrain/shadow-map.png?url";
 
 // prod
-import grassMapUrl from "/textures/new-world/terrain/grass-map.webp?url";
+import grassMapUrl from "/textures/new-world/terrain/grass-map.png?url";
 import waterMapUrl from "/textures/new-world/terrain/water-map.webp?url";
 import shadowMapUrl from "/textures/new-world/terrain/shadow-map.webp?url";
 
