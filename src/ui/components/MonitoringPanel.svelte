@@ -68,7 +68,7 @@
 		const unsubscribe = eventsManager.on("engine-monitoring-update", value => {
 			snapshot = value
 			fpsTrace = addTraceValue(fpsTrace, value.fps.current)
-			frameTrace = addTraceValue(frameTrace, value.frame.currentMs)
+			frameTrace = addTraceValue(frameTrace, value.frame.averageMs)
 		})
 
 		return () => {
@@ -110,16 +110,16 @@
 		<div class="row">
 			<span class="category">FRAME</span>
 			<span class="metric">
-				<span class="metric-label">Current</span>
-				<span class="metric-value">{formatDecimal(snapshot.frame.currentMs, 2)} ms</span>
+				<span class="metric-label">Average</span>
+				<span class="metric-value">{formatDecimal(snapshot.frame.averageMs, 2)} ms</span>
 			</span>
 			<span class="metric">
 				<span class="metric-label">Budget</span>
 				<span class="metric-value">{formatDecimal(snapshot.frame.budgetMs, 2)} ms</span>
 			</span>
 			<span class="metric">
-				<span class="metric-label">Average</span>
-				<span class="metric-value">{formatDecimal(snapshot.frame.averageMs, 2)} ms</span>
+				<span class="metric-label">Late</span>
+				<span class="metric-value">{snapshot.frame.lateFrames}</span>
 			</span>
 			<span class="metric">
 				<span class="trace trace-full">
@@ -266,8 +266,8 @@
 	}
 
 	.trace i {
-		flex: 1 1 0;
-		width: auto;
+		flex: 0 0 0.34rem;
+		width: 0.34rem;
 		height: var(--height);
 		min-height: 1px;
 		border-radius: 1px 1px 0 0;

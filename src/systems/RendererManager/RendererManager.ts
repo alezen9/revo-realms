@@ -5,9 +5,6 @@ import { type DebugManager } from "../DebugManager";
 import { type EventsManager } from "../EventsManager";
 import type { SceneManager } from "../SceneManager";
 
-const ENABLE_DEBUGGING = true;
-const IS_DEBUGGING_ENABLED = import.meta.env.DEV && ENABLE_DEBUGGING;
-
 type ShadowMapWithTransmission = WebGPURenderer["shadowMap"] & {
   transmitted: boolean;
 };
@@ -25,6 +22,7 @@ export class RendererManager {
     sceneManager: SceneManager,
     debugManager: DebugManager,
     eventsManager: EventsManager,
+    isDebugEnabled: boolean,
   ) {
     this.sceneManager = sceneManager;
     this.debugManager = debugManager;
@@ -49,7 +47,7 @@ export class RendererManager {
 
     renderer.toneMappingExposure = 1.5;
     this.renderer = renderer;
-    this.debugManager.setVisibility(IS_DEBUGGING_ENABLED);
+    this.debugManager.setVisibility(isDebugEnabled);
 
     this.eventsManager.on("engine-render-target-resize", (sizes) => {
       // reduce dpr to 85% if postprocessing enabled, min dpr = 1

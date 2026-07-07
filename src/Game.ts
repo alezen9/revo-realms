@@ -99,14 +99,12 @@ export default class Game {
       pendingDelta = 0;
 
       physicsScheduler.update(state.delta);
+
       if (import.meta.env.DEV) sceneManager.update();
       eventsManager.emit("engine-update", state);
       rendererManager.renderAsync();
-      monitoringManager?.sample({
-        rendererManager,
-        frameScheduler,
-        physicsScheduler,
-      });
+
+      monitoringManager?.sample(timestamp);
     };
 
     // resize & start

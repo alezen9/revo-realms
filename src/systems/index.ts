@@ -15,6 +15,7 @@ import { PrewarmManager } from "./PrewarmManager";
 import {
   createDebugManager,
   createMonitoringManager,
+  TOOLING_FLAGS,
 } from "@systems-tooling-runtime";
 
 const init = () => {
@@ -22,12 +23,12 @@ const init = () => {
   const frameScheduler = new FrameScheduler();
   const sceneManager = new SceneManager(eventsManager);
   const debugManager = createDebugManager();
-  const monitoringManager = createMonitoringManager(eventsManager);
 
   const rendererManager = new RendererManager(
     sceneManager,
     debugManager,
     eventsManager,
+    TOOLING_FLAGS.debug,
   );
   const prewarmManager = new PrewarmManager(rendererManager, sceneManager);
   const assetManager = new AssetManager(eventsManager);
@@ -39,6 +40,12 @@ const init = () => {
     debugManager,
   );
   const physicsScheduler = new PhysicsScheduler(eventsManager, physicsManager);
+  const monitoringManager = createMonitoringManager(
+    eventsManager,
+    rendererManager,
+    frameScheduler,
+    physicsScheduler,
+  );
   const timeManager = new TimeManager(
     eventsManager,
     inputManager,

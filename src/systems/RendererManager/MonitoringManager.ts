@@ -4,22 +4,20 @@ import type { EventsManager, MonitoringSnapshot } from "../EventsManager";
 import { type RendererManager } from "./RendererManager";
 
 const SNAPSHOT_INTERVAL_MS = 1000;
-
-type MonitoringSample = {
-  rendererManager: RendererManager;
-  frameScheduler: FrameScheduler;
-  physicsScheduler: PhysicsScheduler;
-};
+const LATE_FRAME_TOLERANCE_MS = 1;
 
 export class MonitoringManager {
   private eventsManager: EventsManager;
+  private rendererManager: RendererManager;
+  private frameScheduler: FrameScheduler;
+  private physicsScheduler: PhysicsScheduler;
   private lastSnapshotUpdate = performance.now();
-  private lastSampleTime = 0;
+  private lastRenderSampleTime = 0;
   private frameCount = 0;
   private physicsStepCount = 0;
   private frameMsSum = 0;
   private frameMsCount = 0;
-  private currentFrameMs = 0;
+  private lateFrames = 0;
   private targetFps = 0;
   private effectiveFps = 0;
   private refreshHz = 0;
@@ -27,48 +25,51 @@ export class MonitoringManager {
   private alpha = 0;
   private drawCalls = 0;
   private triangles = 0;
-  private enabled: boolean;
   private snapshotInterval?: ReturnType<typeof window.setInterval>;
 
-  constructor(eventsManager: EventsManager, enabled: boolean) {
+  constructor(
+    eventsManager: EventsManager,
+    rendererManager: RendererManager,
+    frameScheduler: FrameScheduler,
+    physicsScheduler: PhysicsScheduler,
+  ) {
     this.eventsManager = eventsManager;
-    this.enabled = enabled;
-    if (this.enabled) {
-      this.snapshotInterval = window.setInterval(
-        this.emitSnapshot,
-        SNAPSHOT_INTERVAL_MS,
-      );
-      import.meta.hot?.dispose(this.dispose);
-    }
+    this.rendererManager = rendererManager;
+    this.frameScheduler = frameScheduler;
+    this.physicsScheduler = physicsScheduler;
+    this.snapshotInterval = window.setInterval(
+      this.emitSnapshot,
+      SNAPSHOT_INTERVAL_MS,
+    );
+    import.meta.hot?.dispose(this.dispose);
   }
 
-  sample(sample: MonitoringSample) {
-    const { rendererManager, frameScheduler, physicsScheduler } = sample;
-    const now = performance.now();
-
+  sample(renderTimestamp: DOMHighResTimeStamp) {
     this.frameCount++;
-    this.physicsStepCount += physicsScheduler.steps;
+    this.physicsStepCount += this.physicsScheduler.steps;
 
-    if (this.lastSampleTime > 0) {
-      this.currentFrameMs = now - this.lastSampleTime;
-      this.frameMsSum += this.currentFrameMs;
+    this.targetFps = this.frameScheduler.targetFps;
+    this.effectiveFps = this.frameScheduler.effectiveFps;
+    this.refreshHz = this.frameScheduler.refreshHz;
+    this.divisor = this.frameScheduler.divisor;
+    this.alpha = this.physicsScheduler.alpha;
+
+    const budgetMs = 1000 / this.effectiveFps;
+    if (this.lastRenderSampleTime > 0) {
+      const frameIntervalMs = renderTimestamp - this.lastRenderSampleTime;
+      this.frameMsSum += frameIntervalMs;
       this.frameMsCount++;
+      if (frameIntervalMs > budgetMs + LATE_FRAME_TOLERANCE_MS)
+        this.lateFrames++;
     }
-    this.lastSampleTime = now;
+    this.lastRenderSampleTime = renderTimestamp;
 
-    this.targetFps = frameScheduler.targetFps;
-    this.effectiveFps = frameScheduler.effectiveFps;
-    this.refreshHz = frameScheduler.refreshHz;
-    this.divisor = frameScheduler.divisor;
-    this.alpha = physicsScheduler.alpha;
-
-    const { render } = rendererManager.renderer.info;
+    const { render } = this.rendererManager.renderer.info;
     this.drawCalls = render.drawCalls;
     this.triangles = render.triangles;
   }
 
   private emitSnapshot = () => {
-    if (!this.enabled) return;
     const now = performance.now();
     const elapsedMs = now - this.lastSnapshotUpdate;
     if (this.frameCount === 0) {
@@ -89,9 +90,9 @@ export class MonitoringManager {
         target: this.targetFps,
       },
       frame: {
-        currentMs: this.currentFrameMs,
-        budgetMs: 1000 / this.targetFps,
+        budgetMs: 1000 / this.effectiveFps,
         averageMs: averageFrameMs,
+        lateFrames: this.lateFrames,
       },
       sync: {
         refreshHz: this.refreshHz,
@@ -113,6 +114,7 @@ export class MonitoringManager {
     this.physicsStepCount = 0;
     this.frameMsSum = 0;
     this.frameMsCount = 0;
+    this.lateFrames = 0;
   };
 
   private dispose = () => {

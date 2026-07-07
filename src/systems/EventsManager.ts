@@ -11,9 +11,9 @@ export type MonitoringSnapshot = {
     target: number;
   };
   frame: {
-    currentMs: number;
     budgetMs: number;
     averageMs: number;
+    lateFrames: number;
   };
   sync: {
     refreshHz: number;
