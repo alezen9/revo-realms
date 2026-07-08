@@ -26,7 +26,16 @@ export type MonitoringSnapshot = {
   render: {
     calls: number;
     triangles: number;
+    grass: GrassMonitoringStats | null;
   };
+};
+
+export type GrassMonitoringStats = {
+  rendered: number;
+  total: number;
+  segments: number;
+  totalTriangles: number;
+  renderedTriangles: number;
 };
 
 const throttleLanes = [

@@ -1,10 +1,26 @@
 import type { FrameScheduler } from "../FrameScheduler";
 import type { PhysicsScheduler } from "../PhysicsScheduler";
-import type { EventsManager, MonitoringSnapshot } from "../EventsManager";
+import type {
+  EventsManager,
+  GrassMonitoringStats,
+  MonitoringSnapshot,
+} from "../EventsManager";
 import { type RendererManager } from "./RendererManager";
 
 const SNAPSHOT_INTERVAL_MS = 1000;
 const LATE_FRAME_TOLERANCE_MS = 1;
+
+type MonitoringProviders = {
+  grass: () => Promise<GrassMonitoringStats>;
+};
+
+type MonitoringProviderValues = {
+  grass: GrassMonitoringStats | null;
+};
+
+type MonitoringProviderLoading = {
+  grass: boolean;
+};
 
 export class MonitoringManager {
   private eventsManager: EventsManager;
@@ -25,6 +41,9 @@ export class MonitoringManager {
   private alpha = 0;
   private drawCalls = 0;
   private triangles = 0;
+  private providers: Partial<MonitoringProviders> = {};
+  private providerValues: MonitoringProviderValues = { grass: null };
+  private providerLoading: MonitoringProviderLoading = { grass: false };
   private snapshotInterval?: ReturnType<typeof window.setInterval>;
 
   constructor(
@@ -38,13 +57,20 @@ export class MonitoringManager {
     this.frameScheduler = frameScheduler;
     this.physicsScheduler = physicsScheduler;
     this.snapshotInterval = window.setInterval(
-      this.emitSnapshot,
+      this.onSnapshotInterval,
       SNAPSHOT_INTERVAL_MS,
     );
     this.eventsManager.on("engine-after-physics", () => {
       this.physicsStepCount++;
     });
     import.meta.hot?.dispose(this.dispose);
+  }
+
+  registerProvider<T extends keyof MonitoringProviders>(
+    name: T,
+    provider: MonitoringProviders[T],
+  ) {
+    this.providers[name] = provider;
   }
 
   sample(renderTimestamp: DOMHighResTimeStamp) {
@@ -71,7 +97,30 @@ export class MonitoringManager {
     this.triangles = render.triangles;
   }
 
-  private emitSnapshot = () => {
+  private onSnapshotInterval = () => {
+    this.refreshProviders();
+    this.emitSnapshot();
+  };
+
+  private refreshProviders() {
+    this.refreshGrassProvider();
+  }
+
+  private async refreshGrassProvider() {
+    const provider = this.providers.grass;
+    if (!provider || this.providerLoading.grass) return;
+
+    this.providerLoading.grass = true;
+    try {
+      this.providerValues.grass = await provider();
+    } catch (error) {
+      console.error("[Monitoring] grass provider failed:", error);
+    } finally {
+      this.providerLoading.grass = false;
+    }
+  }
+
+  private emitSnapshot() {
     const now = performance.now();
     const elapsedMs = now - this.lastSnapshotUpdate;
     if (this.frameCount === 0) {
@@ -79,6 +128,10 @@ export class MonitoringManager {
       return;
     }
 
+    const grass = this.providerValues.grass;
+    const triangles = grass
+      ? this.triangles - grass.totalTriangles + grass.renderedTriangles
+      : this.triangles;
     const elapsedSeconds = elapsedMs / 1000;
     const currentFps = this.frameCount / elapsedSeconds;
     const averageFrameMs =
@@ -106,7 +159,8 @@ export class MonitoringManager {
       },
       render: {
         calls: this.drawCalls,
-        triangles: this.triangles,
+        triangles,
+        grass,
       },
     };
 
@@ -117,7 +171,7 @@ export class MonitoringManager {
     this.frameMsSum = 0;
     this.frameMsCount = 0;
     this.lateFrames = 0;
-  };
+  }
 
   private dispose = () => {
     if (!this.snapshotInterval) return;

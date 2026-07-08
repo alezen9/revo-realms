@@ -1,5 +1,4 @@
 import {
-  INFINITY,
   PI2,
   cos,
   float,
@@ -35,8 +34,9 @@ export class GrassMaterial extends SpriteNodeMaterial {
     this.forceSinglePass = true;
 
     // compute values
-    const data1 = this.ssbo.computeBuffer1.element(instanceIndex);
-    const data2 = this.ssbo.computeBuffer2.element(instanceIndex);
+    const bladeIndex = this.ssbo.visibleIndexBuffer.element(instanceIndex);
+    const data1 = this.ssbo.computeBuffer1.element(bladeIndex);
+    const data2 = this.ssbo.computeBuffer2.element(bladeIndex);
     const offsetX = data1.x;
     const offsetY = this.ssbo.getYOffset(data2);
     const offsetZ = data1.y;
@@ -62,8 +62,8 @@ export class GrassMaterial extends SpriteNodeMaterial {
     );
 
     // ROTATION
-    const instanceNoise = hash(instanceIndex.add(196.4356)).sub(0.5).mul(0.25);
-    const spriteRotation = hash(instanceIndex.add(284.7821))
+    const instanceNoise = hash(bladeIndex.add(196.4356)).sub(0.5).mul(0.25);
+    const spriteRotation = hash(bladeIndex.add(284.7821))
       .sub(0.5)
       .mul(2)
       .mul(uniforms.uSpriteRotationRandomness);
@@ -78,10 +78,6 @@ export class GrassMaterial extends SpriteNodeMaterial {
     this.rotationNode = rotation;
 
     // POSITION
-    // fragment cull
-    const offscreenOffset = uniforms.uCameraForward
-      .mul(INFINITY)
-      .mul(float(1).sub(isVisible));
     // base offset
     const bladePosition = vec3(offsetX, offsetY, offsetZ);
     // sway effect
@@ -105,7 +101,7 @@ export class GrassMaterial extends SpriteNodeMaterial {
       .mul(uniforms.uAmbientSwayStrength)
       .mul(swayEnvelope);
     const swayFactor = uv().y.mul(uv().y);
-    const ambientAngle = hash(instanceIndex.add(71.17)).mul(PI2);
+    const ambientAngle = hash(bladeIndex.add(71.17)).mul(PI2);
     const ambientDir = vec2(cos(ambientAngle), sin(ambientAngle));
     const swayOffset = vec3(ambientDir.x, 0, ambientDir.y).mul(
       swayAmount.mul(swayFactor),
@@ -113,7 +109,7 @@ export class GrassMaterial extends SpriteNodeMaterial {
     // flutter offset
     const dirXZ = windManager.uDirection;
     const perp = vec2(dirXZ.y.negate(), dirXZ.x);
-    const phase = hash(instanceIndex)
+    const phase = hash(bladeIndex)
       .mul(PI2)
       .add(offsetX.mul(0.13))
       .add(offsetZ.mul(0.07));
@@ -134,7 +130,6 @@ export class GrassMaterial extends SpriteNodeMaterial {
     );
 
     const pos = bladePosition
-      .add(offscreenOffset)
       .add(swayOffset)
       .add(flutterOffset)
       .add(windOffset);

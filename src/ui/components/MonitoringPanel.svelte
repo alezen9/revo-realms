@@ -172,6 +172,24 @@
 			<span class="metric"></span>
 			<span class="metric"></span>
 		</div>
+		{#if snapshot.render.grass}
+			<div class="row">
+				<span class="category">GRASS</span>
+				<span class="metric">
+					<span class="metric-label">Rendered</span>
+					<span class="metric-value">{formatCompact(snapshot.render.grass.rendered)}</span>
+				</span>
+				<span class="metric">
+					<span class="metric-label">Total</span>
+					<span class="metric-value">{formatCompact(snapshot.render.grass.total)}</span>
+				</span>
+				<span class="metric">
+					<span class="metric-label">Segments</span>
+					<span class="metric-value">{snapshot.render.grass.segments}</span>
+				</span>
+				<span class="metric"></span>
+			</div>
+		{/if}
 	</div>
 {/if}
 

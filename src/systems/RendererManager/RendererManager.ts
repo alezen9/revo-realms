@@ -1,12 +1,19 @@
 import { PCFShadowMap } from "three";
-import { WebGPURenderer } from "three/webgpu";
+import { type ComputeNode, WebGPURenderer } from "three/webgpu";
 import { PostprocessingManager } from "./PostprocessingManager";
 import { type DebugManager } from "../DebugManager";
 import { type EventsManager } from "../EventsManager";
 import type { SceneManager } from "../SceneManager";
+import { ComputeTask } from "./ComputeTask";
 
 type ShadowMapWithTransmission = WebGPURenderer["shadowMap"] & {
   transmitted: boolean;
+};
+
+type CreateComputeTaskOptions = {
+  label: string;
+  init?: ComputeNode | ComputeNode[];
+  update: ComputeNode | ComputeNode[];
 };
 
 export class RendererManager {
@@ -89,6 +96,13 @@ export class RendererManager {
 
   async renderSceneOnceAsync() {
     this.renderScene();
+  }
+
+  createComputeTask(options: CreateComputeTaskOptions) {
+    return new ComputeTask({
+      renderer: this.renderer,
+      ...options,
+    });
   }
 
   render() {

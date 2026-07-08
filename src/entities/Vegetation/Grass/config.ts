@@ -2,19 +2,23 @@ import { Color, Matrix4, Vector2, Vector3 } from "three";
 import { uniform } from "three/tsl";
 
 const getConfig = () => {
-  const BLADE_WIDTH = 0.15;
+  const BLADE_WIDTH = 0.065;
   const BLADE_HEIGHT = 1.75;
   const TILE_SIZE = 130;
-  const BLADES_PER_SIDE = 512 + 512; // power of 2 is optimal, divisible by wg also good
+  const SEGMENTS = 4;
+  const BLADES_PER_SIDE = 512 + 512 + 128; // power of 2 is optimal, divisible by wg also good
+  const COUNT = BLADES_PER_SIDE * BLADES_PER_SIDE;
+
   return {
-    SEGMENTS: 4,
+    SEGMENTS,
+    BLADE_INDEX_COUNT: Math.max(0, SEGMENTS - 1) * 6 + 3,
     BLADE_WIDTH,
     BLADE_HEIGHT,
     BLADE_BOUNDING_SPHERE_RADIUS: BLADE_HEIGHT,
     TILE_SIZE,
     TILE_HALF_SIZE: TILE_SIZE / 2,
     BLADES_PER_SIDE,
-    COUNT: BLADES_PER_SIDE * BLADES_PER_SIDE,
+    COUNT,
     SPACING: TILE_SIZE / BLADES_PER_SIDE,
     WORKGROUP_SIZE: 64,
   };

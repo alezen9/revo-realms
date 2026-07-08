@@ -5,26 +5,35 @@ import {
   rendererManager,
   lightingManager,
   eventsManager,
+  monitoringManager,
 } from "../../../systems";
 import { config, uniforms } from "./config";
 import { debugGrass } from "./debug";
 import { GrassBladeGeometry } from "./GrassBladeGeometry";
 import { GrassMaterial } from "./GrassMaterial";
 import { GrassSsbo } from "./GrassSsbo";
+import type { ComputeTask } from "../../../systems/RendererManager/ComputeTask";
+import type { GrassMonitoringStats } from "../../../systems/EventsManager";
 
 export default class Grass {
   private ssbo = new GrassSsbo();
+  private computeTask: ComputeTask;
   private mesh: InstancedMesh;
-  private pendingPlayerDeltaXZ = new Vector2(0, 0);
-  private computePlayerDeltaXZ = new Vector2(0, 0);
-  private isComputeInFlight = false;
+  private playerDeltaXZ = new Vector2(0, 0);
 
   constructor() {
     uniforms.uSunDir.value.copy(lightingManager.sunDirection);
+    this.computeTask = rendererManager.createComputeTask({
+      label: "Grass",
+      init: this.ssbo.computeInit,
+      update: [this.ssbo.computeResetIndirectArgs, this.ssbo.computeUpdate],
+    });
     this.mesh = this.createMesh();
     sceneManager.scene.add(this.mesh);
+    this.computeTask.init();
 
     eventsManager.on("engine-render-update", this.onEngineUpdate);
+    monitoringManager?.registerProvider("grass", this.getMonitoringStatsAsync);
     debugGrass(uniforms, config);
   }
 
@@ -34,6 +43,8 @@ export default class Grass {
       bladeHeight: config.BLADE_HEIGHT,
       bladeWidth: config.BLADE_WIDTH,
     });
+    geometry.setIndirect(this.ssbo.indirectAttribute);
+
     const material = new GrassMaterial(this.ssbo);
     const mesh = new InstancedMesh(geometry, material, config.COUNT);
     mesh.frustumCulled = false;
@@ -50,8 +61,8 @@ export default class Grass {
   private accumulatePlayerDelta(player: State["player"]) {
     const dx = player.position.x - this.mesh.position.x;
     const dz = player.position.z - this.mesh.position.z;
-    this.pendingPlayerDeltaXZ.x += dx;
-    this.pendingPlayerDeltaXZ.y += dz;
+    this.playerDeltaXZ.x += dx;
+    this.playerDeltaXZ.y += dz;
   }
 
   private syncPlayerAndCameraUniforms(player: State["player"]) {
@@ -68,21 +79,47 @@ export default class Grass {
   }
 
   private updateSsbo() {
-    if (this.isComputeInFlight) return;
+    if (!this.computeTask.canUpdate) return;
 
-    this.computePlayerDeltaXZ.copy(this.pendingPlayerDeltaXZ);
-    this.pendingPlayerDeltaXZ.set(0, 0);
-    uniforms.uPlayerDeltaXZ.value.copy(this.computePlayerDeltaXZ);
+    const deltaX = this.playerDeltaXZ.x;
+    const deltaZ = this.playerDeltaXZ.y;
+    this.playerDeltaXZ.set(0, 0);
+    uniforms.uPlayerDeltaXZ.value.set(deltaX, deltaZ);
 
-    this.isComputeInFlight = true;
-    rendererManager.renderer
-      .computeAsync(this.ssbo.computeUpdate)
-      .catch((error) => {
-        console.error("[Grass] computeAsync failed:", error);
-        this.pendingPlayerDeltaXZ.add(this.computePlayerDeltaXZ);
-      })
-      .finally(() => {
-        this.isComputeInFlight = false;
-      });
+    this.computeSsboAsync(deltaX, deltaZ);
   }
+
+  private async computeSsboAsync(deltaX: number, deltaZ: number) {
+    const computePromise = this.computeTask.update();
+    if (!computePromise) {
+      this.playerDeltaXZ.x += deltaX;
+      this.playerDeltaXZ.y += deltaZ;
+      return;
+    }
+
+    try {
+      await computePromise;
+    } catch {
+      this.playerDeltaXZ.x += deltaX;
+      this.playerDeltaXZ.y += deltaZ;
+    }
+  }
+
+  private getMonitoringStatsAsync = async (): Promise<GrassMonitoringStats> => {
+    const buffer = await rendererManager.renderer.getArrayBufferAsync(
+      this.ssbo.indirectAttribute,
+      null,
+      4,
+      4,
+    );
+    const rendered = new Uint32Array(buffer)[0];
+    const trianglesPerBlade = config.BLADE_INDEX_COUNT / 3;
+    return {
+      rendered,
+      total: config.COUNT,
+      segments: config.SEGMENTS,
+      totalTriangles: config.COUNT * trianglesPerBlade,
+      renderedTriangles: rendered * trianglesPerBlade,
+    };
+  };
 }
