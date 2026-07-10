@@ -41,6 +41,7 @@ import { type State } from "../../Game";
 import { VegetationSsboUtils } from "./ssboUtils";
 import { gameTime } from "../../utils/GameTime";
 import { TSLUtils } from "../../utils/TSLUtils";
+import { srgbColorTarget } from "../../utils/TweakpaneColor";
 
 const getConfig = () => {
   const FLOWER_WIDTH = 0.5;
@@ -77,9 +78,9 @@ const uniforms = {
   uCullPadNDCYNear: uniform(0.75), // small padding to avoid near clipping
   uCullPadNDCYFar: uniform(0.2), // small padding to avoid far clipping
   // tint
-  uColor1: uniform(new Color().setRGB(0.02, 0.14, 0.33)),
-  uColor2: uniform(new Color().setRGB(0.99, 0.64, 0.0)),
-  uBrightness: uniform(0.6),
+  uColor1: uniform(new Color(0.54, 0.54, 0.54).convertSRGBToLinear()),
+  uColor2: uniform(new Color(0.99, 0.64, 0).convertSRGBToLinear()),
+  uBrightness: uniform(1),
   // wind
   uWindAmbientStrength: uniform(0.2),
   uWindDirectionalStrength: uniform(0.45),
@@ -315,12 +316,12 @@ export default class Flowers {
       expanded: false,
     });
 
-    folder.addBinding(uniforms.uColor1, "value", {
+    folder.addBinding(srgbColorTarget(uniforms.uColor1.value), "value", {
       label: "Color 1",
       view: "color",
       color: { type: "float" },
     });
-    folder.addBinding(uniforms.uColor2, "value", {
+    folder.addBinding(srgbColorTarget(uniforms.uColor2.value), "value", {
       label: "Color 2",
       view: "color",
       color: { type: "float" },

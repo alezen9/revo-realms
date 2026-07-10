@@ -1,4 +1,5 @@
 import { debugManager } from "../../../systems";
+import { srgbColorTarget } from "../../../utils/TweakpaneColor";
 import type { GrassConfig, GrassUniforms } from "./config";
 
 export const debugGrass = (uniforms: GrassUniforms, config: GrassConfig) => {
@@ -8,12 +9,12 @@ export const debugGrass = (uniforms: GrassUniforms, config: GrassConfig) => {
   });
 
   const color = folder.addFolder({ title: "Color" });
-  color.addBinding(uniforms.uTipColor, "value", {
+  color.addBinding(srgbColorTarget(uniforms.uTipColor.value), "value", {
     label: "Tip",
     view: "color",
     color: { type: "float" },
   });
-  color.addBinding(uniforms.uBaseColor, "value", {
+  color.addBinding(srgbColorTarget(uniforms.uBaseColor.value), "value", {
     label: "Base",
     view: "color",
     color: { type: "float" },

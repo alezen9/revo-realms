@@ -9,6 +9,7 @@ import {
 import { type SceneManager } from "./SceneManager";
 import { type DebugManager } from "./DebugManager";
 import { type EventsManager } from "./EventsManager";
+import { srgbColorTarget } from "../utils/TweakpaneColor";
 
 const config = {
   LIGHT_POSITION_OFFSET: new Vector3(10, 10, 10),
@@ -119,17 +120,21 @@ export class LightingManager {
     lightFolder.addBinding(config.LIGHT_POSITION_OFFSET, "y", {
       label: "Sun height",
     });
-    lightFolder.addBinding(this.directionalLight, "color", {
-      label: "Directional Color",
-      view: "color",
-      color: { type: "float" },
-    });
+    lightFolder.addBinding(
+      srgbColorTarget(this.directionalLight.color),
+      "value",
+      {
+        label: "Directional Color",
+        view: "color",
+        color: { type: "float" },
+      },
+    );
     lightFolder.addBinding(this.directionalLight, "intensity", {
       min: 0,
       max: 5,
       label: "Directional intensity",
     });
-    lightFolder.addBinding(this.fog, "color", {
+    lightFolder.addBinding(srgbColorTarget(this.fog.color), "value", {
       label: "Fog Color",
       view: "color",
       color: { type: "float" },
@@ -159,16 +164,24 @@ export class LightingManager {
     //   label: "Ambient intensity",
     // });
 
-    lightFolder.addBinding(this.hemisphereLight, "color", {
-      label: "Hemisphere sky color",
-      view: "color",
-      color: { type: "float" },
-    });
-    lightFolder.addBinding(this.hemisphereLight, "groundColor", {
-      label: "Hemisphere ground color",
-      view: "color",
-      color: { type: "float" },
-    });
+    lightFolder.addBinding(
+      srgbColorTarget(this.hemisphereLight.color),
+      "value",
+      {
+        label: "Hemisphere sky color",
+        view: "color",
+        color: { type: "float" },
+      },
+    );
+    lightFolder.addBinding(
+      srgbColorTarget(this.hemisphereLight.groundColor),
+      "value",
+      {
+        label: "Hemisphere ground color",
+        view: "color",
+        color: { type: "float" },
+      },
+    );
     lightFolder.addBinding(this.hemisphereLight, "intensity", {
       min: 0,
       max: 1,

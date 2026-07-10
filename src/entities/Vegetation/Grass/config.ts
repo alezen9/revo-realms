@@ -56,8 +56,8 @@ export const uniforms = {
   uvWindScale: uniform(1.35),
   uAmbientSwayStrength: uniform(0.055),
   // Color
-  uBaseColor: uniform(new Color(0.06, 0.2, 0.07)),
-  uTipColor: uniform(new Color(0.5, 0.27, 0.13)),
+  uBaseColor: uniform(new Color(0.27, 0.49, 0.29).convertSRGBToLinear()),
+  uTipColor: uniform(new Color(0.74, 0.56, 0.4).convertSRGBToLinear()),
   uColorMixFactor: uniform(0.15),
   uColorVariationStrength: uniform(2),
   uAoScale: uniform(0.5),
