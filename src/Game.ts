@@ -26,12 +26,14 @@ export type Sizes = {
 
 export default class Game {
   private player: Player;
-  private state: State;
+  private physicsState: State;
+  private renderState: State;
   private resizeObserver?: ResizeObserver;
 
   constructor() {
     this.player = new Player();
-    this.state = { delta: 0, player: this.player };
+    this.physicsState = { delta: physicsScheduler.fixedDelta, player: this.player };
+    this.renderState = { delta: 0, player: this.player };
     new RevoRealm();
   }
 
@@ -81,24 +83,19 @@ export default class Game {
 
     physicsScheduler.update(timeManager.delta);
 
-    if (physicsScheduler.shouldStep) {
-      this.state.delta = physicsScheduler.fixedDelta;
-
-      eventsManager.emit("engine-before-physics", this.state);
-      const didStep = physicsManager.step();
-
-      if (didStep) {
-        eventsManager.emit("engine-after-physics", this.state);
-        physicsManager.completeStep();
-      }
+    for (let i = 0; i < physicsScheduler.pendingSteps; i++) {
+      eventsManager.emit("engine-before-physics", this.physicsState);
+      physicsManager.step();
+      eventsManager.emit("engine-after-physics", this.physicsState);
+      physicsManager.flush();
     }
 
     frameScheduler.update();
     if (!frameScheduler.shouldRender) return;
 
-    this.state.delta = timeManager.consumeRenderDelta();
+    this.renderState.delta = timeManager.consumeRenderDelta();
 
-    eventsManager.emit("engine-render-update", this.state);
+    eventsManager.emit("engine-render-update", this.renderState);
     rendererManager.render();
 
     monitoringManager?.sample(timestamp);

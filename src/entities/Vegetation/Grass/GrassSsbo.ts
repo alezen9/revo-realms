@@ -376,7 +376,7 @@ export class GrassSsbo {
       uniforms.uR0,
       uniforms.uR1,
       uniforms.uPMin,
-      config.BLADE_HEIGHT,
+      currentScale.mul(config.BLADE_HEIGHT),
       clipPosition,
       uniforms.uFy,
       uniforms.uProjectedMin,

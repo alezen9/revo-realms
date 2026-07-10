@@ -167,12 +167,7 @@ export class GrassMaterial extends SpriteNodeMaterial {
     const withShadow = mix(baseToTip.mul(0.5), baseToTip, bakedShadowFactor);
     const windShadeColor = withShadow.mul(uniforms.uTipColor).mul(1.35);
     const windShaded = mix(withShadow, windShadeColor, windShadeAmount);
-    const roundnessEdge = pow(edge, uniforms.uRoundnessPower);
-    const edgeRoundnessShade = roundnessEdge
-      .mul(uniforms.uRoundnessStrength)
-      .mul(0.5);
-    const roundedColor = windShaded.mul(float(1).sub(edgeRoundnessShade));
 
-    this.colorNode = roundedColor.mul(ao);
+    this.colorNode = windShaded.mul(ao);
   }
 }

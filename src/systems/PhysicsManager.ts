@@ -25,7 +25,6 @@ export class PhysicsManager {
   private eventQueue!: EventQueue;
   private audioManager: AudioManager;
   private sceneManager: SceneManager;
-  private didStep = false;
 
   private dummyVectorLinVel = new Vector3();
   private fixedDebugMesh?: LineSegments2;
@@ -200,21 +199,14 @@ export class PhysicsManager {
     if (!this.debug.enabled) return;
 
     this.createFixedDebugMesh();
-    if (!this.didStep) return;
-
     this.updateDynamicDebugMesh();
   }
 
   step() {
-    if (!this.world) return false;
     this.world.step(this.eventQueue);
-    return true;
   }
 
-  completeStep() {
-    if (!this.world) return;
-
-    this.didStep = true;
+  flush() {
     this.updateDebug();
 
     if (this.audioManager.isReady) this.handleCollisionSounds();
