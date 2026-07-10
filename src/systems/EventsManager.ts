@@ -4,6 +4,40 @@ import { type Sizes, type State } from "../Game";
 type UpdateEvent = (state: State) => void;
 type ResizeEvent = (sizes: Sizes) => void;
 
+export type MonitoringSnapshot = {
+  fps: {
+    current: number;
+    effective: number;
+    target: number;
+  };
+  frame: {
+    budgetMs: number;
+    averageMs: number;
+    lateFrames: number;
+  };
+  sync: {
+    refreshHz: number;
+    divisor: number;
+    alpha: number;
+  };
+  physics: {
+    rate: number;
+  };
+  render: {
+    calls: number;
+    triangles: number;
+    grass: GrassMonitoringStats | null;
+  };
+};
+
+export type GrassMonitoringStats = {
+  rendered: number;
+  total: number;
+  segments: number;
+  totalTriangles: number;
+  renderedTriangles: number;
+};
+
 const throttleLanes = [
   { interval: 2, offset: 0 },
   { interval: 4, offset: 1 },
@@ -13,18 +47,19 @@ const throttleLanes = [
 
 type ThrottleInterval = (typeof throttleLanes)[number]["interval"];
 type ThrottledEvents = {
-  [T in ThrottleInterval as `engine-update-throttle-${T}x`]: UpdateEvent;
+  [T in ThrottleInterval as `engine-render-update-throttle-${T}x`]: UpdateEvent;
 };
 
 type EngineEvents = {
-  "engine-pre-physics-update": UpdateEvent;
-  "engine-post-physics-update": UpdateEvent;
-  "engine-update": UpdateEvent;
+  "engine-before-physics": UpdateEvent;
+  "engine-after-physics": UpdateEvent;
+  "engine-render-update": UpdateEvent;
   "engine-camera-change": VoidFunction;
   "engine-render-target-resize": ResizeEvent;
   "engine-loading-resources-progress": (percentage: number) => void;
   "engine-loading-audio-progress": (percentage: number) => void;
   "engine-loading-core-progress": (percentage: number) => void;
+  "engine-monitoring-update": (snapshot: MonitoringSnapshot) => void;
   "engine-time-scale": (scale: number) => void;
   "engine-pause-change": (paused: boolean) => void;
   "engine-slowmo-change": (enabled: boolean) => void;
@@ -64,7 +99,7 @@ export class EventsManager {
   }
 
   private updateThrottled() {
-    this.on("engine-update", ({ player, delta }) => {
+    this.on("engine-render-update", ({ player, delta }) => {
       this.frameIndex++;
 
       for (const lane of throttleLanes) {
@@ -77,7 +112,7 @@ export class EventsManager {
         if (!canEmit) continue;
         if ((this.frameIndex - offset) % interval !== 0) continue;
 
-        this.emit(`engine-update-throttle-${interval}x`, {
+        this.emit(`engine-render-update-throttle-${interval}x`, {
           player,
           delta: accDelta,
         } as State);

@@ -30,18 +30,6 @@ export const debugGrass = (uniforms: GrassUniforms, config: GrassConfig) => {
     max: 3,
     step: 0.01,
   });
-  color.addBinding(uniforms.uRoundnessStrength, "value", {
-    label: "Roundness strength",
-    min: 0,
-    max: 0.35,
-    step: 0.001,
-  });
-  color.addBinding(uniforms.uRoundnessPower, "value", {
-    label: "Roundness power",
-    min: 0.5,
-    max: 6,
-    step: 0.01,
-  });
   color.addBinding(uniforms.uBaseWindShade, "value", {
     label: "Wind shade strength",
     min: 0,

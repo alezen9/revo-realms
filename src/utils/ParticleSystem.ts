@@ -112,11 +112,11 @@ export default class ParticleSystem extends InstancedMesh {
 
     let shouldCompute = false;
 
-    eventsManager.on("engine-update-throttle-64x", () => {
+    eventsManager.on("engine-render-update-throttle-64x", () => {
       shouldCompute = Utils.isMeshVisible(this);
     });
 
-    eventsManager.on("engine-update-throttle-2x", () => {
+    eventsManager.on("engine-render-update-throttle-2x", () => {
       if (!shouldCompute) return;
       rendererManager.renderer.computeAsync(computeUpdate);
     });

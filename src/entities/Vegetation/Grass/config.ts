@@ -2,19 +2,23 @@ import { Color, Matrix4, Vector2, Vector3 } from "three";
 import { uniform } from "three/tsl";
 
 const getConfig = () => {
-  const BLADE_WIDTH = 0.15;
+  const BLADE_WIDTH = 0.125;
   const BLADE_HEIGHT = 1.75;
   const TILE_SIZE = 130;
+  const SEGMENTS = 3;
   const BLADES_PER_SIDE = 512 + 512; // power of 2 is optimal, divisible by wg also good
+  const COUNT = BLADES_PER_SIDE * BLADES_PER_SIDE;
+
   return {
-    SEGMENTS: 4,
+    SEGMENTS,
+    BLADE_INDEX_COUNT: Math.max(0, SEGMENTS - 1) * 6 + 3,
     BLADE_WIDTH,
     BLADE_HEIGHT,
     BLADE_BOUNDING_SPHERE_RADIUS: BLADE_HEIGHT,
     TILE_SIZE,
     TILE_HALF_SIZE: TILE_SIZE / 2,
     BLADES_PER_SIDE,
-    COUNT: BLADES_PER_SIDE * BLADES_PER_SIDE,
+    COUNT,
     SPACING: TILE_SIZE / BLADES_PER_SIDE,
     WORKGROUP_SIZE: 64,
   };
@@ -52,12 +56,10 @@ export const uniforms = {
   uvWindScale: uniform(1.35),
   uAmbientSwayStrength: uniform(0.055),
   // Color
-  uBaseColor: uniform(new Color().setRGB(0.06, 0.2, 0.07)),
-  uTipColor: uniform(new Color().setRGB(0.5, 0.27, 0.13)),
+  uBaseColor: uniform(new Color(0.06, 0.2, 0.07)),
+  uTipColor: uniform(new Color(0.5, 0.27, 0.13)),
   uColorMixFactor: uniform(0.15),
   uColorVariationStrength: uniform(2),
-  uRoundnessStrength: uniform(0.055),
-  uRoundnessPower: uniform(2.2),
   uAoScale: uniform(0.5),
   uAoRimSmoothness: uniform(5),
   uAoRadius: uniform(15),
@@ -75,4 +77,5 @@ export const uniforms = {
   uBaseBending: uniform(2.5),
   uSpriteRotationRandomness: uniform(0.05),
 };
+
 export type GrassUniforms = typeof uniforms;

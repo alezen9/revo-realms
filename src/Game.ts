@@ -1,15 +1,15 @@
-import { Timer } from "three";
 import Player from "./entities/Player";
 import RevoRealm from "./realm/RevoRealm";
 import { debounce } from "lodash-es";
 import {
-  frameScheduler,
+  debugManager,
+  monitoringManager,
   physicsManager,
+  physicsScheduler,
   rendererManager,
-  sceneManager,
   eventsManager,
   timeManager,
-  monitoringManager,
+  frameScheduler,
 } from "./systems";
 
 export type State = {
@@ -26,10 +26,39 @@ export type Sizes = {
 
 export default class Game {
   private player: Player;
+  private physicsState: State;
+  private renderState: State;
+  private resizeObserver?: ResizeObserver;
 
   constructor() {
     this.player = new Player();
+    this.physicsState = { delta: physicsScheduler.fixedDelta, player: this.player };
+    this.renderState = { delta: 0, player: this.player };
     new RevoRealm();
+  }
+
+  private debugGame() {
+    const folder = debugManager.panel.addFolder({
+      title: "⚡️ Performance",
+      expanded: false,
+    });
+    const config = {
+      renderDivisor: frameScheduler.divisor,
+    };
+
+    const cadences = frameScheduler.getRenderCadences();
+    const options = cadences.reduce((acc, cadence) => {
+      const formattedLabel = cadence.fps.toFixed(2);
+      acc[formattedLabel] = cadence.divisor;
+      return acc;
+    }, {});
+
+    folder
+      .addBinding(config, "renderDivisor", {
+        label: "Render FPS",
+        options,
+      })
+      .on("change", ({ value }) => frameScheduler.setRenderDivisor(value));
   }
 
   private getSizes(): Sizes {
@@ -43,53 +72,51 @@ export default class Game {
     };
   }
 
-  private onResize() {
+  private onResize = () => {
     const sizes = this.getSizes();
     eventsManager.emit("engine-render-target-resize", sizes);
-  }
+  };
+
+  private onAnimationFrame = (timestamp: DOMHighResTimeStamp) => {
+    timeManager.update(timestamp);
+    if (timeManager.isPaused) return;
+
+    physicsScheduler.update(timeManager.delta);
+
+    for (let i = 0; i < physicsScheduler.pendingSteps; i++) {
+      eventsManager.emit("engine-before-physics", this.physicsState);
+      physicsManager.step();
+      eventsManager.emit("engine-after-physics", this.physicsState);
+      physicsManager.flush();
+    }
+
+    frameScheduler.update();
+    if (!frameScheduler.shouldRender) return;
+
+    this.renderState.delta = timeManager.consumeRenderDelta();
+
+    eventsManager.emit("engine-render-update", this.renderState);
+    rendererManager.render();
+
+    monitoringManager?.sample(timestamp);
+  };
+
+  private dispose = () => {
+    this.resizeObserver?.disconnect();
+  };
 
   async startLoop() {
+    await frameScheduler.initAsync();
+    this.debugGame();
     timeManager.reset();
-    const timer = new Timer();
-    timer.connect(document);
 
-    const state: State = { delta: 0, player: this.player };
-
-    const loop = (timestamp: DOMHighResTimeStamp) => {
-      timer.update(timestamp);
-
-      if (timeManager.isPaused) {
-        frameScheduler.reset();
-        return;
-      }
-
-      const frame = frameScheduler.update(timer.getDelta());
-      if (!frame.shouldTick) return;
-
-      const frameWorkStart = performance.now();
-      state.delta = timeManager.update(frame.delta);
-
-      eventsManager.emit("engine-pre-physics-update", state);
-      physicsManager.update(state.delta);
-      eventsManager.emit("engine-post-physics-update", state);
-      if (import.meta.env.DEV) sceneManager.update();
-      eventsManager.emit("engine-update", state);
-      rendererManager.renderAsync();
-      const frameWorkDuration = (performance.now() - frameWorkStart) / 1000;
-      frameScheduler.recordFrameWorkDuration(frameWorkDuration);
-      monitoringManager?.sample();
-    };
-
-    // resize & start
-    const debouncedResize = debounce(this.onResize.bind(this), 300);
+    const debouncedResize = debounce(this.onResize, 300);
     this.onResize();
-    const resizeObserver = new ResizeObserver(debouncedResize);
-    resizeObserver.observe(document.body);
+    this.resizeObserver = new ResizeObserver(debouncedResize);
+    this.resizeObserver.observe(document.body);
 
-    import.meta.hot?.dispose(() => {
-      resizeObserver.disconnect();
-    });
+    import.meta.hot?.dispose(this.dispose);
 
-    rendererManager.renderer.setAnimationLoop(loop);
+    rendererManager.renderer.setAnimationLoop(this.onAnimationFrame);
   }
 }

@@ -60,7 +60,7 @@ export class PostprocessingManager extends RenderPipeline {
       this.saturationTarget = enabled ? 0 : 1;
     });
 
-    this.eventsManager.on("engine-update", ({ delta }) => {
+    this.eventsManager.on("engine-render-update", ({ delta }) => {
       if (this.uSaturation.value === this.saturationTarget) return;
       const t = 1 - Math.exp(-this.saturationLerpSpeed * delta);
       this.uSaturation.value +=

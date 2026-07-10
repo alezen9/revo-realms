@@ -5,7 +5,7 @@ import {
   physicsManager,
   sceneManager,
 } from "../../systems";
-import { InstancedMesh, MeshLambertNodeMaterial } from "three/webgpu";
+import { BatchedMesh, MeshLambertNodeMaterial } from "three/webgpu";
 import {
   attribute,
   normalMap,
@@ -19,7 +19,6 @@ import {
 import { ColliderDesc } from "@dimforge/rapier3d";
 import { RevoColliderType } from "../../types";
 import { gameTime } from "../../utils/GameTime";
-import { realmConfig } from "../../realm/config";
 
 const uniforms = {
   uCanopyDiffuseScale: uniform(0.6),
@@ -27,10 +26,6 @@ const uniforms = {
   uBarkDiffuseScale: uniform(3.5),
   uBarkNormalScale: uniform(3),
   uBarkUvScale: uniform(3),
-};
-
-const config = {
-  chunkSize: realmConfig.MAP_SIZE / 8,
 };
 
 class PineTreeCanopyMaterial extends MeshLambertNodeMaterial {
@@ -90,50 +85,15 @@ export default class PineTrees {
     const barkMaterial = new PineTreeBarkMaterial();
     const canopyMaterial = new PineTreeCanopyMaterial();
 
-    const chunkCountPerAxis = Math.max(
-      1,
-      Math.ceil(realmConfig.MAP_SIZE / config.chunkSize),
+    const barkBatch = this.createBatchedMesh(
+      colliders,
+      pineTreeBark.geometry,
+      barkMaterial,
     );
-    const chunkedColliders = new Map<string, Mesh[]>();
-
-    colliders.forEach((collider) => {
-      const chunkX = Math.min(
-        chunkCountPerAxis - 1,
-        Math.max(
-          0,
-          Math.floor(
-            (collider.position.x + realmConfig.HALF_MAP_SIZE) /
-              config.chunkSize,
-          ),
-        ),
-      );
-      const chunkZ = Math.min(
-        chunkCountPerAxis - 1,
-        Math.max(
-          0,
-          Math.floor(
-            (collider.position.z + realmConfig.HALF_MAP_SIZE) /
-              config.chunkSize,
-          ),
-        ),
-      );
-      const chunkKey = `${chunkX}:${chunkZ}`;
-      let chunk = chunkedColliders.get(chunkKey);
-      if (!chunk) {
-        chunk = [];
-        chunkedColliders.set(chunkKey, chunk);
-      }
-      chunk.push(collider);
-    });
-
-    const chunkMeshes = [...chunkedColliders.values()].flatMap((chunk) =>
-      this.createChunkMeshes(
-        chunk,
-        pineTreeBark.geometry,
-        pineTreeCanopy.geometry,
-        barkMaterial,
-        canopyMaterial,
-      ),
+    const canopyBatch = this.createBatchedMesh(
+      colliders,
+      pineTreeCanopy.geometry,
+      canopyMaterial,
     );
 
     const baseCollider = colliders[0];
@@ -141,7 +101,7 @@ export default class PineTrees {
     const baseRadius = boundingBox.max.x;
     const baseHalfHeight = boundingBox.max.y / 2;
 
-    colliders.forEach((colliderCylinder) => {
+    for (const colliderCylinder of colliders) {
       // Physics
       const radius = baseRadius * colliderCylinder.scale.x;
       const halfHeight = baseHalfHeight * colliderCylinder.scale.y;
@@ -152,42 +112,37 @@ export default class PineTrees {
       physicsManager.world.createCollider(colliderDesc).userData = {
         type: RevoColliderType.Wood,
       };
-    });
+    }
 
-    if (chunkMeshes.length) sceneManager.scene.add(...chunkMeshes);
+    sceneManager.scene.add(barkBatch, canopyBatch);
   }
 
-  private createChunkMeshes(
+  private createBatchedMesh(
     colliders: Mesh[],
-    barkGeometry: Mesh["geometry"],
-    canopyGeometry: Mesh["geometry"],
-    barkMaterial: PineTreeBarkMaterial,
-    canopyMaterial: PineTreeCanopyMaterial,
-  ): InstancedMesh[] {
-    if (!colliders.length) return [];
-
-    const barkInstances = new InstancedMesh(
-      barkGeometry,
-      barkMaterial,
+    geometry: Mesh["geometry"],
+    material: PineTreeBarkMaterial | PineTreeCanopyMaterial,
+  ) {
+    const vertexCount = geometry.getAttribute("position").count;
+    const indexCount = geometry.index?.count ?? vertexCount * 2;
+    const batch = new BatchedMesh(
       colliders.length,
-    );
-    const canopyInstances = new InstancedMesh(
-      canopyGeometry,
-      canopyMaterial,
-      colliders.length,
+      vertexCount,
+      indexCount,
+      material,
     );
 
-    colliders.forEach((collider, i) => {
-      barkInstances.setMatrixAt(i, collider.matrix);
-      canopyInstances.setMatrixAt(i, collider.matrix);
-    });
+    batch.perObjectFrustumCulled = true;
+    batch.sortObjects = false;
 
-    barkInstances.instanceMatrix.needsUpdate = true;
-    canopyInstances.instanceMatrix.needsUpdate = true;
-    barkInstances.computeBoundingSphere();
-    canopyInstances.computeBoundingSphere();
+    const geometryId = batch.addGeometry(geometry);
 
-    return [barkInstances, canopyInstances];
+    for (const collider of colliders) {
+      const instanceId = batch.addInstance(geometryId);
+      batch.setMatrixAt(instanceId, collider.matrix);
+    }
+
+    batch.computeBoundingSphere();
+    return batch;
   }
 
   private debug() {

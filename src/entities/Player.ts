@@ -27,6 +27,7 @@ import {
   inputManager,
   lightingManager,
   physicsManager,
+  physicsScheduler,
   sceneManager,
 } from "../systems";
 import { TSLUtils } from "../utils/TSLUtils";
@@ -158,6 +159,7 @@ export default class Player {
   private jumpStretchImpulse = 0;
   private landingSquashImpulse = 0;
   private impactSquashImpulse = 0;
+  private wasOnGroundBeforePhysics = false;
 
   constructor() {
     this.mesh = this.createCharacterMesh();
@@ -182,15 +184,13 @@ export default class Player {
     this.previousVelocity.copy(this.rigidBody.linvel());
 
     eventsManager.on(
-      "engine-pre-physics-update",
+      "engine-before-physics",
       this.updateBeforePhysics.bind(this),
     );
+    eventsManager.on("engine-after-physics", this.updateAfterPhysics.bind(this));
+    eventsManager.on("engine-render-update", this.updateRender.bind(this));
     eventsManager.on(
-      "engine-post-physics-update",
-      this.updateAfterPhysics.bind(this),
-    );
-    eventsManager.on(
-      "engine-update-throttle-64x",
+      "engine-render-update-throttle-64x",
       this.resetPlayerPosition.bind(this),
     );
     this.loadWaterMask();
@@ -238,13 +238,23 @@ export default class Player {
     this.updateYaw(delta);
     this.updateYawQuaternion();
 
-    const wasOnGround = this.isOnGround;
+    this.wasOnGroundBeforePhysics = this.isOnGround;
     this.updateVerticalMovement(delta);
     this.updateHorizontalMovement(delta);
-    this.updateSquashState(delta, wasOnGround);
   }
 
   private updateAfterPhysics(state: State) {
+    const { delta } = state;
+
+    if (physicsScheduler.didStep) {
+      this.isOnGround = this.groundingLockTimer === 0 && this.checkIfGrounded();
+    }
+
+    this.updateSquashState(delta, this.wasOnGroundBeforePhysics);
+    this.capturePhysicsTarget();
+  }
+
+  private updateRender(state: State) {
     const { delta } = state;
 
     this.syncMeshWithBody(delta);
@@ -605,25 +615,25 @@ export default class Player {
     this.impactSquashImpulse *= decay;
   }
 
-  private syncMeshWithBody(delta: number) {
-    if (physicsManager.didStep) {
+  private capturePhysicsTarget() {
+    if (physicsScheduler.didStep) {
       this.prevPosition.copy(this.targetPosition);
       this.prevQuaternion.copy(this.targetQuaternion);
       this.targetPosition.copy(this.rigidBody.translation());
       this.targetQuaternion.copy(this.rigidBody.rotation());
     }
+  }
 
-    const renderAlpha = physicsManager.didStep ? 1 : physicsManager.alpha;
-
+  private syncMeshWithBody(delta: number) {
     this.visualRoot.position.lerpVectors(
       this.prevPosition,
       this.targetPosition,
-      renderAlpha,
+      physicsScheduler.alpha,
     );
     this.bodyQuaternion.slerpQuaternions(
       this.prevQuaternion,
       this.targetQuaternion,
-      renderAlpha,
+      physicsScheduler.alpha,
     );
     this.applySquashTransform(delta);
   }

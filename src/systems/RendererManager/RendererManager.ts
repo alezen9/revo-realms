@@ -1,15 +1,19 @@
 import { PCFShadowMap } from "three";
-import { WebGPURenderer } from "three/webgpu";
+import { type ComputeNode, WebGPURenderer } from "three/webgpu";
 import { PostprocessingManager } from "./PostprocessingManager";
 import { type DebugManager } from "../DebugManager";
 import { type EventsManager } from "../EventsManager";
 import type { SceneManager } from "../SceneManager";
-
-const ENABLE_DEBUGGING = true;
-const IS_DEBUGGING_ENABLED = import.meta.env.DEV && ENABLE_DEBUGGING;
+import { ComputeTask } from "./ComputeTask";
 
 type ShadowMapWithTransmission = WebGPURenderer["shadowMap"] & {
   transmitted: boolean;
+};
+
+type CreateComputeTaskOptions = {
+  label: string;
+  init?: ComputeNode | ComputeNode[];
+  update: ComputeNode | ComputeNode[];
 };
 
 export class RendererManager {
@@ -25,6 +29,7 @@ export class RendererManager {
     sceneManager: SceneManager,
     debugManager: DebugManager,
     eventsManager: EventsManager,
+    isDebugEnabled: boolean,
   ) {
     this.sceneManager = sceneManager;
     this.debugManager = debugManager;
@@ -49,7 +54,7 @@ export class RendererManager {
 
     renderer.toneMappingExposure = 1.5;
     this.renderer = renderer;
-    this.debugManager.setVisibility(IS_DEBUGGING_ENABLED);
+    this.debugManager.setVisibility(isDebugEnabled);
 
     this.eventsManager.on("engine-render-target-resize", (sizes) => {
       // reduce dpr to 85% if postprocessing enabled, min dpr = 1
@@ -93,7 +98,14 @@ export class RendererManager {
     this.renderScene();
   }
 
-  async renderAsync() {
+  createComputeTask(options: CreateComputeTaskOptions) {
+    return new ComputeTask({
+      renderer: this.renderer,
+      ...options,
+    });
+  }
+
+  render() {
     this.renderScene();
   }
 }

@@ -19,8 +19,15 @@ import {
   fract,
   max,
   min,
+  atomicAdd,
+  atomicStore,
+  storage,
+  uint,
 } from "three/tsl";
-import type { Node } from "three/webgpu";
+import {
+  IndirectStorageBufferAttribute,
+  type Node,
+} from "three/webgpu";
 import { assetManager, windManager } from "../../../systems";
 import { TSLUtils } from "../../../utils/TSLUtils";
 import { gameTime } from "../../../utils/GameTime";
@@ -28,6 +35,10 @@ import { VegetationSsboUtils } from "../ssboUtils";
 import { config, uniforms } from "./config";
 
 export class GrassSsbo {
+  private indirectArgs = new IndirectStorageBufferAttribute(
+    new Uint32Array([config.BLADE_INDEX_COUNT, 0, 0, 0, 0]),
+    1,
+  );
   // x -> offsetX (0 unused)
   // y -> offsetZ (0 unused)
   // z -> 0/12 windX - 12/12 windZ (0 unused)
@@ -35,12 +46,8 @@ export class GrassSsbo {
   private buffer1 = instancedArray(config.COUNT, "vec4");
   // x -> 0/4 position based noise - 4/20 offsetY
   private buffer2 = instancedArray(config.COUNT, "float");
-
-  constructor() {
-    this.computeUpdate.onInit(({ renderer }) => {
-      renderer.computeAsync(this.computeInit);
-    });
-  }
+  private visibleBladeIndices = instancedArray(config.COUNT, "uint");
+  private indirectArgsBuffer = storage(this.indirectArgs, "uint", 5).toAtomic();
 
   get computeBuffer1() {
     return this.buffer1;
@@ -48,6 +55,14 @@ export class GrassSsbo {
 
   get computeBuffer2() {
     return this.buffer2;
+  }
+
+  get visibleIndexBuffer() {
+    return this.visibleBladeIndices;
+  }
+
+  get indirectAttribute() {
+    return this.indirectArgs;
   }
 
   getYOffset = Fn<[value: Node<"float">], Node<"float">>(([data]) => {
@@ -179,7 +194,7 @@ export class GrassSsbo {
     return data;
   });
 
-  private computeInit = Fn(() => {
+  computeInit = Fn(() => {
     const data1 = this.buffer1.element(instanceIndex);
     const data2 = this.buffer2.element(instanceIndex);
     // Position XZ
@@ -315,6 +330,17 @@ export class GrassSsbo {
     return step(0.5, bakedShadow).mul(effectivePlayerShadow);
   });
 
+  computeResetIndirectArgs = Fn(() => {
+    atomicStore(
+      this.indirectArgsBuffer.element(uint(0)),
+      uint(config.BLADE_INDEX_COUNT),
+    );
+    atomicStore(this.indirectArgsBuffer.element(uint(1)), uint(0));
+    atomicStore(this.indirectArgsBuffer.element(uint(2)), uint(0));
+    atomicStore(this.indirectArgsBuffer.element(uint(3)), uint(0));
+    atomicStore(this.indirectArgsBuffer.element(uint(4)), uint(0));
+  })().compute(1, [1]);
+
   computeUpdate = Fn(() => {
     const data1 = this.buffer1.element(instanceIndex);
     const data2 = this.buffer2.element(instanceIndex);
@@ -350,7 +376,7 @@ export class GrassSsbo {
       uniforms.uR0,
       uniforms.uR1,
       uniforms.uPMin,
-      config.BLADE_HEIGHT,
+      currentScale.mul(config.BLADE_HEIGHT),
       clipPosition,
       uniforms.uFy,
       uniforms.uProjectedMin,
@@ -440,6 +466,12 @@ export class GrassSsbo {
           uniforms.uPlayerPosition,
         );
         data1.assign(this.setShadowFactor(data1, shadowFactor));
+
+        const drawIndex = atomicAdd(
+          this.indirectArgsBuffer.element(uint(1)),
+          uint(1),
+        );
+        this.visibleBladeIndices.element(drawIndex).assign(instanceIndex);
       });
     });
   })().compute(config.COUNT, [config.WORKGROUP_SIZE]);

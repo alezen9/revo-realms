@@ -1,3 +1,4 @@
+import { Timer } from "three";
 import type { DebugManager } from "./DebugManager";
 import type { EventsManager } from "./EventsManager";
 import type { InputManager } from "./InputManager";
@@ -9,16 +10,21 @@ type TimeState = {
   slowMotionScale: number;
 };
 
+const MAX_FRAME_DELTA_SECONDS = 1 / 15;
+
 export class TimeManager {
   private eventsManager: EventsManager;
+  private timer = new Timer();
   private state: TimeState = {
     isPaused: false,
     isSlowMotion: false,
     slowMotionScale: 0.125,
   };
+  private pendingRenderDelta = 0;
   private timeScale = 1;
   private lastPauseState = false;
   private lastSlowMoState = false;
+  delta = 0;
 
   constructor(
     eventsManager: EventsManager,
@@ -36,13 +42,32 @@ export class TimeManager {
   }
 
   reset() {
+    this.timer.connect(document);
+    this.pendingRenderDelta = 0;
+    this.delta = 0;
     GameTime.reset();
   }
 
-  update(rawDeltaSeconds: number) {
-    const scaledDelta = rawDeltaSeconds * this.timeScale;
-    GameTime.update(scaledDelta);
-    return scaledDelta;
+  update(timestamp: DOMHighResTimeStamp) {
+    this.timer.update(timestamp);
+    const rawDelta = this.timer.getDelta();
+    const clampedDelta = Math.min(rawDelta, MAX_FRAME_DELTA_SECONDS);
+
+    if (this.state.isPaused) {
+      this.pendingRenderDelta = 0;
+      this.delta = 0;
+      return;
+    }
+
+    this.delta = clampedDelta * this.timeScale;
+    this.pendingRenderDelta += this.delta;
+    GameTime.update(this.delta);
+  }
+
+  consumeRenderDelta() {
+    const delta = this.pendingRenderDelta;
+    this.pendingRenderDelta = 0;
+    return delta;
   }
 
   togglePause() {

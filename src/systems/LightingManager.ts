@@ -53,7 +53,7 @@ export class LightingManager {
       sceneManager.scene.fog = sceneManager.scene.fog ? null : this.fog;
     });
 
-    eventsManager.on("engine-update-throttle-4x", ({ player }) => {
+    eventsManager.on("engine-render-update-throttle-4x", ({ player }) => {
       this.directionalLight.position
         .copy(player.position)
         .add(config.LIGHT_POSITION_OFFSET);

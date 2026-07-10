@@ -32,7 +32,7 @@ export class LandmarkManager {
   constructor(eventsManager: EventsManager) {
     this.eventsManager = eventsManager;
     eventsManager.on(
-      "engine-update-throttle-16x",
+      "engine-render-update-throttle-16x",
       this.checkDiscovery.bind(this),
     );
   }

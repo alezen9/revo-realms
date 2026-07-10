@@ -54,7 +54,10 @@ export class WindManager {
     this.IS_DEBUGGING_ENABLED && this.debug();
 
     this.eventsManager.on("swipe-up", this.handleSwipeUp.bind(this));
-    this.eventsManager.on("engine-update", this.handleWindBlowing.bind(this));
+    this.eventsManager.on(
+      "engine-render-update-throttle-4x",
+      this.handleWindBlowing.bind(this),
+    );
   }
 
   private handleSwipeUp() {
@@ -157,7 +160,7 @@ export class WindManager {
 
     this.sceneManager.scene.add(mesh);
 
-    this.eventsManager.on("engine-update", ({ player }) => {
+    this.eventsManager.on("engine-render-update", ({ player }) => {
       mesh.position.copy(player.position).setY(5);
     });
   }

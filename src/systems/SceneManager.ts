@@ -108,12 +108,13 @@ export class SceneManager {
     };
     controls.enabled = false;
     this.controls = controls;
+    this.eventsManager.on("engine-render-update", this.updateDebugControls);
 
     // Debug
     this.debugScene(debugManager);
   }
 
-  update() {
+  private updateDebugControls = () => {
     if (this.controls?.enabled) this.controls.update();
-  }
+  };
 }
