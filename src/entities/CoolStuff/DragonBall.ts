@@ -55,7 +55,7 @@ export default class DragonBall {
     const colliderDesc = ColliderDesc.cuboid(hx, hy, hz)
       .setTranslation(...collider.position.toArray())
       .setRotation(collider.quaternion)
-      .setRestitution(0.75);
+      .setRestitution(0.4);
     physicsManager.world.createCollider(colliderDesc).userData = {
       type: RevoColliderType.Stone,
     };

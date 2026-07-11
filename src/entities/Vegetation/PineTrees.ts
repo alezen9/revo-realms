@@ -108,7 +108,7 @@ export default class PineTrees {
       const colliderDesc = ColliderDesc.capsule(halfHeight, radius)
         .setTranslation(...colliderCylinder.position.toArray())
         .setRotation(colliderCylinder.quaternion)
-        .setRestitution(0.75);
+        .setRestitution(0.5);
       physicsManager.world.createCollider(colliderDesc).userData = {
         type: RevoColliderType.Wood,
       };

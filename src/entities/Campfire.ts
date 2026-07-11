@@ -64,7 +64,7 @@ export class Campfire {
     const fireColliderDesc = ColliderDesc.ball(fireRadius)
       .setTranslation(...fireColliderMesh.position.toArray())
       .setRotation(fireColliderMesh.quaternion)
-      .setRestitution(0.75);
+      .setRestitution(0.4);
     physicsManager.world.createCollider(fireColliderDesc).userData = {
       type: RevoColliderType.Stone,
     };
@@ -96,7 +96,7 @@ export class Campfire {
     )
       .setTranslation(...shortLogColliderMesh.position.toArray())
       .setRotation(shortLogColliderMesh.quaternion)
-      .setRestitution(0.75);
+      .setRestitution(0.5);
     physicsManager.world.createCollider(shortLogColliderDesc).userData = {
       type: RevoColliderType.Wood,
     };
@@ -126,7 +126,7 @@ export class Campfire {
     )
       .setTranslation(...longLogColliderMesh.position.toArray())
       .setRotation(longLogColliderMesh.quaternion)
-      .setRestitution(0.75);
+      .setRestitution(0.5);
     physicsManager.world.createCollider(longLogColliderDesc).userData = {
       type: RevoColliderType.Wood,
     };

@@ -1,4 +1,4 @@
-import Player from "./entities/Player";
+import Player from "./entities/Player/Player";
 import RevoRealm from "./realm/RevoRealm";
 import { debounce } from "lodash-es";
 import {
@@ -32,7 +32,10 @@ export default class Game {
 
   constructor() {
     this.player = new Player();
-    this.physicsState = { delta: physicsScheduler.fixedDelta, player: this.player };
+    this.physicsState = {
+      delta: physicsScheduler.fixedDelta,
+      player: this.player,
+    };
     this.renderState = { delta: 0, player: this.player };
     new RevoRealm();
   }
