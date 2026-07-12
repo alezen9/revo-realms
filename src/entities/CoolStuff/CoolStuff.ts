@@ -8,6 +8,6 @@ export default class CoolStuff {
     new GodOfWar();
     new Berserk();
     new DragonBall();
-    new Expedition33();
+    // new Expedition33();
   }
 }
