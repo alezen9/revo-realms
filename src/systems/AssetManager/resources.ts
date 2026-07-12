@@ -31,6 +31,8 @@ import berserkORMUrl from "/textures/new-world/cool-stuff/berserk/orm_512.ktx2?u
 // Dragon Ball
 import gokuStatueDiffuseUrl from "/textures/new-world/cool-stuff/dragon-ball/diffuse_1k.ktx2?url";
 import gokuStatueNormalUrl from "/textures/new-world/cool-stuff/dragon-ball/normal_1k.ktx2?url";
+// Expedition 33
+import expedition33DiffuseUrl from "/textures/new-world/cool-stuff/expedition-33/diffuse_1k.ktx2?url";
 // Campfire
 import campfireDiffuseUrl from "/textures/new-world/campfire/diffuse_2k.ktx2?url";
 import campfireNormalRoughnessUrl from "/textures/new-world/campfire/normalRoughness_1k.ktx2?url";
@@ -273,6 +275,17 @@ export const manifest = [
     type: "ktx2",
     flipY: false,
     wrap: true,
+  },
+
+  // -----------------------------------------------
+  // Expedition 33
+  // -----------------------------------------------
+  {
+    name: "expedition33FlagDiffuse",
+    url: expedition33DiffuseUrl,
+    type: "ktx2",
+    flipY: false,
+    colorSpace: SRGBColorSpace,
   },
 
   // -----------------------------------------------

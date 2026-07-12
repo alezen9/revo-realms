@@ -5,11 +5,7 @@ import type { EventsManager } from "./EventsManager";
 const REVEAL_ALL_LANDMARKS = true;
 
 export type LandmarkIconId =
-  | "fire"
-  | "water"
-  | "sword"
-  | "axe"
-  | "dragonball";
+  "fire" | "water" | "sword" | "axe" | "dragonball" | "flag";
 
 export type Landmark = {
   id: string;
@@ -22,7 +18,10 @@ export type Landmark = {
   windTargetId?: string; // ID from wind system for activation
 };
 
-type LandmarkRegistration = Omit<Landmark, "id" | "hasBeenDiscovered" | "windTargetId">;
+type LandmarkRegistration = Omit<
+  Landmark,
+  "id" | "hasBeenDiscovered" | "windTargetId"
+>;
 
 export class LandmarkManager {
   private landmarks = new Map<string, Landmark>();
