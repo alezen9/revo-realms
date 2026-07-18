@@ -29,6 +29,7 @@ export default class Game {
   private physicsState: State;
   private renderState: State;
   private resizeObserver?: ResizeObserver;
+  private hasRenderedFirstFrame = false;
 
   constructor() {
     this.player = new Player();
@@ -38,6 +39,7 @@ export default class Game {
     };
     this.renderState = { delta: 0, player: this.player };
     new RevoRealm();
+    this.onResize();
   }
 
   private debugGame() {
@@ -100,6 +102,11 @@ export default class Game {
 
     eventsManager.emit("engine-render-update", this.renderState);
     rendererManager.render();
+
+    if (!this.hasRenderedFirstFrame) {
+      this.hasRenderedFirstFrame = true;
+      eventsManager.emit("engine-loading-core-progress", 100);
+    }
 
     monitoringManager?.sample(timestamp);
   };

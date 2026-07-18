@@ -11,9 +11,16 @@ import { config, uniforms } from "./config";
 import { debugGrass } from "./debug";
 import { GrassBladeGeometry } from "./GrassBladeGeometry";
 import { GrassMaterial } from "./GrassMaterial";
-import { GrassSsbo } from "./GrassSsbo";
+import {
+  GrassSsbo,
+  INDIRECT_DRAW_INSTANCE_COUNT_ARGUMENT_INDEX,
+} from "./GrassSsbo";
 import type { ComputeTask } from "../../../systems/RendererManager/ComputeTask";
 import type { GrassMonitoringStats } from "../../../systems/EventsManager";
+
+const UINT32_BYTE_SIZE = Uint32Array.BYTES_PER_ELEMENT;
+const INDIRECT_DRAW_INSTANCE_COUNT_BYTE_OFFSET =
+  INDIRECT_DRAW_INSTANCE_COUNT_ARGUMENT_INDEX * UINT32_BYTE_SIZE;
 
 export default class Grass {
   private ssbo = new GrassSsbo();
@@ -26,7 +33,7 @@ export default class Grass {
     this.computeTask = rendererManager.createComputeTask({
       label: "Grass",
       init: this.ssbo.computeInit,
-      update: [this.ssbo.computeResetIndirectArgs, this.ssbo.computeUpdate],
+      update: [this.ssbo.computeResetInstanceCount, this.ssbo.computeUpdate],
     });
     this.mesh = this.createMesh();
     sceneManager.scene.add(this.mesh);
@@ -43,7 +50,7 @@ export default class Grass {
       bladeHeight: config.BLADE_HEIGHT,
       bladeWidth: config.BLADE_WIDTH,
     });
-    geometry.setIndirect(this.ssbo.indirectAttribute);
+    geometry.setIndirect(this.ssbo.indirectDrawAttribute);
 
     const material = new GrassMaterial(this.ssbo);
     const mesh = new InstancedMesh(geometry, material, config.COUNT);
@@ -107,10 +114,10 @@ export default class Grass {
 
   private getMonitoringStatsAsync = async (): Promise<GrassMonitoringStats> => {
     const buffer = await rendererManager.renderer.getArrayBufferAsync(
-      this.ssbo.indirectAttribute,
+      this.ssbo.indirectDrawAttribute,
       null,
-      4,
-      4,
+      INDIRECT_DRAW_INSTANCE_COUNT_BYTE_OFFSET,
+      UINT32_BYTE_SIZE,
     );
     const rendered = new Uint32Array(buffer)[0];
     const trianglesPerBlade = config.BLADE_INDEX_COUNT / 3;

@@ -29,7 +29,7 @@ const bootstrap = async () => {
       );
     else console.warn("[main] Prewarm exited early. Continuing startup.");
 
-    eventsManager.emit("engine-loading-core-progress", 100);
+    // loading screen dismisses itself once the first live frame has rendered
     game.startLoop();
   } catch (error) {
     console.error("[main] Startup failed.", error);

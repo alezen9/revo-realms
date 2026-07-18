@@ -79,7 +79,7 @@ const uniforms = {
   uCullPadNDCYFar: uniform(0.2), // small padding to avoid far clipping
   // tint
   uColor1: uniform(new Color(0.54, 0.54, 0.54).convertSRGBToLinear()),
-  uColor2: uniform(new Color(0.99, 0.64, 0).convertSRGBToLinear()),
+  uColor2: uniform(new Color(0.99, 0.48, 0.0).convertSRGBToLinear()),
   uBrightness: uniform(1),
   // wind
   uWindAmbientStrength: uniform(0.2),

@@ -45,27 +45,24 @@ export class WindManager {
   private eventsManager: EventsManager;
   private sceneManager: SceneManager;
 
-  constructor(
-    eventsManager: EventsManager,
-    sceneManager: SceneManager,
-  ) {
+  constructor(eventsManager: EventsManager, sceneManager: SceneManager) {
     this.eventsManager = eventsManager;
     this.sceneManager = sceneManager;
     this.IS_DEBUGGING_ENABLED && this.debug();
 
-    this.eventsManager.on("swipe-up", this.handleSwipeUp.bind(this));
+    this.eventsManager.on("swipe-up", this.handleSwipeUp);
     this.eventsManager.on(
       "engine-render-update-throttle-4x",
-      this.handleWindBlowing.bind(this),
+      this.handleWindBlowing,
     );
   }
 
-  private handleSwipeUp() {
+  private handleSwipeUp = () => {
     if (!this.target || this.phase !== "idle") return;
     this.phase = "direction";
-  }
+  };
 
-  private directionPhase() {
+  private directionPhase = () => {
     if (!this.target) {
       this.phase = "idle";
       return;
@@ -85,9 +82,9 @@ export class WindManager {
     this.toTargetDir.multiplyScalar(invLen);
     this.uDirection.value.copy(this.toTargetDir);
     this.phase = "start";
-  }
+  };
 
-  private rampPhase(delta: number) {
+  private rampPhase = (delta: number) => {
     this._uIntensityDirectional.value = MathUtils.clamp(
       this._uIntensityDirectional.value + delta * this.RAMP_RATE,
       0,
@@ -95,35 +92,35 @@ export class WindManager {
     );
     if (this._uIntensityDirectional.value === this.MAX_INTENSITY)
       this.phase = "hold";
-  }
+  };
 
-  private holdPhase(delta: number) {
+  private holdPhase = (delta: number) => {
     this.accTimer += delta;
     if (this.accTimer < this.HOLD_INTENSITY_TIME_S) return;
     this.phase = "end";
     this.accTimer = 0;
-  }
+  };
 
-  private decayPhase(delta: number) {
+  private decayPhase = (delta: number) => {
     this._uIntensityDirectional.value = MathUtils.clamp(
       this._uIntensityDirectional.value - delta * this.DECAY_RATE,
       0,
       this.MAX_INTENSITY,
     );
     if (this._uIntensityDirectional.value === 0) this.phase = "idle";
-  }
+  };
 
-  private startPhase() {
+  private startPhase = () => {
     this.eventsManager.emit("game-wind-start");
     this.phase = "ramp";
-  }
+  };
 
-  private endPhase() {
+  private endPhase = () => {
     this.eventsManager.emit("game-wind-end");
     this.phase = "decay";
-  }
+  };
 
-  private clearTargetIfReached() {
+  private clearTargetIfReached = () => {
     if (!this.target) return;
     const dx = this.target.position.x - this.playerPositionXZ.x;
     const dz = this.target.position.z - this.playerPositionXZ.y;
@@ -134,9 +131,9 @@ export class WindManager {
     this.target = undefined;
     this.eventsManager.emit("wind-target-change", null);
     if (this.phase === "direction") this.phase = "idle";
-  }
+  };
 
-  private handleWindBlowing({ player, delta }: State) {
+  private handleWindBlowing = ({ player, delta }: State) => {
     this.playerPositionXZ.set(player.position.x, player.position.z);
     this.hasPlayerPosition = true;
     this.clearTargetIfReached();
@@ -147,9 +144,9 @@ export class WindManager {
     if (this.phase === "hold") return this.holdPhase(delta);
     if (this.phase === "end") return this.endPhase();
     if (this.phase === "decay") return this.decayPhase(delta);
-  }
+  };
 
-  private debug() {
+  private debug = () => {
     const material = new MeshLambertNodeMaterial();
     material.colorNode = vec3(this._uIntensityDirectional);
     const angle = atan(this._uDirection.x, this._uDirection.y.negate());
@@ -163,7 +160,7 @@ export class WindManager {
     this.eventsManager.on("engine-render-update", ({ player }) => {
       mesh.position.copy(player.position).setY(5);
     });
-  }
+  };
 
   get uDirection() {
     return this._uDirection;
@@ -175,7 +172,7 @@ export class WindManager {
     return this._uIntensityDirectional;
   }
 
-  registerTarget(label: string, position: Vector3, radius: number): string {
+  registerTarget = (label: string, position: Vector3, radius: number) => {
     const targetId = `windTarget-${++this.idCounter}`;
     this.targets.set(targetId, {
       id: targetId,
@@ -186,9 +183,9 @@ export class WindManager {
 
     // Debug buttons removed - wind targets are now selected via RadialMenu
     return targetId;
-  }
+  };
 
-  activateTargetById(id: string): boolean {
+  activateTargetById = (id: string) => {
     const target = this.targets.get(id);
     if (!target) return false;
 
@@ -203,7 +200,7 @@ export class WindManager {
     this.targetPositionXZ.set(target.position.x, target.position.z);
     this.eventsManager.emit("wind-target-change", id);
     return true;
-  }
+  };
 
   get activeTargetId() {
     return this.target?.id ?? null;

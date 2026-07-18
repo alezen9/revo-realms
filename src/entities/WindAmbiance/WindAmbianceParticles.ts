@@ -1,6 +1,5 @@
+import { Color } from "three";
 import {
-  abs,
-  cos,
   float,
   floor,
   Fn,
@@ -8,45 +7,50 @@ import {
   If,
   instancedArray,
   instanceIndex,
-  max,
-  min,
   mix,
-  PI2,
-  sin,
   smoothstep,
   step,
-  uv,
+  texture,
   uniform,
   vec2,
   vec3,
   vec4,
 } from "three/tsl";
-import { Color } from "three";
 import {
+  CircleGeometry,
   type ComputeNode,
   InstancedMesh,
-  PlaneGeometry,
   SpriteNodeMaterial,
   Vector2,
   Vector3,
 } from "three/webgpu";
-import { rendererManager, sceneManager, windManager } from "../../systems";
+import { type State } from "../../Game";
+import {
+  assetManager,
+  debugManager,
+  eventsManager,
+  prewarmManager,
+  rendererManager,
+  sceneManager,
+  windManager,
+} from "../../systems";
+import { gameTime } from "../../utils/GameTime";
 import { VegetationSsboUtils } from "../Vegetation/ssboUtils";
 
-export const createWindParticleUniforms = () => ({
+const uniforms = {
   uPlayerDeltaXZ: uniform(new Vector2(0, 0)),
   uPlayerPosition: uniform(new Vector3()),
   uDelta: uniform(0),
-  uColor: uniform(new Color().setRGB(0.24, 0.3, 0.27)),
-  uSpeed: uniform(0.35),
-  uHeight: uniform(5.5),
-  uSize: uniform(1.65),
-});
+  uColor: uniform(new Color().setRGB(0.27, 0.31, 0.28)),
+  uSpeed: uniform(0.5),
+  uHeight: uniform(3.3),
+  uSize: uniform(0.6),
+};
 
-type WindParticleUniforms = ReturnType<typeof createWindParticleUniforms>;
+type WindParticleUniforms = typeof uniforms;
 
 const getConfig = () => {
-  const PARTICLES_PER_SIDE = 64;
+  const PARTICLES_PER_SIDE = 56;
   const FIELD_SIZE = 170;
 
   return {
@@ -55,23 +59,26 @@ const getConfig = () => {
     FIELD_SIZE,
     FIELD_HALF_SIZE: FIELD_SIZE / 2,
     PARTICLE_SPACING: FIELD_SIZE / PARTICLES_PER_SIDE,
-    EDGE_FADE_SIZE: 28,
-    PARTICLE_LIFETIME: 4.2,
+    PARTICLE_LIFETIME: 6.4,
     PARTICLE_SPEED: 30,
-    RESPAWN_DELAY: 2.1,
+    RESPAWN_DELAY: 2.4,
     WORKGROUP_SIZE: 64,
   };
 };
 
 const config = getConfig();
 
-class WindParticleState {
+class WindParticlesSsbo {
+  // x -> local offsetX
+  // y -> world height
+  // z -> local offsetZ
+  // w -> age
   private buffer = instancedArray(config.PARTICLE_COUNT, "vec4");
   private uniforms: WindParticleUniforms;
   private computeInit: ComputeNode;
   private computeUpdate: ComputeNode;
 
-  constructor(uniforms: WindParticleUniforms) {
+  constructor() {
     this.uniforms = uniforms;
     this.computeInit = this.createComputeInit();
     this.computeUpdate = this.createComputeUpdate();
@@ -95,50 +102,28 @@ class WindParticleState {
       const particleIndex = float(instanceIndex);
       const row = floor(particleIndex.div(config.PARTICLES_PER_SIDE));
       const col = particleIndex.sub(row.mul(config.PARTICLES_PER_SIDE));
-      const windDirection = windManager.uDirection;
-      const sideDirection = vec2(windDirection.y.negate(), windDirection.x);
-      const forwardWarp = sin(
-        col.mul(1.73).add(hash(particleIndex.add(41.37)).mul(PI2)),
-      )
+      const seed = hash(particleIndex);
+      const variation = hash(particleIndex.add(2048));
+      const offsetX = col
+        .add(seed)
         .mul(config.PARTICLE_SPACING)
-        .mul(2.4);
-      const sideWarp = cos(
-        row.mul(2.11).add(hash(particleIndex.add(59.91)).mul(PI2)),
-      )
+        .sub(config.FIELD_HALF_SIZE);
+      const offsetZ = row
+        .add(variation)
         .mul(config.PARTICLE_SPACING)
-        .mul(2.8);
-      const forwardOffset = row
-        .add(hash(particleIndex.add(11.13)))
-        .div(config.PARTICLES_PER_SIDE)
-        .mul(config.FIELD_SIZE)
-        .sub(config.FIELD_HALF_SIZE)
-        .add(forwardWarp);
-      const sideOffset = col
-        .add(hash(particleIndex.add(23.19)))
-        .div(config.PARTICLES_PER_SIDE)
-        .mul(config.FIELD_SIZE)
-        .sub(config.FIELD_HALF_SIZE)
-        .add(sideWarp);
-      const localXZ = windDirection
-        .mul(forwardOffset)
-        .add(sideDirection.mul(sideOffset));
-      const worldPos = vec3(localXZ.x, 0, localXZ.y).add(
+        .sub(config.FIELD_HALF_SIZE);
+      const worldPosition = vec3(offsetX, 0, offsetZ).add(
         this.uniforms.uPlayerPosition,
       );
-      const grassScale = VegetationSsboUtils.computeGrassScale(worldPos);
-      const yOffset = VegetationSsboUtils.computeYOffset(worldPos);
-      const isOnGrass = step(0.05, grassScale);
-      const height = mix(
-        0.3,
-        this.uniforms.uHeight.mul(0.9),
-        hash(particleIndex.add(31.73)),
-      );
-      const age = hash(particleIndex.add(113.11))
+      const terrainHeight = VegetationSsboUtils.computeYOffset(worldPosition);
+      const isOnGrass = VegetationSsboUtils.computeGrassMask(worldPosition);
+      const height = mix(0.25, this.uniforms.uHeight.mul(0.85), variation);
+      const age = seed
         .mul(config.PARTICLE_LIFETIME + config.RESPAWN_DELAY)
         .sub(config.RESPAWN_DELAY);
 
       data.assign(
-        vec4(localXZ.x, yOffset.add(height).mul(isOnGrass), localXZ.y, age),
+        vec4(offsetX, terrainHeight.add(height).mul(isOnGrass), offsetZ, age),
       );
     })().compute(config.PARTICLE_COUNT, [config.WORKGROUP_SIZE]);
   }
@@ -147,233 +132,122 @@ class WindParticleState {
     return Fn(() => {
       const data = this.buffer.element(instanceIndex);
       const particleIndex = float(instanceIndex);
-      const row = floor(particleIndex.div(config.PARTICLES_PER_SIDE));
-      const col = particleIndex.sub(row.mul(config.PARTICLES_PER_SIDE));
+      const seed = hash(particleIndex);
+      const variation = hash(particleIndex.add(2048));
       const windDirection = windManager.uDirection;
       const windIntensity = windManager.uIntensityDirectional;
-      const particleStrength = smoothstep(0, 1, windIntensity);
       const sideDirection = vec2(windDirection.y.negate(), windDirection.x);
+      const age = data.w.add(this.uniforms.uDelta.mul(this.uniforms.uSpeed));
+      const isAlive = step(0, age);
+      const lifetime = mix(
+        config.PARTICLE_LIFETIME * 0.82,
+        config.PARTICLE_LIFETIME * 1.18,
+        variation,
+      );
       const wrappedPosition = VegetationSsboUtils.wrapPosition(
-        vec2(data.x, data.z),
+        data.xz,
         this.uniforms.uPlayerDeltaXZ,
         config.FIELD_SIZE,
       );
-      const previousAge = data.w;
-      const age = previousAge.add(
-        this.uniforms.uDelta
-          .mul(this.uniforms.uSpeed)
-          .mul(mix(0.64, 1.08, particleStrength)),
-      );
-      const isAlive = step(0, age);
-      const particleSeed = hash(particleIndex.add(41.19));
-      const lifetime = mix(
-        config.PARTICLE_LIFETIME * 0.72,
-        config.PARTICLE_LIFETIME * 1.38,
-        hash(particleSeed.add(5.17)),
-      );
-      const forwardPulse = sin(
-        age
-          .mul(mix(1.4, 3.8, hash(particleSeed.add(17.47))))
-          .add(particleSeed.mul(PI2)),
-      )
-        .mul(0.5)
-        .add(0.5);
-      const speedVariation = mix(0.78, 1.84, hash(particleSeed.add(7.31)));
+      const worldPosition = wrappedPosition.add(this.uniforms.uPlayerPosition);
+      const flowUv = worldPosition.xz
+        .mul(0.018)
+        .add(vec2(gameTime.mul(0.035), gameTime.mul(0.021)));
+      const flow = texture(assetManager.resources.noiseAtlas, flowUv);
       const forwardVelocity = float(config.PARTICLE_SPEED)
         .mul(this.uniforms.uSpeed)
-        .mul(speedVariation)
-        .mul(mix(0.76, 1.22, forwardPulse))
-        .mul(mix(0.64, 1.18, particleStrength));
-      const chaosStrength = mix(0.38, 1, particleStrength);
-      const sidePhaseA = age
-        .mul(mix(2.1, 5.8, hash(particleSeed.add(13.83))))
-        .add(particleSeed.mul(PI2));
-      const sidePhaseB = age
-        .mul(mix(4.5, 9.2, hash(particleSeed.add(29.61))))
-        .add(hash(particleSeed.add(33.27)).mul(PI2));
-      const sidePhaseC = wrappedPosition.x
-        .mul(0.37)
-        .add(wrappedPosition.z.mul(0.23))
-        .add(age.mul(mix(1.8, 4.8, hash(particleSeed.add(44.53)))))
-        .add(hash(particleSeed.add(48.17)).mul(PI2));
-      const sideVelocity = sin(sidePhaseA)
-        .mul(mix(4.5, 15.0, hash(particleSeed.add(19.73))))
-        .add(cos(sidePhaseB).mul(mix(2.5, 11.0, hash(particleSeed.add(37.91)))))
-        .add(sin(sidePhaseC).mul(mix(3.5, 13.0, hash(particleSeed.add(52.73)))))
+        .mul(mix(0.78, 1.42, seed))
+        .mul(mix(0.78, 1.22, flow.b))
+        .mul(mix(0.6, 1.15, windIntensity));
+      const sideVelocity = flow.r
+        .mul(2)
+        .sub(1)
+        .mul(mix(5, 13, variation))
         .mul(this.uniforms.uSpeed)
-        .mul(chaosStrength);
+        .mul(mix(0.4, 1, windIntensity));
       const travel = windDirection
         .mul(forwardVelocity)
         .add(sideDirection.mul(sideVelocity))
         .mul(this.uniforms.uDelta)
         .mul(isAlive);
-      const nextXZ = wrappedPosition.xz.add(travel);
-      const forwardDistance = nextXZ.dot(windDirection);
-      const sideDistance = nextXZ.dot(sideDirection);
-      const outsideForward = step(config.FIELD_HALF_SIZE, abs(forwardDistance));
-      const outsideSide = step(config.FIELD_HALF_SIZE, abs(sideDistance));
-      const expired = step(lifetime, age);
-      const shouldRespawn = max(max(expired, outsideForward), outsideSide);
+      const position = VegetationSsboUtils.wrapPosition(
+        wrappedPosition.xz.add(travel),
+        vec2(0),
+        config.FIELD_SIZE,
+      );
+      const isOnGrass = step(0.001, data.y);
+      const verticalVelocity = flow.g
+        .mul(2)
+        .sub(1)
+        .mul(mix(0.35, 0.9, seed))
+        .mul(this.uniforms.uSpeed)
+        .mul(mix(0.45, 1.1, windIntensity));
 
-      data.x = nextXZ.x;
-      data.z = nextXZ.y;
+      data.x = position.x;
+      data.y = data.y
+        .add(verticalVelocity.mul(this.uniforms.uDelta).mul(isAlive))
+        .clamp(0.12, this.uniforms.uHeight.add(1))
+        .mul(isOnGrass);
+      data.z = position.z;
       data.w = age;
 
-      If(shouldRespawn, () => {
-        const respawnForwardJitter = hash(particleSeed.add(43.13));
-        const respawnSideJitter = hash(particleSeed.add(53.71));
-        const respawnForward = row
-          .add(respawnForwardJitter)
+      If(step(lifetime, age), () => {
+        const row = floor(particleIndex.div(config.PARTICLES_PER_SIDE));
+        const col = particleIndex.sub(row.mul(config.PARTICLES_PER_SIDE));
+        const spawnForward = row
+          .add(seed)
           .div(config.PARTICLES_PER_SIDE)
-          .mul(config.FIELD_HALF_SIZE * 0.82)
-          .sub(config.FIELD_HALF_SIZE * 1.04);
-        const respawnSide = col
-          .add(respawnSideJitter)
+          .mul(config.FIELD_HALF_SIZE)
+          .sub(config.FIELD_HALF_SIZE);
+        const spawnSide = col
+          .add(variation)
           .div(config.PARTICLES_PER_SIDE)
           .mul(config.FIELD_SIZE)
           .sub(config.FIELD_HALF_SIZE);
-        const laneWarp = sin(
-          row.mul(1.87).add(col.mul(0.63)).add(particleSeed.mul(PI2)),
-        )
-          .mul(config.PARTICLE_SPACING)
-          .mul(1.8);
-        const finalSpawnSide = respawnSide.add(laneWarp);
-        const spawnXZ = windDirection
-          .mul(respawnForward)
-          .add(sideDirection.mul(finalSpawnSide));
-        const worldPos = vec3(spawnXZ.x, 0, spawnXZ.y).add(
-          this.uniforms.uPlayerPosition,
-        );
-        const grassScale = VegetationSsboUtils.computeGrassScale(worldPos);
-        const yOffset = VegetationSsboUtils.computeYOffset(worldPos);
-        const isOnGrass = step(0.05, grassScale);
-        const height = mix(
-          0.3,
-          this.uniforms.uHeight.mul(0.9),
-          hash(particleSeed.add(67.37)),
-        );
-        const respawnAge = hash(particleSeed.add(71.91))
-          .mul(config.RESPAWN_DELAY)
-          .negate();
+        const spawnPosition = windDirection
+          .mul(spawnForward)
+          .add(sideDirection.mul(spawnSide));
+        const spawnWorldPosition = vec3(
+          spawnPosition.x,
+          0,
+          spawnPosition.y,
+        ).add(this.uniforms.uPlayerPosition);
+        const terrainHeight =
+          VegetationSsboUtils.computeYOffset(spawnWorldPosition);
+        const spawnOnGrass =
+          VegetationSsboUtils.computeGrassMask(spawnWorldPosition);
+        const height = mix(0.25, this.uniforms.uHeight.mul(0.85), variation);
 
-        data.x = spawnXZ.x;
-        data.y = yOffset.add(height).mul(isOnGrass);
-        data.z = spawnXZ.y;
-        data.w = respawnAge;
+        data.assign(
+          vec4(
+            spawnPosition.x,
+            terrainHeight.add(height).mul(spawnOnGrass),
+            spawnPosition.y,
+            variation.mul(config.RESPAWN_DELAY).negate(),
+          ),
+        );
       });
     })().compute(config.PARTICLE_COUNT, [config.WORKGROUP_SIZE]);
   }
 }
 
-class WindParticleMaterial extends SpriteNodeMaterial {
-  constructor(state: WindParticleState, uniforms: WindParticleUniforms) {
-    super();
-
-    this.precision = "lowp";
-    this.transparent = false;
-    this.depthWrite = true;
-    this.forceSinglePass = true;
-    this.alphaTest = 0.5;
-
-    const data = state.computeBuffer.element(instanceIndex);
-    const particleIndex = float(instanceIndex);
-    const particleSeed = hash(particleIndex.add(41.19));
-    const windIntensity = windManager.uIntensityDirectional;
-    const particleStrength = smoothstep(0, 1, windIntensity);
-    const windDirection = windManager.uDirection;
-    const sideDirection = vec2(windDirection.y.negate(), windDirection.x);
-    const relativeXZ = data.xz;
-    const forwardDistance = abs(relativeXZ.dot(windDirection));
-    const sideDistance = abs(relativeXZ.dot(sideDirection));
-    const fieldFade = float(1)
-      .sub(
-        smoothstep(
-          config.FIELD_HALF_SIZE - config.EDGE_FADE_SIZE,
-          config.FIELD_HALF_SIZE,
-          max(forwardDistance, sideDistance),
-        ),
-      )
-      .clamp();
-    const isAlive = step(0, data.w);
-    const isOnGrass = step(0.001, data.y);
-    const lifetime = mix(
-      config.PARTICLE_LIFETIME * 0.72,
-      config.PARTICLE_LIFETIME * 1.38,
-      hash(particleSeed.add(5.17)),
-    );
-    const verticalPhaseA = data.w
-      .mul(mix(2.7, 6.2, hash(particleSeed.add(83.61))))
-      .add(particleSeed.mul(PI2));
-    const verticalPhaseB = data.w
-      .mul(mix(5.6, 11.4, hash(particleSeed.add(89.27))))
-      .add(hash(particleSeed.add(97.43)).mul(PI2));
-    const verticalOffset = sin(verticalPhaseA)
-      .mul(mix(0.18, 1.25, hash(particleSeed.add(101.39))))
-      .add(
-        cos(verticalPhaseB).mul(mix(0.1, 0.9, hash(particleSeed.add(109.7)))),
-      )
-      .add(
-        sin(
-          data.x
-            .mul(0.21)
-            .add(data.z.mul(0.34))
-            .add(data.w.mul(mix(1.5, 3.9, hash(particleSeed.add(114.11))))),
-        ).mul(mix(0.16, 0.95, hash(particleSeed.add(118.93)))),
-      )
-      .mul(isAlive)
-      .mul(mix(0.38, 1, particleStrength));
-    const verticalScatter = hash(particleSeed.add(121.71))
-      .sub(0.5)
-      .mul(uniforms.uHeight)
-      .mul(0.6);
-    const lowerY = data.y.sub(uniforms.uHeight.mul(0.18));
-    const upperY = data.y.add(uniforms.uHeight.mul(0.86));
-    const visibleY = min(
-      max(data.y.add(verticalScatter).add(verticalOffset), lowerY),
-      upperY,
-    );
-    const centeredUv = uv().mul(2).sub(1);
-    const radialDistanceSq = centeredUv.x
-      .mul(centeredUv.x)
-      .add(centeredUv.y.mul(centeredUv.y));
-    const particleMask = step(radialDistanceSq, 0.64);
-    const sizeRandom = hash(particleSeed.add(127.31));
-    const smallParticleSize = mix(0.024, 0.054, sizeRandom);
-    const largeParticleSize = mix(0.058, 0.084, hash(particleSeed.add(129.43)));
-    const particleSize = mix(
-      smallParticleSize,
-      largeParticleSize,
-      step(0.72, sizeRandom),
-    ).mul(uniforms.uSize);
-    const lifeVisibility = float(1).sub(step(lifetime, data.w));
-    const fieldVisibility = step(0.001, fieldFade);
-    const scale = isAlive
-      .mul(isOnGrass)
-      .mul(lifeVisibility)
-      .mul(fieldVisibility)
-      .mul(particleStrength);
-    const colorVariation = mix(0.48, 0.72, hash(particleSeed.add(131.83)));
-
-    this.positionNode = vec3(data.x, visibleY, data.z);
-    this.scaleNode = particleSize.mul(scale);
-    this.colorNode = uniforms.uColor.mul(colorVariation);
-    this.opacityNode = particleMask;
-  }
-}
-
 export default class WindAmbianceParticles {
-  private state: WindParticleState;
+  private ssbo = new WindParticlesSsbo();
   private mesh: InstancedMesh;
+  private isComputeInFlight = false;
 
-  constructor(uniforms: WindParticleUniforms) {
-    this.state = new WindParticleState(uniforms);
-    this.mesh = this.createMesh(uniforms);
+  constructor() {
+    this.mesh = this.createMesh();
+    sceneManager.scene.add(this.mesh);
+    this.registerPrewarmTask();
+    this.debug();
+    eventsManager.on("engine-render-update", this.onEngineUpdate);
   }
 
-  private createMesh(uniforms: WindParticleUniforms) {
+  private createMesh() {
     const mesh = new InstancedMesh(
-      new PlaneGeometry(1, 1),
-      new WindParticleMaterial(this.state, uniforms),
+      new CircleGeometry(0.5, 8),
+      new WindParticleMaterial(this.ssbo, uniforms),
       config.PARTICLE_COUNT,
     );
     mesh.visible = false;
@@ -381,24 +255,109 @@ export default class WindAmbianceParticles {
     return mesh;
   }
 
-  syncPlayerPosition(playerPosition: Vector3) {
-    this.mesh.position.copy(playerPosition);
+  private registerPrewarmTask() {
+    prewarmManager.registerTask({
+      prepare: async () => {
+        this.mesh.visible = true;
+        await rendererManager.renderer.computeAsync(this.ssbo.updateNode);
+      },
+      restore: () => {},
+    });
   }
 
-  show() {
+  private onEngineUpdate = ({ player, delta }: State) => {
+    const deltaX = player.position.x - this.mesh.position.x;
+    const deltaZ = player.position.z - this.mesh.position.z;
+    uniforms.uPlayerDeltaXZ.value.set(deltaX, deltaZ);
+    uniforms.uPlayerPosition.value.copy(player.position);
+    uniforms.uDelta.value = delta;
+    this.mesh.position.copy(player.position).setY(0);
     this.mesh.visible = true;
-    if (this.mesh.parent !== sceneManager.scene)
-      sceneManager.scene.add(this.mesh);
+    this.updateSsbo();
+  };
+
+  private async updateSsbo() {
+    if (this.isComputeInFlight) return;
+
+    this.isComputeInFlight = true;
+    try {
+      await rendererManager.renderer.computeAsync(this.ssbo.updateNode);
+    } catch (error) {
+      console.error("[WindAmbianceParticles] computeAsync failed:", error);
+    } finally {
+      this.isComputeInFlight = false;
+    }
   }
 
-  async preparePrewarmAsync() {
-    this.show();
-    await this.update();
+  private debug() {
+    const folder = debugManager.panel.addFolder({
+      title: "🌬️ Wind particles",
+      expanded: false,
+    });
+
+    folder.addBinding(uniforms.uColor, "value", {
+      label: "Color",
+      view: "color",
+      color: { type: "float" },
+    });
+    folder.addBinding(uniforms.uSpeed, "value", {
+      label: "Speed",
+      min: 0,
+      max: 3,
+      step: 0.01,
+    });
+    folder.addBinding(uniforms.uHeight, "value", {
+      label: "Height",
+      min: 0.5,
+      max: 12,
+      step: 0.1,
+    });
+    folder.addBinding(uniforms.uSize, "value", {
+      label: "Size",
+      min: 0.25,
+      max: 4,
+      step: 0.01,
+    });
   }
+}
 
-  restorePrewarm() {}
+class WindParticleMaterial extends SpriteNodeMaterial {
+  constructor(ssbo: WindParticlesSsbo, uniforms: WindParticleUniforms) {
+    super();
 
-  update() {
-    return rendererManager.renderer.computeAsync(this.state.updateNode);
+    this.precision = "lowp";
+    this.transparent = false;
+    this.depthWrite = true;
+    this.forceSinglePass = true;
+
+    const data = ssbo.computeBuffer.element(instanceIndex);
+    const particleIndex = float(instanceIndex);
+    const seed = hash(particleIndex);
+    const variation = hash(particleIndex.add(2048));
+    const lifetime = mix(
+      config.PARTICLE_LIFETIME * 0.82,
+      config.PARTICLE_LIFETIME * 1.18,
+      variation,
+    );
+    const lifeProgress = data.w.div(lifetime).clamp();
+    const lifeFade = smoothstep(0, 0.14, lifeProgress).mul(
+      float(1).sub(smoothstep(0.78, 1, lifeProgress)),
+    );
+    const smallSize = mix(0.03, 0.076, seed);
+    const largeSize = mix(0.09, 0.18, variation);
+    const particleSize = mix(smallSize, largeSize, step(0.66, seed));
+    const gustVisibility = smoothstep(
+      seed.mul(0.55),
+      1,
+      windManager.uIntensityDirectional,
+    );
+    const visibility = step(0, data.w)
+      .mul(step(0.001, data.y))
+      .mul(lifeFade)
+      .mul(gustVisibility);
+
+    this.positionNode = data.xyz;
+    this.scaleNode = particleSize.mul(uniforms.uSize).mul(visibility);
+    this.colorNode = uniforms.uColor.mul(mix(0.48, 0.72, variation));
   }
 }
