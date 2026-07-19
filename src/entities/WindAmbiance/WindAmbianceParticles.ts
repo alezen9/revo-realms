@@ -76,7 +76,7 @@ class WindParticlesSsbo {
   private buffer = instancedArray(config.PARTICLE_COUNT, "vec4");
   private uniforms: WindParticleUniforms;
   private computeInit: ComputeNode;
-  private computeUpdate: ComputeNode;
+  readonly computeUpdate: ComputeNode;
 
   constructor() {
     this.uniforms = uniforms;
@@ -90,10 +90,6 @@ class WindParticlesSsbo {
 
   get computeBuffer() {
     return this.buffer;
-  }
-
-  get updateNode() {
-    return this.computeUpdate;
   }
 
   private createComputeInit() {
@@ -240,8 +236,8 @@ export default class WindAmbianceParticles {
     this.mesh = this.createMesh();
     sceneManager.scene.add(this.mesh);
     this.registerPrewarmTask();
-    this.debug();
     eventsManager.on("engine-render-update", this.onEngineUpdate);
+    this.debug();
   }
 
   private createMesh() {
@@ -259,7 +255,7 @@ export default class WindAmbianceParticles {
     prewarmManager.registerTask({
       prepare: async () => {
         this.mesh.visible = true;
-        await rendererManager.renderer.computeAsync(this.ssbo.updateNode);
+        await rendererManager.renderer.computeAsync(this.ssbo.computeUpdate);
       },
       restore: () => {},
     });
@@ -281,7 +277,7 @@ export default class WindAmbianceParticles {
 
     this.isComputeInFlight = true;
     try {
-      await rendererManager.renderer.computeAsync(this.ssbo.updateNode);
+      await rendererManager.renderer.computeAsync(this.ssbo.computeUpdate);
     } catch (error) {
       console.error("[WindAmbianceParticles] computeAsync failed:", error);
     } finally {

@@ -101,21 +101,12 @@ export default class Player {
     this.targetPosition.copy(this.prevPosition);
     this.targetQuaternion.copy(this.prevQuaternion);
 
-    eventsManager.on(
-      "engine-before-physics",
-      this.updateBeforePhysics.bind(this),
-    );
-    eventsManager.on(
-      "engine-after-physics",
-      this.updateAfterPhysics.bind(this),
-    );
-    eventsManager.on("engine-render-update", this.updateRender.bind(this));
-    eventsManager.on(
-      "engine-render-update-throttle-64x",
-      this.resetPlayerPosition.bind(this),
-    );
+    eventsManager.on("engine-before-physics", this.onBeforePhysics);
+    eventsManager.on("engine-after-physics", this.onAfterPhysics);
+    eventsManager.on("engine-render-update", this.onEngineUpdate);
+    eventsManager.on("engine-render-update-throttle-64x", this.onGateUpdate);
     this.loadWaterMask();
-    this.debugPlayer();
+    this.debug();
   }
 
   private createCharacterMesh() {
@@ -154,7 +145,7 @@ export default class Player {
       .setActiveEvents(ActiveEvents.COLLISION_EVENTS);
   }
 
-  private updateBeforePhysics(state: State) {
+  private onBeforePhysics = (state: State) => {
     const { delta } = state;
 
     this.bodyPosition.copy(this.rigidBody.translation());
@@ -164,9 +155,9 @@ export default class Player {
     this.wasOnGroundBeforePhysics = this.isOnGround;
     this.updateVerticalMovement(delta);
     this.updateHorizontalMovement(delta);
-  }
+  };
 
-  private updateAfterPhysics(state: State) {
+  private onAfterPhysics = (state: State) => {
     const { delta } = state;
 
     this.isOnGround = this.groundingLockTimer === 0 && this.checkIfGrounded();
@@ -181,9 +172,9 @@ export default class Player {
       this.forwardVec,
     );
     this.capturePhysicsTarget();
-  }
+  };
 
-  private updateRender(state: State) {
+  private onEngineUpdate = (state: State) => {
     const { delta } = state;
 
     this.visualRoot.position.lerpVectors(
@@ -198,7 +189,7 @@ export default class Player {
     );
     this.squash.apply(delta, this.visualRoot, this.mesh, this.bodyQuaternion);
     this.camera.update(delta, this.visualRoot.position, this.yawInRadians);
-  }
+  };
 
   private updateWaterState(delta: number) {
     const wasInWater = this.isInWater;
@@ -468,7 +459,7 @@ export default class Player {
     this.targetQuaternion.copy(this.rigidBody.rotation());
   }
 
-  private resetPlayerPosition(state: State) {
+  private onGateUpdate = (state: State) => {
     const { player } = state;
     if (player.position.y > config.RESET_Y_IN_METERS) return;
     this.rigidBody.setLinvel({ x: 0, y: 0, z: 0 }, false);
@@ -486,9 +477,9 @@ export default class Player {
     this.squash.reset();
     this.camera.snapYaw(this.yawInRadians);
     this.jumpsRemaining = 0;
-  }
+  };
 
-  private debugPlayer() {
+  private debug() {
     const folder = debugManager.panel.addFolder({
       title: "⚽️ Player",
       expanded: false,

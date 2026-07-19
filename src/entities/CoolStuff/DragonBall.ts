@@ -35,8 +35,6 @@ class GokuStatueMaterial extends MeshStandardNodeMaterial {
 
 export default class DragonBall {
   constructor() {
-    this.debug();
-
     // Visual
     const gokuStatue = assetManager.resources.worldModel.scene.getObjectByName(
       "goku_statue",
@@ -76,6 +74,7 @@ export default class DragonBall {
       20,
     );
     landmarkManager.setWindTargetId(landmarkId, windTargetId);
+    this.debug();
   }
 
   private debug() {

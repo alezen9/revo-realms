@@ -68,7 +68,6 @@ class PineTreeBarkMaterial extends MeshLambertNodeMaterial {
 export default class PineTrees {
   constructor() {
     // Visual
-    this.debug();
     const pineTreeCanopy =
       assetManager.resources.worldModel.scene.getObjectByName(
         "pine_tree_canopy",
@@ -115,6 +114,7 @@ export default class PineTrees {
     }
 
     sceneManager.scene.add(barkBatch, canopyBatch);
+    this.debug();
   }
 
   private createBatchedMesh(

@@ -46,8 +46,6 @@ class LeviathanAxeMaterial extends MeshStandardNodeMaterial {
 
 export default class GodOfWar {
   constructor() {
-    this.debug();
-
     // Visual
     const axe = assetManager.resources.worldModel.scene.getObjectByName(
       "leviathan_axe",
@@ -72,6 +70,7 @@ export default class GodOfWar {
       20,
     );
     landmarkManager.setWindTargetId(landmarkId, windTargetId);
+    this.debug();
   }
 
   private debug() {

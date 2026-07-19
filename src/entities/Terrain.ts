@@ -93,7 +93,7 @@ const computeCausticsColor = Fn<CausticsArgs, Node<"vec3">>(
   },
 );
 
-class TerainMaterial extends MeshLambertNodeMaterial {
+class TerrainMaterial extends MeshLambertNodeMaterial {
   constructor() {
     super();
     this.createMaterial();
@@ -222,12 +222,12 @@ class OuterTerrainMaterial extends MeshLambertNodeMaterial {
 }
 
 class InnerTerrain {
-  constructor(material: TerainMaterial) {
+  constructor(material: TerrainMaterial) {
     const innerMap = this.createFloor(material);
     sceneManager.scene.add(innerMap);
   }
 
-  private createFloor(material: TerainMaterial) {
+  private createFloor(material: TerrainMaterial) {
     // Visual
     const meshes = assetManager.resources.worldModel.scene.children.filter(
       (obj) => obj.name.startsWith("terrain-") && obj.name !== "terrain-outer",
@@ -369,7 +369,7 @@ class OuterTerrain {
     this.kintoun = this.createKintoun();
     sceneManager.scene.add(this.outerFloor);
 
-    eventsManager.on("engine-render-update", this.update.bind(this));
+    eventsManager.on("engine-render-update", this.onEngineUpdate);
   }
 
   private createOuterFloorVisual() {
@@ -411,7 +411,7 @@ class OuterTerrain {
     this.kintoun.setTranslation(this.kintounPosition, true);
   }
 
-  private update(state: State) {
+  private onEngineUpdate = (state: State) => {
     const { player } = state;
     const isPlayerNearEdgeX =
       realmConfig.HALF_MAP_SIZE - Math.abs(player.position.x) <
@@ -434,12 +434,12 @@ class OuterTerrain {
     const dz =
       absPlayerZ > outerFloorThresold ? absPlayerZ - outerFloorThresold : 0;
     this.outerFloor.position.set(dx * dirX, 0, dz * dirZ);
-  }
+  };
 }
 
 export default class Terrain {
   constructor() {
-    const terrainMaterial = new TerainMaterial();
+    const terrainMaterial = new TerrainMaterial();
     new InnerTerrain(terrainMaterial);
     new OuterTerrain();
   }

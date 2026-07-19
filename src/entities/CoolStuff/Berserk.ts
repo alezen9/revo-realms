@@ -40,8 +40,6 @@ class DragonSlayerMaterial extends MeshStandardNodeMaterial {
 
 export default class Berserk {
   constructor() {
-    this.debug();
-
     // Visual
     const sword = assetManager.resources.worldModel.scene.getObjectByName(
       "dragon_slayer",
@@ -65,6 +63,7 @@ export default class Berserk {
       20,
     );
     landmarkManager.setWindTargetId(landmarkId, windTargetId);
+    this.debug();
   }
 
   private debug() {

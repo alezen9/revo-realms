@@ -1,6 +1,6 @@
 import {
   BufferAttribute,
-  BufferGeometry,
+  InstancedBufferGeometry,
   StaticDrawUsage,
 } from "three";
 
@@ -16,7 +16,7 @@ const getBladeHalfWidth = (t: number, halfWidthBase: number) => {
   return halfWidthBase * baseGrow * tipTaper;
 };
 
-export class GrassBladeGeometry extends BufferGeometry {
+export class GrassBladeGeometry extends InstancedBufferGeometry {
   constructor({
     nSegments,
     bladeHeight,

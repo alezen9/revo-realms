@@ -30,21 +30,24 @@ import { gameTime } from "../../../utils/GameTime";
 import { VegetationSsboUtils } from "../ssboUtils";
 import { config, uniforms } from "./config";
 
-const INDIRECT_DRAW_ARGUMENT_ITEM_SIZE = 1;
-export const INDIRECT_DRAW_INSTANCE_COUNT_ARGUMENT_INDEX = 1;
-
 export class GrassSsbo {
-  private indirectDrawArguments = new Uint32Array([
-    config.BLADE_INDEX_COUNT, // index count
-    0, // instance count
-    0, // first index
-    0, // base vertex
-    0, // first instance
-  ]);
   readonly indirectDrawAttribute = new IndirectStorageBufferAttribute(
-    this.indirectDrawArguments,
-    INDIRECT_DRAW_ARGUMENT_ITEM_SIZE,
+    new Uint32Array([
+      config.BLADE_INDEX_COUNT, // index count
+      0, // instance count, updated every frame by the atomic counter
+      0, // first index
+      0, // base vertex
+      0, // first instance
+    ]),
+    1, // each argument is one uint
   );
+  private atomicIndirectDrawArguments = storage(
+    this.indirectDrawAttribute,
+    "uint",
+    this.indirectDrawAttribute.count,
+  ).toAtomic();
+  // instanceCount is the second indirect draw argument
+  private atomicCounter = this.atomicIndirectDrawArguments.element(1);
   // x -> offsetX (0 unused)
   // y -> offsetZ (0 unused)
   // z -> 0/12 windX - 12/12 windZ (0 unused)
@@ -53,12 +56,6 @@ export class GrassSsbo {
   // x -> 0/4 position based noise - 4/20 offsetY
   private buffer2 = instancedArray(config.COUNT, "float");
   private visibleBladeIndices = instancedArray(config.COUNT, "uint");
-  private atomicIndirectDrawBuffer = storage(
-    this.indirectDrawAttribute,
-    "uint",
-    this.indirectDrawArguments.length,
-  ).toAtomic();
-
   get computeBuffer1() {
     return this.buffer1;
   }
@@ -337,12 +334,7 @@ export class GrassSsbo {
   });
 
   computeResetInstanceCount = Fn(() => {
-    atomicStore(
-      this.atomicIndirectDrawBuffer.element(
-        INDIRECT_DRAW_INSTANCE_COUNT_ARGUMENT_INDEX,
-      ),
-      0,
-    );
+    atomicStore(this.atomicCounter, 0);
   })().compute(1, [1]); // one invocation in a one-thread workgroup
 
   computeUpdate = Fn(() => {
@@ -406,18 +398,18 @@ export class GrassSsbo {
     If(candidateVisible, () => {
       // Scale
       const grassScale = VegetationSsboUtils.computeGrassScale(worldPos);
-      const finalVisible = step(0.05, grassScale);
-      data1.assign(this.setVisibility(data1, finalVisible));
+      const isVisible = step(0.05, grassScale);
+      data1.assign(this.setVisibility(data1, isVisible));
       const baseScale = originalScale.mul(grassScale);
       const recoveredScale = mix(
         currentScale,
         baseScale,
         uniforms.uTrailGrowthRate,
       );
-      const appeared = finalVisible.mul(float(1).sub(previousVisibility));
+      const appeared = isVisible.mul(float(1).sub(previousVisibility));
       const resetScale = mix(recoveredScale, baseScale, max(wrapped, appeared));
 
-      If(finalVisible, () => {
+      If(isVisible, () => {
         // Y offset
         const yOffset = VegetationSsboUtils.computeYOffset(worldPos);
         data2.assign(this.setYOffset(data2, yOffset));
@@ -471,12 +463,7 @@ export class GrassSsbo {
         );
         data1.assign(this.setShadowFactor(data1, shadowFactor));
 
-        const drawIndex = atomicAdd(
-          this.atomicIndirectDrawBuffer.element(
-            INDIRECT_DRAW_INSTANCE_COUNT_ARGUMENT_INDEX,
-          ),
-          1,
-        );
+        const drawIndex = atomicAdd(this.atomicCounter, 1);
         this.visibleBladeIndices.element(drawIndex).assign(instanceIndex);
       });
     });

@@ -33,10 +33,7 @@ type StochasticKeepArgs = [
   previousKeep: Node<"float">,
   hysteresis: Node<"float">,
 ];
-type ClipPositionArgs = [
-  worldPos: Node<"vec3">,
-  cameraMatrix: Node<"mat4">,
-];
+type ClipPositionArgs = [worldPos: Node<"vec3">, cameraMatrix: Node<"mat4">];
 type VisibilityArgs = [
   worldPos: Node<"vec3">,
   cameraMatrix: Node<"mat4">,
@@ -114,9 +111,7 @@ export class VegetationSsboUtils {
       const pDistance = mix(1, pMin, t);
 
       const eyeDepthAbs = clipPosition.w.abs().max(EPSILON);
-      const projectedBladeHeight = fY
-        .mul(bladeHeight)
-        .div(eyeDepthAbs);
+      const projectedBladeHeight = fY.mul(bladeHeight).div(eyeDepthAbs);
       const pScreen = smoothstep(
         projectedMin,
         projectedFull,

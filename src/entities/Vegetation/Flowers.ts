@@ -261,8 +261,8 @@ export default class Flowers {
     this.mesh = this.createMesh();
     sceneManager.scene.add(this.mesh);
 
-    this.debug();
     eventsManager.on("engine-render-update-throttle-16x", this.onEngineUpdate);
+    this.debug();
   }
 
   private createMesh() {

@@ -124,10 +124,10 @@ class WaterMaterial extends MeshBasicNodeMaterial {
     super();
     this.uniforms = { ...this.uniforms, ..._uniforms };
     this.createMaterial();
-    this.debugWater();
+    this.debug();
   }
 
-  private debugWater() {
+  private debug() {
     const folder = debugManager.panel.addFolder({
       title: "🌊 Water",
       expanded: false,

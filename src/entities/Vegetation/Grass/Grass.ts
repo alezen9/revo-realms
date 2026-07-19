@@ -1,4 +1,4 @@
-import { InstancedMesh, Vector2 } from "three";
+import { Mesh, Vector2 } from "three";
 import { type State } from "../../../Game";
 import {
   sceneManager,
@@ -11,21 +11,18 @@ import { config, uniforms } from "./config";
 import { debugGrass } from "./debug";
 import { GrassBladeGeometry } from "./GrassBladeGeometry";
 import { GrassMaterial } from "./GrassMaterial";
-import {
-  GrassSsbo,
-  INDIRECT_DRAW_INSTANCE_COUNT_ARGUMENT_INDEX,
-} from "./GrassSsbo";
+import { GrassSsbo } from "./GrassSsbo";
 import type { ComputeTask } from "../../../systems/RendererManager/ComputeTask";
 import type { GrassMonitoringStats } from "../../../systems/EventsManager";
 
 const UINT32_BYTE_SIZE = Uint32Array.BYTES_PER_ELEMENT;
-const INDIRECT_DRAW_INSTANCE_COUNT_BYTE_OFFSET =
-  INDIRECT_DRAW_INSTANCE_COUNT_ARGUMENT_INDEX * UINT32_BYTE_SIZE;
+// instanceCount is the second uint in the indirect draw arguments
+const INDIRECT_DRAW_INSTANCE_COUNT_BYTE_OFFSET = UINT32_BYTE_SIZE;
 
 export default class Grass {
   private ssbo = new GrassSsbo();
   private computeTask: ComputeTask;
-  private mesh: InstancedMesh;
+  private mesh: Mesh;
   private playerDeltaXZ = new Vector2(0, 0);
 
   constructor() {
@@ -50,10 +47,11 @@ export default class Grass {
       bladeHeight: config.BLADE_HEIGHT,
       bladeWidth: config.BLADE_WIDTH,
     });
+    geometry.instanceCount = config.COUNT;
     geometry.setIndirect(this.ssbo.indirectDrawAttribute);
 
     const material = new GrassMaterial(this.ssbo);
-    const mesh = new InstancedMesh(geometry, material, config.COUNT);
+    const mesh = new Mesh(geometry, material);
     mesh.frustumCulled = false;
     return mesh;
   }
