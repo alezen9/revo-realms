@@ -210,16 +210,16 @@ class FlowersSsbo {
   computeUpdate = Fn(() => {
     const data = this.buffer.element(instanceIndex);
     // Position
-    const pos = VegetationSsboUtils.wrapPosition(
-      vec2(data.x, data.y),
-      uniforms.uPlayerDeltaXZ,
+    const unwrappedOffset = vec2(data.x, data.y).sub(uniforms.uPlayerDeltaXZ);
+    const wrappedOffset = VegetationSsboUtils.wrapPosition(
+      unwrappedOffset,
       config.TILE_SIZE,
     );
 
-    data.x = pos.x;
-    data.y = pos.z;
+    data.x = wrappedOffset.x;
+    data.y = wrappedOffset.z;
 
-    const worldPos = pos.add(uniforms.uPlayerPosition);
+    const worldPos = wrappedOffset.add(uniforms.uPlayerPosition);
     const clipPosition = VegetationSsboUtils.computeClipPosition(
       worldPos,
       uniforms.uCameraMatrix,

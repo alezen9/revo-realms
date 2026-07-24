@@ -342,31 +342,34 @@ export class GrassSsbo {
     const data2 = this.buffer2.element(instanceIndex);
 
     // Position
-    const oldOffset = vec2(data1.x, data1.y);
-    const pos = VegetationSsboUtils.wrapPosition(
-      oldOffset,
-      uniforms.uPlayerDeltaXZ,
+    const previousOffset = vec2(data1.x, data1.y);
+    const unwrappedOffset = previousOffset.sub(uniforms.uPlayerDeltaXZ);
+    const wrappedOffset = VegetationSsboUtils.wrapPosition(
+      unwrappedOffset,
       config.TILE_SIZE,
     );
-    const wrappedX = step(config.TILE_HALF_SIZE, abs(pos.x.sub(oldOffset.x)));
-    const wrappedZ = step(config.TILE_HALF_SIZE, abs(pos.z.sub(oldOffset.y)));
-    const wrapped = max(wrappedX, wrappedZ);
 
-    data1.x = pos.x;
-    data1.y = pos.z;
+    const wrapDelta = wrappedOffset.xz.sub(unwrappedOffset);
+    const isWrapped = step(
+      config.TILE_HALF_SIZE,
+      max(abs(wrapDelta.x), abs(wrapDelta.y)),
+    );
 
-    const worldPos = pos.add(uniforms.uPlayerPosition);
-    const previousVisibility = this.getVisibility(data1);
+    data1.x = wrappedOffset.x;
+    data1.y = wrappedOffset.z;
+
+    const worldPos = wrappedOffset.add(uniforms.uPlayerPosition);
+    const wasVisible = this.getVisibility(data1);
     const currentScale = this.getScale(data1);
     const originalScale = this.getOriginalScale(data1);
-    const previousKeep = previousVisibility.mul(float(1).sub(wrapped));
+    const previousKeep = wasVisible.mul(float(1).sub(isWrapped));
     const clipPosition = VegetationSsboUtils.computeClipPosition(
       worldPos,
       uniforms.uCameraMatrix,
     );
 
     // Visibility
-    const stochasticKeep = VegetationSsboUtils.computeStochasticKeep(
+    const passesStochasticThinning = VegetationSsboUtils.computeStochasticKeep(
       worldPos,
       uniforms.uPlayerPosition,
       uniforms.uR0,
@@ -382,7 +385,7 @@ export class GrassSsbo {
       uniforms.uStochasticHysteresis,
     );
 
-    const candidateVisible = VegetationSsboUtils.computeVisibilityFromClip(
+    const isInFrustum = VegetationSsboUtils.computeVisibilityFromClip(
       clipPosition,
       uniforms.uFx,
       uniforms.uFy,
@@ -390,24 +393,26 @@ export class GrassSsbo {
       uniforms.uCullPadNDCX,
       uniforms.uCullPadNDCYNear,
       uniforms.uCullPadNDCYFar,
-    ).mul(stochasticKeep);
-    data1.assign(this.setVisibility(data1, candidateVisible));
+    );
+    const isPotentiallyVisible = isInFrustum.mul(passesStochasticThinning);
+    data1.assign(this.setVisibility(data1, isPotentiallyVisible));
     data1.assign(this.setShadowFactor(data1, 1));
 
-    // Soft culling
-    If(candidateVisible, () => {
+    // avoid sampling the grass map for blades already rejected above
+    If(isPotentiallyVisible, () => {
       // Scale
       const grassScale = VegetationSsboUtils.computeGrassScale(worldPos);
-      const isVisible = step(0.05, grassScale);
-      data1.assign(this.setVisibility(data1, isVisible));
       const baseScale = originalScale.mul(grassScale);
+      const isVisible = step(config.MIN_VISIBLE_SCALE, baseScale);
+      data1.assign(this.setVisibility(data1, isVisible));
       const recoveredScale = mix(
         currentScale,
         baseScale,
         uniforms.uTrailGrowthRate,
       );
-      const appeared = isVisible.mul(float(1).sub(previousVisibility));
-      const resetScale = mix(recoveredScale, baseScale, max(wrapped, appeared));
+      const didAppear = isVisible.mul(float(1).sub(wasVisible));
+      const shouldReset = max(isWrapped, didAppear);
+      const scaleBeforeTrail = mix(recoveredScale, baseScale, shouldReset);
 
       If(isVisible, () => {
         // Y offset
@@ -433,7 +438,7 @@ export class GrassSsbo {
         // Trail
         const crushedScale = min(baseScale, uniforms.uTrailMinScale);
         const nextScale = mix(
-          resetScale,
+          scaleBeforeTrail,
           crushedScale,
           uniforms.uKDown.mul(contact),
         );
@@ -441,13 +446,12 @@ export class GrassSsbo {
 
         // Wind
         const positionNoise = this.getPositionNoise(data2);
-        const prevWind = this.getWind(data1);
-        const windReset = max(wrapped, appeared);
+        const previousWind = this.getWind(data1);
         const newWind = this.computeWind(
-          prevWind,
+          previousWind,
           worldPos,
           positionNoise,
-          windReset,
+          shouldReset,
         );
         data1.assign(this.setWind(data1, newWind.xy)); // Wind displacement
         const windBend = newWind.xy.dot(newWind.xy).mul(3.5).clamp();

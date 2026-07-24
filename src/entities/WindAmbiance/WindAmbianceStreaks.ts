@@ -26,10 +26,10 @@ import {
   InstancedMesh,
   MeshBasicNodeMaterial,
   PlaneGeometry,
-  Vector2,
   Vector3,
 } from "three/webgpu";
 import { type State } from "../../Game";
+import type { ComputeTask } from "../../systems/RendererManager/ComputeTask";
 import {
   assetManager,
   debugManager,
@@ -43,10 +43,8 @@ import { gameTime } from "../../utils/GameTime";
 import { VegetationSsboUtils } from "../Vegetation/ssboUtils";
 
 const uniforms = {
-  uWindDirection: uniform(new Vector2(0, -1)),
   uPlayerPosition: uniform(new Vector3()),
   uDelta: uniform(0),
-  uEffectFade: uniform(0),
   uHead: uniform(0),
   uAdvance: uniform(0),
   uRecordPhase: uniform(0),
@@ -89,9 +87,6 @@ const getConfig = () => {
     SPEED_PULSE: 0.35,
     GLOW_SPEED: 3,
     GLOW_STRENGTH: 0.25,
-    ACTIVE_INTENSITY_THRESHOLD: 0.24,
-    FADE_IN_RATE: 0.25,
-    FADE_OUT_RATE: 0.35,
     WORKGROUP_SIZE: 16,
   };
 };
@@ -108,13 +103,7 @@ class WindStreaksSsbo {
   // age -> [-RESPAWN_DELAY, STREAK_LIFETIME], negative while respawning
   readonly ages = instancedArray(config.STREAK_COUNT, "float");
 
-  constructor() {
-    this.computeUpdate.onInit(({ renderer }) => {
-      renderer.computeAsync(this.computeInit);
-    });
-  }
-
-  private computeInit = Fn(() => {
+  readonly computeInit = Fn(() => {
     const pointIndex = float(instanceIndex);
     const streakIndex = floor(pointIndex.div(config.POINTS));
     const seed = hash(streakIndex);
@@ -129,7 +118,7 @@ class WindStreaksSsbo {
       .sub(0.5)
       .mul(config.FIELD_SIZE);
     const fieldCenter = uniforms.uPlayerPosition.xz.add(
-      uniforms.uWindDirection.mul(config.FORWARD_BIAS),
+      windManager.uDirection.mul(config.FORWARD_BIAS),
     );
 
     this.points
@@ -152,13 +141,13 @@ class WindStreaksSsbo {
     const base = streakIndex.mul(config.POINTS);
     const seed = hash(streakIndex);
     const variation = hash(streakIndex.add(config.VARIATION_SEED_OFFSET));
-    const windDirection = uniforms.uWindDirection;
     const headSlot = base.add(uniforms.uHead);
     const previousSlot = base.add(
       uniforms.uHead.sub(1).add(config.POINTS).mod(config.POINTS),
     );
 
-    If(uniforms.uAdvance.greaterThan(0.5), () => {
+    const shouldAdvance = uniforms.uAdvance.greaterThan(0.5);
+    If(shouldAdvance, () => {
       this.points.element(headSlot).assign(this.points.element(previousSlot));
     });
 
@@ -199,21 +188,24 @@ class WindStreaksSsbo {
     const headingCos = cos(heading);
     const headingSin = sin(heading);
     const direction = vec2(
-      windDirection.x.mul(headingCos).sub(windDirection.y.mul(headingSin)),
-      windDirection.x.mul(headingSin).add(windDirection.y.mul(headingCos)),
+      windManager.uDirection.x
+        .mul(headingCos)
+        .sub(windManager.uDirection.y.mul(headingSin)),
+      windManager.uDirection.x
+        .mul(headingSin)
+        .add(windManager.uDirection.y.mul(headingCos)),
     );
     const velocity = direction.mul(forwardVelocity);
     const movement = velocity.mul(uniforms.uDelta).mul(isAlive);
     const fieldCenter = uniforms.uPlayerPosition.xz.add(
-      windDirection.mul(config.FORWARD_BIAS),
+      windManager.uDirection.mul(config.FORWARD_BIAS),
     );
     const relativePosition = head.xz.sub(fieldCenter).add(movement);
     const wrappedXZ = VegetationSsboUtils.wrapPosition(
       relativePosition,
-      vec2(0),
       config.FIELD_SIZE,
     ).xz;
-    const expired = step(config.STREAK_LIFETIME, age);
+    const isExpired = step(config.STREAK_LIFETIME, age);
     const respawnSalt = floor(gameTime).mul(config.STREAK_COUNT);
     const respawnSeedX = hash(streakIndex.add(respawnSalt));
     const respawnSeedZ = hash(
@@ -224,9 +216,10 @@ class WindStreaksSsbo {
       .mul(config.FIELD_SIZE);
     const totalShift = wrappedXZ
       .sub(relativePosition)
-      .add(respawnRel.sub(wrappedXZ).mul(expired));
+      .add(respawnRel.sub(wrappedXZ).mul(isExpired));
     const nextXZ = relativePosition.add(fieldCenter);
-    const worldPosition = vec3(nextXZ.x, 0, nextXZ.y);
+    const finalXZ = nextXZ.add(totalShift);
+    const worldPosition = vec3(finalXZ.x, 0, finalXZ.y);
     const terrainHeight = VegetationSsboUtils.computeYOffset(worldPosition);
     const streakLift = uniforms.uHeight.mul(
       mix(0.05, 0.9, variation.mul(variation)),
@@ -246,7 +239,11 @@ class WindStreaksSsbo {
 
     head.assign(vec4(nextXZ.x, nextHeight, nextXZ.y, 0));
 
-    If(totalShift.x.abs().add(totalShift.y.abs()).greaterThan(0.5), () => {
+    const hasShifted = totalShift.x
+      .abs()
+      .add(totalShift.y.abs())
+      .greaterThan(0.5);
+    If(hasShifted, () => {
       Loop(config.POINTS, ({ i }) => {
         const slot = this.points.element(base.add(float(i)));
         slot.x = slot.x.add(totalShift.x);
@@ -255,22 +252,27 @@ class WindStreaksSsbo {
     });
 
     const respawnDelay = variation.mul(config.RESPAWN_DELAY).negate();
-    ageData.assign(mix(age, respawnDelay, expired));
+    ageData.assign(mix(age, respawnDelay, isExpired));
   })().compute(config.STREAK_COUNT, [config.WORKGROUP_SIZE]);
 }
 
 export default class WindAmbianceStreaks {
   private ssbo = new WindStreaksSsbo();
+  private computeTask: ComputeTask;
   private mesh: InstancedMesh;
-  private isComputeInFlight = false;
-  private effectFade = 0;
   private pendingDelta = 0;
   private recordTimer = 0;
   private headIndex = 0;
 
   constructor() {
+    this.computeTask = rendererManager.createComputeTask({
+      label: "WindAmbianceStreaks",
+      init: this.ssbo.computeInit,
+      update: this.ssbo.computeUpdate,
+    });
     this.mesh = this.createMesh();
     sceneManager.scene.add(this.mesh);
+    this.computeTask.init();
     this.registerPrewarmTask();
     eventsManager.on("engine-render-update", this.onEngineUpdate);
     this.debug();
@@ -291,7 +293,8 @@ export default class WindAmbianceStreaks {
     prewarmManager.registerTask({
       prepare: async () => {
         this.mesh.visible = true;
-        await rendererManager.renderer.computeAsync(this.ssbo.computeUpdate);
+        await this.computeTask.init();
+        await this.computeTask.update();
       },
       restore: () => {
         this.mesh.visible = false;
@@ -302,35 +305,13 @@ export default class WindAmbianceStreaks {
   private onEngineUpdate = ({ player, delta }: State) => {
     uniforms.uPlayerPosition.value.copy(player.position);
     this.pendingDelta = Math.min(this.pendingDelta + delta, 0.1);
-    uniforms.uRecordPhase.value = Math.min(
-      (this.recordTimer + this.pendingDelta) / config.RECORD_INTERVAL,
-      1,
-    );
-
-    if (this.effectFade === 0)
-      uniforms.uWindDirection.value.copy(windManager.uDirection.value);
-    const isDirectionCurrent = uniforms.uWindDirection.value.equals(
-      windManager.uDirection.value,
-    );
-
-    const intensity = windManager.uIntensityDirectional.value;
-    const isActive =
-      intensity > config.ACTIVE_INTENSITY_THRESHOLD && isDirectionCurrent;
-    const fadeRate = isActive ? config.FADE_IN_RATE : -config.FADE_OUT_RATE;
-    this.effectFade = Math.max(
-      0,
-      Math.min(1, this.effectFade + delta * fadeRate),
-    );
-    uniforms.uEffectFade.value = this.effectFade;
-
-    this.mesh.visible = isActive || this.effectFade > 0.001;
+    this.mesh.visible = windManager.uIntensityDirectional.value > 0;
     this.updateSsbo();
   };
 
-  private async updateSsbo() {
-    if (this.isComputeInFlight) return;
+  private updateSsbo() {
+    if (!this.computeTask.canUpdate) return;
 
-    this.isComputeInFlight = true;
     this.recordTimer += this.pendingDelta;
     uniforms.uDelta.value = this.pendingDelta;
     this.pendingDelta = 0;
@@ -342,14 +323,9 @@ export default class WindAmbianceStreaks {
       uniforms.uHead.value = this.headIndex;
     }
     uniforms.uAdvance.value = shouldAdvance ? 1 : 0;
+    uniforms.uRecordPhase.value = this.recordTimer / config.RECORD_INTERVAL;
 
-    try {
-      await rendererManager.renderer.computeAsync(this.ssbo.computeUpdate);
-    } catch (error) {
-      console.error("[WindAmbianceStreaks] computeAsync failed:", error);
-    } finally {
-      this.isComputeInFlight = false;
-    }
+    void this.computeTask.update()?.catch(() => undefined);
   }
 
   private debug() {
@@ -380,18 +356,6 @@ export default class WindAmbianceStreaks {
       min: 0.05,
       max: 2,
       step: 0.01,
-    });
-    folder.addBinding(config, "FADE_IN_RATE", {
-      label: "Fade in",
-      min: 0.1,
-      max: 4,
-      step: 0.05,
-    });
-    folder.addBinding(config, "FADE_OUT_RATE", {
-      label: "Fade out",
-      min: 0.1,
-      max: 4,
-      step: 0.05,
     });
   }
 }
@@ -432,9 +396,9 @@ class WindStreakMaterial extends MeshBasicNodeMaterial {
     const position = mix(currentPoint, newerPoint, uniforms.uRecordPhase);
 
     const windForward = vec3(
-      uniforms.uWindDirection.x,
+      windManager.uDirection.x,
       0,
-      uniforms.uWindDirection.y,
+      windManager.uDirection.y,
     );
     const tangent = newerPoint.sub(currentPoint).add(windForward.mul(0.001));
     const viewDirection = cameraPosition.sub(position);
@@ -446,7 +410,7 @@ class WindStreakMaterial extends MeshBasicNodeMaterial {
       float(1).sub(smoothstep(0.78, 1, lifeProgress)),
     );
     const fieldCenter = uniforms.uPlayerPosition.xz.add(
-      uniforms.uWindDirection.mul(config.FORWARD_BIAS),
+      windManager.uDirection.mul(config.FORWARD_BIAS),
     );
     const relativeXZ = position.xz.sub(fieldCenter);
     const fieldDistance = relativeXZ.x.abs().max(relativeXZ.y.abs());
@@ -460,14 +424,13 @@ class WindStreakMaterial extends MeshBasicNodeMaterial {
     const visibility = isAlive
       .mul(lifeFade)
       .mul(fieldFade)
-      .mul(uniforms.uEffectFade);
+      .mul(windManager.uIntensityDirectional);
 
     const widthEnvelope = smoothstep(0, 0.2, trailProgress).mul(
       float(1).sub(trailProgress).pow(1.5),
     );
-    const width = uniforms.uWidth
-      .mul(widthEnvelope)
-      .mul(step(0.001, visibility));
+    const isVisible = step(0.001, visibility);
+    const width = uniforms.uWidth.mul(widthEnvelope).mul(isVisible);
 
     this.positionNode = position.add(sideAxis.mul(sideSign).mul(width));
 

@@ -8,6 +8,7 @@ const getConfig = () => {
   const SEGMENTS = 3;
   const BLADES_PER_SIDE = 512 + 512; // power of 2 is optimal, divisible by wg also good
   const COUNT = BLADES_PER_SIDE * BLADES_PER_SIDE;
+  const MIN_VISIBLE_SCALE = 0.05; // skip almost-flat blades produced near grass-map edges
 
   return {
     SEGMENTS,
@@ -21,6 +22,7 @@ const getConfig = () => {
     COUNT,
     SPACING: TILE_SIZE / BLADES_PER_SIDE,
     WORKGROUP_SIZE: 64,
+    MIN_VISIBLE_SCALE,
   };
 };
 

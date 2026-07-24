@@ -80,10 +80,7 @@ type LandmarkEvents = {
   "landmark-selected": (id: string) => void;
 };
 
-type Events = EngineEvents &
-  InputEvents &
-  GameEvents &
-  LandmarkEvents;
+type Events = EngineEvents & InputEvents & GameEvents & LandmarkEvents;
 
 export class EventsManager {
   private emitter = new EventEmitter<Events>();

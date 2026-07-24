@@ -53,11 +53,7 @@ type VisibilityFromClipArgs = [
   padNdcYNear: Node<"float">,
   padNdcYFar: Node<"float">,
 ];
-type WrapPositionArgs = [
-  posXZ: Node<"vec2">,
-  playerDeltaXZ: Node<"vec2">,
-  tileSize: Node<"float">,
-];
+type WrapPositionArgs = [positionXZ: Node<"vec2">, size: Node<"float">];
 
 const GRASS_MAP_CUTOFF = 0.25;
 
@@ -234,24 +230,17 @@ export class VegetationSsboUtils {
   );
 
   /**
-   * @param posXZ vec2
-   * @param playerDeltaXZ vec2
-   * @param tileSize float
+   * @param positionXZ vec2
+   * @param size float
    * @returns `vec3` Wrapped position
    */
   static wrapPosition = Fn<WrapPositionArgs, Node<"vec3">>(
-    ([posXZ, playerDeltaXZ, tileSize]) => {
-      const halfTile = tileSize.div(2);
-      const newOffsetX = mod(
-        posXZ.x.sub(playerDeltaXZ.x).add(halfTile),
-        tileSize,
-      ).sub(halfTile);
+    ([positionXZ, size]) => {
+      const halfSize = size.div(2);
+      const wrappedX = mod(positionXZ.x.add(halfSize), size).sub(halfSize);
 
-      const newOffsetZ = mod(
-        posXZ.y.sub(playerDeltaXZ.y).add(halfTile),
-        tileSize,
-      ).sub(halfTile);
-      return vec3(newOffsetX, 0, newOffsetZ);
+      const wrappedZ = mod(positionXZ.y.add(halfSize), size).sub(halfSize);
+      return vec3(wrappedX, 0, wrappedZ);
     },
   );
 }
