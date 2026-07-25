@@ -1,6 +1,6 @@
 import { Quaternion, Vector3 } from "three";
 import { sceneManager } from "../../systems";
-import { playerConfig } from "./config";
+import { playerConfig as config } from "./config";
 
 export class PlayerCamera {
   private smoothedPosition = new Vector3();
@@ -11,28 +11,29 @@ export class PlayerCamera {
   private yawQuaternion = new Quaternion();
 
   update(delta: number, focusPosition: Vector3, playerYawInRadians: number) {
+    const {
+      CAMERA_POSITION_FOLLOW_SPEED_IN_INVERSE_SECONDS: positionFollow,
+      CAMERA_TARGET_FOLLOW_SPEED_IN_INVERSE_SECONDS: targetFollow,
+      CAMERA_TARGET_HEIGHT_IN_METERS: targetHeight,
+    } = config;
+
     this.updateYaw(delta, playerYawInRadians);
 
     this.desiredPosition
-      .copy(playerConfig.CAMERA_OFFSET)
+      .copy(config.CAMERA_OFFSET)
       .applyQuaternion(this.yawQuaternion)
       .add(focusPosition);
-
-    const positionLerpFactor =
-      1 -
-      Math.exp(
-        -playerConfig.CAMERA_POSITION_FOLLOW_SPEED_IN_INVERSE_SECONDS * delta,
-      );
-    this.smoothedPosition.lerp(this.desiredPosition, positionLerpFactor);
+    this.smoothedPosition.lerp(
+      this.desiredPosition,
+      1 - Math.exp(-positionFollow * delta),
+    );
 
     this.desiredTarget.copy(focusPosition);
-    this.desiredTarget.y += 1;
-    const targetLerpFactor =
-      1 -
-      Math.exp(
-        -playerConfig.CAMERA_TARGET_FOLLOW_SPEED_IN_INVERSE_SECONDS * delta,
-      );
-    this.smoothedTarget.lerp(this.desiredTarget, targetLerpFactor);
+    this.desiredTarget.y += targetHeight;
+    this.smoothedTarget.lerp(
+      this.desiredTarget,
+      1 - Math.exp(-targetFollow * delta),
+    );
 
     sceneManager.playerCamera.position.copy(this.smoothedPosition);
     sceneManager.playerCamera.lookAt(this.smoothedTarget);
@@ -40,21 +41,17 @@ export class PlayerCamera {
 
   snapYaw(playerYawInRadians: number) {
     this.yawInRadians = playerYawInRadians;
-    this.yawQuaternion.setFromAxisAngle(playerConfig.UP, this.yawInRadians);
+    this.yawQuaternion.setFromAxisAngle(config.UP, this.yawInRadians);
   }
 
   private updateYaw(delta: number, playerYawInRadians: number) {
-    const yawDelta = Math.atan2(
-      Math.sin(playerYawInRadians - this.yawInRadians),
-      Math.cos(playerYawInRadians - this.yawInRadians),
-    );
-    const rotationLerpFactor =
-      1 -
-      Math.exp(
-        -playerConfig.CAMERA_ROTATION_FOLLOW_SPEED_IN_INVERSE_SECONDS * delta,
-      );
+    const { CAMERA_ROTATION_FOLLOW_SPEED_IN_INVERSE_SECONDS: rotationFollow } =
+      config;
 
-    this.yawInRadians += yawDelta * rotationLerpFactor;
-    this.yawQuaternion.setFromAxisAngle(playerConfig.UP, this.yawInRadians);
+    const yawOffset = playerYawInRadians - this.yawInRadians;
+    const yawDelta = Math.atan2(Math.sin(yawOffset), Math.cos(yawOffset));
+
+    this.yawInRadians += yawDelta * (1 - Math.exp(-rotationFollow * delta));
+    this.yawQuaternion.setFromAxisAngle(config.UP, this.yawInRadians);
   }
 }

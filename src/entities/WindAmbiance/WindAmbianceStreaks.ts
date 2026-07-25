@@ -1,12 +1,11 @@
 import { AdditiveBlending, Color, DoubleSide } from "three";
 import {
   cameraPosition,
-  cos,
+  exp,
   float,
   floor,
   Fn,
   hash,
-  If,
   instancedArray,
   instanceIndex,
   Loop,
@@ -15,10 +14,8 @@ import {
   sin,
   smoothstep,
   step,
-  texture,
-  uv,
   uniform,
-  vec2,
+  uv,
   vec3,
   vec4,
 } from "three/tsl";
@@ -28,10 +25,10 @@ import {
   PlaneGeometry,
   Vector3,
 } from "three/webgpu";
+import type { Node } from "three/webgpu";
 import { type State } from "../../Game";
 import type { ComputeTask } from "../../systems/RendererManager/ComputeTask";
 import {
-  assetManager,
   debugManager,
   eventsManager,
   prewarmManager,
@@ -42,247 +39,196 @@ import {
 import { gameTime } from "../../utils/GameTime";
 import { VegetationSsboUtils } from "../Vegetation/ssboUtils";
 
+const STREAK_COUNT = 12;
+const SEGMENT_COUNT = 24;
+const SPINE_POINT_COUNT = SEGMENT_COUNT + 1;
+const FIELD_HALF_SIZE = 60;
+const TRAIL_LENGTH = 24;
+
+const config = {
+  TOTAL_SPINE_POINT_COUNT: STREAK_COUNT * SPINE_POINT_COUNT,
+  // a streak is retired once its whole ribbon has cleared the far edge
+  RECYCLE_DISTANCE: FIELD_HALF_SIZE + TRAIL_LENGTH,
+  EDGE_FADE_SIZE: 18,
+  FORWARD_BIAS: 25,
+  STREAK_SPEED: 18,
+  GROUND_CLEARANCE: 0.16,
+  HEIGHT_FOLLOW_RATE: 2.5,
+  SPAWN_FADE_DISTANCE: 12,
+  GOLDEN_RATIO_CONJUGATE: (Math.sqrt(5) - 1) / 2,
+  HEIGHT_SEQUENCE_STEP: Math.SQRT2 - 1,
+  MAX_UPDATE_DELTA: 0.1,
+  STREAK_WORKGROUP_SIZE: 16,
+};
+
 const uniforms = {
   uPlayerPosition: uniform(new Vector3()),
   uDelta: uniform(0),
-  uHead: uniform(0),
-  uAdvance: uniform(0),
-  uRecordPhase: uniform(0),
+  uReset: uniform(1),
   uColor: uniform(new Color().setRGB(0.42, 0.47, 0.43)),
   uSpeed: uniform(1),
   uHeight: uniform(10),
   uWidth: uniform(0.2),
+  uCurveAmplitude: uniform(3.2),
+  uCurveWavelength: uniform(48),
 };
 
-const getConfig = () => {
-  const STREAK_COUNT = 12;
-  const SEGMENTS = 24;
-  const POINTS = SEGMENTS + 1;
-  const FIELD_SIZE = 120;
+const getWindSide = Fn(() =>
+  vec3(windManager.uDirection.y.negate(), 0, windManager.uDirection.x),
+);
 
-  return {
-    STREAK_COUNT,
-    SEGMENTS,
-    POINTS,
-    TOTAL_POINTS: STREAK_COUNT * POINTS,
-    FIELD_SIZE,
-    FIELD_HALF_SIZE: FIELD_SIZE / 2,
-    EDGE_FADE_SIZE: 18,
-    FORWARD_BIAS: 25,
-    GROUND_CLEARANCE: 0.16,
-    STREAK_LIFETIME: 6.4,
-    STREAK_SPEED: 30,
-    RESPAWN_DELAY: 1.6,
-    RECORD_INTERVAL: 0.075,
-    DISTRIBUTION_STEP: (Math.sqrt(5) - 1) / 2,
-    VARIATION_SEED_OFFSET: 2048,
-    FLOW_MIP_LEVEL: 2,
-    FLOW_NOISE_SCALE: 0.007,
-    FLOW_SCROLL_X: 0.012,
-    FLOW_SCROLL_Y: 0.008,
-    VERTICAL_FLOW_SPEED: 1.2,
-    HEIGHT_RELAX: 0.05,
-    SWIRL_ANGLE: 0.3,
-    DRIFT_ANGLE: 0.5,
-    SPEED_PULSE: 0.35,
-    GLOW_SPEED: 3,
-    GLOW_STRENGTH: 0.25,
-    WORKGROUP_SIZE: 16,
-  };
-};
+const getFieldCenter = Fn(() =>
+  uniforms.uPlayerPosition.xz.add(
+    windManager.uDirection.mul(config.FORWARD_BIAS),
+  ),
+);
 
-const config = getConfig();
+// the curve is a pure function of arc length, so evaluating it further back
+// gives exactly where the head was — that is what makes the body follow it
+const getCurveXZ = Fn<
+  [origin: Node<"vec2">, arc: Node<"float">, seed: Node<"float">],
+  Node<"vec2">
+>(([origin, arc, seed]) => {
+  const reference = origin.add(windManager.uDirection.mul(arc));
+  const waveNumber = float(PI2).div(uniforms.uCurveWavelength);
+  const lateral = sin(arc.mul(waveNumber).add(seed.mul(PI2))).mul(
+    uniforms.uCurveAmplitude,
+  );
+  return reference.add(getWindSide().xz.mul(lateral));
+});
+
+const getSpawnOrigin = Fn<[streakIndex: Node<"float">], Node<"vec2">>(
+  ([streakIndex]) => {
+    const gustOffset = hash(floor(gameTime));
+    const lane = gustOffset
+      .add(streakIndex.mul(config.GOLDEN_RATIO_CONJUGATE))
+      .fract();
+    const alongSequence = gustOffset.add(streakIndex.div(STREAK_COUNT)).fract();
+    // a full reset spreads the flight evenly, a recycle re-enters at the back
+    const spreadAlong = mix(
+      -config.RECYCLE_DISTANCE,
+      FIELD_HALF_SIZE,
+      alongSequence,
+    );
+    const along = mix(
+      float(-config.RECYCLE_DISTANCE),
+      spreadAlong,
+      uniforms.uReset,
+    );
+    const lateral = mix(FIELD_HALF_SIZE * -0.85, FIELD_HALF_SIZE * 0.85, lane);
+    return getFieldCenter()
+      .add(windManager.uDirection.mul(along))
+      .add(getWindSide().xz.mul(lateral));
+  },
+);
+
+const getVisibility = Fn<
+  [position: Node<"vec3">, lifecycleDistance: Node<"float">],
+  Node<"float">
+>(([position, lifecycleDistance]) => {
+  const relativePosition = position.xz.sub(getFieldCenter()).abs();
+  const fieldDistance = relativePosition.x.max(relativePosition.y);
+  const fieldFade = float(1).sub(
+    smoothstep(
+      FIELD_HALF_SIZE - config.EDGE_FADE_SIZE,
+      FIELD_HALF_SIZE,
+      fieldDistance,
+    ),
+  );
+  const spawnFade = smoothstep(
+    0,
+    config.SPAWN_FADE_DISTANCE,
+    lifecycleDistance,
+  );
+  return windManager.uIntensityDirectional.mul(fieldFade).mul(spawnFade);
+});
 
 class WindStreaksSsbo {
-  // ring of POINTS slots per streak
-  // x -> worldX
-  // y -> worldY
-  // z -> worldZ
-  // w -> unused
-  readonly points = instancedArray(config.TOTAL_POINTS, "vec4");
-  // age -> [-RESPAWN_DELAY, STREAK_LIFETIME], negative while respawning
-  readonly ages = instancedArray(config.STREAK_COUNT, "float");
+  // xy -> curve origin in world XZ, z -> travelled arc, w -> smoothed height
+  readonly streaks = instancedArray(STREAK_COUNT, "vec4");
+  readonly spinePoints = instancedArray(config.TOTAL_SPINE_POINT_COUNT, "vec4");
 
-  readonly computeInit = Fn(() => {
-    const pointIndex = float(instanceIndex);
-    const streakIndex = floor(pointIndex.div(config.POINTS));
-    const seed = hash(streakIndex);
-    const offsetX = streakIndex
-      .mul(config.DISTRIBUTION_STEP)
-      .fract()
-      .sub(0.5)
-      .mul(config.FIELD_SIZE);
-    const offsetZ = streakIndex
-      .add(seed)
-      .div(config.STREAK_COUNT)
-      .sub(0.5)
-      .mul(config.FIELD_SIZE);
-    const fieldCenter = uniforms.uPlayerPosition.xz.add(
-      windManager.uDirection.mul(config.FORWARD_BIAS),
-    );
-
-    this.points
-      .element(instanceIndex)
-      .assign(
-        vec4(offsetX.add(fieldCenter.x), 0, offsetZ.add(fieldCenter.y), 0),
-      );
-
-    const isHeadPoint = pointIndex.mod(config.POINTS).lessThan(0.5);
-    If(isHeadPoint, () => {
-      const age = seed
-        .mul(config.STREAK_LIFETIME + config.RESPAWN_DELAY)
-        .sub(config.RESPAWN_DELAY);
-      this.ages.element(streakIndex).assign(age);
-    });
-  })().compute(config.TOTAL_POINTS, [64]);
-
-  readonly computeUpdate = Fn(() => {
+  readonly computeStreaks = Fn(() => {
     const streakIndex = float(instanceIndex);
-    const base = streakIndex.mul(config.POINTS);
     const seed = hash(streakIndex);
-    const variation = hash(streakIndex.add(config.VARIATION_SEED_OFFSET));
-    const headSlot = base.add(uniforms.uHead);
-    const previousSlot = base.add(
-      uniforms.uHead.sub(1).add(config.POINTS).mod(config.POINTS),
-    );
+    const variation = streakIndex.mul(config.HEIGHT_SEQUENCE_STEP).fract();
+    const streak = this.streaks.element(instanceIndex);
+    const origin = streak.xy.toVar();
 
-    const shouldAdvance = uniforms.uAdvance.greaterThan(0.5);
-    If(shouldAdvance, () => {
-      this.points.element(headSlot).assign(this.points.element(previousSlot));
-    });
-
-    const head = this.points.element(headSlot);
-    const ageData = this.ages.element(instanceIndex);
-    const age = ageData.add(uniforms.uDelta.mul(uniforms.uSpeed));
-    const isAlive = step(0, age);
-    const flowScroll = vec2(
-      gameTime.mul(config.FLOW_SCROLL_X),
-      gameTime.mul(config.FLOW_SCROLL_Y),
-    );
-    const flowUv = head.xz.mul(config.FLOW_NOISE_SCALE).add(flowScroll);
-    const flow = texture(
-      assetManager.resources.noiseAtlas,
-      flowUv,
-      config.FLOW_MIP_LEVEL,
-    );
-    const speedVariation = mix(0.75, 1.25, seed);
-    const gustSpeed = mix(0.86, 1.14, flow.r);
-    const pulseFrequency = mix(0.4, 0.9, variation).mul(PI2);
-    const speedPulse = float(1).add(
-      sin(gameTime.mul(pulseFrequency).add(variation.mul(PI2))).mul(
-        config.SPEED_PULSE,
-      ),
-    );
-    const forwardVelocity = float(config.STREAK_SPEED)
+    const speed = float(config.STREAK_SPEED)
       .mul(uniforms.uSpeed)
-      .mul(speedVariation)
-      .mul(gustSpeed)
-      .mul(speedPulse);
+      .mul(mix(0.88, 1.12, seed));
+    const arc = streak.z.add(
+      speed.mul(windManager.uIntensityDirectional).mul(uniforms.uDelta),
+    );
 
-    const driftHeading = flow.g.mul(2).sub(1).mul(config.DRIFT_ANGLE);
-    const swirlFrequency = mix(0.35, 0.8, seed).mul(PI2);
-    const swirlHeading = sin(
-      gameTime.mul(swirlFrequency).add(seed.mul(PI2)),
-    ).mul(config.SWIRL_ANGLE);
-    const heading = driftHeading.add(swirlHeading);
-    const headingCos = cos(heading);
-    const headingSin = sin(heading);
-    const direction = vec2(
-      windManager.uDirection.x
-        .mul(headingCos)
-        .sub(windManager.uDirection.y.mul(headingSin)),
-      windManager.uDirection.x
-        .mul(headingSin)
-        .add(windManager.uDirection.y.mul(headingCos)),
-    );
-    const velocity = direction.mul(forwardVelocity);
-    const movement = velocity.mul(uniforms.uDelta).mul(isAlive);
-    const fieldCenter = uniforms.uPlayerPosition.xz.add(
-      windManager.uDirection.mul(config.FORWARD_BIAS),
-    );
-    const relativePosition = head.xz.sub(fieldCenter).add(movement);
-    const wrappedXZ = VegetationSsboUtils.wrapPosition(
-      relativePosition,
-      config.FIELD_SIZE,
-    ).xz;
-    const isExpired = step(config.STREAK_LIFETIME, age);
-    const respawnSalt = floor(gameTime).mul(config.STREAK_COUNT);
-    const respawnSeedX = hash(streakIndex.add(respawnSalt));
-    const respawnSeedZ = hash(
-      streakIndex.add(respawnSalt).add(config.VARIATION_SEED_OFFSET),
-    );
-    const respawnRel = vec2(respawnSeedX, respawnSeedZ)
-      .sub(0.5)
-      .mul(config.FIELD_SIZE);
-    const totalShift = wrappedXZ
-      .sub(relativePosition)
-      .add(respawnRel.sub(wrappedXZ).mul(isExpired));
-    const nextXZ = relativePosition.add(fieldCenter);
-    const finalXZ = nextXZ.add(totalShift);
-    const worldPosition = vec3(finalXZ.x, 0, finalXZ.y);
-    const terrainHeight = VegetationSsboUtils.computeYOffset(worldPosition);
-    const streakLift = uniforms.uHeight.mul(
-      mix(0.05, 0.9, variation.mul(variation)),
-    );
-    const targetHeight = terrainHeight
-      .add(streakLift)
+    const headXZ = getCurveXZ(origin, arc, seed);
+    const alongDistance = headXZ
+      .sub(getFieldCenter())
+      .dot(windManager.uDirection);
+    const isRecycling = step(config.RECYCLE_DISTANCE, alongDistance);
+    const shouldReset = uniforms.uReset.max(isRecycling).toVar();
+    const nextOrigin = mix(origin, getSpawnOrigin(streakIndex), shouldReset);
+    const nextArc = mix(arc, float(0), shouldReset);
+    const nextHeadXZ = getCurveXZ(nextOrigin, nextArc, seed);
+    const targetHeight = VegetationSsboUtils.computeYOffset(
+      vec3(nextHeadXZ.x, 0, nextHeadXZ.y),
+    )
+      .add(uniforms.uHeight.mul(mix(0.05, 0.9, variation.mul(variation))))
       .add(config.GROUND_CLEARANCE);
-    const verticalFlow = flow.b
-      .mul(2)
-      .sub(1)
-      .mul(config.VERTICAL_FLOW_SPEED)
-      .mul(uniforms.uSpeed);
-    const driftedHeight = head.y.add(
-      verticalFlow.mul(uniforms.uDelta).mul(isAlive),
+    const heightFollow = float(1).sub(
+      exp(uniforms.uDelta.mul(config.HEIGHT_FOLLOW_RATE).negate()),
     );
-    const nextHeight = mix(driftedHeight, targetHeight, config.HEIGHT_RELAX);
+    const movedHeight = mix(streak.w, targetHeight, heightFollow);
+    const nextHeight = mix(movedHeight, targetHeight, shouldReset);
 
-    head.assign(vec4(nextXZ.x, nextHeight, nextXZ.y, 0));
+    streak.assign(vec4(nextOrigin.x, nextOrigin.y, nextArc, nextHeight));
 
-    const hasShifted = totalShift.x
-      .abs()
-      .add(totalShift.y.abs())
-      .greaterThan(0.5);
-    If(hasShifted, () => {
-      Loop(config.POINTS, ({ i }) => {
-        const slot = this.points.element(base.add(float(i)));
-        slot.x = slot.x.add(totalShift.x);
-        slot.z = slot.z.add(totalShift.y);
-      });
+    const baseIndex = streakIndex.mul(SPINE_POINT_COUNT);
+    Loop(SPINE_POINT_COUNT, ({ i }) => {
+      const trailProgress = float(i).div(SEGMENT_COUNT);
+      const pointArc = nextArc.sub(trailProgress.mul(TRAIL_LENGTH));
+      const positionXZ = getCurveXZ(nextOrigin, pointArc, seed);
+      const terrainHeight = VegetationSsboUtils.computeYOffset(
+        vec3(positionXZ.x, 0, positionXZ.y),
+      );
+      const height = nextHeight.max(terrainHeight.add(config.GROUND_CLEARANCE));
+      const position = vec3(positionXZ.x, height, positionXZ.y);
+      const visibility = getVisibility(position, nextArc);
+
+      this.spinePoints
+        .element(baseIndex.add(float(i)))
+        .assign(vec4(position, visibility));
     });
-
-    const respawnDelay = variation.mul(config.RESPAWN_DELAY).negate();
-    ageData.assign(mix(age, respawnDelay, isExpired));
-  })().compute(config.STREAK_COUNT, [config.WORKGROUP_SIZE]);
+  })().compute(STREAK_COUNT, [config.STREAK_WORKGROUP_SIZE]);
 }
 
 export default class WindAmbianceStreaks {
   private ssbo = new WindStreaksSsbo();
   private computeTask: ComputeTask;
   private mesh: InstancedMesh;
-  private pendingDelta = 0;
-  private recordTimer = 0;
-  private headIndex = 0;
-
+  private elapsedSinceUpdate = 0;
+  private isResetPending = false;
   constructor() {
     this.computeTask = rendererManager.createComputeTask({
       label: "WindAmbianceStreaks",
-      init: this.ssbo.computeInit,
-      update: this.ssbo.computeUpdate,
+      init: this.ssbo.computeStreaks,
+      update: this.ssbo.computeStreaks,
     });
     this.mesh = this.createMesh();
     sceneManager.scene.add(this.mesh);
-    this.computeTask.init();
+    void this.computeTask.init()?.then(this.clearReset, this.clearReset);
     this.registerPrewarmTask();
+    eventsManager.on("game-wind-start", this.onWindStart);
     eventsManager.on("engine-render-update", this.onEngineUpdate);
     this.debug();
   }
 
   private createMesh() {
     const mesh = new InstancedMesh(
-      new PlaneGeometry(1, 1, 1, config.SEGMENTS),
+      new PlaneGeometry(1, 1, 1, SEGMENT_COUNT),
       new WindStreakMaterial(this.ssbo),
-      config.STREAK_COUNT,
+      STREAK_COUNT,
     );
     mesh.visible = false;
     mesh.frustumCulled = false;
@@ -302,31 +248,44 @@ export default class WindAmbianceStreaks {
     });
   }
 
+  private onWindStart = () => {
+    this.isResetPending = true;
+  };
+
   private onEngineUpdate = ({ player, delta }: State) => {
     uniforms.uPlayerPosition.value.copy(player.position);
-    this.pendingDelta = Math.min(this.pendingDelta + delta, 0.1);
-    this.mesh.visible = windManager.uIntensityDirectional.value > 0;
+
+    const isWindActive = windManager.uIntensityDirectional.value > 0;
+    this.mesh.visible = isWindActive;
+    if (!isWindActive && !this.isResetPending) {
+      this.elapsedSinceUpdate = 0;
+      return;
+    }
+
+    this.elapsedSinceUpdate = Math.min(
+      this.elapsedSinceUpdate + delta,
+      config.MAX_UPDATE_DELTA,
+    );
     this.updateSsbo();
   };
 
   private updateSsbo() {
     if (!this.computeTask.canUpdate) return;
 
-    this.recordTimer += this.pendingDelta;
-    uniforms.uDelta.value = this.pendingDelta;
-    this.pendingDelta = 0;
+    uniforms.uDelta.value = this.elapsedSinceUpdate;
+    uniforms.uReset.value = this.isResetPending ? 1 : 0;
 
-    const shouldAdvance = this.recordTimer >= config.RECORD_INTERVAL;
-    if (shouldAdvance) {
-      this.recordTimer %= config.RECORD_INTERVAL;
-      this.headIndex = (this.headIndex + 1) % config.POINTS;
-      uniforms.uHead.value = this.headIndex;
-    }
-    uniforms.uAdvance.value = shouldAdvance ? 1 : 0;
-    uniforms.uRecordPhase.value = this.recordTimer / config.RECORD_INTERVAL;
+    const updatePromise = this.computeTask.update();
+    if (!updatePromise) return;
 
-    void this.computeTask.update()?.catch(() => undefined);
+    this.elapsedSinceUpdate = 0;
+    this.isResetPending = false;
+    void updatePromise.then(this.clearReset, this.clearReset);
   }
+
+  private clearReset = () => {
+    uniforms.uReset.value = 0;
+  };
 
   private debug() {
     const folder = debugManager.panel.addFolder({
@@ -339,24 +298,16 @@ export default class WindAmbianceStreaks {
       view: "color",
       color: { type: "float" },
     });
-    folder.addBinding(uniforms.uSpeed, "value", {
-      label: "Speed",
-      min: 0,
-      max: 3,
-      step: 0.01,
-    });
-    folder.addBinding(uniforms.uHeight, "value", {
-      label: "Height",
-      min: 0.5,
-      max: 12,
-      step: 0.1,
-    });
-    folder.addBinding(uniforms.uWidth, "value", {
-      label: "Width",
-      min: 0.05,
-      max: 2,
-      step: 0.01,
-    });
+    const numberBindings = [
+      [uniforms.uSpeed, "Speed", 0, 3, 0.01],
+      [uniforms.uHeight, "Height", 0.5, 12, 0.1],
+      [uniforms.uWidth, "Width", 0.05, 2, 0.01],
+      [uniforms.uCurveAmplitude, "Curve amplitude", 0, 10, 0.1],
+      [uniforms.uCurveWavelength, "Curve wavelength", 8, 120, 1],
+    ] as const;
+    for (const [target, label, min, max, stepSize] of numberBindings) {
+      folder.addBinding(target, "value", { label, min, max, step: stepSize });
+    }
   }
 }
 
@@ -372,87 +323,68 @@ class WindStreakMaterial extends MeshBasicNodeMaterial {
     this.side = DoubleSide;
 
     const streakIndex = float(instanceIndex);
-    const base = streakIndex.mul(config.POINTS);
-    const seed = hash(streakIndex);
-    const variation = hash(streakIndex.add(config.VARIATION_SEED_OFFSET));
-    const age = ssbo.ages.element(instanceIndex);
+    const baseIndex = streakIndex.mul(SPINE_POINT_COUNT);
     const trailProgress = uv().y;
-    const edgeDistance = uv().x.mul(2).sub(1).abs();
-    const sideSign = uv().x.mul(2).sub(1);
-    const lengthFactor = mix(0.6, 1, seed);
-    const row = trailProgress.mul(config.SEGMENTS).mul(lengthFactor).round();
+    const row = trailProgress.mul(SEGMENT_COUNT).round();
+    const point = ssbo.spinePoints.element(baseIndex.add(row));
+    const towardHead = ssbo.spinePoints.element(
+      baseIndex.add(row.sub(1).max(0)),
+    ).xyz;
+    const towardTail = ssbo.spinePoints.element(
+      baseIndex.add(row.add(1).min(SEGMENT_COUNT)),
+    ).xyz;
 
-    const wrapGuard = config.POINTS * 2;
-    const currentIndex = uniforms.uHead
-      .sub(row)
-      .add(wrapGuard)
-      .mod(config.POINTS);
-    const newerIndex = uniforms.uHead
-      .sub(row.sub(1).max(0))
-      .add(wrapGuard)
-      .mod(config.POINTS);
-    const currentPoint = ssbo.points.element(base.add(currentIndex)).xyz;
-    const newerPoint = ssbo.points.element(base.add(newerIndex)).xyz;
-    const position = mix(currentPoint, newerPoint, uniforms.uRecordPhase);
-
-    const windForward = vec3(
+    const endpointDirection = vec3(
       windManager.uDirection.x,
       0,
       windManager.uDirection.y,
+    )
+      .negate()
+      .mul(0.001);
+    const incoming = point.xyz
+      .sub(towardHead)
+      .add(endpointDirection)
+      .normalize();
+    const outgoing = towardTail
+      .sub(point.xyz)
+      .add(endpointDirection)
+      .normalize();
+    const tangent = incoming.add(outgoing).normalize();
+    const toCamera = cameraPosition.sub(point.xyz);
+    const viewDirection = toCamera.div(toCamera.length().max(1e-5));
+    const cameraSide = tangent.cross(viewDirection);
+    const cameraSideLength = cameraSide.length();
+    const cameraSideAxis = cameraSide.div(cameraSideLength.max(1e-5));
+    const worldSide = tangent.cross(vec3(0, 1, 0)).normalize();
+    const alignedWorldSide = mix(
+      worldSide.negate(),
+      worldSide,
+      step(0, cameraSide.dot(worldSide)),
     );
-    const tangent = newerPoint.sub(currentPoint).add(windForward.mul(0.001));
-    const viewDirection = cameraPosition.sub(position);
-    const sideAxis = tangent.cross(viewDirection).normalize();
+    const sideBlend = smoothstep(0.05, 0.2, cameraSideLength);
+    const sideAxis = mix(
+      alignedWorldSide,
+      cameraSideAxis,
+      sideBlend,
+    ).normalize();
+    const miterScale = float(1)
+      .div(tangent.dot(outgoing).abs().max(1e-3))
+      .min(1.5);
+    const sideSign = uv().x.mul(2).sub(1);
+    const width = uniforms.uWidth
+      .mul(smoothstep(0, 0.2, trailProgress))
+      .mul(float(1).sub(trailProgress).pow(1.5))
+      .mul(miterScale);
 
-    const isAlive = step(0, age);
-    const lifeProgress = age.div(config.STREAK_LIFETIME).clamp();
-    const lifeFade = smoothstep(0, 0.1, lifeProgress).mul(
-      float(1).sub(smoothstep(0.78, 1, lifeProgress)),
-    );
-    const fieldCenter = uniforms.uPlayerPosition.xz.add(
-      windManager.uDirection.mul(config.FORWARD_BIAS),
-    );
-    const relativeXZ = position.xz.sub(fieldCenter);
-    const fieldDistance = relativeXZ.x.abs().max(relativeXZ.y.abs());
-    const fieldFade = float(1).sub(
-      smoothstep(
-        config.FIELD_HALF_SIZE - config.EDGE_FADE_SIZE,
-        config.FIELD_HALF_SIZE,
-        fieldDistance,
-      ),
-    );
-    const visibility = isAlive
-      .mul(lifeFade)
-      .mul(fieldFade)
-      .mul(windManager.uIntensityDirectional);
-
-    const widthEnvelope = smoothstep(0, 0.2, trailProgress).mul(
-      float(1).sub(trailProgress).pow(1.5),
-    );
-    const isVisible = step(0.001, visibility);
-    const width = uniforms.uWidth.mul(widthEnvelope).mul(isVisible);
-
-    this.positionNode = position.add(sideAxis.mul(sideSign).mul(width));
-
-    const edgeFade = float(1).sub(smoothstep(0.08, 0.92, edgeDistance));
-    const headFade = float(1).sub(smoothstep(0.1, 1, trailProgress));
-    const glowPhase = trailProgress
-      .mul(PI2)
-      .add(gameTime.mul(config.GLOW_SPEED))
-      .add(seed.mul(PI2));
-    const glow = sin(glowPhase).mul(0.5).add(0.5);
-    const pulseFrequency = mix(0.4, 0.9, variation).mul(PI2);
-    const speedPulse = float(1).add(
-      sin(gameTime.mul(pulseFrequency).add(variation.mul(PI2))).mul(
-        config.SPEED_PULSE,
-      ),
-    );
+    this.positionNode = point.xyz.add(sideAxis.mul(sideSign).mul(width));
     this.colorNode = uniforms.uColor;
-    this.opacityNode = float(0.09)
-      .mul(visibility)
-      .mul(edgeFade)
-      .mul(mix(0.4, 1, headFade))
-      .mul(mix(1 - config.GLOW_STRENGTH, 1 + config.GLOW_STRENGTH, glow))
-      .mul(speedPulse);
+
+    const edgeFade = float(1).sub(smoothstep(0.08, 0.92, sideSign.abs()));
+    const headFade = mix(
+      0.4,
+      1,
+      float(1).sub(smoothstep(0.1, 1, trailProgress)),
+    );
+    this.opacityNode = point.w.mul(0.09).mul(edgeFade).mul(headFade);
   }
 }

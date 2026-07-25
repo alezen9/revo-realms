@@ -2,10 +2,10 @@ import { Color, Matrix4, Vector2, Vector3 } from "three";
 import { uniform } from "three/tsl";
 
 const getConfig = () => {
-  const BLADE_WIDTH = 0.125;
+  const BLADE_WIDTH = 0.15;
   const BLADE_HEIGHT = 1.75;
   const TILE_SIZE = 130;
-  const SEGMENTS = 3;
+  const SEGMENTS = 4;
   const BLADES_PER_SIDE = 512 + 512; // power of 2 is optimal, divisible by wg also good
   const COUNT = BLADES_PER_SIDE * BLADES_PER_SIDE;
   const MIN_VISIBLE_SCALE = 0.05; // skip almost-flat blades produced near grass-map edges
