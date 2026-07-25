@@ -17,7 +17,11 @@ import pyUrl from "/textures/environment/py.webp?url";
 import nyUrl from "/textures/environment/ny.webp?url";
 import pzUrl from "/textures/environment/pz.webp?url";
 import nzUrl from "/textures/environment/nz.webp?url";
-
+// Terrain
+import terrainMapsUrl from "/textures/new-world/terrain/terrain-maps.ktx2?url"; // R shadow, G grass, B water
+import waterMaskUrl from "/textures/new-world/terrain/water-mask.bin?url"; // used CPU side
+import terrainNormAoUrl from "/textures/new-world/terrain/groundNormalAO_1k.ktx2?url";
+import normVeinWaterUrl from "/textures/new-world/water/water_normal_vein_uastc.ktx2?url";
 // Water
 import waterNormalUrl from "/textures/new-world/water/water_normal.ktx2?url";
 // God of War
@@ -53,25 +57,14 @@ import _treeBarkDiffuseUrl from "/textures/new-world/tree/bark_diffuse_512_uastc
 import _treeBarkNormalUrl from "/textures/new-world/tree/bark_normal_512_uastc.ktx2?url";
 
 import uvCheckerUrl from "/textures/new-world/debug/uvChecker_1k_uastc.ktx2?url";
-import terrainNormAoUrl from "/textures/new-world/terrain/groundNormalAO_1k.ktx2?url";
-import normVeinWaterUrl from "/textures/new-world/water/water_normal_vein_uastc.ktx2?url";
 import noiseAtlasUrl from "/textures/new-world/noise/noise_atlas.ktx2?url";
-
-// dev
-// import grassMapUrl from "/textures/new-world/terrain/grass-map.png?url";
-// import waterMapUrl from "/textures/new-world/terrain/water-map.png?url";
-// import shadowMapUrl from "/textures/new-world/terrain/shadow-map.png?url";
-
-// prod
-import grassMapUrl from "/textures/new-world/terrain/grass-map.png?url";
-import waterMapUrl from "/textures/new-world/terrain/water-map.webp?url";
-import shadowMapUrl from "/textures/new-world/terrain/shadow-map.webp?url";
 
 type ResourceType = {
   texture: Texture;
   gltf: GLTF;
   cubeTexture: CubeTexture;
   ktx2: CompressedTexture;
+  binary: Uint8Array;
 };
 
 type TextureResourceRaw = {
@@ -104,11 +97,18 @@ type CompressedTextureResourceRaw = Omit<TextureResourceRaw, "type"> & {
   type: "ktx2";
 };
 
+type BinaryResourceRaw = {
+  name: string;
+  url: string;
+  type: "binary";
+};
+
 export type ResourceRaw =
   | TextureResourceRaw
   | GLTFResourceRaw
   | CubeTextureResourceRaw
-  | CompressedTextureResourceRaw;
+  | CompressedTextureResourceRaw
+  | BinaryResourceRaw;
 
 const isDev = import.meta.env.DEV;
 
@@ -145,31 +145,18 @@ export const manifest = [
   // Terrain
   // -----------------------------------------------
   {
-    name: "grassMap",
-    url: grassMapUrl,
-    type: "texture",
+    name: "terrainMaps",
+    url: terrainMapsUrl,
+    type: "ktx2",
     flipY: false,
     minFilter: LinearFilter,
     magFilter: LinearFilter,
     generateMipmaps: false,
   },
   {
-    name: "waterMap",
-    url: waterMapUrl,
-    type: "texture",
-    flipY: false,
-    minFilter: LinearFilter,
-    magFilter: LinearFilter,
-    generateMipmaps: false,
-  },
-  {
-    name: "shadowMap",
-    url: shadowMapUrl,
-    type: "texture",
-    flipY: false,
-    minFilter: LinearFilter,
-    magFilter: LinearFilter,
-    generateMipmaps: false,
+    name: "waterMask",
+    url: waterMaskUrl,
+    type: "binary",
   },
   {
     name: "terrainNormAo",

@@ -100,6 +100,12 @@ export class AssetManager {
             cubeTex.colorSpace = resource.colorSpace ?? NoColorSpace;
             this.resources[resource.name] = cubeTex;
           });
+      case "binary":
+        return fetch(resource.url)
+          .then((response) => response.arrayBuffer())
+          .then((buffer) => {
+            this.resources[resource.name] = new Uint8Array(buffer);
+          });
       default:
         throw new Error(`Unsupported resource type: ${(resource as any).type}`);
     }

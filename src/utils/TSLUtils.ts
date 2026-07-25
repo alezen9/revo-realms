@@ -258,7 +258,7 @@ export class TSLUtils {
   static getBakedShadowFactor = Fn<[worldPosXZ: Vec2Node], FloatNode>(
     ([worldPosXZ]) => {
       const mapUv = this.computeMapUvByPosition(worldPosXZ);
-      const shadow = texture(assetManager.resources.shadowMap, mapUv);
+      const shadow = texture(assetManager.resources.terrainMaps, mapUv);
       return shadow.r;
     },
   );

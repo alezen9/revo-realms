@@ -166,8 +166,9 @@ class TerrainMaterial extends MeshLambertNodeMaterial {
     const noise = texture(assetManager.resources.noiseAtlas, terrainNoiseUv);
     const vUv = varying(worldUv);
 
+    const terrainTypes = texture(assetManager.resources.terrainMaps, vUv);
     // LAND
-    const isGrass = texture(assetManager.resources.grassMap, vUv).g;
+    const isGrass = terrainTypes.g;
     const smoothIsGrass = smoothstep(0.05, 0.35, isGrass);
     const grassColor = uniforms.uGrassTerrainColor.mul(
       mix(0.86, 1.12, noise.b),
@@ -175,7 +176,7 @@ class TerrainMaterial extends MeshLambertNodeMaterial {
     const terrainColor = mix(uniforms.uTerrainColor, grassColor, smoothIsGrass);
 
     // WATER
-    const isWater = texture(assetManager.resources.waterMap, vUv).r;
+    const isWater = terrainTypes.b;
     const depth = positionWorld.y.negate();
     const blendFactor = smoothstep(0, 8, depth);
     const waterTint = vec3(0.35, 0.45, 0.55).mul(0.65);
@@ -261,8 +262,6 @@ class InnerTerrain {
     const boundingBoxAttribute = mesh.geometry.boundingBox!;
     const totalCount = positionAttribute.count;
     const rowsCount = Math.sqrt(totalCount);
-
-    // console.log(totalCount, rowsCount);
 
     // half extent of the plane size, plane is a square centred at 0,0 in Blender <- IMPORTANT
     const halfExtent = boundingBoxAttribute.max.x;

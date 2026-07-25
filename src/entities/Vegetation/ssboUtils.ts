@@ -192,7 +192,7 @@ export class VegetationSsboUtils {
   static computeGrassMapValue = Fn<[worldPos: Node<"vec3">], Node<"float">>(
     ([worldPos]) => {
       const uv = TSLUtils.computeMapUvByPosition(worldPos.xz);
-      return texture(assetManager.resources.grassMap, uv).g;
+      return texture(assetManager.resources.terrainMaps, uv).g;
     },
   );
 

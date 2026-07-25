@@ -18,7 +18,7 @@ export const debugPlayer = (collider: Collider) => {
   physics.addBinding(config, "MAX_SPEED_IN_METERS_PER_SECOND", {
     label: "Max speed",
     min: 5,
-    max: 40,
+    max: 100,
   });
   physics.addBinding(config, "AIR_CONTROL_FACTOR", {
     label: "Air control",

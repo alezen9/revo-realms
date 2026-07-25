@@ -96,24 +96,12 @@ export class PlayerWater {
   }
 
   private createMask(): WaterMask | null {
-    const image = assetManager.resources.waterMap?.image as
-      HTMLImageElement | undefined;
-    if (!image?.width || !image.height) return null;
+    const bits = assetManager.resources.waterMask;
+    if (!bits) return null;
 
-    const resolution = config.WATER_MASK_RESOLUTION_IN_TEXELS;
-    const canvas = document.createElement("canvas");
-    canvas.width = resolution;
-    canvas.height = resolution;
-
-    const context = canvas.getContext("2d")!;
-    context.drawImage(image, 0, 0, resolution, resolution);
-    const { data } = context.getImageData(0, 0, resolution, resolution);
-
-    const texelCount = resolution * resolution;
-    const bits = new Uint8Array(Math.ceil(texelCount / 8));
-    for (let i = 0; i < texelCount; i++) {
-      const isWaterTexel = data[i * 4] > config.WATER_MASK_THRESHOLD;
-      bits[i >> 3] |= Number(isWaterTexel) << (i & 7);
+    const resolution = Math.sqrt(bits.length * 8);
+    if (!Number.isInteger(resolution)) {
+      throw new Error(`Water mask is not square: ${bits.length} bytes`);
     }
 
     return { bits, resolution };
