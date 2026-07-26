@@ -186,21 +186,13 @@ export class VegetationSsboUtils {
   );
 
   /**
-   * @param worldPos vec3
+   * @param grassMapValue float, green channel of the terrain maps
    * @returns `float` Grass scale based on grassMap
    */
-  static computeGrassMapValue = Fn<[worldPos: Node<"vec3">], Node<"float">>(
-    ([worldPos]) => {
-      const uv = TSLUtils.computeMapUvByPosition(worldPos.xz);
-      return texture(assetManager.resources.terrainMaps, uv).g;
-    },
-  );
-
-  static computeGrassScale = Fn<[worldPos: Node<"vec3">], Node<"float">>(
-    ([worldPos]) => {
-      const mapValue = this.computeGrassMapValue(worldPos);
-      const mask = step(GRASS_MAP_CUTOFF, mapValue);
-      const height = mapValue
+  static computeGrassScale = Fn<[grassMapValue: Node<"float">], Node<"float">>(
+    ([grassMapValue]) => {
+      const mask = step(GRASS_MAP_CUTOFF, grassMapValue);
+      const height = grassMapValue
         .sub(GRASS_MAP_CUTOFF)
         .div(1 - GRASS_MAP_CUTOFF)
         .clamp();
@@ -209,10 +201,13 @@ export class VegetationSsboUtils {
     },
   );
 
-  static computeGrassMask = Fn<[worldPos: Node<"vec3">], Node<"float">>(
-    ([worldPos]) => {
-      const mapValue = this.computeGrassMapValue(worldPos);
-      return step(GRASS_MAP_CUTOFF, mapValue);
+  /**
+   * @param grassMapValue float, green channel of the terrain maps
+   * @returns `float` Flag grass/no grass based on grassMap
+   */
+  static computeGrassMask = Fn<[grassMapValue: Node<"float">], Node<"float">>(
+    ([grassMapValue]) => {
+      return step(GRASS_MAP_CUTOFF, grassMapValue);
     },
   );
 

@@ -6,16 +6,17 @@ import {
   texture,
   uniform,
   uv,
-  vec3,
 } from "three/tsl";
-import { MeshLambertNodeMaterial } from "three/webgpu";
-import { assetManager } from "../../systems";
+import { MeshLambertNodeMaterial, Vector3 } from "three/webgpu";
+import { assetManager, lightingManager } from "../../systems";
 import { TSLUtils } from "../../utils/TSLUtils";
 import { playerConfig as config } from "./config";
 
 export const playerUniforms = {
   uSpinFactor: uniform(0),
   uSpinBlurMax: uniform(config.SPIN_BLUR_MAX),
+  uPosition: uniform(new Vector3()),
+  uRadius: uniform(config.RADIUS_IN_METERS),
 };
 
 export class PlayerMaterial extends MeshLambertNodeMaterial {
@@ -25,23 +26,25 @@ export class PlayerMaterial extends MeshLambertNodeMaterial {
   }
 
   private createMaterial() {
-    const { DIFFUSE_BOOST, SHADOWED_DIFFUSE_FACTOR, CAST_SHADOW_OPACITY } =
-      config;
+    const { DIFFUSE_BOOST } = config;
     const { SPIN_NORMAL_SCALE, SPIN_NORMAL_SCALE_MIN } = config;
     const { uSpinFactor, uSpinBlurMax } = playerUniforms;
 
     this.precision = "lowp";
     this.flatShading = false;
-    this.castShadowNode = vec3(CAST_SHADOW_OPACITY);
 
     const blurAmount = uSpinFactor.mul(uSpinBlurMax);
 
     const baseColor = texture(assetManager.resources.playerDiffuse, uv())
       .blur(blurAmount)
       .mul(DIFFUSE_BOOST);
-    const bakedShadowFactor = TSLUtils.getBakedShadowFactor(positionWorld.xz);
+    const terrainMapUv = TSLUtils.computeMapUvByPosition(positionWorld.xz);
+    const bakedShadowFactor = texture(
+      assetManager.resources.terrainMaps,
+      terrainMapUv,
+    ).r;
     this.colorNode = mix(
-      baseColor.mul(SHADOWED_DIFFUSE_FACTOR),
+      baseColor.mul(lightingManager.uShadowBrightness),
       baseColor,
       bakedShadowFactor,
     );

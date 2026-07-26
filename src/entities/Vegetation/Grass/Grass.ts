@@ -3,7 +3,6 @@ import { type State } from "../../../Game";
 import {
   sceneManager,
   rendererManager,
-  lightingManager,
   eventsManager,
   monitoringManager,
 } from "../../../systems";
@@ -26,7 +25,6 @@ export default class Grass {
   private playerDeltaXZ = new Vector2(0, 0);
 
   constructor() {
-    uniforms.uSunDir.value.copy(lightingManager.sunDirection);
     this.computeTask = rendererManager.createComputeTask({
       label: "Grass",
       init: this.ssbo.computeInit,

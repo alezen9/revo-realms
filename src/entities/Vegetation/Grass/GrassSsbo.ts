@@ -51,9 +51,9 @@ export class GrassSsbo {
   // x -> offsetX (0 unused)
   // y -> offsetZ (0 unused)
   // z -> 0/12 windX - 12/12 windZ (0 unused)
-  // w -> 0/8 current scale - 8/8 original scale - 16/1 shadow - 17/1 visibility - 18/6 wind noise factor (1 unused)
+  // w -> 0/8 current scale - 8/8 original scale - 16/1 unused - 17/1 visibility - 18/6 wind noise factor (1 unused)
   private buffer1 = instancedArray(config.COUNT, "vec4");
-  // x -> 0/4 position based noise - 4/20 offsetY
+  // x -> 0/4 position based noise - 4/16 offsetY - 20/4 baked shadow
   private buffer2 = instancedArray(config.COUNT, "float");
   private visibleBladeIndices = instancedArray(config.COUNT, "uint");
   get computeBuffer1() {
@@ -72,7 +72,7 @@ export class GrassSsbo {
     return TSLUtils.unpackUnits(
       data,
       4,
-      20,
+      16,
       0,
       Math.ceil(assetManager.resources.heightmap.userData.max),
     );
@@ -110,8 +110,8 @@ export class GrassSsbo {
     return TSLUtils.unpackUnit(data, 0, 4);
   });
 
-  getShadowFactor = Fn<[value: Node<"vec4">], Node<"float">>(([data]) => {
-    return TSLUtils.unpackFlag(data.w, 16);
+  getBakedShadowFactor = Fn<[value: Node<"float">], Node<"float">>(([data]) => {
+    return TSLUtils.unpackUnit(data, 20, 4);
   });
 
   private setYOffset = Fn<
@@ -121,7 +121,7 @@ export class GrassSsbo {
     return TSLUtils.packUnits(
       data,
       4,
-      20,
+      16,
       value,
       0,
       Math.ceil(assetManager.resources.heightmap.userData.max),
@@ -189,12 +189,11 @@ export class GrassSsbo {
     return TSLUtils.packUnit(data, 0, 4, value);
   });
 
-  private setShadowFactor = Fn<
-    [data: Node<"vec4">, value: Node<"float">],
-    Node<"vec4">
+  private setBakedShadowFactor = Fn<
+    [data: Node<"float">, value: Node<"float">],
+    Node<"float">
   >(([data, value]) => {
-    data.w = TSLUtils.packFlag(data.w, 16, value);
-    return data;
+    return TSLUtils.packUnit(data, 20, 4, value);
   });
 
   computeInit = Fn(() => {
@@ -307,32 +306,6 @@ export class GrassSsbo {
     return vec3(newWind, gust01);
   });
 
-  private computeShadowFactor = Fn<
-    [grassWorldPos: Node<"vec3">, playerPos: Node<"vec3">],
-    Node<"float">
-  >(([grassWorldPos, playerPos]) => {
-    // Baked shadow from lightmap
-    const bakedShadow = TSLUtils.getBakedShadowFactor(grassWorldPos.xz);
-
-    // Player shadow with smooth intensity based on height above grass
-    const playerBottomY = playerPos.y.sub(uniforms.uPlayerRadius);
-    const heightAboveGrass = playerBottomY.sub(grassWorldPos.y);
-
-    // Smooth transition: softer when grounded, stronger when jumping
-    const shadowStrength = smoothstep(0, 2, heightAboveGrass);
-
-    const playerShadow = TSLUtils.getPlayerShadowFactor(
-      grassWorldPos,
-      playerPos,
-      uniforms.uPlayerRadius,
-      uniforms.uSunDir,
-    );
-
-    // Blend shadow intensity based on player height
-    const effectivePlayerShadow = mix(float(1), playerShadow, shadowStrength);
-    return step(0.5, bakedShadow).mul(effectivePlayerShadow);
-  });
-
   computeResetInstanceCount = Fn(() => {
     atomicStore(this.atomicCounter, 0);
   })().compute(1, [1]); // one invocation in a one-thread workgroup
@@ -396,12 +369,17 @@ export class GrassSsbo {
     );
     const isPotentiallyVisible = isInFrustum.mul(passesStochasticThinning);
     data1.assign(this.setVisibility(data1, isPotentiallyVisible));
-    data1.assign(this.setShadowFactor(data1, 1));
+    data2.assign(this.setBakedShadowFactor(data2, 1));
 
     // avoid sampling the grass map for blades already rejected above
     If(isPotentiallyVisible, () => {
+      const terrainMaps = texture(
+        assetManager.resources.terrainMaps,
+        TSLUtils.computeMapUvByPosition(worldPos.xz),
+      );
+
       // Scale
-      const grassScale = VegetationSsboUtils.computeGrassScale(worldPos);
+      const grassScale = VegetationSsboUtils.computeGrassScale(terrainMaps.g);
       const baseScale = originalScale.mul(grassScale);
       const isVisible = step(config.MIN_VISIBLE_SCALE, baseScale);
       data1.assign(this.setVisibility(data1, isVisible));
@@ -459,13 +437,8 @@ export class GrassSsbo {
         const windShadeMask = max(windBend, windNoiseShade.mul(0.45));
         data1.assign(this.setWindNoise(data1, windShadeMask)); // Wind visual factor
 
-        // Shadow factor (baked + player projected)
-        const grassWorldPos = vec3(worldPos.x, yOffset, worldPos.z);
-        const shadowFactor = this.computeShadowFactor(
-          grassWorldPos,
-          uniforms.uPlayerPosition,
-        );
-        data1.assign(this.setShadowFactor(data1, shadowFactor));
+        // Baked shadow
+        data2.assign(this.setBakedShadowFactor(data2, terrainMaps.r));
 
         const drawIndex = atomicAdd(this.atomicCounter, 1);
         this.visibleBladeIndices.element(drawIndex).assign(instanceIndex);

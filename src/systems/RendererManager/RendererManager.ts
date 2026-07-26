@@ -1,14 +1,9 @@
-import { PCFShadowMap } from "three";
 import { type ComputeNode, WebGPURenderer } from "three/webgpu";
 import { PostprocessingManager } from "./PostprocessingManager";
 import { type DebugManager } from "../DebugManager";
 import { type EventsManager } from "../EventsManager";
 import type { SceneManager } from "../SceneManager";
 import { ComputeTask } from "./ComputeTask";
-
-type ShadowMapWithTransmission = WebGPURenderer["shadowMap"] & {
-  transmitted: boolean;
-};
 
 type CreateComputeTaskOptions = {
   label: string;
@@ -47,9 +42,6 @@ export class RendererManager {
       stencil: false,
       depth: true,
     });
-    renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = PCFShadowMap;
-    (renderer.shadowMap as ShadowMapWithTransmission).transmitted = true;
     renderer.setClearColor(0x000000, 1);
 
     renderer.toneMappingExposure = 1.5;
@@ -70,6 +62,9 @@ export class RendererManager {
   async init() {
     await this.renderer.init();
     this.sceneManager.init(this.canvas, this.debugManager);
+  }
+
+  initPostprocessing() {
     this.postprocessingManager = new PostprocessingManager(
       this.renderer,
       this.sceneManager,

@@ -35,6 +35,7 @@ import {
   windManager,
 } from "../../systems";
 import { gameTime } from "../../utils/GameTime";
+import { TSLUtils } from "../../utils/TSLUtils";
 import { VegetationSsboUtils } from "../Vegetation/ssboUtils";
 
 const uniforms = {
@@ -100,7 +101,11 @@ class WindParticlesSsbo {
       uniforms.uPlayerPosition,
     );
     const terrainHeight = VegetationSsboUtils.computeYOffset(worldPosition);
-    const isSpawnValid = VegetationSsboUtils.computeGrassMask(worldPosition);
+    const grassMapValue = texture(
+      assetManager.resources.terrainMaps,
+      TSLUtils.computeMapUvByPosition(worldPosition.xz),
+    ).g;
+    const isSpawnValid = VegetationSsboUtils.computeGrassMask(grassMapValue);
     const heightOffset = mix(0.25, uniforms.uHeight.mul(0.85), variation);
     const spawnHeight = terrainHeight.add(heightOffset).mul(isSpawnValid);
     const age = seed
@@ -195,8 +200,12 @@ class WindParticlesSsbo {
       );
       const terrainHeight =
         VegetationSsboUtils.computeYOffset(spawnWorldPosition);
+      const spawnGrassMapValue = texture(
+        assetManager.resources.terrainMaps,
+        TSLUtils.computeMapUvByPosition(spawnWorldPosition.xz),
+      ).g;
       const isSpawnValid =
-        VegetationSsboUtils.computeGrassMask(spawnWorldPosition);
+        VegetationSsboUtils.computeGrassMask(spawnGrassMapValue);
       const heightOffset = mix(0.25, uniforms.uHeight.mul(0.85), variation);
       const spawnHeight = terrainHeight.add(heightOffset).mul(isSpawnValid);
       const respawnAge = variation.mul(config.RESPAWN_DELAY).negate();

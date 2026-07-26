@@ -10,13 +10,10 @@ import {
   PI2,
   round,
   vec3,
-  texture,
   EPSILON,
-  smoothstep,
 } from "three/tsl";
 import type { Node } from "three/webgpu";
 import { realmConfig } from "../realm/config";
-import { assetManager } from "../systems";
 
 type FloatNode = Node<"float">;
 type Vec2Node = Node<"vec2">;
@@ -75,12 +72,6 @@ type UnpackUnitsArgs = [
   maxV: FloatNode,
 ];
 type AtlasUvArgs = [scale: Vec2Node, offset: Vec2Node, uv: Vec2Node];
-type PlayerShadowArgs = [
-  worldPos: Vec3Node,
-  playerPos: Vec3Node,
-  playerRadius: FloatNode,
-  sunDir: Vec3Node,
-];
 type BlendNormalsArgs = [n1: Vec3Node, n2: Vec3Node];
 
 export class TSLUtils {
@@ -254,37 +245,6 @@ export class TSLUtils {
   static computeAtlasUv = Fn<AtlasUvArgs, Vec2Node>(([scale, offset, uv]) => {
     return uv.mul(scale).add(offset);
   });
-
-  static getBakedShadowFactor = Fn<[worldPosXZ: Vec2Node], FloatNode>(
-    ([worldPosXZ]) => {
-      const mapUv = this.computeMapUvByPosition(worldPosXZ);
-      const shadow = texture(assetManager.resources.terrainMaps, mapUv);
-      return shadow.r;
-    },
-  );
-
-  static getPlayerShadowFactor = Fn<PlayerShadowArgs, FloatNode>(
-    ([worldPos, playerPos, playerRadius, sunDir]) => {
-      // sunDir points FROM sun TO scene (e.g., normalized(-1,-1,-1))
-      // Find where player center projects onto plane at worldPos.y along sunDir
-      // playerPos + sunDir * t = shadowPoint, where shadowPoint.y = worldPos.y
-      // t = (worldPos.y - playerPos.y) / sunDir.y
-      const t = worldPos.y.sub(playerPos.y).div(sunDir.y.add(EPSILON));
-
-      // Shadow center XZ at grass height
-      const shadowX = playerPos.x.add(sunDir.x.mul(t));
-      const shadowZ = playerPos.z.add(sunDir.z.mul(t));
-
-      // Squared distance from grass to shadow center (XZ plane)
-      const dx = worldPos.x.sub(shadowX);
-      const dz = worldPos.z.sub(shadowZ);
-      const distSq = dx.mul(dx).add(dz.mul(dz));
-
-      // Soft shadow: 0 = full shadow, 1 = lit
-      const rSq = playerRadius.mul(playerRadius);
-      return smoothstep(rSq.mul(0.5), rSq.mul(2.0), distSq);
-    },
-  );
 
   // Inputs n1, n2 are tangent-space normals already unpacked to [-1..1] and normalized.
   // (If you sampled from texture, do: n = tex.rgb * 2 - 1; normalize(n);)

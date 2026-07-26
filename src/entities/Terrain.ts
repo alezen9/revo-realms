@@ -2,6 +2,7 @@ import {
   float,
   Fn,
   If,
+  min,
   mix,
   normalMap,
   positionWorld,
@@ -40,6 +41,7 @@ import { TSLUtils } from "../utils/TSLUtils";
 import {
   assetManager,
   debugManager,
+  lightingManager,
   sceneManager,
   physicsManager,
   eventsManager,
@@ -193,8 +195,11 @@ class TerrainMaterial extends MeshLambertNodeMaterial {
     const waterColor = waterBaseColor.add(causticsColor);
 
     const final = mix(terrainColor, waterColor, isWater);
-    const shadowFactor = TSLUtils.getBakedShadowFactor(positionWorld.xz);
-    const withShadow = mix(final.mul(0.62), final, shadowFactor);
+    const withShadow = mix(
+      final.mul(lightingManager.uShadowBrightness),
+      final,
+      terrainTypes.r,
+    );
     this.colorNode = withShadow;
 
     // NORMAL
@@ -243,7 +248,6 @@ class InnerTerrain {
         mesh.material = material;
         mesh.geometry.computeBoundingSphere();
         mesh.geometry.computeBoundingBox();
-        mesh.receiveShadow = true;
         innerMap.add(mesh);
       }
     }

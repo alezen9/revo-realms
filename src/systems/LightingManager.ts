@@ -9,6 +9,7 @@ import {
 import { type SceneManager } from "./SceneManager";
 import { type DebugManager } from "./DebugManager";
 import { type EventsManager } from "./EventsManager";
+import { uniform } from "three/tsl";
 import { srgbColorTarget } from "../utils/TweakpaneColor";
 
 const config = {
@@ -35,6 +36,8 @@ export class LightingManager {
   private fog: FogExp2;
 
   sunDirection = config.LIGHT_POSITION_OFFSET.clone().normalize().negate();
+  uSunDir = uniform(this.sunDirection);
+  uShadowBrightness = uniform(0.62);
 
   constructor(
     sceneManager: SceneManager,
@@ -58,6 +61,7 @@ export class LightingManager {
       this.directionalLight.position
         .copy(player.position)
         .add(config.LIGHT_POSITION_OFFSET);
+      this.sunDirection.copy(config.LIGHT_POSITION_OFFSET).normalize().negate();
     });
 
     this.debugLight(debugManager, sceneManager);
@@ -83,22 +87,6 @@ export class LightingManager {
     directionalLight.position.copy(config.LIGHT_POSITION_OFFSET);
 
     directionalLight.target = new Object3D();
-
-    directionalLight.castShadow = true;
-
-    directionalLight.shadow.mapSize.set(64, 64);
-
-    const frustumSize = 1;
-    directionalLight.shadow.intensity = 0.85;
-    directionalLight.shadow.camera.left = -frustumSize;
-    directionalLight.shadow.camera.right = frustumSize;
-    directionalLight.shadow.camera.top = frustumSize;
-    directionalLight.shadow.camera.bottom = -frustumSize;
-    directionalLight.shadow.camera.near = 0.01;
-    directionalLight.shadow.camera.far = 30;
-
-    directionalLight.shadow.normalBias = 0.02;
-    directionalLight.shadow.bias = -0.001;
 
     return directionalLight;
   }
@@ -133,6 +121,12 @@ export class LightingManager {
       min: 0,
       max: 5,
       label: "Directional intensity",
+    });
+    lightFolder.addBinding(this.uShadowBrightness, "value", {
+      label: "Shadow brightness",
+      min: 0,
+      max: 1,
+      step: 0.01,
     });
     lightFolder.addBinding(srgbColorTarget(this.fog.color), "value", {
       label: "Fog Color",

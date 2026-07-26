@@ -13,7 +13,7 @@ import {
   vec3,
 } from "three/tsl";
 import { SpriteNodeMaterial } from "three/webgpu";
-import { windManager } from "../../../systems";
+import { lightingManager, windManager } from "../../../systems";
 import { gameTime } from "../../../utils/GameTime";
 import { uniforms } from "./config";
 import { GrassSsbo } from "./GrassSsbo";
@@ -45,7 +45,7 @@ export class GrassMaterial extends SpriteNodeMaterial {
     const isVisible = this.ssbo.getVisibility(data1);
     const windNoiseFactor = this.ssbo.getWindNoise(data1);
     const positionNoise = this.ssbo.getPositionNoise(data2);
-    const bakedShadowFactor = this.ssbo.getShadowFactor(data1);
+    const bakedShadowFactor = this.ssbo.getBakedShadowFactor(data2);
 
     // OPACITY
     this.opacityNode = isVisible;
@@ -164,7 +164,11 @@ export class GrassMaterial extends SpriteNodeMaterial {
       .mul(baseMask)
       .mul(windNoiseFactor);
 
-    const withShadow = mix(baseToTip.mul(0.5), baseToTip, bakedShadowFactor);
+    const withShadow = mix(
+      baseToTip.mul(lightingManager.uShadowBrightness),
+      baseToTip,
+      bakedShadowFactor,
+    );
     const windShadeColor = withShadow.mul(uniforms.uTipColor).mul(1.35);
     const windShaded = mix(withShadow, windShadeColor, windShadeAmount);
 

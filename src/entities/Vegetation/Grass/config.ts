@@ -42,7 +42,6 @@ export const uniforms = {
   uPlayerDeltaXZ: uniform(new Vector2(0, 0)),
   uPlayerRadius: uniform(0.5),
   uCameraForward: uniform(new Vector3(0, 0, 0)),
-  uSunDir: uniform(new Vector3(0)),
   // Scale
   uBladeMinScale: uniform(0.65),
   uBladeMaxScale: uniform(2.25),

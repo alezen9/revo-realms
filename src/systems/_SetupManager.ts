@@ -16,6 +16,7 @@ export default class _SetupManager {
       physicsManager.initAsync(),
       assetManager.initAsync(rendererManager),
     ]);
+    rendererManager.initPostprocessing();
     eventsManager.emit("engine-loading-core-progress", 75);
     audioManager.initAsync(); // bg loading
     Utils.init();

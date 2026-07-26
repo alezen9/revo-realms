@@ -85,7 +85,6 @@ export default class Player {
       "player",
     ) as Mesh;
     mesh.material = new PlayerMaterial();
-    mesh.castShadow = true;
     mesh.position.set(0, 0, 0);
     return mesh;
   }
@@ -155,6 +154,7 @@ export default class Player {
       blurStart,
       blurFull,
     );
+    playerUniforms.uPosition.value.copy(this.visualRoot.position);
   };
 
   private onGateUpdate = () => {

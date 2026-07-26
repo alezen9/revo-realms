@@ -244,7 +244,11 @@ class FlowersSsbo {
       data.assign(this.setYOffset(data, yOffset));
 
       // Grass scale
-      const grassScale = VegetationSsboUtils.computeGrassScale(worldPos);
+      const grassMapValue = texture(
+        assetManager.resources.terrainMaps,
+        TSLUtils.computeMapUvByPosition(worldPos.xz),
+      ).g;
+      const grassScale = VegetationSsboUtils.computeGrassScale(grassMapValue);
       const grassVisibility = step(0.05, grassScale);
       data.assign(this.setGrassScale(data, grassScale));
       data.assign(this.setVisibility(data, grassVisibility));

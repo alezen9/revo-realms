@@ -40,7 +40,6 @@ export default class DragonBall {
       "goku_statue",
     ) as Mesh;
     gokuStatue.material = new GokuStatueMaterial();
-    gokuStatue.receiveShadow = true;
     sceneManager.scene.add(gokuStatue);
 
     // Physics
