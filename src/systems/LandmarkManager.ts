@@ -5,7 +5,7 @@ import type { EventsManager } from "./EventsManager";
 const REVEAL_ALL_LANDMARKS = true;
 
 export type LandmarkIconId =
-  "fire" | "water" | "sword" | "axe" | "dragonball" | "flag";
+  "fire" | "water" | "sword" | "axe" | "dragonball" | "flag" | "football";
 
 export type Landmark = {
   id: string;

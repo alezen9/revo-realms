@@ -11,6 +11,7 @@
 	import IconDragonBall from "./icons/IconDragonBall.svelte"
 	import IconFire from "./icons/IconFire.svelte"
 	import IconFlag from "./icons/IconFlag.svelte"
+	import IconFootball from "./icons/IconFootball.svelte"
 	import IconSword from "./icons/IconSword.svelte"
 	import IconWater from "./icons/IconWater.svelte"
 
@@ -35,6 +36,7 @@
 		axe: IconAxe,
 		dragonball: IconDragonBall,
 		flag: IconFlag,
+		football: IconFootball,
 	} as const satisfies Record<LandmarkIconId, typeof IconFire>
 
 	const toRad = (deg: number) => (deg * Math.PI) / 180

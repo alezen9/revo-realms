@@ -37,7 +37,7 @@ export class LightingManager {
 
   sunDirection = config.LIGHT_POSITION_OFFSET.clone().normalize().negate();
   uSunDir = uniform(this.sunDirection);
-  uShadowBrightness = uniform(0.62);
+  uShadowBrightness = uniform(0.7);
 
   constructor(
     sceneManager: SceneManager,

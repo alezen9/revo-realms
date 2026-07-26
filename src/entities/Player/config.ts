@@ -8,6 +8,7 @@ const POSITIONS = {
   gow: [70, 0.5, 125],
   lake: [-222.5, 0.5, 170],
   dragonball: [150, 0.5, 80],
+  pitch: [-15, 0.5, -165],
 } as const;
 
 export const playerConfig = {
@@ -68,7 +69,7 @@ export const playerConfig = {
   SPIN_NORMAL_SCALE_MIN: 1.2,
   DIFFUSE_BOOST: 2,
 
-  PLAYER_INITIAL_POSITION: new Vector3(...POSITIONS.dragonball),
+  PLAYER_INITIAL_POSITION: new Vector3(...POSITIONS.pitch),
   CAMERA_OFFSET: new Vector3(0, 16, 20),
   CAMERA_TARGET_HEIGHT_IN_METERS: 1,
   CAMERA_POSITION_FOLLOW_SPEED_IN_INVERSE_SECONDS: 12,
