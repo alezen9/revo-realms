@@ -44,12 +44,13 @@ const uniforms = {
   uDelta: uniform(0),
   uColor: uniform(new Color().setRGB(0.27, 0.31, 0.28)),
   uSpeed: uniform(0.5),
+  uTurbulence: uniform(1.25),
   uHeight: uniform(3.3),
   uSize: uniform(0.6),
 };
 
 const getConfig = () => {
-  const PARTICLES_PER_SIDE = 56;
+  const PARTICLES_PER_SIDE = 64;
   const FIELD_SIZE = 170;
 
   return {
@@ -150,6 +151,7 @@ class WindParticlesSsbo {
       .mul(2)
       .sub(1)
       .mul(mix(5, 13, variation))
+      .mul(uniforms.uTurbulence)
       .mul(uniforms.uSpeed)
       .mul(mix(0.4, 1, windManager.uIntensityDirectional));
     const travel = windManager.uDirection
@@ -166,6 +168,7 @@ class WindParticlesSsbo {
       .mul(2)
       .sub(1)
       .mul(mix(0.35, 0.9, seed))
+      .mul(uniforms.uTurbulence)
       .mul(uniforms.uSpeed)
       .mul(mix(0.45, 1.1, windManager.uIntensityDirectional));
     const maxHeight = uniforms.uHeight.add(this.maxTerrainHeight);
@@ -286,6 +289,12 @@ export default class WindAmbianceParticles {
     });
     folder.addBinding(uniforms.uSpeed, "value", {
       label: "Speed",
+      min: 0,
+      max: 3,
+      step: 0.01,
+    });
+    folder.addBinding(uniforms.uTurbulence, "value", {
+      label: "Turbulence",
       min: 0,
       max: 3,
       step: 0.01,
