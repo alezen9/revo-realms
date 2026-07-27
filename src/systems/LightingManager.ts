@@ -37,7 +37,8 @@ export class LightingManager {
 
   sunDirection = config.LIGHT_POSITION_OFFSET.clone().normalize().negate();
   uSunDir = uniform(this.sunDirection);
-  uShadowBrightness = uniform(0.7);
+  uPlayerShadowBrightness = uniform(0.7);
+  uBakedShadowBrightness = uniform(0.45);
 
   constructor(
     sceneManager: SceneManager,
@@ -122,8 +123,14 @@ export class LightingManager {
       max: 5,
       label: "Directional intensity",
     });
-    lightFolder.addBinding(this.uShadowBrightness, "value", {
-      label: "Shadow brightness",
+    lightFolder.addBinding(this.uPlayerShadowBrightness, "value", {
+      label: "Player shadow brightness",
+      min: 0,
+      max: 1,
+      step: 0.01,
+    });
+    lightFolder.addBinding(this.uBakedShadowBrightness, "value", {
+      label: "Baked shadow brightness",
       min: 0,
       max: 1,
       step: 0.01,

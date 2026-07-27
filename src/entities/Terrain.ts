@@ -196,7 +196,7 @@ class TerrainMaterial extends MeshLambertNodeMaterial {
 
     const final = mix(terrainColor, waterColor, isWater);
     const withShadow = mix(
-      final.mul(lightingManager.uShadowBrightness),
+      final.mul(lightingManager.uBakedShadowBrightness),
       final,
       terrainTypes.r,
     );

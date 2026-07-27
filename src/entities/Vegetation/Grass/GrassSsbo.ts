@@ -1,12 +1,15 @@
 import {
+  EPSILON,
   Fn,
   mix,
+  mod,
   instancedArray,
   instanceIndex,
   hash,
   float,
   floor,
   vec3,
+  vec4,
   smoothstep,
   vec2,
   texture,
@@ -27,8 +30,23 @@ import { IndirectStorageBufferAttribute, type Node } from "three/webgpu";
 import { assetManager, windManager } from "../../../systems";
 import { TSLUtils } from "../../../utils/TSLUtils";
 import { gameTime } from "../../../utils/GameTime";
-import { VegetationSsboUtils } from "../ssboUtils";
 import { config, uniforms } from "./config";
+
+type StochasticKeepArgs = [
+  worldPos: Node<"vec3">,
+  playerPosition: Node<"vec3">,
+  R0: Node<"float">,
+  R1: Node<"float">,
+  pMin: Node<"float">,
+  bladeHeight: Node<"float">,
+  clipPosition: Node<"vec4">,
+  fY: Node<"float">,
+  projectedMin: Node<"float">,
+  projectedFull: Node<"float">,
+  spacing: Node<"float">,
+  previousKeep: Node<"float">,
+  hysteresis: Node<"float">,
+];
 
 export class GrassSsbo {
   readonly indirectDrawAttribute = new IndirectStorageBufferAttribute(
@@ -56,6 +74,49 @@ export class GrassSsbo {
   // x -> 0/4 position based noise - 4/16 offsetY - 20/4 baked shadow
   private buffer2 = instancedArray(config.COUNT, "float");
   private visibleBladeIndices = instancedArray(config.COUNT, "uint");
+
+  private computeStochasticKeep = Fn<StochasticKeepArgs, Node<"float">>(
+    ([
+      worldPos,
+      playerPosition,
+      R0,
+      R1,
+      pMin,
+      bladeHeight,
+      clipPosition,
+      fY,
+      projectedMin,
+      projectedFull,
+      spacing,
+      previousKeep,
+      hysteresis,
+    ]) => {
+      const dx = worldPos.x.sub(playerPosition.x);
+      const dz = worldPos.z.sub(playerPosition.z);
+      const distSq = dx.mul(dx).add(dz.mul(dz));
+      const R0Sq = R0.mul(R0);
+      const R1Sq = R1.mul(R1);
+      const t = distSq
+        .sub(R0Sq)
+        .div(max(R1Sq.sub(R0Sq), EPSILON))
+        .clamp();
+      const pDistance = mix(1, pMin, t);
+      const eyeDepthAbs = clipPosition.w.abs().max(EPSILON);
+      const projectedBladeHeight = fY.mul(bladeHeight).div(eyeDepthAbs);
+      const pScreen = smoothstep(
+        projectedMin,
+        projectedFull,
+        projectedBladeHeight,
+      );
+      const p = pDistance.mul(pScreen);
+      const cell = floor(worldPos.xz.div(spacing));
+      const rnd = hash(cell.x.mul(12.9898).add(cell.y.mul(78.233)));
+      const enterKeep = step(rnd.add(hysteresis), p);
+      const stayKeep = step(rnd.sub(hysteresis), p);
+      return mix(enterKeep, stayKeep, previousKeep);
+    },
+  );
+
   get computeBuffer1() {
     return this.buffer1;
   }
@@ -317,10 +378,15 @@ export class GrassSsbo {
     // Position
     const previousOffset = vec2(data1.x, data1.y);
     const unwrappedOffset = previousOffset.sub(uniforms.uPlayerDeltaXZ);
-    const wrappedOffset = VegetationSsboUtils.wrapPosition(
-      unwrappedOffset,
+    const wrappedOffsetX = mod(
+      unwrappedOffset.x.add(config.TILE_HALF_SIZE),
       config.TILE_SIZE,
-    );
+    ).sub(config.TILE_HALF_SIZE);
+    const wrappedOffsetZ = mod(
+      unwrappedOffset.y.add(config.TILE_HALF_SIZE),
+      config.TILE_SIZE,
+    ).sub(config.TILE_HALF_SIZE);
+    const wrappedOffset = vec3(wrappedOffsetX, 0, wrappedOffsetZ);
 
     const wrapDelta = wrappedOffset.xz.sub(unwrappedOffset);
     const isWrapped = step(
@@ -336,13 +402,10 @@ export class GrassSsbo {
     const currentScale = this.getScale(data1);
     const originalScale = this.getOriginalScale(data1);
     const previousKeep = wasVisible.mul(float(1).sub(isWrapped));
-    const clipPosition = VegetationSsboUtils.computeClipPosition(
-      worldPos,
-      uniforms.uCameraMatrix,
-    );
+    const clipPosition = uniforms.uCameraMatrix.mul(vec4(worldPos, 1));
 
     // Visibility
-    const passesStochasticThinning = VegetationSsboUtils.computeStochasticKeep(
+    const passesStochasticThinning = this.computeStochasticKeep(
       worldPos,
       uniforms.uPlayerPosition,
       uniforms.uR0,
@@ -358,7 +421,7 @@ export class GrassSsbo {
       uniforms.uStochasticHysteresis,
     );
 
-    const isInFrustum = VegetationSsboUtils.computeVisibilityFromClip(
+    const isInFrustum = TSLUtils.computeFrustumVisibility(
       clipPosition,
       uniforms.uFx,
       uniforms.uFy,
@@ -379,7 +442,7 @@ export class GrassSsbo {
       );
 
       // Scale
-      const grassScale = VegetationSsboUtils.computeGrassScale(terrainMaps.g);
+      const grassScale = terrainMaps.g.sub(0.25).div(0.75).clamp();
       const baseScale = originalScale.mul(grassScale);
       const isVisible = step(config.MIN_VISIBLE_SCALE, baseScale);
       data1.assign(this.setVisibility(data1, isVisible));
@@ -394,7 +457,9 @@ export class GrassSsbo {
 
       If(isVisible, () => {
         // Y offset
-        const yOffset = VegetationSsboUtils.computeYOffset(worldPos);
+        const mapUv = TSLUtils.computeMapUvByPosition(worldPos.xz);
+        const heightUv = vec2(mapUv.x, float(1).sub(mapUv.y));
+        const yOffset = texture(assetManager.resources.heightmap, heightUv).r;
         data2.assign(this.setYOffset(data2, yOffset));
 
         // Compute distance to player

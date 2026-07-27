@@ -8,6 +8,7 @@ import {
   instancedArray,
   instanceIndex,
   mix,
+  mod,
   smoothstep,
   step,
   texture,
@@ -36,7 +37,6 @@ import {
 } from "../../systems";
 import { gameTime } from "../../utils/GameTime";
 import { TSLUtils } from "../../utils/TSLUtils";
-import { VegetationSsboUtils } from "../Vegetation/ssboUtils";
 
 const uniforms = {
   uPlayerDeltaXZ: uniform(new Vector2(0, 0)),
@@ -101,12 +101,14 @@ class WindParticlesSsbo {
     const worldPosition = vec3(offsetX, 0, offsetZ).add(
       uniforms.uPlayerPosition,
     );
-    const terrainHeight = VegetationSsboUtils.computeYOffset(worldPosition);
+    const mapUv = TSLUtils.computeMapUvByPosition(worldPosition.xz);
+    const heightUv = vec2(mapUv.x, float(1).sub(mapUv.y));
+    const terrainHeight = texture(assetManager.resources.heightmap, heightUv).r;
     const grassMapValue = texture(
       assetManager.resources.terrainMaps,
       TSLUtils.computeMapUvByPosition(worldPosition.xz),
     ).g;
-    const isSpawnValid = VegetationSsboUtils.computeGrassMask(grassMapValue);
+    const isSpawnValid = step(0.25, grassMapValue);
     const heightOffset = mix(0.25, uniforms.uHeight.mul(0.85), variation);
     const spawnHeight = terrainHeight.add(heightOffset).mul(isSpawnValid);
     const age = seed
@@ -133,10 +135,15 @@ class WindParticlesSsbo {
       variation,
     );
     const unwrappedOffset = data.xz.sub(uniforms.uPlayerDeltaXZ);
-    const wrappedOffset = VegetationSsboUtils.wrapPosition(
-      unwrappedOffset,
+    const wrappedOffsetX = mod(
+      unwrappedOffset.x.add(config.FIELD_HALF_SIZE),
       config.FIELD_SIZE,
-    );
+    ).sub(config.FIELD_HALF_SIZE);
+    const wrappedOffsetZ = mod(
+      unwrappedOffset.y.add(config.FIELD_HALF_SIZE),
+      config.FIELD_SIZE,
+    ).sub(config.FIELD_HALF_SIZE);
+    const wrappedOffset = vec3(wrappedOffsetX, 0, wrappedOffsetZ);
     const worldPosition = wrappedOffset.add(uniforms.uPlayerPosition);
     const flowUv = worldPosition.xz
       .mul(0.018)
@@ -159,10 +166,15 @@ class WindParticlesSsbo {
       .add(sideDirection.mul(sideVelocity))
       .mul(uniforms.uDelta)
       .mul(isAlive);
-    const position = VegetationSsboUtils.wrapPosition(
-      wrappedOffset.xz.add(travel),
+    const travelledOffset = wrappedOffset.xz.add(travel);
+    const positionX = mod(
+      travelledOffset.x.add(config.FIELD_HALF_SIZE),
       config.FIELD_SIZE,
-    );
+    ).sub(config.FIELD_HALF_SIZE);
+    const positionZ = mod(
+      travelledOffset.y.add(config.FIELD_HALF_SIZE),
+      config.FIELD_SIZE,
+    ).sub(config.FIELD_HALF_SIZE);
     const isSpawnValid = step(0.001, data.y);
     const verticalVelocity = flow.g
       .mul(2)
@@ -173,12 +185,12 @@ class WindParticlesSsbo {
       .mul(mix(0.45, 1.1, windManager.uIntensityDirectional));
     const maxHeight = uniforms.uHeight.add(this.maxTerrainHeight);
 
-    data.x = position.x;
+    data.x = positionX;
     data.y = data.y
       .add(verticalVelocity.mul(uniforms.uDelta).mul(isAlive))
       .clamp(0.12, maxHeight)
       .mul(isSpawnValid);
-    data.z = position.z;
+    data.z = positionZ;
     data.w = age;
 
     const isExpired = step(lifetime, age);
@@ -201,14 +213,17 @@ class WindParticlesSsbo {
       const spawnWorldPosition = vec3(spawnPosition.x, 0, spawnPosition.y).add(
         uniforms.uPlayerPosition,
       );
-      const terrainHeight =
-        VegetationSsboUtils.computeYOffset(spawnWorldPosition);
+      const spawnMapUv = TSLUtils.computeMapUvByPosition(spawnWorldPosition.xz);
+      const spawnHeightUv = vec2(spawnMapUv.x, float(1).sub(spawnMapUv.y));
+      const terrainHeight = texture(
+        assetManager.resources.heightmap,
+        spawnHeightUv,
+      ).r;
       const spawnGrassMapValue = texture(
         assetManager.resources.terrainMaps,
         TSLUtils.computeMapUvByPosition(spawnWorldPosition.xz),
       ).g;
-      const isSpawnValid =
-        VegetationSsboUtils.computeGrassMask(spawnGrassMapValue);
+      const isSpawnValid = step(0.25, spawnGrassMapValue);
       const heightOffset = mix(0.25, uniforms.uHeight.mul(0.85), variation);
       const spawnHeight = terrainHeight.add(heightOffset).mul(isSpawnValid);
       const respawnAge = variation.mul(config.RESPAWN_DELAY).negate();

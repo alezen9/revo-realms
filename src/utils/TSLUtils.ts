@@ -9,6 +9,7 @@ import {
   max,
   PI2,
   round,
+  step,
   vec3,
   EPSILON,
 } from "three/tsl";
@@ -18,6 +19,7 @@ import { realmConfig } from "../realm/config";
 type FloatNode = Node<"float">;
 type Vec2Node = Node<"vec2">;
 type Vec3Node = Node<"vec3">;
+type Vec4Node = Node<"vec4">;
 
 type PackF32Args = [
   dest: FloatNode,
@@ -73,6 +75,15 @@ type UnpackUnitsArgs = [
 ];
 type AtlasUvArgs = [scale: Vec2Node, offset: Vec2Node, uv: Vec2Node];
 type BlendNormalsArgs = [n1: Vec3Node, n2: Vec3Node];
+type FrustumVisibilityArgs = [
+  clipPosition: Vec4Node,
+  fX: FloatNode,
+  fY: FloatNode,
+  radius: FloatNode,
+  padNdcX: FloatNode,
+  padNdcYNear: FloatNode,
+  padNdcYFar: FloatNode,
+];
 
 export class TSLUtils {
   /**
@@ -241,6 +252,26 @@ export class TSLUtils {
   static computeMapUvByPosition = Fn<[pos: Vec2Node], Vec2Node>(([pos]) => {
     return pos.add(realmConfig.HALF_MAP_SIZE).div(realmConfig.MAP_SIZE);
   });
+
+  static computeFrustumVisibility = Fn<FrustumVisibilityArgs, FloatNode>(
+    ([clipPosition, fX, fY, radius, padNdcX, padNdcYNear, padNdcYFar]) => {
+      const one = float(1);
+      const ndc = clipPosition.xyz.mul(one.div(clipPosition.w));
+      const eyeDepthAbs = clipPosition.w.abs().max(EPSILON);
+      const radiusNdcX = fX.mul(radius).div(eyeDepthAbs).add(padNdcX);
+      const radiusNdcY = fY.mul(radius).div(eyeDepthAbs);
+      const radiusNdcYNear = radiusNdcY.add(padNdcYNear);
+      const radiusNdcYFar = radiusNdcY.sub(padNdcYFar);
+      const isVisibleX = step(one.negate().sub(radiusNdcX), ndc.x).mul(
+        step(ndc.x, one.add(radiusNdcX)),
+      );
+      const isVisibleY = step(one.negate().sub(radiusNdcYNear), ndc.y).mul(
+        step(ndc.y.add(radiusNdcYFar), one),
+      );
+      const isVisibleZ = step(-1, ndc.z).mul(step(ndc.z, 1));
+      return isVisibleX.mul(isVisibleY).mul(isVisibleZ);
+    },
+  );
 
   static computeAtlasUv = Fn<AtlasUvArgs, Vec2Node>(([scale, offset, uv]) => {
     return uv.mul(scale).add(offset);

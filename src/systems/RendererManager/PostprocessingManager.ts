@@ -186,7 +186,7 @@ export class PostprocessingManager extends RenderPipeline {
     const withBloomHDR = colorHDR.add(bloomPass);
     const shadowFactor = this.computeBallShadowFactor();
     const shadowedHDR = mix(
-      withBloomHDR.mul(lightingManager.uShadowBrightness),
+      withBloomHDR.mul(lightingManager.uPlayerShadowBrightness),
       withBloomHDR,
       shadowFactor,
     );

@@ -14,8 +14,10 @@ import {
   sin,
   smoothstep,
   step,
+  texture,
   uniform,
   uv,
+  vec2,
   vec3,
   vec4,
 } from "three/tsl";
@@ -29,6 +31,7 @@ import type { Node } from "three/webgpu";
 import { type State } from "../../Game";
 import type { ComputeTask } from "../../systems/RendererManager/ComputeTask";
 import {
+  assetManager,
   debugManager,
   eventsManager,
   prewarmManager,
@@ -37,7 +40,7 @@ import {
   windManager,
 } from "../../systems";
 import { gameTime } from "../../utils/GameTime";
-import { VegetationSsboUtils } from "../Vegetation/ssboUtils";
+import { TSLUtils } from "../../utils/TSLUtils";
 
 const STREAK_COUNT = 12;
 const SEGMENT_COUNT = 24;
@@ -66,7 +69,7 @@ const uniforms = {
   uDelta: uniform(0),
   uReset: uniform(1),
   uColor: uniform(new Color().setRGB(0.42, 0.47, 0.43)),
-  uSpeed: uniform(1),
+  uSpeed: uniform(1.5),
   uHeight: uniform(10),
   uWidth: uniform(0.2),
   uCurveAmplitude: uniform(3.2),
@@ -171,10 +174,10 @@ class WindStreaksSsbo {
     const nextOrigin = mix(origin, getSpawnOrigin(streakIndex), shouldReset);
     const nextArc = mix(arc, float(0), shouldReset);
     const nextHeadXZ = getCurveXZ(nextOrigin, nextArc, seed);
-    const targetHeight = VegetationSsboUtils.computeYOffset(
-      vec3(nextHeadXZ.x, 0, nextHeadXZ.y),
-    )
-      .add(uniforms.uHeight.mul(mix(0.05, 0.9, variation.mul(variation))))
+    const headMapUv = TSLUtils.computeMapUvByPosition(nextHeadXZ);
+    const headHeightUv = vec2(headMapUv.x, float(1).sub(headMapUv.y));
+    const targetHeight = texture(assetManager.resources.heightmap, headHeightUv)
+      .r.add(uniforms.uHeight.mul(mix(0.05, 0.9, variation.mul(variation))))
       .add(config.GROUND_CLEARANCE);
     const heightFollow = float(1).sub(
       exp(uniforms.uDelta.mul(config.HEIGHT_FOLLOW_RATE).negate()),
@@ -189,9 +192,12 @@ class WindStreaksSsbo {
       const trailProgress = float(i).div(SEGMENT_COUNT);
       const pointArc = nextArc.sub(trailProgress.mul(TRAIL_LENGTH));
       const positionXZ = getCurveXZ(nextOrigin, pointArc, seed);
-      const terrainHeight = VegetationSsboUtils.computeYOffset(
-        vec3(positionXZ.x, 0, positionXZ.y),
-      );
+      const pointMapUv = TSLUtils.computeMapUvByPosition(positionXZ);
+      const pointHeightUv = vec2(pointMapUv.x, float(1).sub(pointMapUv.y));
+      const terrainHeight = texture(
+        assetManager.resources.heightmap,
+        pointHeightUv,
+      ).r;
       const height = nextHeight.max(terrainHeight.add(config.GROUND_CLEARANCE));
       const position = vec3(positionXZ.x, height, positionXZ.y);
       const visibility = getVisibility(position, nextArc);

@@ -44,7 +44,7 @@ export class PlayerMaterial extends MeshLambertNodeMaterial {
       terrainMapUv,
     ).r;
     this.colorNode = mix(
-      baseColor.mul(lightingManager.uShadowBrightness),
+      baseColor.mul(lightingManager.uBakedShadowBrightness),
       baseColor,
       bakedShadowFactor,
     );

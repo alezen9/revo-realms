@@ -9,6 +9,8 @@ import {
   instancedArray,
   instanceIndex,
   mix,
+  mod,
+  PI2,
   sin,
   smoothstep,
   step,
@@ -38,7 +40,6 @@ import {
   debugManager,
 } from "../../systems";
 import { type State } from "../../Game";
-import { VegetationSsboUtils } from "./ssboUtils";
 import { gameTime } from "../../utils/GameTime";
 import { TSLUtils } from "../../utils/TSLUtils";
 import { srgbColorTarget } from "../../utils/TweakpaneColor";
@@ -211,22 +212,24 @@ class FlowersSsbo {
     const data = this.buffer.element(instanceIndex);
     // Position
     const unwrappedOffset = vec2(data.x, data.y).sub(uniforms.uPlayerDeltaXZ);
-    const wrappedOffset = VegetationSsboUtils.wrapPosition(
-      unwrappedOffset,
+    const wrappedOffsetX = mod(
+      unwrappedOffset.x.add(config.TILE_HALF_SIZE),
       config.TILE_SIZE,
-    );
+    ).sub(config.TILE_HALF_SIZE);
+    const wrappedOffsetZ = mod(
+      unwrappedOffset.y.add(config.TILE_HALF_SIZE),
+      config.TILE_SIZE,
+    ).sub(config.TILE_HALF_SIZE);
+    const wrappedOffset = vec3(wrappedOffsetX, 0, wrappedOffsetZ);
 
     data.x = wrappedOffset.x;
     data.y = wrappedOffset.z;
 
     const worldPos = wrappedOffset.add(uniforms.uPlayerPosition);
-    const clipPosition = VegetationSsboUtils.computeClipPosition(
-      worldPos,
-      uniforms.uCameraMatrix,
-    );
+    const clipPosition = uniforms.uCameraMatrix.mul(vec4(worldPos, 1));
 
     // Visibility
-    const isVisible = VegetationSsboUtils.computeVisibilityFromClip(
+    const isVisible = TSLUtils.computeFrustumVisibility(
       clipPosition,
       uniforms.uFx,
       uniforms.uFy,
@@ -240,7 +243,9 @@ class FlowersSsbo {
 
     If(isVisible, () => {
       // Y offset
-      const yOffset = VegetationSsboUtils.computeYOffset(worldPos);
+      const mapUv = TSLUtils.computeMapUvByPosition(worldPos.xz);
+      const heightUv = vec2(mapUv.x, float(1).sub(mapUv.y));
+      const yOffset = texture(assetManager.resources.heightmap, heightUv).r;
       data.assign(this.setYOffset(data, yOffset));
 
       // Grass scale
@@ -248,7 +253,7 @@ class FlowersSsbo {
         assetManager.resources.terrainMaps,
         TSLUtils.computeMapUvByPosition(worldPos.xz),
       ).g;
-      const grassScale = VegetationSsboUtils.computeGrassScale(grassMapValue);
+      const grassScale = grassMapValue.sub(0.25).div(0.75).clamp();
       const grassVisibility = step(0.05, grassScale);
       data.assign(this.setGrassScale(data, grassScale));
       data.assign(this.setVisibility(data, grassVisibility));
@@ -396,7 +401,7 @@ class FlowerMaterial extends SpriteNodeMaterial {
     const timer = gameTime.mul(uniforms.uWindSwaySpeed);
     const windTravel = x.mul(windDirection.x).add(z.mul(windDirection.y));
     const travelWave = sin(
-      windTravel.mul(0.16).sub(timer.mul(2.2)).add(rand3.mul(6.28318)),
+      windTravel.mul(0.16).sub(timer.mul(2.2)).add(rand3.mul(PI2)),
     )
       .mul(0.5)
       .add(0.5);
@@ -425,7 +430,7 @@ class FlowerMaterial extends SpriteNodeMaterial {
     const swayY = rand2
       .mul(0.28)
       .add(
-        sin(ambientPhase.mul(1.7).add(rand3.mul(6.28318))).mul(
+        sin(ambientPhase.mul(1.7).add(rand3.mul(PI2))).mul(
           uniforms.uWindVerticalBobStrength.mul(grassScale),
         ),
       );

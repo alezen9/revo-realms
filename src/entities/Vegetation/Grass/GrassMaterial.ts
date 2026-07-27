@@ -165,7 +165,7 @@ export class GrassMaterial extends SpriteNodeMaterial {
       .mul(windNoiseFactor);
 
     const withShadow = mix(
-      baseToTip.mul(lightingManager.uShadowBrightness),
+      baseToTip.mul(lightingManager.uBakedShadowBrightness),
       baseToTip,
       bakedShadowFactor,
     );
