@@ -21,9 +21,9 @@ export class WindManager {
     import.meta.env.DEV && ENABLE_DEBUGGING;
 
   // uniforms
-  private _uDirection = uniform(new Vector2(0, -1));
-  private _uIntensityBase = uniform(0.1);
-  private _uIntensityDirectional = uniform(0);
+  readonly uDirection = uniform(new Vector2(0, -1));
+  readonly uIntensityBase = uniform(0.1);
+  readonly uIntensityDirectional = uniform(0);
 
   private phase: Phase = "idle";
   private readonly MAX_INTENSITY = 1;
@@ -85,12 +85,12 @@ export class WindManager {
   };
 
   private rampPhase = (delta: number) => {
-    this._uIntensityDirectional.value = MathUtils.clamp(
-      this._uIntensityDirectional.value + delta * this.RAMP_RATE,
+    this.uIntensityDirectional.value = MathUtils.clamp(
+      this.uIntensityDirectional.value + delta * this.RAMP_RATE,
       0,
       this.MAX_INTENSITY,
     );
-    if (this._uIntensityDirectional.value === this.MAX_INTENSITY)
+    if (this.uIntensityDirectional.value === this.MAX_INTENSITY)
       this.phase = "hold";
   };
 
@@ -102,12 +102,12 @@ export class WindManager {
   };
 
   private decayPhase = (delta: number) => {
-    this._uIntensityDirectional.value = MathUtils.clamp(
-      this._uIntensityDirectional.value - delta * this.DECAY_RATE,
+    this.uIntensityDirectional.value = MathUtils.clamp(
+      this.uIntensityDirectional.value - delta * this.DECAY_RATE,
       0,
       this.MAX_INTENSITY,
     );
-    if (this._uIntensityDirectional.value === 0) this.phase = "idle";
+    if (this.uIntensityDirectional.value === 0) this.phase = "idle";
   };
 
   private startPhase = () => {
@@ -148,8 +148,8 @@ export class WindManager {
 
   private debug = () => {
     const material = new MeshLambertNodeMaterial();
-    material.colorNode = vec3(this._uIntensityDirectional);
-    const angle = atan(this._uDirection.x, this._uDirection.y.negate());
+    material.colorNode = vec3(this.uIntensityDirectional);
+    const angle = atan(this.uDirection.x, this.uDirection.y.negate());
     material.positionNode = rotate(positionLocal, vec3(0, angle, 0));
     const geom = new ConeGeometry(1, 3);
     geom.rotateX(-Math.PI / 2);
@@ -161,16 +161,6 @@ export class WindManager {
       mesh.position.copy(player.position).setY(5);
     });
   };
-
-  get uDirection() {
-    return this._uDirection;
-  }
-  get uIntensityBase() {
-    return this._uIntensityBase;
-  }
-  get uIntensityDirectional() {
-    return this._uIntensityDirectional;
-  }
 
   registerTarget = (label: string, position: Vector3, radius: number) => {
     const targetId = `windTarget-${++this.idCounter}`;

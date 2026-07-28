@@ -17,9 +17,7 @@ import {
   sin,
   abs,
   If,
-  PI2,
   remap,
-  fract,
   max,
   min,
   atomicAdd,
@@ -29,7 +27,7 @@ import {
 import { IndirectStorageBufferAttribute, type Node } from "three/webgpu";
 import { assetManager, windManager } from "../../../systems";
 import { TSLUtils } from "../../../utils/TSLUtils";
-import { gameTime } from "../../../utils/GameTime";
+import { gameDeltaTime, gameTime } from "../../../utils/GameTime";
 import { config, uniforms } from "./config";
 
 type StochasticKeepArgs = [
@@ -309,62 +307,33 @@ export class GrassSsbo {
     ],
     Node<"vec3">
   >(([prevWindXZ, worldPos, positionNoise, resetWind]) => {
-    const bendDir = windManager.uDirection;
-    const scrollDir = bendDir.negate();
-
-    const speed = uniforms.uWindSpeed.mul(
-      positionNoise.remap(0, 1, 0.95, 2.05),
-    );
-
-    const uvBase = worldPos.xz.mul(0.01).mul(uniforms.uvWindScale);
-    const scroll = scrollDir.mul(speed).mul(gameTime);
-
-    const uvA = uvBase.add(scroll);
-    const noise = texture(assetManager.resources.noiseAtlas, uvA);
-
-    const gustJitter = fract(sin(positionNoise.mul(12.9898)).mul(78.233))
-      .mul(2)
-      .sub(1);
-    const gustTime = sin(gameTime.mul(0.35).add(positionNoise.mul(PI2)))
-      .mul(0.5)
-      .add(0.5);
+    const baseDir = windManager.uDirection;
     const windEvent = windManager.uIntensityDirectional;
-    const windTravel = worldPos.x.mul(bendDir.x).add(worldPos.z.mul(bendDir.y));
-    const travelWave = sin(
-      windTravel
-        .mul(0.18)
-        .sub(gameTime.mul(speed).mul(2.2))
-        .add(positionNoise.mul(PI2)),
-    )
-      .mul(0.5)
-      .add(0.5);
-    const rawBurst = noise.r
-      .mul(0.6)
-      .add(noise.g.mul(0.25))
-      .add(travelWave.mul(0.25))
-      .add(gustTime.mul(0.1))
-      .add(gustJitter.mul(0.06))
-      .clamp();
-    const ambientBurst = smoothstep(0.2, 0.72, rawBurst);
-    const directionalBurst = smoothstep(0.56, 0.95, rawBurst);
-    const ambientFactor = uniforms.uWindStrength.mul(
-      mix(0.35, 1.0, ambientBurst),
-    );
-    const directionalFactor = directionalBurst.mul(windEvent).mul(1.25);
-    const windFactor = ambientFactor.add(directionalFactor);
-    const gust01 = mix(ambientBurst, directionalBurst, windEvent);
+    const perp = vec2(baseDir.y.negate(), baseDir.x);
 
-    const perp = vec2(bendDir.y.negate(), bendDir.x);
-    const turbulence = perp.mul(gustJitter.mul(0.12).mul(windFactor));
-    const target = bendDir.mul(windFactor).add(turbulence);
-    const dampingNoise = abs(
-      noise.b.mul(2).sub(1).add(gustJitter.mul(0.25)),
-    ).clamp();
-    const k = mix(0.045, 0.24, dampingNoise).add(windEvent.mul(0.035));
+    const scrollDir = perp.mul(0.3717).sub(baseDir);
+    const uv = worldPos.xz
+      .mul(uniforms.uvWindScale.mul(0.01))
+      .add(scrollDir.mul(uniforms.uWindSpeed.mul(gameTime)));
+    const noise = texture(assetManager.resources.noiseAtlas, uv);
+
+    const fastGust = sin(noise.g.mul(18.85)).mul(0.5).add(0.5);
+    const gustField = mix(noise.r, fastGust, windEvent);
+    const gustStart = float(1).sub(uniforms.uWindGustCoverage);
+    const gust = smoothstep(gustStart, gustStart.add(0.25), gustField);
+    const windFactor = uniforms.uWindStrength
+      .mul(mix(uniforms.uWindLull, 1, gust))
+      .mul(mix(1, 4, windEvent));
+
+    const veer = noise.g.sub(0.5).mul(2).mul(uniforms.uWindEddyStrength);
+    const target = baseDir.add(perp.mul(veer)).mul(windFactor);
+
+    const rate = mix(3.5, 11, positionNoise).mul(mix(0.3, 1, gust));
+    const k = min(rate.mul(gameDeltaTime), 1);
     const dampedWind = prevWindXZ.add(target.sub(prevWindXZ).mul(k));
     const newWind = mix(dampedWind, target, resetWind);
 
-    return vec3(newWind, gust01);
+    return vec3(newWind, gust);
   });
 
   computeResetInstanceCount = Fn(() => {
@@ -442,7 +411,10 @@ export class GrassSsbo {
       );
 
       // Scale
-      const grassScale = terrainMaps.g.sub(0.25).div(0.75).clamp();
+      const grassScale = terrainMaps.g
+        .sub(0.25)
+        .div(1 - 0.25)
+        .clamp();
       const baseScale = originalScale.mul(grassScale);
       const isVisible = step(config.MIN_VISIBLE_SCALE, baseScale);
       data1.assign(this.setVisibility(data1, isVisible));

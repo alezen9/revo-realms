@@ -63,10 +63,8 @@ export class GrassMaterial extends SpriteNodeMaterial {
 
     // ROTATION
     const instanceNoise = hash(bladeIndex.add(196.4356)).sub(0.5).mul(0.25);
-    const spriteRotation = hash(bladeIndex.add(284.7821))
-      .sub(0.5)
-      .mul(2)
-      .mul(uniforms.uSpriteRotationRandomness);
+    const spriteNoise = hash(bladeIndex.add(284.7821)).sub(0.5).mul(2);
+    const spriteRotation = spriteNoise.mul(uniforms.uSpriteRotationRandomness);
     const h = uv().y;
     const bendProfile = h.mul(h).mul(uniforms.uBaseBending);
     const baseBending = positionNoise
@@ -81,15 +79,18 @@ export class GrassMaterial extends SpriteNodeMaterial {
     // base offset
     const bladePosition = vec3(offsetX, offsetY, offsetZ);
     // sway effect
-    const randomPhase = positionNoise.mul(PI2);
+    const swayRate = spriteNoise.remap(-1, 1, 0.7, 1.45);
+    const randomPhase = instanceNoise.mul(25.13);
     const heightPhase = h
       .mul(h)
       .mul(0.55)
       .mul(mix(0.75, 1.35, windNoiseFactor));
-    const swayA = sin(gameTime.mul(1.35).add(randomPhase).add(heightPhase));
+    const swayA = sin(
+      gameTime.mul(swayRate.mul(1.35)).add(randomPhase).add(heightPhase),
+    );
     const swayB = sin(
       gameTime
-        .mul(2.15)
+        .mul(swayRate.mul(2.15))
         .add(offsetX.mul(0.17))
         .add(offsetZ.mul(0.11))
         .add(randomPhase.mul(1.7))
@@ -157,21 +158,12 @@ export class GrassMaterial extends SpriteNodeMaterial {
     );
     const baseColorJittered = uniforms.uBaseColor.mul(jitter);
     const baseToTip = mix(baseColorJittered, uniforms.uTipColor, colorProfile);
-    const baseMask = float(1).sub(
-      smoothstep(0.0, uniforms.uBaseShadeHeight, h),
-    );
-    const windShadeAmount = uniforms.uBaseWindShade
-      .mul(baseMask)
-      .mul(windNoiseFactor);
-
     const withShadow = mix(
       baseToTip.mul(lightingManager.uBakedShadowBrightness),
       baseToTip,
       bakedShadowFactor,
     );
-    const windShadeColor = withShadow.mul(uniforms.uTipColor).mul(1.35);
-    const windShaded = mix(withShadow, windShadeColor, windShadeAmount);
 
-    this.colorNode = windShaded.mul(ao);
+    this.colorNode = withShadow.mul(ao);
   }
 }

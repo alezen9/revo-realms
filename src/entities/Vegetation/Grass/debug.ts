@@ -31,18 +31,6 @@ export const debugGrass = (uniforms: GrassUniforms, config: GrassConfig) => {
     max: 3,
     step: 0.01,
   });
-  color.addBinding(uniforms.uBaseWindShade, "value", {
-    label: "Wind shade strength",
-    min: 0,
-    max: 2,
-    step: 0.01,
-  });
-  color.addBinding(uniforms.uBaseShadeHeight, "value", {
-    label: "Wind shade height",
-    min: 0,
-    max: 1,
-    step: 0.01,
-  });
   color.addBinding(uniforms.uAoScale, "value", {
     label: "AO scale",
     min: 0,
@@ -90,6 +78,24 @@ export const debugGrass = (uniforms: GrassUniforms, config: GrassConfig) => {
     min: 0,
     max: 0.15,
     step: 0.001,
+  });
+  wind.addBinding(uniforms.uWindLull, "value", {
+    label: "Calm floor",
+    min: 0,
+    max: 1,
+    step: 0.01,
+  });
+  wind.addBinding(uniforms.uWindEddyStrength, "value", {
+    label: "Eddy strength",
+    min: 0,
+    max: 1.5,
+    step: 0.01,
+  });
+  wind.addBinding(uniforms.uWindGustCoverage, "value", {
+    label: "Gust coverage",
+    min: 0,
+    max: 1,
+    step: 0.01,
   });
 
   const stochastic = folder.addFolder({ title: "Stochastic keep" });

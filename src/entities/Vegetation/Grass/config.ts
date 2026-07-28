@@ -43,8 +43,8 @@ export const uniforms = {
   uPlayerRadius: uniform(0.5),
   uCameraForward: uniform(new Vector3(0, 0, 0)),
   // Scale
-  uBladeMinScale: uniform(0.65),
-  uBladeMaxScale: uniform(2.25),
+  uBladeMinScale: uniform(0.45),
+  uBladeMaxScale: uniform(2.75),
   // Trail
   uTrailGrowthRate: uniform(0.04),
   uTrailMinScale: uniform(0.25),
@@ -52,10 +52,13 @@ export const uniforms = {
   uTrailRadiusSquared: uniform(1),
   uKDown: uniform(0.4),
   // Wind
-  uWindStrength: uniform(0.28),
+  uWindStrength: uniform(0.32),
   uWindSpeed: uniform(0.18),
   uvWindScale: uniform(1.35),
   uAmbientSwayStrength: uniform(0.055),
+  uWindLull: uniform(0.09),
+  uWindEddyStrength: uniform(0.9),
+  uWindGustCoverage: uniform(0.6),
   // Color
   uBaseColor: uniform(new Color(0.27, 0.49, 0.29).convertSRGBToLinear()),
   uTipColor: uniform(new Color(0.74, 0.56, 0.4).convertSRGBToLinear()),
@@ -65,8 +68,6 @@ export const uniforms = {
   uAoRimSmoothness: uniform(5),
   uAoRadius: uniform(15),
   uAoRadiusSquared: uniform(15 * 15),
-  uBaseWindShade: uniform(0.75),
-  uBaseShadeHeight: uniform(1),
   // Stochastic keep
   uR0: uniform(16),
   uR1: uniform(50),

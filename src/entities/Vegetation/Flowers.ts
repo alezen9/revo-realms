@@ -253,7 +253,10 @@ class FlowersSsbo {
         assetManager.resources.terrainMaps,
         TSLUtils.computeMapUvByPosition(worldPos.xz),
       ).g;
-      const grassScale = grassMapValue.sub(0.25).div(0.75).clamp();
+      const grassScale = grassMapValue
+        .sub(0.25)
+        .div(1 - 0.25)
+        .clamp();
       const grassVisibility = step(0.05, grassScale);
       data.assign(this.setGrassScale(data, grassScale));
       data.assign(this.setVisibility(data, grassVisibility));
