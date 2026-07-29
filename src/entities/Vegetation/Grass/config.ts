@@ -60,7 +60,7 @@ export const uniforms = {
   uWindEddyStrength: uniform(0.9),
   uWindGustCoverage: uniform(0.6),
   // Color
-  uBaseColor: uniform(new Color(0.27, 0.49, 0.29).convertSRGBToLinear()),
+  uBaseColor: uniform(new Color(0.25, 0.44, 0.26).convertSRGBToLinear()),
   uTipColor: uniform(new Color(0.74, 0.56, 0.4).convertSRGBToLinear()),
   uColorMixFactor: uniform(0.15),
   uColorVariationStrength: uniform(2),
