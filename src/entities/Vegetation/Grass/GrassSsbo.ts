@@ -109,8 +109,10 @@ export class GrassSsbo {
       const p = pDistance.mul(pScreen);
       const cell = floor(worldPos.xz.div(spacing));
       const rnd = hash(cell.x.mul(12.9898).add(cell.y.mul(78.233)));
-      const enterKeep = step(rnd.add(hysteresis), p);
-      const stayKeep = step(rnd.sub(hysteresis), p);
+      const enterThreshold = rnd.add(hysteresis).clamp();
+      const stayThreshold = rnd.sub(hysteresis).clamp(EPSILON, 1);
+      const enterKeep = step(enterThreshold, p);
+      const stayKeep = step(stayThreshold, p);
       return mix(enterKeep, stayKeep, previousKeep);
     },
   );
