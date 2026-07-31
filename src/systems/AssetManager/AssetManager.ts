@@ -57,7 +57,6 @@ export class AssetManager {
 
     // GLTF
     const dracoLoader = new DRACOLoader();
-    dracoLoader.setDecoderPath("/draco/");
     this.gltfLoader = new GLTFLoader(manager);
     this.gltfLoader.setDRACOLoader(dracoLoader);
 
