@@ -2,7 +2,7 @@ import { Vector3 } from "three";
 
 const POSITIONS = {
   center: [0, 0.5, 10],
-  berserk: [180, 0.5, -150],
+  berserk: [210, 0.5, -110],
   hill: [-100, 0.5, 240],
   campfire: [-165, 0.5, -150],
   gow: [70, 0.5, 125],
