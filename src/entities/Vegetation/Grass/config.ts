@@ -43,8 +43,8 @@ export const uniforms = {
   uPlayerRadius: uniform(0.5),
   uCameraForward: uniform(new Vector3(0, 0, 0)),
   // Scale
-  uBladeMinScale: uniform(0.45),
-  uBladeMaxScale: uniform(2.75),
+  uBladeMinScale: uniform(0.85),
+  uBladeMaxScale: uniform(2.35),
   // Trail
   uTrailGrowthRate: uniform(0.04),
   uTrailMinScale: uniform(0.25),
