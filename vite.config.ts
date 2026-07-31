@@ -1,6 +1,5 @@
 import { defineConfig } from "vite";
 import wasm from "vite-plugin-wasm";
-import topLevelAwait from "vite-plugin-top-level-await";
 import { svelte } from "@sveltejs/vite-plugin-svelte";
 import path from "node:path";
 
@@ -15,7 +14,7 @@ export default defineConfig(({ mode }) => {
         "@systems-tooling-runtime": toolingRuntimePath,
       },
     },
-    plugins: [wasm(), topLevelAwait(), svelte()],
+    plugins: [wasm(), svelte()],
     base: "/",
     build: {
       target: "esnext",
