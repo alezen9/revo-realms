@@ -4,14 +4,22 @@
 
 	let animation = $state("")
 
-	onMount(() => {
-		eventsManager.on("game-wind-start", () => {
-			animation = "fade-in"
-		})
+	const onWindStart = () => {
+		animation = "fade-in"
+	}
 
-		eventsManager.on("game-wind-end", () => {
-			animation = "fade-out"
-		})
+	const onWindEnd = () => {
+		animation = "fade-out"
+	}
+
+	onMount(() => {
+		const unsubscribeWindStart = eventsManager.on("game-wind-start", onWindStart)
+		const unsubscribeWindEnd = eventsManager.on("game-wind-end", onWindEnd)
+
+		return () => {
+			unsubscribeWindStart()
+			unsubscribeWindEnd()
+		}
 	})
 </script>
 

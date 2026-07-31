@@ -82,6 +82,8 @@ export default class Game {
     eventsManager.emit("engine-render-target-resize", sizes);
   };
 
+  private onResizeDebounced = debounce(this.onResize, 300);
+
   private onAnimationFrame = (timestamp: DOMHighResTimeStamp) => {
     timeManager.update(timestamp);
     if (timeManager.isPaused) return;
@@ -112,7 +114,10 @@ export default class Game {
   };
 
   private dispose = () => {
+    rendererManager.renderer.setAnimationLoop(null);
     this.resizeObserver?.disconnect();
+    this.resizeObserver = undefined;
+    this.onResizeDebounced.cancel();
   };
 
   async startLoop() {
@@ -120,9 +125,8 @@ export default class Game {
     this.debugGame();
     timeManager.reset();
 
-    const debouncedResize = debounce(this.onResize, 300);
     this.onResize();
-    this.resizeObserver = new ResizeObserver(debouncedResize);
+    this.resizeObserver = new ResizeObserver(this.onResizeDebounced);
     this.resizeObserver.observe(document.body);
 
     import.meta.hot?.dispose(this.dispose);

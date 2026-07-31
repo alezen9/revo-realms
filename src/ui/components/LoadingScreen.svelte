@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from "svelte"
+	import { fade } from "svelte/transition"
 	import { eventsManager } from "../../systems"
 
 	let progress = $state(0)
@@ -35,9 +36,9 @@
 	})
 </script>
 
-<div class={progress === 100 ? "fade-out" : ""}>
-	{progress}%
-</div>
+{#if progress < 100}
+	<div out:fade={{ delay: 80, duration: 1000 }}>{progress}%</div>
+{/if}
 
 <style>
 	div {
@@ -56,21 +57,5 @@
 			"Gill Sans", "Gill Sans MT", Calibri, "Trebuchet MS", sans-serif;
 		-webkit-font-smoothing: antialiased;
 		-moz-osx-font-smoothing: grayscale;
-	}
-
-	.fade-out {
-		animation: fadeOut 1s ease-out 80ms forwards;
-		will-change: opacity;
-	}
-
-	@keyframes fadeOut {
-		0% {
-			visibility: visible;
-			opacity: 1;
-		}
-		100% {
-			visibility: hidden;
-			opacity: 0;
-		}
 	}
 </style>

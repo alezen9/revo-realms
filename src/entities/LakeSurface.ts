@@ -40,10 +40,14 @@ import {
 } from "../systems";
 
 export class LakeSurface {
+  private lakeSurface: Mesh;
+  private unsubscribeAudioProgress?: VoidFunction;
+
   constructor() {
     const lakeSurface = assetManager.resources.worldModel.scene.getObjectByName(
       "lake-surface",
     ) as Mesh;
+    this.lakeSurface = lakeSurface;
 
     const uniforms = {
       uTworld: uniform(new Vector3(1, 0, 0)),
@@ -86,10 +90,24 @@ export class LakeSurface {
     );
     landmarkManager.setWindTargetId(landmarkId, windTargetId);
 
-    eventsManager.on("engine-loading-audio-progress", (p) => {
-      if (p === 100) lakeSurface.add(audioManager.lake);
-    });
+    if (audioManager.isReady) this.attachLakeAudio();
+    else
+      this.unsubscribeAudioProgress = eventsManager.on(
+        "engine-loading-audio-progress",
+        this.onAudioProgress,
+      );
   }
+
+  private attachLakeAudio() {
+    this.lakeSurface.add(audioManager.lake);
+    this.unsubscribeAudioProgress?.();
+    this.unsubscribeAudioProgress = undefined;
+  }
+
+  private onAudioProgress = (percentage: number) => {
+    if (percentage !== 100) return;
+    this.attachLakeAudio();
+  };
 }
 
 class WaterMaterial extends MeshBasicNodeMaterial {

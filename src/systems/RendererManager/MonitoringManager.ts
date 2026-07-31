@@ -44,7 +44,8 @@ export class MonitoringManager {
   private providers: Partial<MonitoringProviders> = {};
   private providerValues: MonitoringProviderValues = { grass: null };
   private providerLoading: MonitoringProviderLoading = { grass: false };
-  private snapshotInterval?: ReturnType<typeof window.setInterval>;
+  private readonly snapshotInterval: ReturnType<typeof window.setInterval>;
+  private readonly unsubscribePhysics: VoidFunction;
 
   constructor(
     eventsManager: EventsManager,
@@ -60,9 +61,10 @@ export class MonitoringManager {
       this.onSnapshotInterval,
       SNAPSHOT_INTERVAL_MS,
     );
-    this.eventsManager.on("engine-after-physics", () => {
-      this.physicsStepCount++;
-    });
+    this.unsubscribePhysics = this.eventsManager.on(
+      "engine-after-physics",
+      this.onPhysicsStep,
+    );
     import.meta.hot?.dispose(this.dispose);
   }
 
@@ -100,6 +102,10 @@ export class MonitoringManager {
   private onSnapshotInterval = () => {
     this.refreshProviders();
     this.emitSnapshot();
+  };
+
+  private onPhysicsStep = () => {
+    this.physicsStepCount++;
   };
 
   private refreshProviders() {
@@ -174,8 +180,7 @@ export class MonitoringManager {
   }
 
   private dispose = () => {
-    if (!this.snapshotInterval) return;
     window.clearInterval(this.snapshotInterval);
-    this.snapshotInterval = undefined;
+    this.unsubscribePhysics();
   };
 }

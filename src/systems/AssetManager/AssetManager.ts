@@ -33,6 +33,7 @@ export class AssetManager {
   // Loaders
   private textureLoader: TextureLoader;
   private gltfLoader: GLTFLoader;
+  private dracoLoader: DRACOLoader;
   private cubeTextureLoader: CubeTextureLoader;
   private ktx2Loader: KTX2Loader;
   private eventsManager: EventsManager;
@@ -57,6 +58,7 @@ export class AssetManager {
 
     // GLTF
     const dracoLoader = new DRACOLoader();
+    this.dracoLoader = dracoLoader;
     this.gltfLoader = new GLTFLoader(manager);
     this.gltfLoader.setDRACOLoader(dracoLoader);
 
@@ -113,6 +115,11 @@ export class AssetManager {
   async initAsync(rendererManager: RendererManager) {
     this.ktx2Loader.detectSupport(rendererManager.renderer);
     const promises = manifest.map(this.getResource);
-    await Promise.all(promises);
+    try {
+      await Promise.all(promises);
+    } finally {
+      this.dracoLoader.dispose();
+      this.ktx2Loader.dispose();
+    }
   }
 }

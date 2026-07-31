@@ -14,7 +14,7 @@ export class ComputeTask {
   private renderer: WebGPURenderer;
   private initNodes?: ComputeTaskNodes;
   private updateNodes: ComputeTaskNodes;
-  private initPromise?: Promise<void>;
+  private initPromise?: Promise<boolean>;
   private updatePromise?: Promise<void>;
   private hasInitialized: boolean;
 
@@ -31,8 +31,8 @@ export class ComputeTask {
   }
 
   init() {
-    if (!this.initNodes || this.hasInitialized || this.initPromise)
-      return this.initPromise;
+    if (this.hasInitialized) return Promise.resolve(true);
+    if (this.initPromise) return this.initPromise;
 
     this.initPromise = this.runInit();
     return this.initPromise;
@@ -47,11 +47,13 @@ export class ComputeTask {
 
   private async runInit() {
     try {
-      if (!this.initNodes) return;
+      if (!this.initNodes) return true;
       await this.renderer.computeAsync(this.initNodes);
       this.hasInitialized = true;
+      return true;
     } catch (error) {
       console.error(`[${this.label}] compute init failed:`, error);
+      return false;
     } finally {
       this.initPromise = undefined;
     }

@@ -22,8 +22,6 @@ import terrainMapsUrl from "/textures/new-world/terrain/terrain-maps.ktx2?url"; 
 import waterMaskUrl from "/textures/new-world/terrain/water-mask.bin?url"; // used CPU side
 import terrainNormAoUrl from "/textures/new-world/terrain/groundNormalAO_1k.ktx2?url";
 import normVeinWaterUrl from "/textures/new-world/water/water_normal_vein_uastc.ktx2?url";
-// Water
-import waterNormalUrl from "/textures/new-world/water/water_normal.ktx2?url";
 // God of War
 import leviathanDiffuseEmissiveUrl from "/textures/new-world/cool-stuff/leviathan/diffuse_emissive_1k.ktx2?url";
 import leviathanNormalUrl from "/textures/new-world/cool-stuff/leviathan/normal_512.ktx2?url";
@@ -171,11 +169,6 @@ export const manifest = [
     type: "ktx2",
     wrap: true,
   },
-
-  // -----------------------------------------------
-  // Water
-  // -----------------------------------------------
-  { name: "waterNormal", url: waterNormalUrl, type: "ktx2" },
 
   // -----------------------------------------------
   // Campfire

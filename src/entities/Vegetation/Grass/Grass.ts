@@ -32,11 +32,16 @@ export default class Grass {
     });
     this.mesh = this.createMesh();
     sceneManager.scene.add(this.mesh);
-    this.computeTask.init();
+    void this.initComputeTaskAsync();
 
     eventsManager.on("engine-render-update", this.onEngineUpdate);
-    monitoringManager?.registerProvider("grass", this.getMonitoringStatsAsync);
     debugGrass(uniforms, config);
+  }
+
+  private async initComputeTaskAsync() {
+    const isInitialized = await this.computeTask.init();
+    if (!isInitialized) return;
+    monitoringManager?.registerProvider("grass", this.getMonitoringStatsAsync);
   }
 
   private createMesh() {
