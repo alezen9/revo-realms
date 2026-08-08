@@ -1,18 +1,14 @@
 import "./style.css";
-import _SetupManager from "./systems/_SetupManager";
 import Game from "./Game";
-import { UIManager } from "./systems/UIManager";
-import {
-  eventsManager,
-  prewarmManager,
-} from "./systems";
-
-const _setupManager = new _SetupManager();
-const _uiManager = new UIManager();
+import { mountUi } from "./ui/mountUi";
+import { setupAsync } from "./systems/setupAsync";
+import { eventsManager, prewarmManager } from "./systems";
 
 const bootstrap = async () => {
+  mountUi();
+
   try {
-    await _setupManager.initAsync();
+    await setupAsync();
     const game = new Game();
     eventsManager.emit("engine-loading-core-progress", 90);
 
@@ -29,10 +25,10 @@ const bootstrap = async () => {
       );
     else console.warn("[main] Prewarm exited early. Continuing startup.");
 
-    // loading screen dismisses itself once the first live frame has rendered
     game.startLoop();
   } catch (error) {
     console.error("[main] Startup failed.", error);
+    eventsManager.emit("engine-loading-failed");
   }
 };
 

@@ -1,5 +1,6 @@
 import { AssetManager } from "./AssetManager/AssetManager";
 import { AudioManager } from "./AudioManager";
+import { CullingManager } from "./CullingManager";
 import { EventsManager } from "./EventsManager";
 import { FrameScheduler } from "./FrameScheduler";
 import { InputManager } from "./InputManager";
@@ -22,6 +23,7 @@ const init = () => {
   const eventsManager = new EventsManager();
   const frameScheduler = new FrameScheduler();
   const sceneManager = new SceneManager(eventsManager);
+  const cullingManager = new CullingManager(eventsManager, sceneManager);
   const debugManager = createDebugManager();
 
   const rendererManager = new RendererManager(
@@ -63,6 +65,7 @@ const init = () => {
     frameScheduler,
     lightingManager,
     sceneManager,
+    cullingManager,
     rendererManager,
     monitoringManager,
     prewarmManager,
@@ -83,6 +86,7 @@ export const {
   frameScheduler,
   lightingManager,
   sceneManager,
+  cullingManager,
   rendererManager,
   monitoringManager,
   prewarmManager,

@@ -1,7 +1,6 @@
 import {
   CubeTextureLoader,
   DataTexture,
-  LoadingManager,
   NoColorSpace,
   RepeatWrapping,
   Texture,
@@ -9,6 +8,7 @@ import {
 } from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { DRACOLoader } from "three/addons/loaders/DRACOLoader.js";
+import { KTX2Loader } from "three/addons/loaders/KTX2Loader.js";
 import atlasesCoords from "../../atlases/atlases.json";
 import { type Atlases } from "../../atlases/types";
 import {
@@ -16,7 +16,6 @@ import {
   type ResourceRaw,
   type ExternalResources,
 } from "./resources";
-import { KTX2Loader } from "three/addons/loaders/KTX2Loader.js";
 import { type RendererManager } from "../RendererManager/RendererManager";
 import type { EventsManager } from "../EventsManager";
 
@@ -26,100 +25,113 @@ type InternalResources = {
 
 type Resources = ExternalResources & InternalResources;
 
+type FailedLoad = {
+  resource: ResourceRaw;
+  error: unknown;
+};
+
+const MAX_RETRIES = 3;
+const RETRY_BACKOFF_MS = 250;
+
 export class AssetManager {
-  // Atlas coords
   readonly atlasesCoords = atlasesCoords as Atlases;
 
-  // Loaders
-  private textureLoader: TextureLoader;
-  private gltfLoader: GLTFLoader;
-  private dracoLoader: DRACOLoader;
-  private cubeTextureLoader: CubeTextureLoader;
-  private ktx2Loader: KTX2Loader;
+  private textureLoader = new TextureLoader();
+  private cubeTextureLoader = new CubeTextureLoader();
+  private dracoLoader = new DRACOLoader();
+  private gltfLoader = new GLTFLoader();
+  private ktx2Loader = new KTX2Loader();
   private eventsManager: EventsManager;
+  private loadedCount = 0;
 
   resources = {
-    heightmap: new DataTexture(), // placeholder
+    heightmap: new DataTexture(),
   } as Resources;
 
   constructor(eventsManager: EventsManager) {
     this.eventsManager = eventsManager;
-    const manager = new LoadingManager();
-    manager.onProgress = (_, itemsLoaded, itemsTotal) => {
-      const percentage = Math.ceil((100 / itemsTotal) * itemsLoaded);
-      this.eventsManager.emit(
-        "engine-loading-resources-progress",
-        Math.min(percentage, 100),
-      );
-    };
-
-    // Texture
-    this.textureLoader = new TextureLoader(manager);
-
-    // GLTF
-    const dracoLoader = new DRACOLoader();
-    this.dracoLoader = dracoLoader;
-    this.gltfLoader = new GLTFLoader(manager);
-    this.gltfLoader.setDRACOLoader(dracoLoader);
-
-    // Env maps
-    this.cubeTextureLoader = new CubeTextureLoader(manager);
-
-    // KTX2
-    const ktx2Loader = new KTX2Loader(manager);
-    ktx2Loader.setTranscoderPath("/basis/");
-    this.ktx2Loader = ktx2Loader;
+    this.gltfLoader.setDRACOLoader(this.dracoLoader);
+    this.ktx2Loader.setTranscoderPath("/basis/");
   }
 
-  private getResource = async (resource: ResourceRaw) => {
+  private loadResource = async (resource: ResourceRaw) => {
     switch (resource.type) {
       case "texture":
-      case "ktx2":
+      case "ktx2": {
         const loader =
           resource.type === "ktx2" ? this.ktx2Loader : this.textureLoader;
-        return loader.loadAsync(resource.url).then((tex) => {
-          tex.flipY = resource.flipY ?? true;
-          tex.colorSpace = resource.colorSpace ?? NoColorSpace;
-          if (resource.wrap) tex.wrapS = tex.wrapT = RepeatWrapping;
-          tex.anisotropy = resource.anisotropy ?? Texture.DEFAULT_ANISOTROPY;
-          if (resource.minFilter !== undefined)
-            tex.minFilter = resource.minFilter;
-          if (resource.magFilter !== undefined)
-            tex.magFilter = resource.magFilter;
-          if (resource.generateMipmaps !== undefined)
-            tex.generateMipmaps = resource.generateMipmaps;
-          this.resources[resource.name] = tex;
-        });
+        const texture = await loader.loadAsync(resource.url);
+        texture.flipY = resource.flipY ?? true;
+        texture.colorSpace = resource.colorSpace ?? NoColorSpace;
+        texture.anisotropy = resource.anisotropy ?? Texture.DEFAULT_ANISOTROPY;
+        texture.minFilter = resource.minFilter ?? texture.minFilter;
+        texture.magFilter = resource.magFilter ?? texture.magFilter;
+        texture.generateMipmaps =
+          resource.generateMipmaps ?? texture.generateMipmaps;
+        if (resource.wrap) texture.wrapS = texture.wrapT = RepeatWrapping;
+        this.resources[resource.name] = texture;
+        break;
+      }
       case "gltf":
-        return this.gltfLoader.loadAsync(resource.url).then((gltf) => {
-          this.resources[resource.name] = gltf;
-        });
-      case "cubeTexture":
-        return this.cubeTextureLoader
-          .loadAsync(resource.urls)
-          .then((cubeTex) => {
-            cubeTex.colorSpace = resource.colorSpace ?? NoColorSpace;
-            this.resources[resource.name] = cubeTex;
-          });
-      case "binary":
-        return fetch(resource.url)
-          .then((response) => response.arrayBuffer())
-          .then((buffer) => {
-            this.resources[resource.name] = new Uint8Array(buffer);
-          });
-      default:
-        throw new Error(`Unsupported resource type: ${(resource as any).type}`);
+        this.resources[resource.name] = await this.gltfLoader.loadAsync(
+          resource.url,
+        );
+        break;
+      case "cubeTexture": {
+        const cubeTexture = await this.cubeTextureLoader.loadAsync(
+          resource.urls,
+        );
+        cubeTexture.colorSpace = resource.colorSpace ?? NoColorSpace;
+        this.resources[resource.name] = cubeTexture;
+        break;
+      }
+      case "binary": {
+        const response = await fetch(resource.url);
+        if (!response.ok)
+          throw new Error(`${resource.url} responded ${response.status}`);
+        const buffer = await response.arrayBuffer();
+        this.resources[resource.name] = new Uint8Array(buffer);
+        break;
+      }
     }
+
+    this.loadedCount++;
+    const percentage = Math.ceil((this.loadedCount / manifest.length) * 100);
+    this.eventsManager.emit("engine-loading-resources-progress", percentage);
   };
 
   async initAsync(rendererManager: RendererManager) {
     this.ktx2Loader.detectSupport(rendererManager.renderer);
-    const promises = manifest.map(this.getResource);
-    try {
-      await Promise.all(promises);
-    } finally {
-      this.dracoLoader.dispose();
-      this.ktx2Loader.dispose();
+
+    let pending: ResourceRaw[] = [...manifest];
+    let failures: FailedLoad[] = [];
+
+    for (let attempt = 0; pending.length && attempt <= MAX_RETRIES; attempt++) {
+      if (attempt) {
+        const nominalBackoffMs = RETRY_BACKOFF_MS * 2 ** (attempt - 1);
+        const jitteredBackoffMs = nominalBackoffMs * (0.5 + Math.random());
+        await new Promise((resolve) => setTimeout(resolve, jitteredBackoffMs));
+      }
+
+      failures = [];
+      const loads = pending.map((resource) =>
+        this.loadResource(resource).catch((error) =>
+          failures.push({ resource, error }),
+        ),
+      );
+      await Promise.all(loads);
+      pending = failures.map((failure) => failure.resource);
     }
+
+    this.dracoLoader.dispose();
+    this.ktx2Loader.dispose();
+
+    if (!failures.length) return;
+
+    const details = failures.map(
+      ({ resource, error }) =>
+        `${resource.name}: ${error instanceof Error ? error.message : error}`,
+    );
+    throw new Error(`Failed to load resources -> ${details.join(" | ")}`);
   }
 }

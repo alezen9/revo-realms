@@ -59,6 +59,7 @@ type EngineEvents = {
   "engine-loading-resources-progress": (percentage: number) => void;
   "engine-loading-audio-progress": (percentage: number) => void;
   "engine-loading-core-progress": (percentage: number) => void;
+  "engine-loading-failed": VoidFunction;
   "engine-monitoring-update": (snapshot: MonitoringSnapshot) => void;
   "engine-time-scale": (scale: number) => void;
   "engine-pause-change": (paused: boolean) => void;

@@ -19,6 +19,11 @@ export const debugGrass = (uniforms: GrassUniforms, config: GrassConfig) => {
     view: "color",
     color: { type: "float" },
   });
+  color.addBinding(srgbColorTarget(uniforms.uBaseColorDark.value), "value", {
+    label: "Base dark",
+    view: "color",
+    color: { type: "float" },
+  });
   color.addBinding(uniforms.uColorMixFactor, "value", {
     label: "Mix factor",
     min: 0,

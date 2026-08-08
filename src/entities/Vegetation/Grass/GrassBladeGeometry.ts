@@ -35,7 +35,6 @@ export class GrassBladeGeometry extends InstancedBufferGeometry {
     const positions = new Float32Array(vertexCount * 3);
     const uvs = new Float32Array(vertexCount * 2);
     const indices = new Uint8Array(indexCount);
-    const normals = new Float32Array(vertexCount * 3);
 
     let idx = 0;
     for (let row = 0; row < rowCount; row++) {
@@ -96,9 +95,5 @@ export class GrassBladeGeometry extends InstancedBufferGeometry {
     const indexAttribute = new BufferAttribute(indices, 1);
     indexAttribute.setUsage(StaticDrawUsage);
     this.setIndex(indexAttribute);
-
-    const normalAttribute = new BufferAttribute(normals, 3);
-    normalAttribute.setUsage(StaticDrawUsage);
-    this.setAttribute("normal", normalAttribute);
   }
 }

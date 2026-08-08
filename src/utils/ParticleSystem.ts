@@ -26,9 +26,13 @@ import {
   PlaneGeometry,
   SpriteNodeMaterial,
 } from "three/webgpu";
-import { assetManager, rendererManager, eventsManager } from "../systems";
+import {
+  assetManager,
+  cullingManager,
+  rendererManager,
+  eventsManager,
+} from "../systems";
 import { gameTime } from "./GameTime";
-import { Utils } from "./Utils";
 
 const createParticleBuffer = (count: number | Float32Array) =>
   instancedArray(count, "vec4");
@@ -113,7 +117,7 @@ export default class ParticleSystem extends InstancedMesh {
     let shouldCompute = false;
 
     eventsManager.on("engine-render-update-throttle-64x", () => {
-      shouldCompute = Utils.isMeshVisible(this);
+      shouldCompute = cullingManager.isMeshVisible(this);
     });
 
     eventsManager.on("engine-render-update-throttle-2x", () => {

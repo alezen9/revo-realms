@@ -83,7 +83,6 @@ export default class Grass {
     uniforms.uCameraMatrix.value
       .copy(projectionMatrix)
       .multiply(sceneManager.playerCamera.matrixWorldInverse);
-    sceneManager.playerCamera.getWorldDirection(uniforms.uCameraForward.value);
   }
 
   private updateSsbo() {

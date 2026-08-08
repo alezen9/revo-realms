@@ -51,7 +51,7 @@ const uniforms = {
   uGrassTerrainColor: uniform(new Color().setRGB(0.21, 0.34, 0.22)),
   uWaterSandColor: uniform(new Color().setRGB(0.7, 0.55, 0.29)),
   uTerrainColor: uniform(new Color().setRGB(0.7, 0.55, 0.29)),
-  uGrassNormalScale: uniform(1.25),
+  uGrassNormalScale: uniform(2),
   uTerrainNormalScale: uniform(1),
   uWaterNormalScale: uniform(0.35),
   uCausticsHighlightScale: uniform(0.4),

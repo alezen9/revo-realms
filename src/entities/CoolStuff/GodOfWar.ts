@@ -15,10 +15,10 @@ import { RevoColliderType } from "../../types";
 const uniforms = {
   uDiffuseScale: uniform(4),
   uNormalScale: uniform(1.25),
-  uAoScale: uniform(1),
+  uAoScale: uniform(0.75),
   uMetalnessScale: uniform(1),
   uRoughnessScale: uniform(1.5),
-  uEmissionScale: uniform(10),
+  uEmissionScale: uniform(42),
 };
 
 class LeviathanAxeMaterial extends MeshStandardNodeMaterial {
@@ -86,10 +86,7 @@ export default class GodOfWar {
     const handleRotation = new Quaternion()
       .setFromAxisAngle(new Vector3(0, 0, 1), 0.5 - Math.PI / 2)
       .premultiply(axe.quaternion);
-    const handleColliderDesc = ColliderDesc.capsule(
-      1.35 * scale,
-      0.2 * scale,
-    )
+    const handleColliderDesc = ColliderDesc.capsule(1.35 * scale, 0.2 * scale)
       .setTranslation(...handlePosition.toArray())
       .setRotation(handleRotation)
       .setRestitution(0.4);
