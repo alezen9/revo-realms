@@ -10,7 +10,7 @@ import { config, uniforms } from "./config";
 import { debugGrass } from "./debug";
 import { GrassBladeGeometry } from "./GrassBladeGeometry";
 import { GrassMaterial } from "./GrassMaterial";
-import { GrassSsbo } from "./GrassSsbo";
+import { GrassCompute } from "./GrassCompute";
 import type { ComputeTask } from "../../../systems/RendererManager/ComputeTask";
 import type { GrassMonitoringStats } from "../../../systems/EventsManager";
 
@@ -19,7 +19,7 @@ const UINT32_BYTE_SIZE = Uint32Array.BYTES_PER_ELEMENT;
 const INDIRECT_DRAW_INSTANCE_COUNT_BYTE_OFFSET = UINT32_BYTE_SIZE;
 
 export default class Grass {
-  private ssbo = new GrassSsbo();
+  private compute = new GrassCompute();
   private computeTask: ComputeTask;
   private mesh: Mesh;
   private playerDeltaXZ = new Vector2(0, 0);
@@ -27,8 +27,11 @@ export default class Grass {
   constructor() {
     this.computeTask = rendererManager.createComputeTask({
       label: "Grass",
-      init: this.ssbo.computeInit,
-      update: [this.ssbo.computeResetInstanceCount, this.ssbo.computeUpdate],
+      init: this.compute.computeInit,
+      update: [
+        this.compute.computeResetInstanceCount,
+        this.compute.computeUpdate,
+      ],
     });
     this.mesh = this.createMesh();
     sceneManager.scene.add(this.mesh);
@@ -51,9 +54,9 @@ export default class Grass {
       bladeWidth: config.BLADE_WIDTH,
     });
     geometry.instanceCount = config.COUNT;
-    geometry.setIndirect(this.ssbo.indirectDrawAttribute);
+    geometry.setIndirect(this.compute.indirectDrawAttribute);
 
-    const material = new GrassMaterial(this.ssbo);
+    const material = new GrassMaterial(this.compute);
     const mesh = new Mesh(geometry, material);
     mesh.frustumCulled = false;
     return mesh;
@@ -62,7 +65,7 @@ export default class Grass {
   private onEngineUpdate = ({ player }: State) => {
     this.accumulatePlayerDelta(player);
     this.syncPlayerAndCameraUniforms(player);
-    this.updateSsbo();
+    this.updateCompute();
     this.mesh.position.copy(player.position).setY(0);
   };
 
@@ -85,7 +88,7 @@ export default class Grass {
       .multiply(sceneManager.playerCamera.matrixWorldInverse);
   }
 
-  private updateSsbo() {
+  private updateCompute() {
     if (!this.computeTask.canUpdate) return;
 
     const deltaX = this.playerDeltaXZ.x;
@@ -93,10 +96,10 @@ export default class Grass {
     this.playerDeltaXZ.set(0, 0);
     uniforms.uPlayerDeltaXZ.value.set(deltaX, deltaZ);
 
-    this.computeSsboAsync(deltaX, deltaZ);
+    this.computeGrassAsync(deltaX, deltaZ);
   }
 
-  private async computeSsboAsync(deltaX: number, deltaZ: number) {
+  private async computeGrassAsync(deltaX: number, deltaZ: number) {
     const computePromise = this.computeTask.update();
     if (!computePromise) {
       this.playerDeltaXZ.x += deltaX;
@@ -114,7 +117,7 @@ export default class Grass {
 
   private getMonitoringStatsAsync = async (): Promise<GrassMonitoringStats> => {
     const buffer = await rendererManager.renderer.getArrayBufferAsync(
-      this.ssbo.indirectDrawAttribute,
+      this.compute.indirectDrawAttribute,
       null,
       INDIRECT_DRAW_INSTANCE_COUNT_BYTE_OFFSET,
       UINT32_BYTE_SIZE,

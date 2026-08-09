@@ -78,8 +78,8 @@ export const uniforms = {
 
   // Stochastic keep
   uR0: uniform(16),
-  uR1: uniform(50),
-  uPMin: uniform(0.14),
+  uR1: uniform(75),
+  uPMin: uniform(0.1),
   uProjectedMin: uniform(0.004),
   uProjectedFull: uniform(0.022),
   uStochasticHysteresis: uniform(0.11),

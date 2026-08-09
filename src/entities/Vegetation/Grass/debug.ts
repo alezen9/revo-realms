@@ -103,42 +103,18 @@ export const debugGrass = (uniforms: GrassUniforms, config: GrassConfig) => {
     step: 0.01,
   });
 
-  const stochastic = folder.addFolder({ title: "Stochastic keep" });
-  stochastic.addBinding(uniforms.uR0, "value", {
-    label: "Inner ring",
+  const density = folder.addFolder({ title: "Density" });
+  density.addBinding(uniforms.uR1, "value", {
+    label: "Full-density radius",
     min: 0,
     max: config.TILE_SIZE,
     step: 0.1,
   });
-  stochastic.addBinding(uniforms.uR1, "value", {
-    label: "Outer ring",
-    min: 0,
-    max: config.TILE_SIZE,
-    step: 0.1,
-  });
-  stochastic.addBinding(uniforms.uPMin, "value", {
-    label: "P Min",
+  density.addBinding(uniforms.uPMin, "value", {
+    label: "Far density",
     min: 0,
     max: 1,
     step: 0.01,
-  });
-  stochastic.addBinding(uniforms.uProjectedMin, "value", {
-    label: "Projected min",
-    min: 0,
-    max: 0.2,
-    step: 0.001,
-  });
-  stochastic.addBinding(uniforms.uProjectedFull, "value", {
-    label: "Projected full",
-    min: 0,
-    max: 0.2,
-    step: 0.001,
-  });
-  stochastic.addBinding(uniforms.uStochasticHysteresis, "value", {
-    label: "Hysteresis",
-    min: 0,
-    max: 0.25,
-    step: 0.001,
   });
 
   const trail = folder.addFolder({ title: "Trail" });
@@ -195,23 +171,5 @@ export const debugGrass = (uniforms: GrassUniforms, config: GrassConfig) => {
     min: 0,
     max: 5,
     step: 0.01,
-  });
-  general.addBinding(uniforms.uCullPadNDCX, "value", {
-    label: "Cull pad X",
-    min: 0,
-    max: 0.5,
-    step: 0.001,
-  });
-  general.addBinding(uniforms.uCullPadNDCYNear, "value", {
-    label: "Cull pad Y (near)",
-    min: 0,
-    max: 1,
-    step: 0.001,
-  });
-  general.addBinding(uniforms.uCullPadNDCYFar, "value", {
-    label: "Cull pad Y (far)",
-    min: 0,
-    max: 1,
-    step: 0.001,
   });
 };

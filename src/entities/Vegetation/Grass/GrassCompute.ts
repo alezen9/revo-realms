@@ -1,6 +1,8 @@
 import {
   EPSILON,
   Fn,
+  PI2,
+  cos,
   mix,
   mod,
   instancedArray,
@@ -46,7 +48,7 @@ type StochasticKeepArgs = [
   hysteresis: Node<"float">,
 ];
 
-export class GrassSsbo {
+export class GrassCompute {
   readonly indirectDrawAttribute = new IndirectStorageBufferAttribute(
     new Uint32Array([
       config.BLADE_INDEX_COUNT, // index count
@@ -64,14 +66,12 @@ export class GrassSsbo {
   ).toAtomic();
   // instanceCount is the second indirect draw argument
   private atomicCounter = this.atomicIndirectDrawArguments.element(1);
-  // x -> offsetX (0 unused)
-  // y -> offsetZ (0 unused)
-  // z -> 0/12 windX - 12/12 windZ (0 unused)
-  // w -> 0/8 current scale - 8/8 original scale - 16/1 unused - 17/1 visibility - 18/6 wind noise factor (1 unused)
-  private buffer1 = instancedArray(config.COUNT, "vec4");
+  // x -> offsetX, y -> offsetZ, z -> packed bend, w -> packed scale and visibility
+  private bladeState = instancedArray(config.COUNT, "vec4");
   // x -> 0/4 position based noise - 4/16 offsetY - 20/4 baked shadow
-  private buffer2 = instancedArray(config.COUNT, "float");
-  private visibleBladeIndices = instancedArray(config.COUNT, "uint");
+  private bladeTerrain = instancedArray(config.COUNT, "float");
+  private windState = instancedArray(config.COUNT, "vec2");
+  private visibleIndices = instancedArray(config.COUNT, "uint");
 
   private computeStochasticKeep = Fn<StochasticKeepArgs, Node<"float">>(
     ([
@@ -117,16 +117,16 @@ export class GrassSsbo {
     },
   );
 
-  get computeBuffer1() {
-    return this.buffer1;
+  get bladeStateBuffer() {
+    return this.bladeState;
   }
 
-  get computeBuffer2() {
-    return this.buffer2;
+  get bladeTerrainBuffer() {
+    return this.bladeTerrain;
   }
 
   get visibleIndexBuffer() {
-    return this.visibleBladeIndices;
+    return this.visibleIndices;
   }
 
   getYOffset = Fn<[value: Node<"float">], Node<"float">>(([data]) => {
@@ -139,9 +139,9 @@ export class GrassSsbo {
     );
   });
 
-  getWind = Fn<[value: Node<"vec4">], Node<"vec2">>(([data]) => {
-    const x = TSLUtils.unpackUnits(data.z, 0, 12, -2, 2);
-    const z = TSLUtils.unpackUnits(data.z, 12, 12, -2, 2);
+  getBend = Fn<[value: Node<"vec4">], Node<"vec2">>(([data]) => {
+    const x = TSLUtils.unpackUnits(data.z, 0, 12, -6, 6);
+    const z = TSLUtils.unpackUnits(data.z, 12, 12, -6, 6);
     return vec2(x, z);
   });
 
@@ -149,7 +149,10 @@ export class GrassSsbo {
     return TSLUtils.unpackUnits(data.w, 0, 8, 0, uniforms.uBladeMaxScale);
   });
 
-  getOriginalScale = Fn<[value: Node<"vec4">], Node<"float">>(([data]) => {
+  private getOriginalScale = Fn<
+    [value: Node<"vec4">],
+    Node<"float">
+  >(([data]) => {
     return TSLUtils.unpackUnits(
       data.w,
       8,
@@ -161,10 +164,6 @@ export class GrassSsbo {
 
   getVisibility = Fn<[value: Node<"vec4">], Node<"float">>(([data]) => {
     return TSLUtils.unpackFlag(data.w, 17);
-  });
-
-  getWindNoise = Fn<[value: Node<"vec4">], Node<"float">>(([data]) => {
-    return TSLUtils.unpackUnit(data.w, 18, 6);
   });
 
   getPositionNoise = Fn<[value: Node<"float">], Node<"float">>(([data]) => {
@@ -189,10 +188,10 @@ export class GrassSsbo {
     );
   });
 
-  private setWind = Fn<[data: Node<"vec4">, value: Node<"vec2">], Node<"vec4">>(
+  private setBend = Fn<[data: Node<"vec4">, value: Node<"vec2">], Node<"vec4">>(
     ([data, value]) => {
-      data.z = TSLUtils.packUnits(data.z, 0, 12, value.x, -2, 2);
-      data.z = TSLUtils.packUnits(data.z, 12, 12, value.y, -2, 2);
+      data.z = TSLUtils.packUnits(data.z, 0, 12, value.x, -6, 6);
+      data.z = TSLUtils.packUnits(data.z, 12, 12, value.y, -6, 6);
       return data;
     },
   );
@@ -235,14 +234,6 @@ export class GrassSsbo {
     return data;
   });
 
-  private setWindNoise = Fn<
-    [data: Node<"vec4">, value: Node<"float">],
-    Node<"vec4">
-  >(([data, value]) => {
-    data.w = TSLUtils.packUnit(data.w, 18, 6, value);
-    return data;
-  });
-
   private setPositionNoise = Fn<
     [data: Node<"float">, value: Node<"float">],
     Node<"float">
@@ -258,9 +249,8 @@ export class GrassSsbo {
   });
 
   computeInit = Fn(() => {
-    const data1 = this.buffer1.element(instanceIndex);
-    const data2 = this.buffer2.element(instanceIndex);
-    // Position XZ
+    const bladeState = this.bladeState.element(instanceIndex);
+    const bladeTerrain = this.bladeTerrain.element(instanceIndex);
     const row = floor(float(instanceIndex).div(config.BLADES_PER_SIDE));
     const col = float(instanceIndex).mod(config.BLADES_PER_SIDE);
     const randX = hash(instanceIndex.add(4321));
@@ -282,11 +272,10 @@ export class GrassSsbo {
     const wrapNoise = noise.b.sub(0.5);
     const noiseX = wrapNoise.mul(17).fract();
     const noiseZ = wrapNoise.mul(13).fract();
-    data1.x = offsetX.add(noiseX);
-    data1.y = offsetZ.add(noiseZ);
+    bladeState.x = offsetX.add(noiseX);
+    bladeState.y = offsetZ.add(noiseZ);
 
-    data2.assign(this.setPositionNoise(data2, noise.g));
-    // Scale
+    bladeTerrain.assign(this.setPositionNoise(bladeTerrain, noise.g));
     const n = noise.b;
     const shaped = n.mul(n);
     const randomScale = remap(
@@ -296,8 +285,10 @@ export class GrassSsbo {
       uniforms.uBladeMinScale,
       uniforms.uBladeMaxScale,
     );
-    data1.assign(this.setScale(data1, randomScale));
-    data1.assign(this.setOriginalScale(data1, randomScale));
+    bladeState.assign(this.setScale(bladeState, randomScale));
+    bladeState.assign(this.setOriginalScale(bladeState, randomScale));
+    bladeState.assign(this.setBend(bladeState, vec2(0)));
+    this.windState.element(instanceIndex).assign(vec2(0));
   })().compute(config.COUNT, [config.WORKGROUP_SIZE]);
 
   private computeWind = Fn<
@@ -338,16 +329,84 @@ export class GrassSsbo {
     return vec3(newWind, gust);
   });
 
+  private computeBladeDeformation = Fn<
+    [
+      windXZ: Node<"vec2">,
+      gust: Node<"float">,
+      worldPos: Node<"vec3">,
+      scaleY: Node<"float">,
+    ],
+    Node<"vec2">
+  >(([windXZ, gust, worldPos, scaleY]) => {
+    const bladeSeed = hash(instanceIndex);
+    const instanceNoise = bladeSeed.mul(0.25).sub(0.125);
+    const spriteNoise = bladeSeed.mul(31.7).fract().mul(2).sub(1);
+    const scaleWindFactor = mix(
+      0.25,
+      1,
+      smoothstep(uniforms.uBladeMinScale, uniforms.uBladeMaxScale, scaleY),
+    );
+    const windBend = windXZ.dot(windXZ).mul(3.5).clamp();
+    const windNoiseShade = smoothstep(0.2, 1, gust);
+    const windNoiseFactor = max(windBend, windNoiseShade.mul(0.45));
+    const swayEnvelope = mix(0.75, 1.35, windNoiseFactor);
+    const randomPhase = instanceNoise.mul(25.13);
+    const heightPhase = swayEnvelope.mul(0.55);
+    const swayRate = spriteNoise.remap(-1, 1, 0.7, 1.45);
+    const swayA = sin(
+      gameTime.mul(swayRate.mul(1.35)).add(randomPhase).add(heightPhase),
+    );
+    const swayB = sin(
+      gameTime
+        .mul(swayRate.mul(2.15))
+        .add(worldPos.x.mul(0.17))
+        .add(worldPos.z.mul(0.11))
+        .add(randomPhase.mul(1.7))
+        .add(heightPhase.mul(1.6)),
+    ).mul(0.45);
+    const ambientAngle = bladeSeed.mul(53.3).fract().mul(PI2);
+    const ambientOffset = vec2(cos(ambientAngle), sin(ambientAngle)).mul(
+      swayA
+        .add(swayB)
+        .mul(uniforms.uAmbientSwayStrength)
+        .mul(swayEnvelope),
+    );
+    const perpendicularWind = vec2(
+      windManager.uDirection.y.negate(),
+      windManager.uDirection.x,
+    );
+    const bendStrength = uniforms.uBaseBending.mul(scaleWindFactor);
+    const flutterPhase = bladeSeed
+      .mul(97.13)
+      .fract()
+      .mul(PI2)
+      .add(worldPos.x.mul(0.13))
+      .add(worldPos.z.mul(0.07));
+    const flutter = sin(
+      gameTime
+        .mul(uniforms.uWindSpeed.mul(1.7))
+        .add(flutterPhase.mul(1.3))
+        .add(heightPhase.mul(2.2)),
+    )
+      .mul(0.025)
+      .mul(windNoiseFactor)
+      .mul(bendStrength);
+
+    return windXZ
+      .mul(bendStrength)
+      .add(ambientOffset)
+      .add(perpendicularWind.mul(flutter));
+  });
+
   computeResetInstanceCount = Fn(() => {
     atomicStore(this.atomicCounter, 0);
   })().compute(1, [1]); // one invocation in a one-thread workgroup
 
   computeUpdate = Fn(() => {
-    const data1 = this.buffer1.element(instanceIndex);
-    const data2 = this.buffer2.element(instanceIndex);
+    const bladeState = this.bladeState.element(instanceIndex);
+    const bladeTerrain = this.bladeTerrain.element(instanceIndex);
 
-    // Position
-    const previousOffset = vec2(data1.x, data1.y);
+    const previousOffset = vec2(bladeState.x, bladeState.y);
     const unwrappedOffset = previousOffset.sub(uniforms.uPlayerDeltaXZ);
     const wrappedOffsetX = mod(
       unwrappedOffset.x.add(config.TILE_HALF_SIZE),
@@ -365,17 +424,16 @@ export class GrassSsbo {
       max(abs(wrapDelta.x), abs(wrapDelta.y)),
     );
 
-    data1.x = wrappedOffset.x;
-    data1.y = wrappedOffset.z;
+    bladeState.x = wrappedOffset.x;
+    bladeState.y = wrappedOffset.z;
 
     const worldPos = wrappedOffset.add(uniforms.uPlayerPosition);
-    const wasVisible = this.getVisibility(data1);
-    const currentScale = this.getScale(data1);
-    const originalScale = this.getOriginalScale(data1);
+    const wasVisible = this.getVisibility(bladeState);
+    const currentScale = this.getScale(bladeState);
+    const originalScale = this.getOriginalScale(bladeState);
     const previousKeep = wasVisible.mul(float(1).sub(isWrapped));
     const clipPosition = uniforms.uCameraMatrix.mul(vec4(worldPos, 1));
 
-    // Visibility
     const passesStochasticThinning = this.computeStochasticKeep(
       worldPos,
       uniforms.uPlayerPosition,
@@ -402,24 +460,22 @@ export class GrassSsbo {
       uniforms.uCullPadNDCYFar,
     );
     const isPotentiallyVisible = isInFrustum.mul(passesStochasticThinning);
-    data1.assign(this.setVisibility(data1, isPotentiallyVisible));
-    data2.assign(this.setBakedShadowFactor(data2, 1));
+    bladeState.assign(this.setVisibility(bladeState, isPotentiallyVisible));
+    bladeTerrain.assign(this.setBakedShadowFactor(bladeTerrain, 1));
 
-    // avoid sampling the grass map for blades already rejected above
     If(isPotentiallyVisible, () => {
       const terrainMaps = texture(
         assetManager.resources.terrainMaps,
         TSLUtils.computeMapUvByPosition(worldPos.xz),
       );
 
-      // Scale
       const grassScale = terrainMaps.g
         .sub(0.25)
         .div(1 - 0.25)
         .clamp();
       const baseScale = originalScale.mul(grassScale);
       const isVisible = step(config.MIN_VISIBLE_SCALE, baseScale);
-      data1.assign(this.setVisibility(data1, isVisible));
+      bladeState.assign(this.setVisibility(bladeState, isVisible));
       const recoveredScale = mix(
         currentScale,
         baseScale,
@@ -430,57 +486,64 @@ export class GrassSsbo {
       const scaleBeforeTrail = mix(recoveredScale, baseScale, shouldReset);
 
       If(isVisible, () => {
-        // Y offset
         const mapUv = TSLUtils.computeMapUvByPosition(worldPos.xz);
         const heightUv = vec2(mapUv.x, float(1).sub(mapUv.y));
         const yOffset = texture(assetManager.resources.heightmap, heightUv).r;
-        data2.assign(this.setYOffset(data2, yOffset));
+        bladeTerrain.assign(this.setYOffset(bladeTerrain, yOffset));
 
-        // Compute distance to player
         const diff = worldPos.xz.sub(uniforms.uPlayerPosition.xz);
         const distSq = diff.dot(diff);
 
-        // Check if the player is on the ground
         const isPlayerGrounded = step(
           0.1,
           float(1).sub(uniforms.uPlayerPosition.y.sub(yOffset)),
         );
 
-        const inner = uniforms.uTrailRadiusSquared.mul(0.35);
-        const outer = uniforms.uTrailRadiusSquared;
-        const contact = float(1.0)
-          .sub(smoothstep(inner, outer, distSq))
+        const contact = float(1)
+          .sub(
+            smoothstep(
+              uniforms.uTrailRadiusSquared.mul(0.35),
+              uniforms.uTrailRadiusSquared,
+              distSq,
+            ),
+          )
           .mul(isPlayerGrounded);
 
-        // Trail
         const crushedScale = min(baseScale, uniforms.uTrailMinScale);
         const nextScale = mix(
           scaleBeforeTrail,
           crushedScale,
           uniforms.uKDown.mul(contact),
         );
-        data1.assign(this.setScale(data1, nextScale));
+        bladeState.assign(this.setScale(bladeState, nextScale));
 
-        // Wind
-        const positionNoise = this.getPositionNoise(data2);
-        const previousWind = this.getWind(data1);
+        const positionNoise = this.getPositionNoise(bladeTerrain);
+        const windState = this.windState.element(instanceIndex);
         const newWind = this.computeWind(
-          previousWind,
+          windState,
           worldPos,
           positionNoise,
           shouldReset,
         );
-        data1.assign(this.setWind(data1, newWind.xy)); // Wind displacement
-        const windBend = newWind.xy.dot(newWind.xy).mul(3.5).clamp();
-        const windNoiseShade = smoothstep(0.2, 1.0, newWind.z);
-        const windShadeMask = max(windBend, windNoiseShade.mul(0.45));
-        data1.assign(this.setWindNoise(data1, windShadeMask)); // Wind visual factor
-
-        // Baked shadow
-        data2.assign(this.setBakedShadowFactor(data2, terrainMaps.r));
+        const windXZ = newWind.xy.clamp(-2, 2);
+        windState.assign(windXZ);
+        bladeState.assign(
+          this.setBend(
+            bladeState,
+            this.computeBladeDeformation(
+              windXZ,
+              newWind.z,
+              worldPos,
+              baseScale,
+            ),
+          ),
+        );
+        bladeTerrain.assign(
+          this.setBakedShadowFactor(bladeTerrain, terrainMaps.r),
+        );
 
         const drawIndex = atomicAdd(this.atomicCounter, 1);
-        this.visibleBladeIndices.element(drawIndex).assign(instanceIndex);
+        this.visibleIndices.element(drawIndex).assign(instanceIndex);
       });
     });
   })().compute(config.COUNT, [config.WORKGROUP_SIZE]);
