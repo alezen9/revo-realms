@@ -2,10 +2,12 @@ import {
   float,
   mix,
   normalMap,
+  normalWorld,
   positionWorld,
   texture,
   uniform,
   uv,
+  vec3,
 } from "three/tsl";
 import { MeshLambertNodeMaterial, Vector3 } from "three/webgpu";
 import { assetManager, lightingManager } from "../../systems";
@@ -17,6 +19,7 @@ export const playerUniforms = {
   uSpinBlurMax: uniform(config.SPIN_BLUR_MAX),
   uPosition: uniform(new Vector3()),
   uRadius: uniform(config.RADIUS_IN_METERS),
+  uSunTintStrength: uniform(0.22),
 };
 
 export class PlayerMaterial extends MeshLambertNodeMaterial {
@@ -28,7 +31,7 @@ export class PlayerMaterial extends MeshLambertNodeMaterial {
   private createMaterial() {
     const { DIFFUSE_BOOST } = config;
     const { SPIN_NORMAL_SCALE, SPIN_NORMAL_SCALE_MIN } = config;
-    const { uSpinFactor, uSpinBlurMax } = playerUniforms;
+    const { uSpinFactor, uSpinBlurMax, uSunTintStrength } = playerUniforms;
 
     this.precision = "lowp";
     this.flatShading = false;
@@ -43,11 +46,18 @@ export class PlayerMaterial extends MeshLambertNodeMaterial {
       assetManager.resources.terrainMaps,
       terrainMapUv,
     ).r;
-    this.colorNode = mix(
+    const shadowedColor = mix(
       baseColor.mul(lightingManager.uBakedShadowBrightness),
       baseColor,
       bakedShadowFactor,
     );
+    const sunFacing = normalWorld.dot(lightingManager.uSunDir.negate()).clamp();
+    const sunTint = mix(
+      vec3(1),
+      lightingManager.uSunColor,
+      sunFacing.mul(uSunTintStrength),
+    );
+    this.colorNode = shadowedColor.mul(sunTint);
 
     const normal = texture(assetManager.resources.playerNormal, uv()).blur(
       blurAmount,

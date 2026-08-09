@@ -67,7 +67,7 @@ export const playerConfig = {
   SPIN_BLUR_MAX: 0.33,
   SPIN_NORMAL_SCALE: 3.5,
   SPIN_NORMAL_SCALE_MIN: 1.2,
-  DIFFUSE_BOOST: 2,
+  DIFFUSE_BOOST: 1.45,
 
   PLAYER_INITIAL_POSITION: new Vector3(...POSITIONS.dragonball),
   CAMERA_OFFSET: new Vector3(0, 16, 20),

@@ -18,56 +18,46 @@ import {
 import { SpriteNodeMaterial } from "three/webgpu";
 import { lightingManager } from "../../../systems";
 import { uniforms } from "./config";
-import { GrassCompute } from "./GrassCompute";
+import type { GrassCompute } from "./GrassCompute";
 
 export class GrassMaterial extends SpriteNodeMaterial {
-  private compute: GrassCompute;
-
   constructor(compute: GrassCompute) {
     super();
-
-    this.compute = compute;
-    this.createGrassMaterial();
+    this.createMaterial(compute);
   }
 
-  private createGrassMaterial() {
+  private createMaterial(compute: GrassCompute) {
     this.precision = "lowp";
     this.transparent = false;
     this.stencilWrite = false;
     this.forceSinglePass = true;
 
-    const bladeIndex = this.compute.visibleIndexBuffer.element(instanceIndex);
-    const bladeState = this.compute.bladeStateBuffer.element(bladeIndex);
-    const bladeTerrain = this.compute.bladeTerrainBuffer.element(bladeIndex);
+    const bladeIndex = compute.visibleIndexBuffer.element(instanceIndex);
+    const bladeState = compute.bladeStateBuffer.element(bladeIndex);
+    const bladeTerrain = compute.bladeTerrainBuffer.element(bladeIndex);
 
     const offsetX = bladeState.x;
-    const offsetY = this.compute.getYOffset(bladeTerrain);
+    const offsetY = compute.getYOffset(bladeTerrain);
     const offsetZ = bladeState.y;
 
-    const bendXZ = this.compute.getBend(bladeState);
-    const scaleY = this.compute.getScale(bladeState);
-    const positionNoise = this.compute.getPositionNoise(bladeTerrain);
-    const bakedShadowFactor = this.compute.getBakedShadowFactor(bladeTerrain);
+    const bendXZ = compute.getBend(bladeState);
+    const scaleY = compute.getScale(bladeState);
+    const positionNoise = compute.getPositionNoise(bladeTerrain);
+    const bakedShadowFactor = compute.getBakedShadowFactor(bladeTerrain);
 
-    // Common
     const bladeUv = uv();
-    const h = bladeUv.y;
-    const bend = h.mul(h);
+    const bladeHeight = bladeUv.y;
+    const bendWeight = bladeHeight.mul(bladeHeight);
 
     const bladeHash = hash(bladeIndex);
     const instanceNoise = bladeHash.mul(0.25).sub(0.125);
     const spriteNoise = bladeHash.mul(31.7).fract().mul(2).sub(1);
 
-    // Scale
     const scaleX = positionNoise.add(0.5);
-
     this.scaleNode = vec3(scaleX, scaleY, 1);
 
-    // Rotation
     const spriteRotation = spriteNoise.mul(uniforms.uSpriteRotationRandomness);
-
-    const bendProfile = bend.mul(uniforms.uBaseBending);
-
+    const bendProfile = bendWeight.mul(uniforms.uBaseBending);
     const baseBending = positionNoise
       .sub(0.5)
       .mul(0.25)
@@ -77,38 +67,34 @@ export class GrassMaterial extends SpriteNodeMaterial {
     this.rotationNode = spriteRotation.add(baseBending);
 
     const bladePosition = vec3(offsetX, offsetY, offsetZ);
-    const bendOffset = vec3(bendXZ.x, 0, bendXZ.y).mul(bend);
+    const bendOffset = vec3(bendXZ.x, 0, bendXZ.y).mul(bendWeight);
     const finalPosition = bladePosition.add(bendOffset);
     this.positionNode = finalPosition;
 
-    // AO
     const distanceSquared = offsetX.mul(offsetX).add(offsetZ.mul(offsetZ));
-
-    const nearAo = float(1).sub(
+    const proximityMask = float(1).sub(
       smoothstep(0, uniforms.uAoRadiusSquared, distanceSquared),
     );
-
-    const aoStrength = varying(uniforms.uAoScale.mul(0.25).mul(nearAo));
-
-    const edge = bladeUv.x.mul(2).sub(1).abs();
-
+    const proximityOcclusion = varying(
+      uniforms.uAoScale.mul(0.25).mul(proximityMask),
+    );
+    const edgeDistance = bladeUv.x.mul(2).sub(1).abs();
     const edgeMask = smoothstep(
       uniforms.uAoRimSmoothness.negate(),
       uniforms.uAoRimSmoothness,
-      edge,
+      edgeDistance,
+    );
+    const rootMask = float(1).sub(smoothstep(0.1, 0.85, bladeHeight));
+    const occlusion = float(1).sub(
+      proximityOcclusion.mul(edgeMask).mul(rootMask),
     );
 
-    const rootMask = float(1).sub(smoothstep(0.1, 0.85, h));
-
-    const ao = float(1).sub(aoStrength.mul(edgeMask).mul(rootMask));
-
-    // Color variation
     const colorVariation = mix(
       1,
       positionNoise,
       uniforms.uColorVariationStrength,
     );
-    const oliveColor = mix(
+    const greenColor = mix(
       uniforms.uBaseColorDark,
       uniforms.uBaseColor,
       colorVariation,
@@ -124,45 +110,43 @@ export class GrassMaterial extends SpriteNodeMaterial {
       .mul(uniforms.uWarmVariationStrength);
     const bladeColor = varying(
       mix(
-        mix(oliveColor, uniforms.uRustColor, rustMask),
+        mix(greenColor, uniforms.uRustColor, rustMask),
         uniforms.uWarmColor,
         warmMask,
       ),
     );
 
-    // Baked shadow
     const shadow = varying(
       mix(lightingManager.uBakedShadowBrightness, 1, bakedShadowFactor),
     );
 
-    // Base -> tip
-    const baseToTip = mix(
+    const albedo = mix(
       bladeColor,
       uniforms.uTipColor,
-      smoothstep(0.25, 1, h).mul(uniforms.uColorMixFactor),
+      smoothstep(0.25, 1, bladeHeight).mul(uniforms.uColorMixFactor),
     );
 
     const bladeAngle = bladeHash.mul(53.3).fract().mul(PI2);
     const restingNormal = vec3(cos(bladeAngle), 0, sin(bladeAngle));
     const bladeTangent = vec3(
-      bendXZ.x.mul(h).mul(1.8),
+      bendXZ.x.mul(bladeHeight).mul(1.8),
       1,
-      bendXZ.y.mul(h).mul(1.8),
+      bendXZ.y.mul(bladeHeight).mul(1.8),
     ).normalize();
     const normalProjection = bladeTangent.mul(restingNormal.dot(bladeTangent));
     const aggregateNormal = restingNormal.sub(normalProjection).normalize();
     const bladeNormal = varying(aggregateNormal);
 
-    const nearLightingNode = float(1).sub(
+    const nearDetailNode = float(1).sub(
       smoothstep(20 * 20, 45 * 45, distanceSquared),
     );
-    const nearLighting = varying(nearLightingNode);
+    const nearDetail = varying(nearDetailNode);
     const lightDirection = lightingManager.uSunDir.negate();
     const twoSidedNdotL = aggregateNormal.dot(lightDirection).abs();
     const diffuseFacing = mix(
       0.65,
       twoSidedNdotL,
-      nearLightingNode.mul(uniforms.uDiffuseContrast),
+      nearDetailNode.mul(uniforms.uDiffuseContrast),
     );
     const sunDiffuse = lightingManager.uSunColor
       .mul(lightingManager.uSunIntensity)
@@ -175,14 +159,14 @@ export class GrassMaterial extends SpriteNodeMaterial {
       hemiWeight,
     ).mul(lightingManager.uHemiIntensity);
 
-    const sceneLight = varying(
+    const sceneLighting = varying(
       hemisphereLight.add(sunDiffuse).mul(uniforms.uLightExposure),
     );
 
     const worldPosition = modelWorldMatrix.mul(vec4(finalPosition, 1)).xyz;
     const viewDirectionNode = cameraPosition.sub(worldPosition).normalize();
     const viewDirection = varying(viewDirectionNode);
-    const lookingTowardSun = varying(
+    const viewSunAlignment = varying(
       viewDirectionNode.xz
         .normalize()
         .dot(lightingManager.uSunDir.xz.normalize())
@@ -194,24 +178,22 @@ export class GrassMaterial extends SpriteNodeMaterial {
     const grazing = float(1).sub(bladeNormal.dot(viewDirection).abs().clamp());
     const grazingSheen = grazing
       .mul(grazing)
-      .mul(mix(0.25, 1, lookingTowardSun))
+      .mul(mix(0.25, 1, viewSunAlignment))
       .mul(uniforms.uHighlightStrength);
     const localBacklight = saturate(bladeNormal.dot(lightDirection).negate());
-    const transmission = lookingTowardSun
+    const transmission = viewSunAlignment
       .mul(mix(0.35, 1, localBacklight))
       .mul(uniforms.uBacklightStrength);
-    const highlightHeight = smoothstep(0.1, 0.9, h);
-    const lightingDetail = nearLighting.mul(highlightHeight).mul(shadow);
+    const highlightHeight = smoothstep(0.1, 0.9, bladeHeight);
+    const lightingDetail = nearDetail.mul(highlightHeight).mul(shadow);
 
-    const diffuseColor = baseToTip.mul(shadow).mul(ao).mul(sceneLight);
+    const diffuseColor = albedo.mul(shadow).mul(occlusion).mul(sceneLighting);
     const sheenColor = lightingManager.uSunColor
       .mul(lightingManager.uSunIntensity)
       .mul(grazingSheen.mul(lightingDetail));
-    const transmittedColor = mix(
-      baseToTip,
-      lightingManager.uSunColor,
-      0.55,
-    ).mul(transmission.mul(lightingDetail));
+    const transmittedColor = mix(albedo, lightingManager.uSunColor, 0.55).mul(
+      transmission.mul(lightingDetail),
+    );
 
     this.colorNode = diffuseColor.add(sheenColor).add(transmittedColor);
   }

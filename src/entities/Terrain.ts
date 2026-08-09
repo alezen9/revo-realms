@@ -36,6 +36,7 @@ import {
 import { type State } from "../Game";
 import { gameTime } from "../utils/GameTime";
 import { TSLUtils } from "../utils/TSLUtils";
+import { srgbColorTarget } from "../utils/TweakpaneColor";
 import {
   assetManager,
   debugManager,
@@ -46,9 +47,11 @@ import {
 } from "../systems";
 
 const uniforms = {
-  uGrassTerrainColor: uniform(new Color().setRGB(0.14, 0.22, 0.15)),
-  uWaterSandColor: uniform(new Color().setRGB(0.7, 0.55, 0.29)),
-  uTerrainColor: uniform(new Color().setRGB(0.7, 0.55, 0.29)),
+  uGrassTerrainColor: uniform(
+    new Color(0.62, 0.68, 0.38).convertSRGBToLinear(),
+  ),
+  uWaterSandColor: uniform(new Color(0.95, 0.87, 0.68).convertSRGBToLinear()),
+  uTerrainColor: uniform(new Color(0.9, 0.82, 0.65).convertSRGBToLinear()),
   uGrassNormalScale: uniform(2),
   uTerrainNormalScale: uniform(1),
   uWaterNormalScale: uniform(0.35),
@@ -107,17 +110,21 @@ class TerrainMaterial extends MeshLambertNodeMaterial {
     });
 
     const color = folder.addFolder({ title: "Color" });
-    color.addBinding(uniforms.uTerrainColor, "value", {
+    color.addBinding(srgbColorTarget(uniforms.uTerrainColor.value), "value", {
       label: "Terrain",
       view: "color",
       color: { type: "float" },
     });
-    color.addBinding(uniforms.uGrassTerrainColor, "value", {
-      label: "Grass",
-      view: "color",
-      color: { type: "float" },
-    });
-    color.addBinding(uniforms.uWaterSandColor, "value", {
+    color.addBinding(
+      srgbColorTarget(uniforms.uGrassTerrainColor.value),
+      "value",
+      {
+        label: "Grass",
+        view: "color",
+        color: { type: "float" },
+      },
+    );
+    color.addBinding(srgbColorTarget(uniforms.uWaterSandColor.value), "value", {
       label: "Water",
       view: "color",
       color: { type: "float" },

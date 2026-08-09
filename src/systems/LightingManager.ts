@@ -16,16 +16,16 @@ const config = {
   LIGHT_POSITION_OFFSET: new Vector3(10, 10, 10),
   // directionalColor: new Color(0.53, 0.65, 0.79), // Dark
   // directionalIntensity: 0.16, // Dark
-  directionalColor: new Color(1.0, 0.68, 0.42), // Light
-  directionalIntensity: 0.65, // Light
+  directionalColor: new Color(1, 0.79, 0.58).convertSRGBToLinear(), // Light
+  directionalIntensity: 0.62, // Light
   // hemiSkyColor: new Color(0.4, 0.45, 0.6), // Dark
   // hemiGroundColor: new Color(0.3, 0.2, 0.2), // Dark
-  hemiSkyColor: new Color(0.75, 0.48, 0.42), // Light
-  hemiGroundColor: new Color(0.25, 0.22, 0.12), // Light
-  hemiIntensity: 0.35,
+  hemiSkyColor: new Color(0.7, 0.59, 0.52).convertSRGBToLinear(), // Light
+  hemiGroundColor: new Color(0.36, 0.31, 0.19).convertSRGBToLinear(), // Light
+  hemiIntensity: 0.38,
   // fogColor: new Color(0.05, 0.12, 0.24), // Dark
   // fogDensity: 0.009, // Dark
-  fogColor: new Color().setRGB(0.44, 0.4, 0.2), // Light
+  fogColor: new Color(0.64, 0.6, 0.48).convertSRGBToLinear(), // Light
   fogDensity: 0.0044, // Light
   fogEnabled: true,
 };

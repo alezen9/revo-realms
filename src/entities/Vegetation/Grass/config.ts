@@ -68,14 +68,14 @@ export const uniforms = {
   uDetailedWindRadius: uniform(30),
 
   // Color
-  uBaseColorDark: uniform(new Color(0.08, 0.12, 0.055).convertSRGBToLinear()),
-  uBaseColor: uniform(new Color(0.18, 0.3, 0.1).convertSRGBToLinear()),
-  uWarmColor: uniform(new Color(0.46, 0.32, 0.13).convertSRGBToLinear()),
-  uRustColor: uniform(new Color(0.38, 0.15, 0.08).convertSRGBToLinear()),
-  uTipColor: uniform(new Color(0.52, 0.41, 0.19).convertSRGBToLinear()),
+  uBaseColorDark: uniform(new Color(0.09, 0.15, 0.075).convertSRGBToLinear()),
+  uBaseColor: uniform(new Color(0.25, 0.38, 0.22).convertSRGBToLinear()),
+  uWarmColor: uniform(new Color(0.46, 0.33, 0.16).convertSRGBToLinear()),
+  uRustColor: uniform(new Color(0.38, 0.19, 0.11).convertSRGBToLinear()),
+  uTipColor: uniform(new Color(0.53, 0.46, 0.23).convertSRGBToLinear()),
   uColorMixFactor: uniform(0.24),
-  uColorVariationStrength: uniform(0.75),
-  uWarmVariationStrength: uniform(0.62),
+  uColorVariationStrength: uniform(0.68),
+  uWarmVariationStrength: uniform(0.48),
   uRustVariationStrength: uniform(0.08),
 
   // AO
