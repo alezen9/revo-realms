@@ -2,14 +2,12 @@ import {
   float,
   Fn,
   If,
-  min,
   mix,
   normalMap,
   positionWorld,
   smoothstep,
   texture,
   uniform,
-  uv,
   varying,
   vec2,
   vec3,
@@ -48,7 +46,7 @@ import {
 } from "../systems";
 
 const uniforms = {
-  uGrassTerrainColor: uniform(new Color().setRGB(0.21, 0.34, 0.22)),
+  uGrassTerrainColor: uniform(new Color().setRGB(0.14, 0.22, 0.15)),
   uWaterSandColor: uniform(new Color().setRGB(0.7, 0.55, 0.29)),
   uTerrainColor: uniform(new Color().setRGB(0.7, 0.55, 0.29)),
   uGrassNormalScale: uniform(2),

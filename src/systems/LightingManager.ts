@@ -37,6 +37,11 @@ export class LightingManager {
 
   sunDirection = config.LIGHT_POSITION_OFFSET.clone().normalize().negate();
   uSunDir = uniform(this.sunDirection);
+  uSunColor = uniform(config.directionalColor.clone());
+  uSunIntensity = uniform(config.directionalIntensity);
+  uHemiSkyColor = uniform(config.hemiSkyColor.clone());
+  uHemiGroundColor = uniform(config.hemiGroundColor.clone());
+  uHemiIntensity = uniform(config.hemiIntensity);
   uPlayerShadowBrightness = uniform(0.7);
   uBakedShadowBrightness = uniform(0.45);
 
@@ -69,22 +74,22 @@ export class LightingManager {
   }
 
   get sunColor() {
-    return this.directionalLight.color;
+    return this.uSunColor.value;
   }
 
   private setupHemisphereLight() {
     const hemiLight = new HemisphereLight();
-    hemiLight.color.copy(config.hemiSkyColor);
-    hemiLight.groundColor.copy(config.hemiGroundColor);
-    hemiLight.intensity = config.hemiIntensity;
+    hemiLight.color.copy(this.uHemiSkyColor.value);
+    hemiLight.groundColor.copy(this.uHemiGroundColor.value);
+    hemiLight.intensity = this.uHemiIntensity.value;
     hemiLight.position.copy(config.LIGHT_POSITION_OFFSET);
     return hemiLight;
   }
 
   private setupDirectionalLighting() {
     const directionalLight = new DirectionalLight();
-    directionalLight.intensity = config.directionalIntensity;
-    directionalLight.color.copy(config.directionalColor);
+    directionalLight.intensity = this.uSunIntensity.value;
+    directionalLight.color.copy(this.uSunColor.value);
     directionalLight.position.copy(config.LIGHT_POSITION_OFFSET);
 
     directionalLight.target = new Object3D();
@@ -109,20 +114,24 @@ export class LightingManager {
     lightFolder.addBinding(config.LIGHT_POSITION_OFFSET, "y", {
       label: "Sun height",
     });
-    lightFolder.addBinding(
-      srgbColorTarget(this.directionalLight.color),
-      "value",
-      {
+    lightFolder
+      .addBinding(srgbColorTarget(this.uSunColor.value), "value", {
         label: "Directional Color",
         view: "color",
         color: { type: "float" },
-      },
-    );
-    lightFolder.addBinding(this.directionalLight, "intensity", {
-      min: 0,
-      max: 5,
-      label: "Directional intensity",
-    });
+      })
+      .on("change", () => {
+        this.directionalLight.color.copy(this.uSunColor.value);
+      });
+    lightFolder
+      .addBinding(this.uSunIntensity, "value", {
+        min: 0,
+        max: 5,
+        label: "Directional intensity",
+      })
+      .on("change", ({ value }) => {
+        this.directionalLight.intensity = value;
+      });
     lightFolder.addBinding(this.uPlayerShadowBrightness, "value", {
       label: "Player shadow brightness",
       min: 0,
@@ -165,29 +174,33 @@ export class LightingManager {
     //   label: "Ambient intensity",
     // });
 
-    lightFolder.addBinding(
-      srgbColorTarget(this.hemisphereLight.color),
-      "value",
-      {
+    lightFolder
+      .addBinding(srgbColorTarget(this.uHemiSkyColor.value), "value", {
         label: "Hemisphere sky color",
         view: "color",
         color: { type: "float" },
-      },
-    );
-    lightFolder.addBinding(
-      srgbColorTarget(this.hemisphereLight.groundColor),
-      "value",
-      {
+      })
+      .on("change", () => {
+        this.hemisphereLight.color.copy(this.uHemiSkyColor.value);
+      });
+    lightFolder
+      .addBinding(srgbColorTarget(this.uHemiGroundColor.value), "value", {
         label: "Hemisphere ground color",
         view: "color",
         color: { type: "float" },
-      },
-    );
-    lightFolder.addBinding(this.hemisphereLight, "intensity", {
-      min: 0,
-      max: 1,
-      label: "Hemisphere intensity",
-    });
+      })
+      .on("change", () => {
+        this.hemisphereLight.groundColor.copy(this.uHemiGroundColor.value);
+      });
+    lightFolder
+      .addBinding(this.uHemiIntensity, "value", {
+        min: 0,
+        max: 1,
+        label: "Hemisphere intensity",
+      })
+      .on("change", ({ value }) => {
+        this.hemisphereLight.intensity = value;
+      });
   }
 
   setTarget(target: Object3D) {

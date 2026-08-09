@@ -1,12 +1,19 @@
 import {
+  PI2,
+  cameraPosition,
+  cos,
   float,
   hash,
   instanceIndex,
   mix,
+  modelWorldMatrix,
+  saturate,
+  sin,
   smoothstep,
   uv,
   varying,
   vec3,
+  vec4,
 } from "three/tsl";
 import { SpriteNodeMaterial } from "three/webgpu";
 import { lightingManager } from "../../../systems";
@@ -75,7 +82,8 @@ export class GrassMaterial extends SpriteNodeMaterial {
 
     const bladePosition = vec3(offsetX, offsetY, offsetZ);
     const bendOffset = vec3(bendXZ.x, 0, bendXZ.y).mul(bend);
-    this.positionNode = bladePosition.add(bendOffset);
+    const finalPosition = bladePosition.add(bendOffset);
+    this.positionNode = finalPosition;
 
     // AO
     const distanceSquared = offsetX.mul(offsetX).add(offsetZ.mul(offsetZ));
@@ -99,11 +107,8 @@ export class GrassMaterial extends SpriteNodeMaterial {
     const ao = float(1).sub(aoStrength.mul(edgeMask).mul(rootMask));
 
     // Color variation
-    const colorVariation = smoothstep(
-      0,
-      uniforms.uColorVariationStrength,
-      positionNoise,
-    );
+    const colorNoise = smoothstep(0.1, 0.9, positionNoise);
+    const colorVariation = mix(1, colorNoise, uniforms.uColorVariationStrength);
 
     const bladeColor = varying(
       mix(uniforms.uBaseColorDark, uniforms.uBaseColor, colorVariation),
@@ -118,9 +123,79 @@ export class GrassMaterial extends SpriteNodeMaterial {
     const baseToTip = mix(
       bladeColor,
       uniforms.uTipColor,
-      h.mul(uniforms.uColorMixFactor),
+      smoothstep(0.25, 1, h).mul(uniforms.uColorMixFactor),
     );
 
-    this.colorNode = baseToTip.mul(shadow.mul(ao));
+    const bladeAngle = bladeHash.mul(53.3).fract().mul(PI2);
+    const restingNormal = vec3(cos(bladeAngle), 0, sin(bladeAngle));
+    const bladeTangent = vec3(
+      bendXZ.x.mul(h).mul(1.8),
+      1,
+      bendXZ.y.mul(h).mul(1.8),
+    ).normalize();
+    const normalProjection = bladeTangent.mul(restingNormal.dot(bladeTangent));
+    const bladeNormal = varying(
+      restingNormal.sub(normalProjection).normalize(),
+    );
+
+    const nearLighting = varying(
+      float(1).sub(smoothstep(20 * 20, 45 * 45, distanceSquared)),
+    );
+    const lightDirection = lightingManager.uSunDir.negate();
+    const twoSidedNdotL = bladeNormal.dot(lightDirection).abs();
+    const diffuseFacing = mix(
+      0.65,
+      twoSidedNdotL,
+      nearLighting.mul(uniforms.uDiffuseContrast),
+    );
+    const sunDiffuse = lightingManager.uSunColor
+      .mul(lightingManager.uSunIntensity)
+      .mul(mix(0.35, 1, diffuseFacing));
+
+    const hemiWeight = bladeNormal.y.mul(0.5).add(0.5).clamp();
+    const hemisphereLight = mix(
+      lightingManager.uHemiGroundColor,
+      lightingManager.uHemiSkyColor,
+      hemiWeight,
+    ).mul(lightingManager.uHemiIntensity);
+
+    const sceneLight = hemisphereLight
+      .add(sunDiffuse)
+      .mul(uniforms.uLightExposure);
+
+    const worldPosition = modelWorldMatrix.mul(vec4(finalPosition, 1)).xyz;
+    const viewDirection = varying(
+      cameraPosition.sub(worldPosition).normalize(),
+    );
+    const viewDirectionXZ = viewDirection.xz.normalize();
+    const lookingTowardSun = viewDirectionXZ
+      .dot(lightingManager.uSunDir.xz.normalize())
+      .mul(0.5)
+      .add(0.5)
+      .clamp();
+
+    const grazing = float(1).sub(bladeNormal.dot(viewDirection).abs().clamp());
+    const grazingSheen = grazing
+      .mul(grazing)
+      .mul(mix(0.25, 1, lookingTowardSun))
+      .mul(uniforms.uHighlightStrength);
+    const localBacklight = saturate(bladeNormal.dot(lightDirection).negate());
+    const transmission = lookingTowardSun
+      .mul(mix(0.35, 1, localBacklight))
+      .mul(uniforms.uBacklightStrength);
+    const highlightHeight = smoothstep(0.1, 0.9, h);
+    const lightingDetail = nearLighting.mul(highlightHeight).mul(shadow);
+
+    const diffuseColor = baseToTip.mul(shadow).mul(ao).mul(sceneLight);
+    const sheenColor = lightingManager.uSunColor
+      .mul(lightingManager.uSunIntensity)
+      .mul(grazingSheen.mul(lightingDetail));
+    const transmittedColor = mix(
+      baseToTip,
+      lightingManager.uSunColor,
+      0.55,
+    ).mul(transmission.mul(lightingDetail));
+
+    this.colorNode = diffuseColor.add(sheenColor).add(transmittedColor);
   }
 }

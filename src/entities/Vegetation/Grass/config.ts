@@ -65,17 +65,23 @@ export const uniforms = {
   uWindGustCoverage: uniform(0.6),
 
   // Color
-  uBaseColor: uniform(new Color(0.25, 0.44, 0.26).convertSRGBToLinear()),
-  uBaseColorDark: uniform(new Color(0, 0, 0).convertSRGBToLinear()),
-  uTipColor: uniform(new Color(0.74, 0.56, 0.4).convertSRGBToLinear()),
+  uBaseColorDark: uniform(new Color(0.04, 0.07, 0.02).convertSRGBToLinear()),
+  uBaseColor: uniform(new Color(0.17, 0.31, 0.09).convertSRGBToLinear()),
+  uTipColor: uniform(new Color(0.51, 0.45, 0.24).convertSRGBToLinear()),
   uColorMixFactor: uniform(0.15),
-  uColorVariationStrength: uniform(2),
+  uColorVariationStrength: uniform(0.6),
 
   // AO
   uAoScale: uniform(0.5),
   uAoRimSmoothness: uniform(5),
   uAoRadius: uniform(15),
   uAoRadiusSquared: uniform(15 * 15),
+
+  // lighting
+  uDiffuseContrast: uniform(1),
+  uLightExposure: uniform(1.15),
+  uHighlightStrength: uniform(0.02),
+  uBacklightStrength: uniform(0.13),
 
   // Stochastic keep
   uR0: uniform(16),

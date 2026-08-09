@@ -33,31 +33,57 @@ export const debugGrass = (uniforms: GrassUniforms, config: GrassConfig) => {
   color.addBinding(uniforms.uColorVariationStrength, "value", {
     label: "Variation strength",
     min: 0,
+    max: 1,
+    step: 0.01,
+  });
+
+  const lighting = folder.addFolder({ title: "Lighting" });
+  lighting.addBinding(uniforms.uDiffuseContrast, "value", {
+    label: "Diffuse contrast",
+    min: 0,
+    max: 1,
+    step: 0.01,
+  });
+  lighting.addBinding(uniforms.uLightExposure, "value", {
+    label: "Exposure",
+    min: 0,
     max: 3,
     step: 0.01,
   });
-  color.addBinding(uniforms.uAoScale, "value", {
-    label: "AO scale",
+  lighting.addBinding(uniforms.uHighlightStrength, "value", {
+    label: "Highlight strength",
+    min: 0,
+    max: 0.5,
+    step: 0.005,
+  });
+  lighting.addBinding(uniforms.uBacklightStrength, "value", {
+    label: "Backlight strength",
+    min: 0,
+    max: 1,
+    step: 0.01,
+  });
+
+  const ao = folder.addFolder({ title: "AO" });
+  ao.addBinding(uniforms.uAoScale, "value", {
+    label: "Scale",
     min: 0,
     max: 5,
     step: 0.01,
   });
-  color.addBinding(uniforms.uAoRimSmoothness, "value", {
-    label: "AO rim smoothness",
+  ao.addBinding(uniforms.uAoRimSmoothness, "value", {
+    label: "Rim smoothness",
     min: 0,
     max: 5,
     step: 0.01,
   });
-  color
-    .addBinding(uniforms.uAoRadius, "value", {
-      label: "AO radius",
-      min: 0,
-      max: 100,
-      step: 0.01,
-    })
-    .on("change", ({ value }) => {
-      uniforms.uAoRadiusSquared.value = value * value;
-    });
+  ao.addBinding(uniforms.uAoRadius, "value", {
+    label: "Radius",
+    min: 0,
+    max: config.TILE_HALF_SIZE,
+    step: 0.1,
+  }).on("change", ({ value }) => {
+    uniforms.uAoRadiusSquared.value = value * value;
+  });
 
   const wind = folder.addFolder({ title: "Wind" });
   wind.addBinding(uniforms.uWindStrength, "value", {
