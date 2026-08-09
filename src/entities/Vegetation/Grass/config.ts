@@ -9,6 +9,7 @@ const getConfig = () => {
   const BLADES_PER_SIDE = 512 + 512;
   const COUNT = BLADES_PER_SIDE * BLADES_PER_SIDE;
   const MIN_VISIBLE_SCALE = 0.15;
+  const DETAILED_WIND_TRANSITION_WIDTH = 5;
 
   return {
     SEGMENTS,
@@ -23,6 +24,7 @@ const getConfig = () => {
     SPACING: TILE_SIZE / BLADES_PER_SIDE,
     WORKGROUP_SIZE: 64,
     MIN_VISIBLE_SCALE,
+    DETAILED_WIND_TRANSITION_WIDTH,
   };
 };
 
@@ -63,13 +65,18 @@ export const uniforms = {
   uWindLull: uniform(0.09),
   uWindEddyStrength: uniform(0.9),
   uWindGustCoverage: uniform(0.6),
+  uDetailedWindRadius: uniform(30),
 
   // Color
-  uBaseColorDark: uniform(new Color(0.04, 0.07, 0.02).convertSRGBToLinear()),
-  uBaseColor: uniform(new Color(0.17, 0.31, 0.09).convertSRGBToLinear()),
-  uTipColor: uniform(new Color(0.51, 0.45, 0.24).convertSRGBToLinear()),
-  uColorMixFactor: uniform(0.15),
-  uColorVariationStrength: uniform(0.6),
+  uBaseColorDark: uniform(new Color(0.08, 0.12, 0.055).convertSRGBToLinear()),
+  uBaseColor: uniform(new Color(0.18, 0.3, 0.1).convertSRGBToLinear()),
+  uWarmColor: uniform(new Color(0.46, 0.32, 0.13).convertSRGBToLinear()),
+  uRustColor: uniform(new Color(0.38, 0.15, 0.08).convertSRGBToLinear()),
+  uTipColor: uniform(new Color(0.52, 0.41, 0.19).convertSRGBToLinear()),
+  uColorMixFactor: uniform(0.24),
+  uColorVariationStrength: uniform(0.75),
+  uWarmVariationStrength: uniform(0.62),
+  uRustVariationStrength: uniform(0.08),
 
   // AO
   uAoScale: uniform(0.5),

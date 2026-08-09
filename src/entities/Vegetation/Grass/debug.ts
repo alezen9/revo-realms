@@ -24,6 +24,16 @@ export const debugGrass = (uniforms: GrassUniforms, config: GrassConfig) => {
     view: "color",
     color: { type: "float" },
   });
+  color.addBinding(srgbColorTarget(uniforms.uWarmColor.value), "value", {
+    label: "Warm",
+    view: "color",
+    color: { type: "float" },
+  });
+  color.addBinding(srgbColorTarget(uniforms.uRustColor.value), "value", {
+    label: "Rust",
+    view: "color",
+    color: { type: "float" },
+  });
   color.addBinding(uniforms.uColorMixFactor, "value", {
     label: "Mix factor",
     min: 0,
@@ -31,7 +41,19 @@ export const debugGrass = (uniforms: GrassUniforms, config: GrassConfig) => {
     step: 0.01,
   });
   color.addBinding(uniforms.uColorVariationStrength, "value", {
-    label: "Variation strength",
+    label: "Olive variation",
+    min: 0,
+    max: 1,
+    step: 0.01,
+  });
+  color.addBinding(uniforms.uWarmVariationStrength, "value", {
+    label: "Warm variation",
+    min: 0,
+    max: 1,
+    step: 0.01,
+  });
+  color.addBinding(uniforms.uRustVariationStrength, "value", {
+    label: "Rust variation",
     min: 0,
     max: 1,
     step: 0.01,
@@ -127,6 +149,12 @@ export const debugGrass = (uniforms: GrassUniforms, config: GrassConfig) => {
     min: 0,
     max: 1,
     step: 0.01,
+  });
+  wind.addBinding(uniforms.uDetailedWindRadius, "value", {
+    label: "Detailed radius",
+    min: 0,
+    max: config.TILE_HALF_SIZE * Math.SQRT2,
+    step: 1,
   });
 
   const density = folder.addFolder({ title: "Density" });

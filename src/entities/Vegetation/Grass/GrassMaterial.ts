@@ -46,7 +46,6 @@ export class GrassMaterial extends SpriteNodeMaterial {
 
     const bendXZ = this.compute.getBend(bladeState);
     const scaleY = this.compute.getScale(bladeState);
-    const isVisible = this.compute.getVisibility(bladeState);
     const positionNoise = this.compute.getPositionNoise(bladeTerrain);
     const bakedShadowFactor = this.compute.getBakedShadowFactor(bladeTerrain);
 
@@ -59,13 +58,10 @@ export class GrassMaterial extends SpriteNodeMaterial {
     const instanceNoise = bladeHash.mul(0.25).sub(0.125);
     const spriteNoise = bladeHash.mul(31.7).fract().mul(2).sub(1);
 
-    // Visibility
-    this.opacityNode = varying(isVisible);
-
     // Scale
     const scaleX = positionNoise.add(0.5);
 
-    this.scaleNode = vec3(scaleX, scaleY, 1).mul(isVisible);
+    this.scaleNode = vec3(scaleX, scaleY, 1);
 
     // Rotation
     const spriteRotation = spriteNoise.mul(uniforms.uSpriteRotationRandomness);
@@ -107,11 +103,31 @@ export class GrassMaterial extends SpriteNodeMaterial {
     const ao = float(1).sub(aoStrength.mul(edgeMask).mul(rootMask));
 
     // Color variation
-    const colorNoise = smoothstep(0.1, 0.9, positionNoise);
-    const colorVariation = mix(1, colorNoise, uniforms.uColorVariationStrength);
-
+    const colorVariation = mix(
+      1,
+      positionNoise,
+      uniforms.uColorVariationStrength,
+    );
+    const oliveColor = mix(
+      uniforms.uBaseColorDark,
+      uniforms.uBaseColor,
+      colorVariation,
+    );
+    const rustMask = positionNoise
+      .mul(float(1).sub(positionNoise))
+      .mul(4)
+      .mul(uniforms.uRustVariationStrength);
+    const warmMask = positionNoise
+      .sub(0.6)
+      .mul(2.5)
+      .clamp()
+      .mul(uniforms.uWarmVariationStrength);
     const bladeColor = varying(
-      mix(uniforms.uBaseColorDark, uniforms.uBaseColor, colorVariation),
+      mix(
+        mix(oliveColor, uniforms.uRustColor, rustMask),
+        uniforms.uWarmColor,
+        warmMask,
+      ),
     );
 
     // Baked shadow
@@ -134,45 +150,46 @@ export class GrassMaterial extends SpriteNodeMaterial {
       bendXZ.y.mul(h).mul(1.8),
     ).normalize();
     const normalProjection = bladeTangent.mul(restingNormal.dot(bladeTangent));
-    const bladeNormal = varying(
-      restingNormal.sub(normalProjection).normalize(),
-    );
+    const aggregateNormal = restingNormal.sub(normalProjection).normalize();
+    const bladeNormal = varying(aggregateNormal);
 
-    const nearLighting = varying(
-      float(1).sub(smoothstep(20 * 20, 45 * 45, distanceSquared)),
+    const nearLightingNode = float(1).sub(
+      smoothstep(20 * 20, 45 * 45, distanceSquared),
     );
+    const nearLighting = varying(nearLightingNode);
     const lightDirection = lightingManager.uSunDir.negate();
-    const twoSidedNdotL = bladeNormal.dot(lightDirection).abs();
+    const twoSidedNdotL = aggregateNormal.dot(lightDirection).abs();
     const diffuseFacing = mix(
       0.65,
       twoSidedNdotL,
-      nearLighting.mul(uniforms.uDiffuseContrast),
+      nearLightingNode.mul(uniforms.uDiffuseContrast),
     );
     const sunDiffuse = lightingManager.uSunColor
       .mul(lightingManager.uSunIntensity)
       .mul(mix(0.35, 1, diffuseFacing));
 
-    const hemiWeight = bladeNormal.y.mul(0.5).add(0.5).clamp();
+    const hemiWeight = aggregateNormal.y.mul(0.5).add(0.5).clamp();
     const hemisphereLight = mix(
       lightingManager.uHemiGroundColor,
       lightingManager.uHemiSkyColor,
       hemiWeight,
     ).mul(lightingManager.uHemiIntensity);
 
-    const sceneLight = hemisphereLight
-      .add(sunDiffuse)
-      .mul(uniforms.uLightExposure);
+    const sceneLight = varying(
+      hemisphereLight.add(sunDiffuse).mul(uniforms.uLightExposure),
+    );
 
     const worldPosition = modelWorldMatrix.mul(vec4(finalPosition, 1)).xyz;
-    const viewDirection = varying(
-      cameraPosition.sub(worldPosition).normalize(),
+    const viewDirectionNode = cameraPosition.sub(worldPosition).normalize();
+    const viewDirection = varying(viewDirectionNode);
+    const lookingTowardSun = varying(
+      viewDirectionNode.xz
+        .normalize()
+        .dot(lightingManager.uSunDir.xz.normalize())
+        .mul(0.5)
+        .add(0.5)
+        .clamp(),
     );
-    const viewDirectionXZ = viewDirection.xz.normalize();
-    const lookingTowardSun = viewDirectionXZ
-      .dot(lightingManager.uSunDir.xz.normalize())
-      .mul(0.5)
-      .add(0.5)
-      .clamp();
 
     const grazing = float(1).sub(bladeNormal.dot(viewDirection).abs().clamp());
     const grazingSheen = grazing

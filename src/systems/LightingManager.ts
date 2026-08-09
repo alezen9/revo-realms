@@ -25,8 +25,8 @@ const config = {
   hemiIntensity: 0.35,
   // fogColor: new Color(0.05, 0.12, 0.24), // Dark
   // fogDensity: 0.009, // Dark
-  fogColor: new Color().setRGB(0.48, 0.45, 0.22), // Light
-  fogDensity: 0.004, // Light
+  fogColor: new Color().setRGB(0.44, 0.4, 0.2), // Light
+  fogDensity: 0.0044, // Light
   fogEnabled: true,
 };
 
