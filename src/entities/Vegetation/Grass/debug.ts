@@ -121,8 +121,8 @@ export const debugGrass = (uniforms: GrassUniforms, config: GrassConfig) => {
   trail.addBinding(uniforms.uTrailGrowthRate, "value", {
     label: "Growth rate",
     min: 0,
-    max: 0.1,
-    step: 0.001,
+    max: 10,
+    step: 0.1,
   });
   trail.addBinding(uniforms.uTrailMinScale, "value", {
     label: "Min scale",
@@ -133,7 +133,13 @@ export const debugGrass = (uniforms: GrassUniforms, config: GrassConfig) => {
   trail.addBinding(uniforms.uKDown, "value", {
     label: "Crushing speed",
     min: 0,
-    max: 5,
+    max: 100,
+    step: 1,
+  });
+  trail.addBinding(uniforms.uTrailBendStrength, "value", {
+    label: "Bend strength",
+    min: 0,
+    max: 2,
     step: 0.01,
   });
   trail

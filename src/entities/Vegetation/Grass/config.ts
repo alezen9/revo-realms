@@ -48,11 +48,12 @@ export const uniforms = {
   uBladeMaxScale: uniform(2.35),
 
   // Trail
-  uTrailGrowthRate: uniform(0.04),
-  uTrailMinScale: uniform(0.25),
-  uTrailRadius: uniform(1),
-  uTrailRadiusSquared: uniform(1),
-  uKDown: uniform(0.4),
+  uTrailGrowthRate: uniform(5),
+  uTrailMinScale: uniform(0.15),
+  uTrailRadius: uniform(0.65),
+  uTrailRadiusSquared: uniform(0.65 * 0.65),
+  uTrailBendStrength: uniform(0.8),
+  uKDown: uniform(50),
 
   // Wind
   uWindStrength: uniform(0.32),
@@ -67,7 +68,7 @@ export const uniforms = {
   uBaseColor: uniform(new Color(0.25, 0.44, 0.26).convertSRGBToLinear()),
   uBaseColorDark: uniform(new Color(0, 0, 0).convertSRGBToLinear()),
   uTipColor: uniform(new Color(0.74, 0.56, 0.4).convertSRGBToLinear()),
-  uColorMixFactor: uniform(0.2),
+  uColorMixFactor: uniform(0.15),
   uColorVariationStrength: uniform(2),
 
   // AO

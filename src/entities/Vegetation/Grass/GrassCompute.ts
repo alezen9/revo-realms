@@ -476,11 +476,11 @@ export class GrassCompute {
       const baseScale = originalScale.mul(grassScale);
       const isVisible = step(config.MIN_VISIBLE_SCALE, baseScale);
       bladeState.assign(this.setVisibility(bladeState, isVisible));
-      const recoveredScale = mix(
-        currentScale,
-        baseScale,
-        uniforms.uTrailGrowthRate,
+      const recoveryFactor = min(
+        uniforms.uTrailGrowthRate.mul(gameDeltaTime),
+        1,
       );
+      const recoveredScale = mix(currentScale, baseScale, recoveryFactor);
       const didAppear = isVisible.mul(float(1).sub(wasVisible));
       const shouldReset = max(isWrapped, didAppear);
       const scaleBeforeTrail = mix(recoveredScale, baseScale, shouldReset);
@@ -502,7 +502,7 @@ export class GrassCompute {
         const contact = float(1)
           .sub(
             smoothstep(
-              uniforms.uTrailRadiusSquared.mul(0.35),
+              0,
               uniforms.uTrailRadiusSquared,
               distSq,
             ),
@@ -510,12 +510,22 @@ export class GrassCompute {
           .mul(isPlayerGrounded);
 
         const crushedScale = min(baseScale, uniforms.uTrailMinScale);
-        const nextScale = mix(
-          scaleBeforeTrail,
-          crushedScale,
-          uniforms.uKDown.mul(contact),
+        const crushingFactor = min(
+          uniforms.uKDown.mul(contact).mul(gameDeltaTime),
+          1,
         );
+        const nextScale = mix(scaleBeforeTrail, crushedScale, crushingFactor);
         bladeState.assign(this.setScale(bladeState, nextScale));
+
+        const trailDirection = diff
+          .mul(uniforms.uTrailRadius)
+          .div(max(distSq, uniforms.uTrailRadiusSquared));
+        const trailAmount = float(1)
+          .sub(nextScale.div(max(baseScale, config.MIN_VISIBLE_SCALE)))
+          .clamp();
+        const trailBend = trailDirection.mul(
+          trailAmount.mul(uniforms.uTrailBendStrength),
+        );
 
         const positionNoise = this.getPositionNoise(bladeTerrain);
         const windState = this.windState.element(instanceIndex);
@@ -534,8 +544,8 @@ export class GrassCompute {
               windXZ,
               newWind.z,
               worldPos,
-              baseScale,
-            ),
+              nextScale,
+            ).add(trailBend),
           ),
         );
         bladeTerrain.assign(
