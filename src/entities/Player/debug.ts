@@ -143,6 +143,12 @@ export const debugPlayer = (collider: Collider) => {
       step: 0.01,
     })
     .on("change", ({ value }) => (playerUniforms.uSpinBlurMax.value = value));
+  visuals.addBinding(playerUniforms.uDiffuseScale, "value", {
+    label: "Diffuse scale",
+    min: 0,
+    max: 4,
+    step: 0.01,
+  });
   visuals.addBinding(playerUniforms.uSunTintStrength, "value", {
     label: "Sun tint",
     min: 0,

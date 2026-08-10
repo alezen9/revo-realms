@@ -34,18 +34,10 @@ import { config, uniforms } from "./config";
 
 type StochasticKeepArgs = [
   worldPos: Node<"vec3">,
-  playerPosition: Node<"vec3">,
-  R0: Node<"float">,
-  R1: Node<"float">,
-  pMin: Node<"float">,
+  distanceSquared: Node<"float">,
   bladeHeight: Node<"float">,
   clipPosition: Node<"vec4">,
-  fY: Node<"float">,
-  projectedMin: Node<"float">,
-  projectedFull: Node<"float">,
-  spacing: Node<"float">,
   previousKeep: Node<"float">,
-  hysteresis: Node<"float">,
 ];
 
 export class GrassCompute {
@@ -76,45 +68,43 @@ export class GrassCompute {
   private visibleIndices = instancedArray(config.COUNT, "uint");
 
   private computeStochasticKeep = Fn<StochasticKeepArgs, Node<"float">>(
-    ([
-      worldPos,
-      playerPosition,
-      R0,
-      R1,
-      pMin,
-      bladeHeight,
-      clipPosition,
-      fY,
-      projectedMin,
-      projectedFull,
-      spacing,
-      previousKeep,
-      hysteresis,
-    ]) => {
-      const dx = worldPos.x.sub(playerPosition.x);
-      const dz = worldPos.z.sub(playerPosition.z);
-      const distSq = dx.mul(dx).add(dz.mul(dz));
-      const R0Sq = R0.mul(R0);
-      const R1Sq = R1.mul(R1);
-      const t = distSq
-        .sub(R0Sq)
-        .div(max(R1Sq.sub(R0Sq), EPSILON))
+    ([worldPos, distanceSquared, bladeHeight, clipPosition, previousKeep]) => {
+      const fullDensityRadiusSquared = uniforms.uFullDensityRadius.mul(
+        uniforms.uFullDensityRadius,
+      );
+      const densityFalloffRadiusSquared = uniforms.uDensityFalloffRadius.mul(
+        uniforms.uDensityFalloffRadius,
+      );
+      const distanceFactor = distanceSquared
+        .sub(fullDensityRadiusSquared)
+        .div(
+          max(
+            densityFalloffRadiusSquared.sub(fullDensityRadiusSquared),
+            EPSILON,
+          ),
+        )
         .clamp();
-      const pDistance = mix(1, pMin, t);
+      const distanceKeep = mix(1, uniforms.uFarDensity, distanceFactor);
       const eyeDepthAbs = clipPosition.w.abs().max(EPSILON);
-      const projectedBladeHeight = fY.mul(bladeHeight).div(eyeDepthAbs);
-      const pScreen = smoothstep(
-        projectedMin,
-        projectedFull,
+      const projectedBladeHeight = uniforms.uFy
+        .mul(bladeHeight)
+        .div(eyeDepthAbs);
+      const screenKeep = smoothstep(
+        uniforms.uProjectedHeightMin,
+        uniforms.uProjectedHeightFull,
         projectedBladeHeight,
       );
-      const p = pDistance.mul(pScreen);
-      const cell = floor(worldPos.xz.div(spacing));
-      const rnd = hash(cell.x.mul(12.9898).add(cell.y.mul(78.233)));
-      const enterThreshold = rnd.add(hysteresis).clamp();
-      const stayThreshold = rnd.sub(hysteresis).clamp(EPSILON, 1);
-      const enterKeep = step(enterThreshold, p);
-      const stayKeep = step(stayThreshold, p);
+      const keepProbability = distanceKeep.mul(screenKeep);
+      const cell = floor(worldPos.xz.div(config.SPACING));
+      const randomThreshold = hash(cell.x.mul(12.9898).add(cell.y.mul(78.233)));
+      const enterThreshold = randomThreshold
+        .add(uniforms.uStochasticHysteresis)
+        .clamp();
+      const stayThreshold = randomThreshold
+        .sub(uniforms.uStochasticHysteresis)
+        .clamp(EPSILON, 1);
+      const enterKeep = step(enterThreshold, keepProbability);
+      const stayKeep = step(stayThreshold, keepProbability);
       return mix(enterKeep, stayKeep, previousKeep);
     },
   );
@@ -163,7 +153,7 @@ export class GrassCompute {
     },
   );
 
-  getVisibility = Fn<[value: Node<"vec4">], Node<"float">>(([data]) => {
+  private getVisibility = Fn<[value: Node<"vec4">], Node<"float">>(([data]) => {
     return TSLUtils.unpackFlag(data.w, 17);
   });
 
@@ -278,12 +268,12 @@ export class GrassCompute {
       .mul(config.SPACING)
       .sub(config.TILE_HALF_SIZE)
       .add(randZ.mul(config.SPACING * 0.5));
-    const _uv = vec3(offsetX, 0, offsetZ)
+    const noiseUv = vec3(offsetX, 0, offsetZ)
       .xz.add(config.TILE_HALF_SIZE)
       .div(config.TILE_SIZE)
       .abs()
       .fract();
-    const noise = texture(assetManager.resources.noiseAtlas, _uv);
+    const noise = texture(assetManager.resources.noiseAtlas, noiseUv);
     const wrapNoise = noise.b.sub(0.5);
     const noiseX = wrapNoise.mul(17).fract();
     const noiseZ = wrapNoise.mul(13).fract();
@@ -291,10 +281,10 @@ export class GrassCompute {
     bladeState.y = offsetZ.add(noiseZ);
 
     bladeTerrain.assign(this.setPositionNoise(bladeTerrain, noise.g));
-    const n = noise.b;
-    const shaped = n.mul(n);
+    const scaleNoise = noise.b;
+    const shapedScaleNoise = scaleNoise.mul(scaleNoise);
     const randomScale = remap(
-      shaped,
+      shapedScaleNoise,
       0,
       1,
       uniforms.uBladeMinScale,
@@ -324,7 +314,7 @@ export class GrassCompute {
 
     const scrollDir = perp.mul(0.3717).sub(baseDir);
     const uv = worldPos.xz
-      .mul(uniforms.uvWindScale.mul(0.01))
+      .mul(uniforms.uWindUvScale.mul(0.01))
       .add(scrollDir.mul(uniforms.uWindSpeed.mul(gameTime)));
     const noise = texture(assetManager.resources.noiseAtlas, uv);
 
@@ -502,21 +492,14 @@ export class GrassCompute {
     bladeState.assign(this.setTerrainCacheValidity(bladeState, cacheValidity));
 
     If(isInFrustum, () => {
+      const distanceSquared = wrappedOffset.xz.dot(wrappedOffset.xz);
       const previousKeep = wasVisible.mul(float(1).sub(isWrapped));
       const passesStochasticThinning = this.computeStochasticKeep(
         worldPos,
-        uniforms.uPlayerPosition,
-        uniforms.uR0,
-        uniforms.uR1,
-        uniforms.uPMin,
+        distanceSquared,
         currentScale.mul(config.BLADE_HEIGHT),
         clipPosition,
-        uniforms.uFy,
-        uniforms.uProjectedMin,
-        uniforms.uProjectedFull,
-        config.SPACING,
         previousKeep,
-        uniforms.uStochasticHysteresis,
       );
 
       If(passesStochasticThinning, () => {
@@ -559,8 +542,7 @@ export class GrassCompute {
 
           const yOffset = this.getYOffset(bladeTerrain);
 
-          const diff = worldPos.xz.sub(uniforms.uPlayerPosition.xz);
-          const distSq = diff.dot(diff);
+          const playerOffset = wrappedOffset.xz;
 
           const isPlayerGrounded = step(
             0.1,
@@ -568,7 +550,7 @@ export class GrassCompute {
           );
 
           const contact = float(1)
-            .sub(smoothstep(0, uniforms.uTrailRadiusSquared, distSq))
+            .sub(smoothstep(0, uniforms.uTrailRadiusSquared, distanceSquared))
             .mul(isPlayerGrounded);
 
           const crushedScale = min(baseScale, uniforms.uTrailMinScale);
@@ -579,9 +561,9 @@ export class GrassCompute {
           const nextScale = mix(scaleBeforeTrail, crushedScale, crushingFactor);
           bladeState.assign(this.setScale(bladeState, nextScale));
 
-          const trailDirection = diff
+          const trailDirection = playerOffset
             .mul(uniforms.uTrailRadius)
-            .div(max(distSq, uniforms.uTrailRadiusSquared));
+            .div(max(distanceSquared, uniforms.uTrailRadiusSquared));
           const trailAmount = float(1)
             .sub(nextScale.div(max(baseScale, config.MIN_VISIBLE_SCALE)))
             .clamp();
@@ -598,7 +580,7 @@ export class GrassCompute {
           );
           const transitionInnerSquared = transitionInner.mul(transitionInner);
           const transitionOuterSquared = transitionOuter.mul(transitionOuter);
-          const isFarOnly = step(transitionOuterSquared, distSq);
+          const isFarOnly = step(transitionOuterSquared, distanceSquared);
 
           If(isFarOnly, () => {
             const distantWind = this.computeDistantWind(worldPos);
@@ -627,7 +609,10 @@ export class GrassCompute {
             );
             bendXZ.assign(detailedBend);
 
-            const usesTransition = step(transitionInnerSquared, distSq);
+            const usesTransition = step(
+              transitionInnerSquared,
+              distanceSquared,
+            );
             If(usesTransition, () => {
               const distantWind = this.computeDistantWind(worldPos);
               const distantWindXZ = distantWind.xy.clamp(-2, 2);
@@ -639,7 +624,7 @@ export class GrassCompute {
               const transitionMix = smoothstep(
                 transitionInnerSquared,
                 transitionOuterSquared,
-                distSq,
+                distanceSquared,
               );
               bendXZ.assign(mix(detailedBend, distantBend, transitionMix));
             });

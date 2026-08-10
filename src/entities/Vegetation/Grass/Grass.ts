@@ -78,7 +78,6 @@ export default class Grass {
 
   private syncPlayerAndCameraUniforms(player: State["player"]) {
     uniforms.uPlayerPosition.value.copy(player.position);
-    uniforms.uPlayerRadius.value = player.radius;
 
     const projectionMatrix = sceneManager.playerCamera.projectionMatrix;
     uniforms.uFx.value = projectionMatrix.elements[0];

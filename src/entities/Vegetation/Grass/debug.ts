@@ -120,7 +120,7 @@ export const debugGrass = (uniforms: GrassUniforms, config: GrassConfig) => {
     max: 1,
     step: 0.01,
   });
-  wind.addBinding(uniforms.uvWindScale, "value", {
+  wind.addBinding(uniforms.uWindUvScale, "value", {
     label: "UV scale",
     step: 0.01,
     min: 0,
@@ -158,13 +158,13 @@ export const debugGrass = (uniforms: GrassUniforms, config: GrassConfig) => {
   });
 
   const density = folder.addFolder({ title: "Density" });
-  density.addBinding(uniforms.uR1, "value", {
-    label: "Full-density radius",
+  density.addBinding(uniforms.uDensityFalloffRadius, "value", {
+    label: "Density falloff radius",
     min: 0,
     max: config.TILE_SIZE,
     step: 0.1,
   });
-  density.addBinding(uniforms.uPMin, "value", {
+  density.addBinding(uniforms.uFarDensity, "value", {
     label: "Far density",
     min: 0,
     max: 1,

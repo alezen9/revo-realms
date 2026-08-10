@@ -1,5 +1,4 @@
 import {
-  cos,
   float,
   floor,
   Fn,
@@ -48,9 +47,9 @@ const getConfig = () => {
   const FLOWER_WIDTH = 0.5;
   const FLOWER_HEIGHT = 1;
   const TILE_SIZE = 150;
-  const FLOWERS_PER_SIDE = 128;
-  const MIN_SCALE = 0.05;
-  const MAX_SCALE = 0.15;
+  const FLOWERS_PER_SIDE = 64;
+  const MIN_SCALE = 0.1;
+  const MAX_SCALE = 0.2;
   return {
     MIN_SCALE,
     MAX_SCALE,
@@ -87,6 +86,9 @@ const uniforms = {
   uWindDirectionalStrength: uniform(0.45),
   uWindSwaySpeed: uniform(0.9),
   uWindVerticalBobStrength: uniform(0.02),
+  // scale
+  uMinScale: uniform(config.MIN_SCALE),
+  uMaxScale: uniform(config.MAX_SCALE),
 };
 
 class FlowersSsbo {
@@ -368,6 +370,18 @@ export default class Flowers {
       max: 0.2,
       step: 0.005,
     });
+    folder.addBinding(uniforms.uMinScale, "value", {
+      label: "Min scale",
+      min: 0,
+      max: 3,
+      step: 0.001,
+    });
+    folder.addBinding(uniforms.uMaxScale, "value", {
+      label: "Max scale",
+      min: 0,
+      max: 3,
+      step: 0.001,
+    });
   }
 }
 
@@ -449,7 +463,7 @@ class FlowerMaterial extends SpriteNodeMaterial {
 
     // Size
     this.scaleNode = vec3(
-      rand1.remap(0, 1, config.MIN_SCALE, config.MAX_SCALE),
+      rand1.remap(0, 1, uniforms.uMinScale, uniforms.uMaxScale),
     ).mul(grassScale.remap(0, 1, 0.6, 1));
 
     // Diffuse

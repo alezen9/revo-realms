@@ -44,7 +44,7 @@ const uniforms = {
   uDelta: uniform(0),
   uColor: uniform(new Color().setRGB(0.27, 0.31, 0.28)),
   uSpeed: uniform(0.5),
-  uTurbulence: uniform(1.25),
+  uTurbulence: uniform(1.75),
   uHeight: uniform(3.3),
   uSize: uniform(0.6),
 };

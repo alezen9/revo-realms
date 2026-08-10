@@ -15,6 +15,7 @@ import { TSLUtils } from "../../utils/TSLUtils";
 import { playerConfig as config } from "./config";
 
 export const playerUniforms = {
+  uDiffuseScale: uniform(config.DIFFUSE_BOOST),
   uSpinFactor: uniform(0),
   uSpinBlurMax: uniform(config.SPIN_BLUR_MAX),
   uPosition: uniform(new Vector3()),
@@ -29,9 +30,9 @@ export class PlayerMaterial extends MeshLambertNodeMaterial {
   }
 
   private createMaterial() {
-    const { DIFFUSE_BOOST } = config;
     const { SPIN_NORMAL_SCALE, SPIN_NORMAL_SCALE_MIN } = config;
-    const { uSpinFactor, uSpinBlurMax, uSunTintStrength } = playerUniforms;
+    const { uDiffuseScale, uSpinFactor, uSpinBlurMax, uSunTintStrength } =
+      playerUniforms;
 
     this.precision = "lowp";
     this.flatShading = false;
@@ -40,7 +41,7 @@ export class PlayerMaterial extends MeshLambertNodeMaterial {
 
     const baseColor = texture(assetManager.resources.playerDiffuse, uv())
       .blur(blurAmount)
-      .mul(DIFFUSE_BOOST);
+      .mul(uDiffuseScale);
     const terrainMapUv = TSLUtils.computeMapUvByPosition(positionWorld.xz);
     const bakedShadowFactor = texture(
       assetManager.resources.terrainMaps,

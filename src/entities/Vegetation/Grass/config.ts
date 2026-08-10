@@ -43,7 +43,6 @@ export const uniforms = {
   // Player
   uPlayerPosition: uniform(new Vector3(0, 0, 0)),
   uPlayerDeltaXZ: uniform(new Vector2(0, 0)),
-  uPlayerRadius: uniform(0.5),
 
   // Scale
   uBladeMinScale: uniform(0.85),
@@ -60,7 +59,7 @@ export const uniforms = {
   // Wind
   uWindStrength: uniform(0.32),
   uWindSpeed: uniform(0.18),
-  uvWindScale: uniform(1.35),
+  uWindUvScale: uniform(1.35),
   uAmbientSwayStrength: uniform(0.055),
   uWindLull: uniform(0.09),
   uWindEddyStrength: uniform(0.9),
@@ -69,12 +68,12 @@ export const uniforms = {
 
   // Color
   uBaseColorDark: uniform(new Color(0.09, 0.15, 0.075).convertSRGBToLinear()),
-  uBaseColor: uniform(new Color(0.25, 0.38, 0.22).convertSRGBToLinear()),
-  uWarmColor: uniform(new Color(0.46, 0.33, 0.16).convertSRGBToLinear()),
+  uBaseColor: uniform(new Color(0.33, 0.43, 0.3).convertSRGBToLinear()),
+  uTipColor: uniform(new Color(0.4, 0.43, 0.32).convertSRGBToLinear()),
+  uWarmColor: uniform(new Color(0.66, 0.53, 0.41).convertSRGBToLinear()),
   uRustColor: uniform(new Color(0.38, 0.19, 0.11).convertSRGBToLinear()),
-  uTipColor: uniform(new Color(0.53, 0.46, 0.23).convertSRGBToLinear()),
-  uColorMixFactor: uniform(0.24),
-  uColorVariationStrength: uniform(0.68),
+  uColorMixFactor: uniform(0.4),
+  uColorVariationStrength: uniform(0.9),
   uWarmVariationStrength: uniform(0.48),
   uRustVariationStrength: uniform(0.08),
 
@@ -85,17 +84,17 @@ export const uniforms = {
   uAoRadiusSquared: uniform(15 * 15),
 
   // lighting
-  uDiffuseContrast: uniform(1),
+  uDiffuseContrast: uniform(0.5),
   uLightExposure: uniform(1.15),
   uHighlightStrength: uniform(0.02),
   uBacklightStrength: uniform(0.13),
 
   // Stochastic keep
-  uR0: uniform(16),
-  uR1: uniform(75),
-  uPMin: uniform(0.1),
-  uProjectedMin: uniform(0.004),
-  uProjectedFull: uniform(0.022),
+  uFullDensityRadius: uniform(16),
+  uDensityFalloffRadius: uniform(75),
+  uFarDensity: uniform(0.1),
+  uProjectedHeightMin: uniform(0.004),
+  uProjectedHeightFull: uniform(0.022),
   uStochasticHysteresis: uniform(0.11),
 
   // Rotation
