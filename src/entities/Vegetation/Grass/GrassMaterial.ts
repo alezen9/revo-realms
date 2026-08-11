@@ -71,8 +71,13 @@ export class GrassMaterial extends SpriteNodeMaterial {
       .dot(bendXZ)
       .div(scaleY.mul(config.BLADE_HEIGHT * 2))
       .mul(uniforms.uBendDropStrength);
+    const bendShape = uniforms.uBendControlPoint
+      .mul(2)
+      .mul(bladeHeight)
+      .mul(float(1).sub(bladeHeight))
+      .add(bendWeight);
     const bendOffset = vec3(bendXZ.x, bendDrop.negate(), bendXZ.y).mul(
-      bendWeight,
+      bendShape,
     );
     const finalPosition = bladePosition.add(bendOffset);
     this.positionNode = finalPosition;
@@ -134,10 +139,16 @@ export class GrassMaterial extends SpriteNodeMaterial {
 
     const bladeAngle = bladeHash.mul(53.3).fract().mul(PI2);
     const restingNormal = vec3(cos(bladeAngle), 0, sin(bladeAngle));
+    const bladeLength = scaleY.mul(config.BLADE_HEIGHT);
+    const bendShapeDerivative = uniforms.uBendControlPoint
+      .mul(2)
+      .mul(float(1).sub(bladeHeight.mul(2)))
+      .add(bladeHeight.mul(2));
+    const tangentTilt = bendShapeDerivative.mul(uniforms.uNormalTiltGain);
     const bladeTangent = vec3(
-      bendXZ.x.mul(bladeHeight).mul(1.8),
-      1,
-      bendXZ.y.mul(bladeHeight).mul(1.8),
+      bendXZ.x.mul(tangentTilt),
+      bladeLength,
+      bendXZ.y.mul(tangentTilt),
     ).normalize();
     const normalProjection = bladeTangent.mul(restingNormal.dot(bladeTangent));
     const aggregateNormal = restingNormal.sub(normalProjection).normalize();

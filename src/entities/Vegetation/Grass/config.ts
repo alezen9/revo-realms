@@ -69,6 +69,7 @@ export const uniforms = {
   uWindCurveP1: uniform(0.003),
   uWindCurveP2: uniform(0.85),
   uBendDropStrength: uniform(1.3),
+  uBendControlPoint: uniform(0.4),
 
   // Color
   uBaseColorDark: uniform(new Color(0.09, 0.15, 0.075).convertSRGBToLinear()),
@@ -93,6 +94,7 @@ export const uniforms = {
   uHighlightStrength: uniform(0.02),
   uBacklightStrength: uniform(0.13),
   uRootSkyVisibility: uniform(0.6),
+  uNormalTiltGain: uniform(1),
 
   // Stochastic keep
   uFullDensityRadius: uniform(16),
