@@ -19,6 +19,13 @@ import { SpriteNodeMaterial } from "three/webgpu";
 import { lightingManager } from "../../../systems";
 import { config, uniforms } from "./config";
 import type { GrassCompute } from "./GrassCompute";
+import {
+  getBakedShadowFactor,
+  getBend,
+  getPositionNoise,
+  getScale,
+  getYOffset,
+} from "./GrassBladeData";
 
 export class GrassMaterial extends SpriteNodeMaterial {
   constructor(compute: GrassCompute) {
@@ -32,18 +39,21 @@ export class GrassMaterial extends SpriteNodeMaterial {
     this.stencilWrite = false;
     this.forceSinglePass = true;
 
+    // each LOD draw sets firstInstance to its region start, so instanceIndex
+    // already points inside the right slice of the visible index list
     const bladeIndex = compute.visibleIndexBuffer.element(instanceIndex);
+    const lodIndex = instanceIndex.div(config.COUNT);
     const bladeState = compute.bladeStateBuffer.element(bladeIndex);
     const bladeTerrain = compute.bladeTerrainBuffer.element(bladeIndex);
 
     const offsetX = bladeState.x;
-    const offsetY = compute.getYOffset(bladeTerrain);
+    const offsetY = getYOffset(bladeTerrain);
     const offsetZ = bladeState.y;
 
-    const bendXZ = compute.getBend(bladeState);
-    const scaleY = compute.getScale(bladeState);
-    const positionNoise = compute.getPositionNoise(bladeTerrain);
-    const bakedShadowFactor = compute.getBakedShadowFactor(bladeTerrain);
+    const bendXZ = getBend(bladeState);
+    const scaleY = getScale(bladeState);
+    const positionNoise = getPositionNoise(bladeTerrain);
+    const bakedShadowFactor = getBakedShadowFactor(bladeTerrain);
 
     const bladeUv = uv();
     const bladeHeight = bladeUv.y;
@@ -53,7 +63,18 @@ export class GrassMaterial extends SpriteNodeMaterial {
     const instanceNoise = bladeHash.mul(0.25).sub(0.125);
     const spriteNoise = bladeHash.mul(31.7).fract().mul(2).sub(1);
 
-    const scaleX = positionNoise.add(0.5);
+    const distanceSquared = offsetX.mul(offsetX).add(offsetZ.mul(offsetZ));
+
+    // far blades fall below a pixel and alias, so widen them slightly
+    const farWidthBlend = smoothstep(
+      uniforms.uWidthNearRadiusSquared,
+      uniforms.uWidthFarRadiusSquared,
+      distanceSquared,
+    );
+    const farWidthGain = mix(1, uniforms.uWidthFarGain, farWidthBlend);
+    const bladeWidth = uniforms.uBladeWidth.mul(farWidthGain);
+    const widthVariation = positionNoise.add(0.5);
+    const scaleX = widthVariation.mul(bladeWidth);
     this.scaleNode = vec3(scaleX, scaleY, 1);
 
     const spriteRotation = spriteNoise.mul(uniforms.uSpriteRotationRandomness);
@@ -82,7 +103,6 @@ export class GrassMaterial extends SpriteNodeMaterial {
     const finalPosition = bladePosition.add(bendOffset);
     this.positionNode = finalPosition;
 
-    const distanceSquared = offsetX.mul(offsetX).add(offsetZ.mul(offsetZ));
     const proximityMask = float(1).sub(
       smoothstep(0, uniforms.uAoRadiusSquared, distanceSquared),
     );
@@ -217,6 +237,8 @@ export class GrassMaterial extends SpriteNodeMaterial {
       transmission.mul(lightingDetail),
     );
 
-    this.colorNode = diffuseColor.add(sheenColor).add(transmittedColor);
+    const shadedColor = diffuseColor.add(sheenColor).add(transmittedColor);
+    const lodDebugColor = uniforms.uLodDebugColors.element(lodIndex);
+    this.colorNode = mix(shadedColor, lodDebugColor, uniforms.uLodDebugEnabled);
   }
 }

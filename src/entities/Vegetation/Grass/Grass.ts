@@ -1,4 +1,4 @@
-import { Mesh, Vector2 } from "three";
+import { Group, Mesh, Vector2 } from "three";
 import { type State } from "../../../Game";
 import {
   sceneManager,
@@ -15,13 +15,16 @@ import type { ComputeTask } from "../../../systems/RendererManager/ComputeTask";
 import type { GrassMonitoringStats } from "../../../systems/EventsManager";
 
 const UINT32_BYTE_SIZE = Uint32Array.BYTES_PER_ELEMENT;
-// instanceCount is the second uint in the indirect draw arguments
-const INDIRECT_DRAW_INSTANCE_COUNT_BYTE_OFFSET = UINT32_BYTE_SIZE;
+const INDIRECT_FIRST_INSTANCE_FEATURE = "indirect-first-instance";
 
 export default class Grass {
   private compute = new GrassCompute();
   private computeTask: ComputeTask;
-  private mesh: Mesh;
+  // one material for every LOD; each draw resolves its own region through
+  // the firstInstance stored in its indirect draw arguments
+  private material = new GrassMaterial(this.compute);
+  // every LOD mesh rides the same wrapping tile, so only the group moves
+  private tile = new Group();
   private playerDeltaXZ = new Vector2(0, 0);
 
   constructor() {
@@ -33,8 +36,10 @@ export default class Grass {
         this.compute.computeUpdate,
       ],
     });
-    this.mesh = this.createMesh();
-    sceneManager.scene.add(this.mesh);
+    config.LOD_SEGMENTS.forEach((segments, lod) =>
+      this.tile.add(this.createMesh(segments, lod)),
+    );
+    sceneManager.scene.add(this.tile);
     void this.initComputeTaskAsync();
 
     eventsManager.on("engine-render-update", this.onEngineUpdate);
@@ -44,20 +49,32 @@ export default class Grass {
   private async initComputeTaskAsync() {
     const isInitialized = await this.computeTask.init();
     if (!isInitialized) return;
+
+    // LOD regions rely on a non zero firstInstance in the indirect draw
+    // arguments, which WebGPU gates behind this feature
+    if (!rendererManager.renderer.hasFeature(INDIRECT_FIRST_INSTANCE_FEATURE)) {
+      console.error(
+        `[Grass] "${INDIRECT_FIRST_INSTANCE_FEATURE}" is unavailable, every LOD will draw the nearest region`,
+      );
+    }
+
     monitoringManager?.registerProvider("grass", this.getMonitoringStatsAsync);
   }
 
-  private createMesh() {
+  private createMesh(segments: number, lod: number) {
     const geometry = new GrassBladeGeometry({
-      nSegments: config.SEGMENTS,
+      nSegments: segments,
       bladeHeight: config.BLADE_HEIGHT,
-      bladeWidth: config.BLADE_WIDTH,
+      // normalized: the world width comes from uBladeWidth in the material
+      bladeWidth: 1,
     });
     geometry.instanceCount = config.COUNT;
-    geometry.setIndirect(this.compute.indirectDrawAttribute);
+    geometry.setIndirect(
+      this.compute.indirectDrawAttribute,
+      lod * config.INDIRECT_ARGS_STRIDE * UINT32_BYTE_SIZE,
+    );
 
-    const material = new GrassMaterial(this.compute);
-    const mesh = new Mesh(geometry, material);
+    const mesh = new Mesh(geometry, this.material);
     mesh.frustumCulled = false;
     return mesh;
   }
@@ -66,12 +83,12 @@ export default class Grass {
     this.accumulatePlayerDelta(player);
     this.syncPlayerAndCameraUniforms(player);
     this.updateCompute();
-    this.mesh.position.copy(player.position).setY(0);
+    this.tile.position.copy(player.position).setY(0);
   };
 
   private accumulatePlayerDelta(player: State["player"]) {
-    const dx = player.position.x - this.mesh.position.x;
-    const dz = player.position.z - this.mesh.position.z;
+    const dx = player.position.x - this.tile.position.x;
+    const dz = player.position.z - this.tile.position.z;
     this.playerDeltaXZ.x += dx;
     this.playerDeltaXZ.y += dz;
   }
@@ -118,18 +135,35 @@ export default class Grass {
   private getMonitoringStatsAsync = async (): Promise<GrassMonitoringStats> => {
     const buffer = await rendererManager.renderer.getArrayBufferAsync(
       this.compute.indirectDrawAttribute,
-      null,
-      INDIRECT_DRAW_INSTANCE_COUNT_BYTE_OFFSET,
-      UINT32_BYTE_SIZE,
     );
-    const rendered = new Uint32Array(buffer)[0];
-    const trianglesPerBlade = config.BLADE_INDEX_COUNT / 3;
+    const drawArguments = new Uint32Array(buffer);
+    const renderedPerLod = config.LOD_SEGMENTS.map(
+      (_, lod) =>
+        drawArguments[
+          lod * config.INDIRECT_ARGS_STRIDE + config.INSTANCE_COUNT_INDEX
+        ],
+    );
+
+    let rendered = 0;
+    let totalTriangles = 0;
+    let renderedTriangles = 0;
+    for (let lod = 0; lod < config.LOD_COUNT; lod++) {
+      const trianglesPerBlade = config.LOD_INDEX_COUNTS[lod] / 3;
+      rendered += renderedPerLod[lod];
+      // every LOD geometry is allocated at COUNT instances, so the scene
+      // triangle substitution in MonitoringManager must account for all of them
+      totalTriangles += config.COUNT * trianglesPerBlade;
+      renderedTriangles += renderedPerLod[lod] * trianglesPerBlade;
+    }
+
     return {
       rendered,
+      renderedPerLod,
       total: config.COUNT,
-      segments: config.SEGMENTS,
-      totalTriangles: config.COUNT * trianglesPerBlade,
-      renderedTriangles: rendered * trianglesPerBlade,
+      segmentsPerLod: config.LOD_SEGMENTS,
+      drawCalls: config.LOD_COUNT,
+      totalTriangles,
+      renderedTriangles,
     };
   };
 }

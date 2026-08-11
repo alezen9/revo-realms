@@ -176,18 +176,36 @@
 			<div class="row">
 				<span class="category">GRASS</span>
 				<span class="metric">
-					<span class="metric-label">Rendered</span>
+					<span class="metric-label"># Blades</span>
 					<span class="metric-value">{formatCompact(snapshot.render.grass.rendered)}</span>
 				</span>
 				<span class="metric">
-					<span class="metric-label">Total</span>
+					<span class="metric-label"># Total</span>
 					<span class="metric-value">{formatCompact(snapshot.render.grass.total)}</span>
 				</span>
 				<span class="metric">
-					<span class="metric-label">Segments</span>
-					<span class="metric-value">{snapshot.render.grass.segments}</span>
+					<span class="metric-label"># Tris</span>
+					<span class="metric-value"
+						>{formatCompact(snapshot.render.grass.renderedTriangles)}</span
+					>
 				</span>
-				<span class="metric"></span>
+				<span class="metric">
+					<span class="metric-label"># Draws</span>
+					<span class="metric-value">{formatInteger(snapshot.render.grass.drawCalls)}</span>
+				</span>
+			</div>
+			<div class="row">
+				<span class="category"></span>
+				{#each snapshot.render.grass.renderedPerLod as bladeCount, lod (lod)}
+					<span class="metric">
+						<span class="metric-label"># LOD{lod}</span>
+						<span class="metric-value">{formatCompact(bladeCount)}</span>
+					</span>
+				{/each}
+				<span class="metric">
+					<span class="metric-label">Segments</span>
+					<span class="metric-value">{snapshot.render.grass.segmentsPerLod.join('/')}</span>
+				</span>
 			</div>
 		{/if}
 	</div>

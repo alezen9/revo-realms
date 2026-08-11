@@ -213,6 +213,67 @@ export const debugGrass = (uniforms: GrassUniforms, config: GrassConfig) => {
     step: 0.01,
   });
 
+  const width = folder.addFolder({ title: "Width" });
+  width.addBinding(uniforms.uBladeWidth, "value", {
+    label: "Blade width",
+    min: 0.01,
+    max: 0.3,
+    step: 0.005,
+  });
+  width.addBinding(uniforms.uWidthFarGain, "value", {
+    label: "Far width gain",
+    min: 1,
+    max: 4,
+    step: 0.05,
+  });
+  width
+    .addBinding(uniforms.uWidthNearRadius, "value", {
+      label: "Gain start radius",
+      min: 0,
+      max: config.TILE_HALF_SIZE,
+      step: 0.5,
+    })
+    .on("change", ({ value }) => {
+      uniforms.uWidthNearRadiusSquared.value = value * value;
+    });
+  width
+    .addBinding(uniforms.uWidthFarRadius, "value", {
+      label: "Gain full radius",
+      min: 0,
+      max: config.TILE_HALF_SIZE,
+      step: 0.5,
+    })
+    .on("change", ({ value }) => {
+      uniforms.uWidthFarRadiusSquared.value = value * value;
+    });
+
+  const lod = folder.addFolder({ title: "LOD" });
+  lod
+    .addBinding({ enabled: false }, "enabled", { label: "Show LOD colors" })
+    .on("change", ({ value }) => {
+      uniforms.uLodDebugEnabled.value = value ? 1 : 0;
+    });
+  lod
+    .addBinding(uniforms.uLod0Radius, "value", {
+      label: "Near radius",
+      min: 0,
+      max: config.TILE_HALF_SIZE,
+      step: 0.5,
+    })
+    .on("change", ({ value }) => {
+      uniforms.uLod0RadiusSquared.value = value * value;
+    });
+  lod
+    .addBinding(uniforms.uLod1Radius, "value", {
+      label: "Mid radius",
+      min: 0,
+      max: config.TILE_HALF_SIZE,
+      step: 0.5,
+    })
+    .on("change", ({ value }) => {
+      uniforms.uLod1RadiusSquared.value = value * value;
+    });
+
   const trail = folder.addFolder({ title: "Trail" });
   trail.addBinding(uniforms.uTrailGrowthRate, "value", {
     label: "Growth rate",

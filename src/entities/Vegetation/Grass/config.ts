@@ -1,19 +1,29 @@
 import { Color, Matrix4, Vector2, Vector3 } from "three";
-import { uniform } from "three/tsl";
+import { uniform, uniformArray } from "three/tsl";
+
+const getBladeIndexCount = (segments: number) =>
+  Math.max(0, segments - 1) * 6 + 3;
 
 const getConfig = () => {
-  const BLADE_WIDTH = 0.15;
+  const BLADE_WIDTH = 0.075;
   const BLADE_HEIGHT = 1.75;
   const TILE_SIZE = 130;
-  const SEGMENTS = 4;
+  // near to far, one indirect draw per entry
+  const LOD_SEGMENTS = [8, 4, 2];
   const BLADES_PER_SIDE = 512 + 512;
   const COUNT = BLADES_PER_SIDE * BLADES_PER_SIDE;
   const MIN_VISIBLE_SCALE = 0.15;
   const DETAILED_WIND_TRANSITION_WIDTH = 5;
 
   return {
-    SEGMENTS,
-    BLADE_INDEX_COUNT: Math.max(0, SEGMENTS - 1) * 6 + 3,
+    LOD_SEGMENTS,
+    LOD_INDEX_COUNTS: LOD_SEGMENTS.map(getBladeIndexCount),
+    LOD_COUNT: LOD_SEGMENTS.length,
+    // indexCount, instanceCount, firstIndex, baseVertex, firstInstance
+    INDIRECT_ARGS_STRIDE: 5,
+    INDEX_COUNT_INDEX: 0,
+    INSTANCE_COUNT_INDEX: 1,
+    FIRST_INSTANCE_INDEX: 4,
     BLADE_WIDTH,
     BLADE_HEIGHT,
     BLADE_BOUNDING_SPHERE_RADIUS: BLADE_HEIGHT,
@@ -41,9 +51,28 @@ export const uniforms = {
   uCullPadNDCYFar: uniform(0.2),
   uCameraPosition: uniform(new Vector3(0, 0, 0)),
 
+  // LOD
+  uLod0Radius: uniform(15),
+  uLod0RadiusSquared: uniform(15 * 15),
+  uLod1Radius: uniform(40),
+  uLod1RadiusSquared: uniform(40 * 40),
+  uLodDebugEnabled: uniform(0),
+  uLodDebugColors: uniformArray(
+    [new Color("green"), new Color("blue"), new Color("red")],
+    "color" as const,
+  ),
+
   // Player
   uPlayerPosition: uniform(new Vector3(0, 0, 0)),
   uPlayerDeltaXZ: uniform(new Vector2(0, 0)),
+
+  // Width
+  uBladeWidth: uniform(config.BLADE_WIDTH),
+  uWidthFarGain: uniform(1),
+  uWidthNearRadius: uniform(20),
+  uWidthNearRadiusSquared: uniform(20 * 20),
+  uWidthFarRadius: uniform(60),
+  uWidthFarRadiusSquared: uniform(60 * 60),
 
   // Scale
   uBladeMinScale: uniform(0.85),

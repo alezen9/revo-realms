@@ -32,8 +32,10 @@ export type MonitoringSnapshot = {
 
 export type GrassMonitoringStats = {
   rendered: number;
+  renderedPerLod: number[];
   total: number;
-  segments: number;
+  segmentsPerLod: number[];
+  drawCalls: number;
   totalTriangles: number;
   renderedTriangles: number;
 };

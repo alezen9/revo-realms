@@ -25,12 +25,31 @@ import {
   atomicAdd,
   atomicStore,
   storage,
+  uint,
 } from "three/tsl";
 import { IndirectStorageBufferAttribute, type Node } from "three/webgpu";
 import { assetManager, windManager } from "../../../systems";
 import { TSLUtils } from "../../../utils/TSLUtils";
 import { gameDeltaTime, gameTime } from "../../../utils/GameTime";
 import { config, uniforms } from "./config";
+import {
+  getBakedShadowFactor,
+  getBend,
+  getOriginalScale,
+  getPositionNoise,
+  getScale,
+  getTerrainCacheValidity,
+  getVisibility,
+  getYOffset,
+  setBakedShadowFactor,
+  setBend,
+  setOriginalScale,
+  setPositionNoise,
+  setScale,
+  setTerrainCacheValidity,
+  setVisibility,
+  setYOffset,
+} from "./GrassBladeData";
 
 type StochasticKeepArgs = [
   worldPos: Node<"vec3">,
@@ -39,15 +58,26 @@ type StochasticKeepArgs = [
   previousKeep: Node<"float">,
 ];
 
+// Draw arguments for every LOD live back to back in one buffer, so the compute
+// pass binds a single storage buffer instead of one per LOD. firstInstance points
+// each draw at its own region of the visible index list, which is how the material
+// resolves its LOD without being told: instance_index starts at firstInstance.
+const createIndirectDrawArguments = () => {
+  const { LOD_COUNT, INDIRECT_ARGS_STRIDE, LOD_INDEX_COUNTS, COUNT } = config;
+  const drawArguments = new Uint32Array(LOD_COUNT * INDIRECT_ARGS_STRIDE);
+
+  for (let lod = 0; lod < LOD_COUNT; lod++) {
+    const argsBase = lod * INDIRECT_ARGS_STRIDE;
+    drawArguments[argsBase + config.INDEX_COUNT_INDEX] = LOD_INDEX_COUNTS[lod];
+    drawArguments[argsBase + config.FIRST_INSTANCE_INDEX] = lod * COUNT;
+  }
+
+  return drawArguments;
+};
+
 export class GrassCompute {
   readonly indirectDrawAttribute = new IndirectStorageBufferAttribute(
-    new Uint32Array([
-      config.BLADE_INDEX_COUNT, // index count
-      0, // instance count, updated every frame by the atomic counter
-      0, // first index
-      0, // base vertex
-      0, // first instance
-    ]),
+    createIndirectDrawArguments(),
     1, // each argument is one uint
   );
   private atomicIndirectDrawArguments = storage(
@@ -55,8 +85,6 @@ export class GrassCompute {
     "uint",
     this.indirectDrawAttribute.count,
   ).toAtomic();
-  // instanceCount is the second indirect draw argument
-  private atomicCounter = this.atomicIndirectDrawArguments.element(1);
   // x -> offsetX, y -> offsetZ, z -> packed bend
   // w -> 0/8 scale - 8/8 original scale - 16 terrain cache valid - 17 visibility
   private bladeState = instancedArray(config.COUNT, "vec4");
@@ -64,7 +92,12 @@ export class GrassCompute {
   private bladeTerrain = instancedArray(config.COUNT, "float");
   private cachedGrassScale = instancedArray(config.COUNT, "float");
   private windState = instancedArray(config.COUNT, "vec2");
-  private visibleIndices = instancedArray(config.COUNT, "uint");
+  // one draw list per LOD, packed as regions of a single buffer; a blade appends
+  // to exactly one region, so no region can exceed COUNT
+  private visibleIndices = instancedArray(
+    config.COUNT * config.LOD_COUNT,
+    "uint",
+  );
 
   private computeStochasticKeep = Fn<StochasticKeepArgs, Node<"float">>(
     ([worldPos, distanceSquared, bladeHeight, previousKeep]) => {
@@ -137,138 +170,6 @@ export class GrassCompute {
     return this.visibleIndices;
   }
 
-  getYOffset = Fn<[value: Node<"float">], Node<"float">>(([data]) => {
-    return TSLUtils.unpackUnits(
-      data,
-      4,
-      16,
-      0,
-      Math.ceil(assetManager.resources.heightmap.userData.max),
-    );
-  });
-
-  getBend = Fn<[value: Node<"vec4">], Node<"vec2">>(([data]) => {
-    const x = TSLUtils.unpackUnits(data.z, 0, 12, -6, 6);
-    const z = TSLUtils.unpackUnits(data.z, 12, 12, -6, 6);
-    return vec2(x, z);
-  });
-
-  getScale = Fn<[value: Node<"vec4">], Node<"float">>(([data]) => {
-    return TSLUtils.unpackUnits(data.w, 0, 8, 0, uniforms.uBladeMaxScale);
-  });
-
-  private getOriginalScale = Fn<[value: Node<"vec4">], Node<"float">>(
-    ([data]) => {
-      return TSLUtils.unpackUnits(
-        data.w,
-        8,
-        8,
-        uniforms.uBladeMinScale,
-        uniforms.uBladeMaxScale,
-      );
-    },
-  );
-
-  private getVisibility = Fn<[value: Node<"vec4">], Node<"float">>(([data]) => {
-    return TSLUtils.unpackFlag(data.w, 17);
-  });
-
-  private getTerrainCacheValidity = Fn<[value: Node<"vec4">], Node<"float">>(
-    ([data]) => {
-      return TSLUtils.unpackFlag(data.w, 16);
-    },
-  );
-
-  getPositionNoise = Fn<[value: Node<"float">], Node<"float">>(([data]) => {
-    return TSLUtils.unpackUnit(data, 0, 4);
-  });
-
-  getBakedShadowFactor = Fn<[value: Node<"float">], Node<"float">>(([data]) => {
-    return TSLUtils.unpackUnit(data, 20, 4);
-  });
-
-  private setYOffset = Fn<
-    [data: Node<"float">, value: Node<"float">],
-    Node<"float">
-  >(([data, value]) => {
-    return TSLUtils.packUnits(
-      data,
-      4,
-      16,
-      value,
-      0,
-      Math.ceil(assetManager.resources.heightmap.userData.max),
-    );
-  });
-
-  private setBend = Fn<[data: Node<"vec4">, value: Node<"vec2">], Node<"vec4">>(
-    ([data, value]) => {
-      data.z = TSLUtils.packUnits(data.z, 0, 12, value.x, -6, 6);
-      data.z = TSLUtils.packUnits(data.z, 12, 12, value.y, -6, 6);
-      return data;
-    },
-  );
-
-  private setScale = Fn<
-    [data: Node<"vec4">, value: Node<"float">],
-    Node<"vec4">
-  >(([data, value]) => {
-    data.w = TSLUtils.packUnits(
-      data.w,
-      0,
-      8,
-      value,
-      0,
-      uniforms.uBladeMaxScale,
-    );
-    return data;
-  });
-
-  private setOriginalScale = Fn<
-    [data: Node<"vec4">, value: Node<"float">],
-    Node<"vec4">
-  >(([data, value]) => {
-    data.w = TSLUtils.packUnits(
-      data.w,
-      8,
-      8,
-      value,
-      uniforms.uBladeMinScale,
-      uniforms.uBladeMaxScale,
-    );
-    return data;
-  });
-
-  private setVisibility = Fn<
-    [data: Node<"vec4">, value: Node<"float">],
-    Node<"vec4">
-  >(([data, value]) => {
-    data.w = TSLUtils.packFlag(data.w, 17, value);
-    return data;
-  });
-
-  private setTerrainCacheValidity = Fn<
-    [data: Node<"vec4">, value: Node<"float">],
-    Node<"vec4">
-  >(([data, value]) => {
-    data.w = TSLUtils.packFlag(data.w, 16, value);
-    return data;
-  });
-
-  private setPositionNoise = Fn<
-    [data: Node<"float">, value: Node<"float">],
-    Node<"float">
-  >(([data, value]) => {
-    return TSLUtils.packUnit(data, 0, 4, value);
-  });
-
-  private setBakedShadowFactor = Fn<
-    [data: Node<"float">, value: Node<"float">],
-    Node<"float">
-  >(([data, value]) => {
-    return TSLUtils.packUnit(data, 20, 4, value);
-  });
-
   computeInit = Fn(() => {
     const bladeState = this.bladeState.element(instanceIndex);
     const bladeTerrain = this.bladeTerrain.element(instanceIndex);
@@ -296,7 +197,7 @@ export class GrassCompute {
     bladeState.x = offsetX.add(noiseX);
     bladeState.y = offsetZ.add(noiseZ);
 
-    bladeTerrain.assign(this.setPositionNoise(bladeTerrain, noise.g));
+    bladeTerrain.assign(setPositionNoise(bladeTerrain, noise.g));
     const scaleNoise = noise.b;
     const shapedScaleNoise = scaleNoise.mul(scaleNoise);
     const randomScale = remap(
@@ -306,11 +207,11 @@ export class GrassCompute {
       uniforms.uBladeMinScale,
       uniforms.uBladeMaxScale,
     );
-    bladeState.assign(this.setScale(bladeState, randomScale));
-    bladeState.assign(this.setOriginalScale(bladeState, randomScale));
-    bladeState.assign(this.setVisibility(bladeState, 0));
-    bladeState.assign(this.setTerrainCacheValidity(bladeState, 0));
-    bladeState.assign(this.setBend(bladeState, vec2(0)));
+    bladeState.assign(setScale(bladeState, randomScale));
+    bladeState.assign(setOriginalScale(bladeState, randomScale));
+    bladeState.assign(setVisibility(bladeState, 0));
+    bladeState.assign(setTerrainCacheValidity(bladeState, 0));
+    bladeState.assign(setBend(bladeState, vec2(0)));
     this.cachedGrassScale.element(instanceIndex).assign(0);
     this.windState.element(instanceIndex).assign(vec2(0));
   })().compute(config.COUNT, [config.WORKGROUP_SIZE]);
@@ -449,8 +350,18 @@ export class GrassCompute {
       .add(perpendicularWind.mul(broadSway.mul(scaleWindFactor)));
   });
 
+  // only the instance counts are cleared; indexCount and firstInstance are set
+  // once at construction and must survive every frame
   computeResetInstanceCount = Fn(() => {
-    atomicStore(this.atomicCounter, 0);
+    // unrolled at graph build time, no GPU branching
+    for (let lod = 0; lod < config.LOD_COUNT; lod++) {
+      const argsBase = lod * config.INDIRECT_ARGS_STRIDE;
+      const instanceCountIndex = argsBase + config.INSTANCE_COUNT_INDEX;
+      atomicStore(
+        this.atomicIndirectDrawArguments.element(instanceCountIndex),
+        0,
+      );
+    }
   })().compute(1, [1]); // one invocation in a one-thread workgroup
 
   computeUpdate = Fn(() => {
@@ -480,9 +391,9 @@ export class GrassCompute {
     bladeState.y = wrappedOffset.z;
 
     const worldPos = wrappedOffset.add(uniforms.uPlayerPosition);
-    const wasVisible = this.getVisibility(bladeState).toVar();
-    const currentScale = this.getScale(bladeState);
-    const originalScale = this.getOriginalScale(bladeState);
+    const wasVisible = getVisibility(bladeState).toVar();
+    const currentScale = getScale(bladeState);
+    const originalScale = getOriginalScale(bladeState);
     const clipPosition = uniforms.uCameraMatrix.mul(vec4(worldPos, 1));
     const isInFrustum = TSLUtils.computeFrustumVisibility(
       clipPosition,
@@ -493,11 +404,11 @@ export class GrassCompute {
       uniforms.uCullPadNDCYNear,
       uniforms.uCullPadNDCYFar,
     );
-    const cacheValidity = this.getTerrainCacheValidity(bladeState).mul(
+    const cacheValidity = getTerrainCacheValidity(bladeState).mul(
       float(1).sub(isWrapped),
     );
-    bladeState.assign(this.setVisibility(bladeState, 0));
-    bladeState.assign(this.setTerrainCacheValidity(bladeState, cacheValidity));
+    bladeState.assign(setVisibility(bladeState, 0));
+    bladeState.assign(setTerrainCacheValidity(bladeState, cacheValidity));
 
     If(isInFrustum, () => {
       const distanceSquared = wrappedOffset.xz.dot(wrappedOffset.xz);
@@ -526,18 +437,18 @@ export class GrassCompute {
           const yOffset = texture(assetManager.resources.heightmap, heightUv).r;
 
           cachedGrassScale.assign(grassScale);
-          bladeTerrain.assign(this.setYOffset(bladeTerrain, yOffset));
+          bladeTerrain.assign(setYOffset(bladeTerrain, yOffset));
           bladeTerrain.assign(
-            this.setBakedShadowFactor(bladeTerrain, terrainMaps.r),
+            setBakedShadowFactor(bladeTerrain, terrainMaps.r),
           );
-          bladeState.assign(this.setTerrainCacheValidity(bladeState, 1));
+          bladeState.assign(setTerrainCacheValidity(bladeState, 1));
         });
 
         const baseScale = originalScale.mul(cachedGrassScale);
         const isTerrainVisible = step(config.MIN_VISIBLE_SCALE, baseScale);
 
         If(isTerrainVisible, () => {
-          bladeState.assign(this.setVisibility(bladeState, 1));
+          bladeState.assign(setVisibility(bladeState, 1));
           const recoveryFactor = min(
             uniforms.uTrailGrowthRate.mul(gameDeltaTime),
             1,
@@ -547,7 +458,7 @@ export class GrassCompute {
           const shouldReset = max(isWrapped, didAppear);
           const scaleBeforeTrail = mix(recoveredScale, baseScale, shouldReset);
 
-          const yOffset = this.getYOffset(bladeTerrain);
+          const yOffset = getYOffset(bladeTerrain);
 
           const playerOffset = wrappedOffset.xz;
 
@@ -566,7 +477,7 @@ export class GrassCompute {
             1,
           );
           const nextScale = mix(scaleBeforeTrail, crushedScale, crushingFactor);
-          bladeState.assign(this.setScale(bladeState, nextScale));
+          bladeState.assign(setScale(bladeState, nextScale));
 
           const trailDirection = playerOffset
             .mul(uniforms.uTrailRadius)
@@ -578,7 +489,7 @@ export class GrassCompute {
             trailAmount.mul(uniforms.uTrailBendStrength),
           );
 
-          const positionNoise = this.getPositionNoise(bladeTerrain);
+          const positionNoise = getPositionNoise(bladeTerrain);
           const windState = this.windState.element(instanceIndex);
           const bendXZ = vec2(0).toVar();
           const transitionInner = uniforms.uDetailedWindRadius;
@@ -637,10 +548,31 @@ export class GrassCompute {
             });
           });
 
-          bladeState.assign(this.setBend(bladeState, bendXZ.add(trailBend)));
+          bladeState.assign(setBend(bladeState, bendXZ.add(trailBend)));
 
-          const drawIndex = atomicAdd(this.atomicCounter, 1);
-          this.visibleIndices.element(drawIndex).assign(instanceIndex);
+          // 0, 1 or 2 without branching: each radius passed contributes one step
+          const isPastNearRadius = step(
+            uniforms.uLod0RadiusSquared,
+            distanceSquared,
+          );
+          const isPastMidRadius = step(
+            uniforms.uLod1RadiusSquared,
+            distanceSquared,
+          );
+          const lodIndex = uint(isPastNearRadius.add(isPastMidRadius));
+
+          const drawArgsBase = lodIndex.mul(config.INDIRECT_ARGS_STRIDE);
+          const instanceCountIndex = drawArgsBase.add(
+            config.INSTANCE_COUNT_INDEX,
+          );
+          const drawIndex = atomicAdd(
+            this.atomicIndirectDrawArguments.element(instanceCountIndex),
+            1,
+          );
+
+          const lodRegionStart = lodIndex.mul(config.COUNT);
+          const drawSlot = lodRegionStart.add(drawIndex);
+          this.visibleIndices.element(drawSlot).assign(instanceIndex);
         });
       });
     });
