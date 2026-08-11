@@ -39,6 +39,9 @@ export class LightingManager {
   uSunDir = uniform(this.sunDirection);
   uSunColor = uniform(config.directionalColor.clone());
   uSunIntensity = uniform(config.directionalIntensity);
+  uSunRadiance = uniform(
+    config.directionalColor.clone().multiplyScalar(config.directionalIntensity),
+  );
   uHemiSkyColor = uniform(config.hemiSkyColor.clone());
   uHemiGroundColor = uniform(config.hemiGroundColor.clone());
   uHemiIntensity = uniform(config.hemiIntensity);
@@ -75,6 +78,12 @@ export class LightingManager {
 
   get sunColor() {
     return this.uSunColor.value;
+  }
+
+  private syncSunRadiance() {
+    this.uSunRadiance.value
+      .copy(this.uSunColor.value)
+      .multiplyScalar(this.uSunIntensity.value);
   }
 
   private setupHemisphereLight() {
@@ -122,6 +131,7 @@ export class LightingManager {
       })
       .on("change", () => {
         this.directionalLight.color.copy(this.uSunColor.value);
+        this.syncSunRadiance();
       });
     lightFolder
       .addBinding(this.uSunIntensity, "value", {
@@ -131,6 +141,7 @@ export class LightingManager {
       })
       .on("change", ({ value }) => {
         this.directionalLight.intensity = value;
+        this.syncSunRadiance();
       });
     lightFolder.addBinding(this.uPlayerShadowBrightness, "value", {
       label: "Player shadow brightness",

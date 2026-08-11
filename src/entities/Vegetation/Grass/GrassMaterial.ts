@@ -17,7 +17,7 @@ import {
 } from "three/tsl";
 import { SpriteNodeMaterial } from "three/webgpu";
 import { lightingManager } from "../../../systems";
-import { uniforms } from "./config";
+import { config, uniforms } from "./config";
 import type { GrassCompute } from "./GrassCompute";
 
 export class GrassMaterial extends SpriteNodeMaterial {
@@ -67,7 +67,13 @@ export class GrassMaterial extends SpriteNodeMaterial {
     this.rotationNode = spriteRotation.add(baseBending);
 
     const bladePosition = vec3(offsetX, offsetY, offsetZ);
-    const bendOffset = vec3(bendXZ.x, 0, bendXZ.y).mul(bendWeight);
+    const bendDrop = bendXZ
+      .dot(bendXZ)
+      .div(scaleY.mul(config.BLADE_HEIGHT * 2))
+      .mul(uniforms.uBendDropStrength);
+    const bendOffset = vec3(bendXZ.x, bendDrop.negate(), bendXZ.y).mul(
+      bendWeight,
+    );
     const finalPosition = bladePosition.add(bendOffset);
     this.positionNode = finalPosition;
 
@@ -148,11 +154,16 @@ export class GrassMaterial extends SpriteNodeMaterial {
       twoSidedNdotL,
       nearDetailNode.mul(uniforms.uDiffuseContrast),
     );
-    const sunDiffuse = lightingManager.uSunColor
-      .mul(lightingManager.uSunIntensity)
-      .mul(mix(0.35, 1, diffuseFacing));
+    const sunDiffuse = lightingManager.uSunRadiance.mul(
+      mix(0.35, 1, diffuseFacing),
+    );
 
-    const hemiWeight = aggregateNormal.y.mul(0.5).add(0.5).clamp();
+    const skyVisibility = mix(uniforms.uRootSkyVisibility, 1, bladeHeight);
+    const hemiWeight = aggregateNormal.y
+      .mul(0.5)
+      .add(0.5)
+      .clamp()
+      .mul(skyVisibility);
     const hemisphereLight = mix(
       lightingManager.uHemiGroundColor,
       lightingManager.uHemiSkyColor,
@@ -188,9 +199,9 @@ export class GrassMaterial extends SpriteNodeMaterial {
     const lightingDetail = nearDetail.mul(highlightHeight).mul(shadow);
 
     const diffuseColor = albedo.mul(shadow).mul(occlusion).mul(sceneLighting);
-    const sheenColor = lightingManager.uSunColor
-      .mul(lightingManager.uSunIntensity)
-      .mul(grazingSheen.mul(lightingDetail));
+    const sheenColor = lightingManager.uSunRadiance.mul(
+      grazingSheen.mul(lightingDetail),
+    );
     const transmittedColor = mix(albedo, lightingManager.uSunColor, 0.55).mul(
       transmission.mul(lightingDetail),
     );

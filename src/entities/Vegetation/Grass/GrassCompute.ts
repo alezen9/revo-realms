@@ -36,7 +36,6 @@ type StochasticKeepArgs = [
   worldPos: Node<"vec3">,
   distanceSquared: Node<"float">,
   bladeHeight: Node<"float">,
-  clipPosition: Node<"vec4">,
   previousKeep: Node<"float">,
 ];
 
@@ -68,7 +67,7 @@ export class GrassCompute {
   private visibleIndices = instancedArray(config.COUNT, "uint");
 
   private computeStochasticKeep = Fn<StochasticKeepArgs, Node<"float">>(
-    ([worldPos, distanceSquared, bladeHeight, clipPosition, previousKeep]) => {
+    ([worldPos, distanceSquared, bladeHeight, previousKeep]) => {
       const fullDensityRadiusSquared = uniforms.uFullDensityRadius.mul(
         uniforms.uFullDensityRadius,
       );
@@ -85,10 +84,12 @@ export class GrassCompute {
         )
         .clamp();
       const distanceKeep = mix(1, uniforms.uFarDensity, distanceFactor);
-      const eyeDepthAbs = clipPosition.w.abs().max(EPSILON);
+      const cameraDistance = worldPos
+        .distance(uniforms.uCameraPosition)
+        .max(EPSILON);
       const projectedBladeHeight = uniforms.uFy
         .mul(bladeHeight)
-        .div(eyeDepthAbs);
+        .div(cameraDistance);
       const screenKeep = smoothstep(
         uniforms.uProjectedHeightMin,
         uniforms.uProjectedHeightFull,
@@ -106,6 +107,21 @@ export class GrassCompute {
       const enterKeep = step(enterThreshold, keepProbability);
       const stayKeep = step(stayThreshold, keepProbability);
       return mix(enterKeep, stayKeep, previousKeep);
+    },
+  );
+
+  // cubic bezier with P0 = 0 and P3 = 1 over normalized blade height
+  private computeWindResponse = Fn<[scaleY: Node<"float">], Node<"float">>(
+    ([scaleY]) => {
+      const t = scaleY.div(uniforms.uBladeMaxScale).clamp();
+      const inverse = float(1).sub(t);
+      const p1Term = inverse
+        .mul(inverse)
+        .mul(t)
+        .mul(3)
+        .mul(uniforms.uWindCurveP1);
+      const p2Term = inverse.mul(t).mul(t).mul(3).mul(uniforms.uWindCurveP2);
+      return p1Term.add(p2Term).add(t.mul(t).mul(t));
     },
   );
 
@@ -349,11 +365,7 @@ export class GrassCompute {
     const bladeSeed = hash(instanceIndex);
     const instanceNoise = bladeSeed.mul(0.25).sub(0.125);
     const spriteNoise = bladeSeed.mul(31.7).fract().mul(2).sub(1);
-    const scaleWindFactor = mix(
-      0.25,
-      1,
-      smoothstep(uniforms.uBladeMinScale, uniforms.uBladeMaxScale, scaleY),
-    );
+    const scaleWindFactor = this.computeWindResponse(scaleY);
     const windBend = windXZ.dot(windXZ).mul(3.5).clamp();
     const windNoiseShade = smoothstep(0.2, 1, gust);
     const windNoiseFactor = max(windBend, windNoiseShade.mul(0.45));
@@ -399,7 +411,7 @@ export class GrassCompute {
 
     return windXZ
       .mul(bendStrength)
-      .add(ambientOffset)
+      .add(ambientOffset.mul(scaleWindFactor))
       .add(perpendicularWind.mul(flutter));
   });
 
@@ -425,11 +437,7 @@ export class GrassCompute {
     [windXZ: Node<"vec2">, gust: Node<"float">, scaleY: Node<"float">],
     Node<"vec2">
   >(([windXZ, gust, scaleY]) => {
-    const scaleWindFactor = mix(
-      0.25,
-      1,
-      smoothstep(uniforms.uBladeMinScale, uniforms.uBladeMaxScale, scaleY),
-    );
+    const scaleWindFactor = this.computeWindResponse(scaleY);
     const perpendicularWind = vec2(
       windManager.uDirection.y.negate(),
       windManager.uDirection.x,
@@ -438,7 +446,7 @@ export class GrassCompute {
 
     return windXZ
       .mul(uniforms.uBaseBending.mul(scaleWindFactor))
-      .add(perpendicularWind.mul(broadSway));
+      .add(perpendicularWind.mul(broadSway.mul(scaleWindFactor)));
   });
 
   computeResetInstanceCount = Fn(() => {
@@ -498,7 +506,6 @@ export class GrassCompute {
         worldPos,
         distanceSquared,
         currentScale.mul(config.BLADE_HEIGHT),
-        clipPosition,
         previousKeep,
       );
 

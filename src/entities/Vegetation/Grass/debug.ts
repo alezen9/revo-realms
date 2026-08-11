@@ -84,6 +84,12 @@ export const debugGrass = (uniforms: GrassUniforms, config: GrassConfig) => {
     max: 1,
     step: 0.01,
   });
+  lighting.addBinding(uniforms.uRootSkyVisibility, "value", {
+    label: "Root sky visibility",
+    min: 0,
+    max: 1,
+    step: 0.01,
+  });
 
   const ao = folder.addFolder({ title: "AO" });
   ao.addBinding(uniforms.uAoScale, "value", {
@@ -156,6 +162,24 @@ export const debugGrass = (uniforms: GrassUniforms, config: GrassConfig) => {
     max: config.TILE_HALF_SIZE * Math.SQRT2,
     step: 1,
   });
+  wind.addBinding(uniforms.uWindCurveP1, "value", {
+    label: "Wind curve short",
+    min: 0,
+    max: 1,
+    step: 0.01,
+  });
+  wind.addBinding(uniforms.uWindCurveP2, "value", {
+    label: "Wind curve tall",
+    min: 0,
+    max: 1,
+    step: 0.01,
+  });
+  wind.addBinding(uniforms.uBendDropStrength, "value", {
+    label: "Bend drop",
+    min: 0,
+    max: 4,
+    step: 0.05,
+  });
 
   const density = folder.addFolder({ title: "Density" });
   density.addBinding(uniforms.uDensityFalloffRadius, "value", {
@@ -168,6 +192,12 @@ export const debugGrass = (uniforms: GrassUniforms, config: GrassConfig) => {
     label: "Far density",
     min: 0,
     max: 1,
+    step: 0.01,
+  });
+  density.addBinding(uniforms.uStochasticHysteresis, "value", {
+    label: "Stochastic hysteresis",
+    min: 0,
+    max: 0.5,
     step: 0.01,
   });
 

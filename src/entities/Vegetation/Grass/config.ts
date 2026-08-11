@@ -39,6 +39,7 @@ export const uniforms = {
   uCullPadNDCX: uniform(0.075),
   uCullPadNDCYNear: uniform(0.75),
   uCullPadNDCYFar: uniform(0.2),
+  uCameraPosition: uniform(new Vector3(0, 0, 0)),
 
   // Player
   uPlayerPosition: uniform(new Vector3(0, 0, 0)),
@@ -65,6 +66,9 @@ export const uniforms = {
   uWindEddyStrength: uniform(0.9),
   uWindGustCoverage: uniform(0.6),
   uDetailedWindRadius: uniform(30),
+  uWindCurveP1: uniform(0.003),
+  uWindCurveP2: uniform(0.85),
+  uBendDropStrength: uniform(1.3),
 
   // Color
   uBaseColorDark: uniform(new Color(0.09, 0.15, 0.075).convertSRGBToLinear()),
@@ -88,6 +92,7 @@ export const uniforms = {
   uLightExposure: uniform(1.15),
   uHighlightStrength: uniform(0.02),
   uBacklightStrength: uniform(0.13),
+  uRootSkyVisibility: uniform(0.6),
 
   // Stochastic keep
   uFullDensityRadius: uniform(16),
