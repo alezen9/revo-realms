@@ -20,8 +20,6 @@ const INDIRECT_FIRST_INSTANCE_FEATURE = "indirect-first-instance";
 export default class Grass {
   private compute = new GrassCompute();
   private computeTask: ComputeTask;
-  // one material for every LOD; each draw resolves its own region through
-  // the firstInstance stored in its indirect draw arguments
   private material = new GrassMaterial(this.compute);
   // every LOD mesh rides the same wrapping tile, so only the group moves
   private tile = new Group();
@@ -47,7 +45,7 @@ export default class Grass {
       ],
     });
     this.drawProfiles.forEach(({ segments }, lod) => {
-      this.tile.add(this.createMesh(segments, lod));
+      this.tile.add(this.createMesh(segments, lod, this.material));
     });
     sceneManager.scene.add(this.tile);
     void this.computeTask.init();
@@ -64,20 +62,20 @@ export default class Grass {
     );
   }
 
-  private createMesh(segments: number, lod: number) {
+  private createMesh(segments: number, lod: number, material: GrassMaterial) {
     const geometry = new GrassBladeGeometry({
       nSegments: segments,
       bladeHeight: config.BLADE_HEIGHT,
-      // normalized: the world width comes from uBladeWidth in the material
-      bladeWidth: 1,
     });
     geometry.instanceCount = config.COUNT;
+    const indirectByteOffset =
+      lod * config.INDIRECT_ARGS_STRIDE * UINT32_BYTE_SIZE;
     geometry.setIndirect(
       this.compute.indirectDrawAttribute,
-      lod * config.INDIRECT_ARGS_STRIDE * UINT32_BYTE_SIZE,
+      indirectByteOffset,
     );
 
-    const mesh = new Mesh(geometry, this.material);
+    const mesh = new Mesh(geometry, material);
     mesh.frustumCulled = false;
     return mesh;
   }

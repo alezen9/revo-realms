@@ -1,4 +1,6 @@
 import {
+  Fn,
+  If,
   PI2,
   cameraPosition,
   cos,
@@ -15,7 +17,7 @@ import {
   vec3,
   vec4,
 } from "three/tsl";
-import { SpriteNodeMaterial } from "three/webgpu";
+import { SpriteNodeMaterial, type Node } from "three/webgpu";
 import { lightingManager } from "../../../systems";
 import { config, uniforms } from "./config";
 import type { GrassCompute } from "./GrassCompute";
@@ -30,42 +32,28 @@ import {
 export class GrassMaterial extends SpriteNodeMaterial {
   constructor(compute: GrassCompute) {
     super();
-    this.createMaterial(compute);
-  }
 
-  private createMaterial(compute: GrassCompute) {
     this.precision = "lowp";
     this.transparent = false;
     this.stencilWrite = false;
     this.forceSinglePass = true;
 
-    // each LOD draw sets firstInstance to its region start, so instanceIndex
-    // already points inside the right slice of the visible index list
     const bladeIndex = compute.visibleIndexBuffer.element(instanceIndex);
     const lodIndex = instanceIndex.div(config.COUNT);
     const bladeState = compute.bladeStateBuffer.element(bladeIndex);
     const bladeTerrain = compute.bladeTerrainBuffer.element(bladeIndex);
-
     const offsetX = bladeState.x;
     const offsetY = getYOffset(bladeTerrain);
     const offsetZ = bladeState.y;
-
     const bendXZ = getBend(bladeState);
     const scaleY = getScale(bladeState);
     const positionNoise = getPositionNoise(bladeTerrain);
     const bakedShadowFactor = getBakedShadowFactor(bladeTerrain);
-
     const bladeUv = uv();
     const bladeHeight = bladeUv.y;
-    const bendWeight = bladeHeight.mul(bladeHeight);
-
     const bladeHash = hash(bladeIndex);
-    const instanceNoise = bladeHash.mul(0.25).sub(0.125);
-    const spriteNoise = bladeHash.mul(31.7).fract().mul(2).sub(1);
-
     const distanceSquared = offsetX.mul(offsetX).add(offsetZ.mul(offsetZ));
 
-    // far blades fall below a pixel and alias, so widen them slightly
     const farWidthBlend = smoothstep(
       uniforms.uWidthNearRadiusSquared,
       uniforms.uWidthFarRadiusSquared,
@@ -74,20 +62,20 @@ export class GrassMaterial extends SpriteNodeMaterial {
     const farWidthGain = mix(1, uniforms.uWidthFarGain, farWidthBlend);
     const bladeWidth = uniforms.uBladeWidth.mul(farWidthGain);
     const widthVariation = positionNoise.add(0.5);
-    const scaleX = widthVariation.mul(bladeWidth);
-    this.scaleNode = vec3(scaleX, scaleY, 1);
+    this.scaleNode = vec3(widthVariation.mul(bladeWidth), scaleY, 1);
 
+    const instanceNoise = bladeHash.mul(0.25).sub(0.125);
+    const spriteNoise = bladeHash.mul(31.7).fract().mul(2).sub(1);
     const spriteRotation = spriteNoise.mul(uniforms.uSpriteRotationRandomness);
+    const bendWeight = bladeHeight.mul(bladeHeight);
     const bendProfile = bendWeight.mul(uniforms.uBaseBending);
     const baseBending = positionNoise
       .sub(0.5)
       .mul(0.25)
       .add(instanceNoise)
       .mul(bendProfile);
-
     this.rotationNode = spriteRotation.add(baseBending);
 
-    const bladePosition = vec3(offsetX, offsetY, offsetZ);
     const bendDrop = bendXZ
       .dot(bendXZ)
       .div(scaleY.mul(config.BLADE_HEIGHT * 2))
@@ -100,145 +88,240 @@ export class GrassMaterial extends SpriteNodeMaterial {
     const bendOffset = vec3(bendXZ.x, bendDrop.negate(), bendXZ.y).mul(
       bendShape,
     );
-    const finalPosition = bladePosition.add(bendOffset);
+    const finalPosition = vec3(offsetX, offsetY, offsetZ).add(bendOffset);
     this.positionNode = finalPosition;
 
-    const proximityMask = float(1).sub(
-      smoothstep(0, uniforms.uAoRadiusSquared, distanceSquared),
-    );
-    const proximityOcclusion = varying(
-      uniforms.uAoScale.mul(0.25).mul(proximityMask),
-    );
-    const edgeDistance = bladeUv.x.mul(2).sub(1).abs();
-    const edgeMask = smoothstep(
-      uniforms.uAoRimSmoothness.negate(),
-      uniforms.uAoRimSmoothness,
-      edgeDistance,
-    );
-    const rootMask = float(1).sub(smoothstep(0.1, 0.85, bladeHeight));
-    const occlusion = float(1).sub(
-      proximityOcclusion.mul(edgeMask).mul(rootMask),
-    );
-
-    const colorVariation = mix(
-      1,
+    this.colorNode = this.computeColor(
+      lodIndex,
+      offsetX,
+      offsetY,
+      offsetZ,
+      bendXZ,
+      scaleY,
       positionNoise,
-      uniforms.uColorVariationStrength,
+      bakedShadowFactor,
+      bladeUv,
+      bladeHash,
+      distanceSquared,
+      finalPosition,
     );
-    const greenColor = mix(
-      uniforms.uBaseColorDark,
-      uniforms.uBaseColor,
-      colorVariation,
-    );
-    const rustMask = positionNoise
-      .mul(float(1).sub(positionNoise))
-      .mul(4)
-      .mul(uniforms.uRustVariationStrength);
-    const warmMask = positionNoise
-      .sub(0.6)
-      .mul(2.5)
-      .clamp()
-      .mul(uniforms.uWarmVariationStrength);
-    const bladeColor = varying(
-      mix(
-        mix(greenColor, uniforms.uRustColor, rustMask),
-        uniforms.uWarmColor,
-        warmMask,
-      ),
-    );
+  }
 
-    const shadow = varying(
-      mix(lightingManager.uBakedShadowBrightness, 1, bakedShadowFactor),
-    );
+  private computeColor = Fn<
+    [
+      lodIndex: Node<"uint">,
+      offsetX: Node<"float">,
+      offsetY: Node<"float">,
+      offsetZ: Node<"float">,
+      bendXZ: Node<"vec2">,
+      scaleY: Node<"float">,
+      positionNoise: Node<"float">,
+      bakedShadowFactor: Node<"float">,
+      bladeUv: Node<"vec2">,
+      bladeHash: Node<"float">,
+      distanceSquared: Node<"float">,
+      finalPosition: Node<"vec3">,
+    ],
+    Node<"vec3">
+  >(
+    ([
+      lodIndex,
+      offsetX,
+      offsetY,
+      offsetZ,
+      bendXZ,
+      scaleY,
+      positionNoise,
+      bakedShadowFactor,
+      bladeUv,
+      bladeHash,
+      distanceSquared,
+      finalPosition,
+    ]) => {
+      const bladeHeight = bladeUv.y;
+      const proximityMask = float(1).sub(
+        smoothstep(0, uniforms.uAoRadiusSquared, distanceSquared),
+      );
+      const proximityOcclusion = varying(
+        uniforms.uAoScale.mul(0.25).mul(proximityMask),
+      );
+      const edgeDistance = bladeUv.x.mul(2).sub(1).abs();
+      const edgeMask = smoothstep(
+        uniforms.uAoRimSmoothness.negate(),
+        uniforms.uAoRimSmoothness,
+        edgeDistance,
+      );
+      const rootMask = float(1).sub(smoothstep(0.1, 0.85, bladeHeight));
+      const occlusion = float(1).sub(
+        proximityOcclusion.mul(edgeMask).mul(rootMask),
+      );
+      const colorVariation = mix(
+        1,
+        positionNoise,
+        uniforms.uColorVariationStrength,
+      );
+      const greenColor = mix(
+        uniforms.uBaseColorDark,
+        uniforms.uBaseColor,
+        colorVariation,
+      );
+      const rustMask = positionNoise
+        .mul(float(1).sub(positionNoise))
+        .mul(4)
+        .mul(uniforms.uRustVariationStrength);
+      const warmMask = positionNoise
+        .sub(0.6)
+        .mul(2.5)
+        .clamp()
+        .mul(uniforms.uWarmVariationStrength);
+      const bladeColor = varying(
+        mix(
+          mix(greenColor, uniforms.uRustColor, rustMask),
+          uniforms.uWarmColor,
+          warmMask,
+        ),
+      );
+      const shadow = varying(
+        mix(lightingManager.uBakedShadowBrightness, 1, bakedShadowFactor),
+      );
+      const albedo = mix(
+        bladeColor,
+        uniforms.uTipColor,
+        smoothstep(0.25, 1, bladeHeight).mul(uniforms.uColorMixFactor),
+      );
 
-    const albedo = mix(
-      bladeColor,
-      uniforms.uTipColor,
-      smoothstep(0.25, 1, bladeHeight).mul(uniforms.uColorMixFactor),
-    );
-
-    const bladeAngle = bladeHash.mul(53.3).fract().mul(PI2);
-    const restingNormal = vec3(cos(bladeAngle), 0, sin(bladeAngle));
-    const bladeLength = scaleY.mul(config.BLADE_HEIGHT);
-    const bendShapeDerivative = uniforms.uBendControlPoint
-      .mul(2)
-      .mul(float(1).sub(bladeHeight.mul(2)))
-      .add(bladeHeight.mul(2));
-    const tangentTilt = bendShapeDerivative.mul(uniforms.uNormalTiltGain);
-    const bladeTangent = vec3(
-      bendXZ.x.mul(tangentTilt),
-      bladeLength,
-      bendXZ.y.mul(tangentTilt),
-    ).normalize();
-    const normalProjection = bladeTangent.mul(restingNormal.dot(bladeTangent));
-    const aggregateNormal = restingNormal.sub(normalProjection).normalize();
-    const bladeNormal = varying(aggregateNormal);
-
-    const nearDetailNode = float(1).sub(
-      smoothstep(20 * 20, 45 * 45, distanceSquared),
-    );
-    const nearDetail = varying(nearDetailNode);
-    const lightDirection = lightingManager.uSunDir.negate();
-    const twoSidedNdotL = aggregateNormal.dot(lightDirection).abs();
-    const diffuseFacing = mix(
-      0.65,
-      twoSidedNdotL,
-      nearDetailNode.mul(uniforms.uDiffuseContrast),
-    );
-    const sunDiffuse = lightingManager.uSunRadiance.mul(
-      mix(0.35, 1, diffuseFacing),
-    );
-
-    const skyVisibility = mix(uniforms.uRootSkyVisibility, 1, bladeHeight);
-    const hemiWeight = aggregateNormal.y
-      .mul(0.5)
-      .add(0.5)
-      .clamp()
-      .mul(skyVisibility);
-    const hemisphereLight = mix(
-      lightingManager.uHemiGroundColor,
-      lightingManager.uHemiSkyColor,
-      hemiWeight,
-    ).mul(lightingManager.uHemiIntensity);
-
-    const sceneLighting = varying(
-      hemisphereLight.add(sunDiffuse).mul(uniforms.uLightExposure),
-    );
-
-    const worldPosition = modelWorldMatrix.mul(vec4(finalPosition, 1)).xyz;
-    const viewDirectionNode = cameraPosition.sub(worldPosition).normalize();
-    const viewDirection = varying(viewDirectionNode);
-    const viewSunAlignment = varying(
-      viewDirectionNode.xz
+      const bladeAngle = bladeHash.mul(53.3).fract().mul(PI2);
+      const restingNormal = vec3(cos(bladeAngle), 0, sin(bladeAngle));
+      const lightDirection = lightingManager.uSunDir.negate();
+      const worldPosition = vec3(
+        offsetX.add(uniforms.uPlayerPosition.x),
+        offsetY,
+        offsetZ.add(uniforms.uPlayerPosition.z),
+      );
+      const viewDirection = cameraPosition.sub(worldPosition).normalize();
+      const twoSidedNdotL = restingNormal.dot(lightDirection).abs().toVar();
+      const hemiNormalWeight = float(0.5).toVar();
+      const grazing = float(1)
+        .sub(restingNormal.dot(viewDirection).abs().clamp())
+        .toVar();
+      const localBacklight = saturate(
+        restingNormal.dot(lightDirection).negate(),
+      ).toVar();
+      const viewSunAlignment = viewDirection.xz
         .normalize()
         .dot(lightingManager.uSunDir.xz.normalize())
         .mul(0.5)
         .add(0.5)
-        .clamp(),
-    );
+        .clamp()
+        .toVar();
 
-    const grazing = float(1).sub(bladeNormal.dot(viewDirection).abs().clamp());
-    const grazingSheen = grazing
-      .mul(grazing)
-      .mul(mix(0.25, 1, viewSunAlignment))
-      .mul(uniforms.uHighlightStrength);
-    const localBacklight = saturate(bladeNormal.dot(lightDirection).negate());
-    const transmission = viewSunAlignment
-      .mul(mix(0.35, 1, localBacklight))
-      .mul(uniforms.uBacklightStrength);
-    const highlightHeight = smoothstep(0.1, 0.9, bladeHeight);
-    const lightingDetail = nearDetail.mul(highlightHeight).mul(shadow);
+      If(lodIndex.lessThan(config.LOD_COUNT - 1), () => {
+        const cameraOffset = vec3(offsetX, 0, offsetZ)
+          .add(uniforms.uPlayerPosition)
+          .sub(uniforms.uCameraPosition);
+        const cameraDistanceSquared = cameraOffset.xz.dot(cameraOffset.xz);
+        const detailStrength = float(1).sub(
+          smoothstep(
+            uniforms.uLod0RadiusSquared,
+            uniforms.uLod1RadiusSquared,
+            cameraDistanceSquared,
+          ),
+        );
+        const bladeLength = scaleY.mul(config.BLADE_HEIGHT);
+        const bendShapeDerivative = uniforms.uBendControlPoint
+          .mul(2)
+          .mul(float(1).sub(bladeHeight.mul(2)))
+          .add(bladeHeight.mul(2));
+        const tangentTilt = bendShapeDerivative.mul(uniforms.uNormalTiltGain);
+        const bladeTangent = vec3(
+          bendXZ.x.mul(tangentTilt),
+          bladeLength,
+          bendXZ.y.mul(tangentTilt),
+        ).normalize();
+        const normalProjection = bladeTangent.mul(
+          restingNormal.dot(bladeTangent),
+        );
+        const aggregateNormal = restingNormal.sub(normalProjection).normalize();
+        const detailedViewDirection = cameraPosition
+          .sub(modelWorldMatrix.mul(vec4(finalPosition, 1)).xyz)
+          .normalize();
+        const detailedViewSunAlignment = detailedViewDirection.xz
+          .normalize()
+          .dot(lightingManager.uSunDir.xz.normalize())
+          .mul(0.5)
+          .add(0.5)
+          .clamp();
 
-    const diffuseColor = albedo.mul(shadow).mul(occlusion).mul(sceneLighting);
-    const sheenColor = lightingManager.uSunRadiance.mul(
-      grazingSheen.mul(lightingDetail),
-    );
-    const transmittedColor = mix(albedo, lightingManager.uSunColor, 0.55).mul(
-      transmission.mul(lightingDetail),
-    );
+        twoSidedNdotL.assign(
+          mix(
+            twoSidedNdotL,
+            aggregateNormal.dot(lightDirection).abs(),
+            detailStrength,
+          ),
+        );
+        hemiNormalWeight.assign(
+          mix(
+            hemiNormalWeight,
+            aggregateNormal.y.mul(0.5).add(0.5).clamp(),
+            detailStrength,
+          ),
+        );
+        grazing.assign(
+          mix(
+            grazing,
+            float(1).sub(
+              aggregateNormal.dot(detailedViewDirection).abs().clamp(),
+            ),
+            detailStrength,
+          ),
+        );
+        localBacklight.assign(
+          mix(
+            localBacklight,
+            saturate(aggregateNormal.dot(lightDirection).negate()),
+            detailStrength,
+          ),
+        );
+        viewSunAlignment.assign(
+          mix(viewSunAlignment, detailedViewSunAlignment, detailStrength),
+        );
+      });
 
-    const shadedColor = diffuseColor.add(sheenColor).add(transmittedColor);
-    const lodDebugColor = uniforms.uLodDebugColors.element(lodIndex);
-    this.colorNode = mix(shadedColor, lodDebugColor, uniforms.uLodDebugEnabled);
-  }
+      const diffuseFacing = mix(0.65, twoSidedNdotL, uniforms.uDiffuseContrast);
+      const sunDiffuse = lightingManager.uSunRadiance.mul(
+        mix(0.35, 1, diffuseFacing),
+      );
+      const skyVisibility = mix(uniforms.uRootSkyVisibility, 1, bladeHeight);
+      const hemiWeight = hemiNormalWeight.mul(skyVisibility);
+      const hemisphereLight = mix(
+        lightingManager.uHemiGroundColor,
+        lightingManager.uHemiSkyColor,
+        hemiWeight,
+      ).mul(lightingManager.uHemiIntensity);
+      const sceneLighting = varying(
+        hemisphereLight.add(sunDiffuse).mul(uniforms.uLightExposure),
+      );
+      const bladeGrazing = varying(grazing);
+      const bladeBacklight = varying(localBacklight);
+      const bladeViewSunAlignment = varying(viewSunAlignment);
+      const grazingSheen = bladeGrazing
+        .mul(bladeGrazing)
+        .mul(mix(0.25, 1, bladeViewSunAlignment))
+        .mul(uniforms.uHighlightStrength);
+      const transmission = bladeViewSunAlignment
+        .mul(mix(0.35, 1, bladeBacklight))
+        .mul(uniforms.uBacklightStrength);
+      const detailStrength = smoothstep(0.1, 0.9, bladeHeight).mul(shadow);
+      const diffuseColor = albedo.mul(shadow).mul(occlusion).mul(sceneLighting);
+      const sheenColor = lightingManager.uSunRadiance.mul(
+        grazingSheen.mul(detailStrength),
+      );
+      const transmittedColor = mix(albedo, lightingManager.uSunColor, 0.55).mul(
+        transmission.mul(detailStrength),
+      );
+      const shadedColor = diffuseColor.add(sheenColor).add(transmittedColor);
+      const lodDebugColor = uniforms.uLodDebugColors.element(lodIndex);
+      return mix(shadedColor, lodDebugColor, uniforms.uLodDebugEnabled);
+    },
+  );
 }

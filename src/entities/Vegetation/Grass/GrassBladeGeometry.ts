@@ -7,7 +7,7 @@ import {
 type GrassBladeGeometryParams = {
   nSegments: number;
   bladeHeight: number;
-  bladeWidth: number;
+  bladeWidth?: number;
 };
 
 const getBladeHalfWidth = (t: number, halfWidthBase: number) => {
@@ -20,7 +20,7 @@ export class GrassBladeGeometry extends InstancedBufferGeometry {
   constructor({
     nSegments,
     bladeHeight,
-    bladeWidth,
+    bladeWidth = 1,
   }: GrassBladeGeometryParams) {
     super();
 

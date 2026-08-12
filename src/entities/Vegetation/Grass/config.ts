@@ -60,8 +60,8 @@ export const uniforms = {
   // LOD
   uLod0Radius: uniform(15),
   uLod0RadiusSquared: uniform(15 * 15),
-  uLod1Radius: uniform(30),
-  uLod1RadiusSquared: uniform(30 * 30),
+  uLod1Radius: uniform(35),
+  uLod1RadiusSquared: uniform(35 * 35),
   uLodEnabled: uniform(1),
   uLodDebugEnabled: uniform(0),
   uLodDebugColors: uniformArray(
