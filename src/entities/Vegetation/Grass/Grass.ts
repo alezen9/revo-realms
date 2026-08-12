@@ -26,8 +26,18 @@ export default class Grass {
   // every LOD mesh rides the same wrapping tile, so only the group moves
   private tile = new Group();
   private playerDeltaXZ = new Vector2(0, 0);
+  private drawProfiles: typeof config.LOD_DRAW_PROFILES;
+  private hasRegisteredMonitoringProvider = false;
 
   constructor() {
+    const isLodEnabled = rendererManager.renderer.hasFeature(
+      INDIRECT_FIRST_INSTANCE_FEATURE,
+    );
+    this.drawProfiles = isLodEnabled
+      ? config.LOD_DRAW_PROFILES
+      : [config.FALLBACK_DRAW_PROFILE];
+    if (!isLodEnabled) this.configureFallback();
+
     this.computeTask = rendererManager.createComputeTask({
       label: "Grass",
       init: this.compute.computeInit,
@@ -36,29 +46,22 @@ export default class Grass {
         this.compute.computeUpdate,
       ],
     });
-    config.LOD_SEGMENTS.forEach((segments, lod) =>
-      this.tile.add(this.createMesh(segments, lod)),
-    );
+    this.drawProfiles.forEach(({ segments }, lod) => {
+      this.tile.add(this.createMesh(segments, lod));
+    });
     sceneManager.scene.add(this.tile);
-    void this.initComputeTaskAsync();
+    void this.computeTask.init();
 
     eventsManager.on("engine-render-update", this.onEngineUpdate);
     debugGrass(uniforms, config);
   }
 
-  private async initComputeTaskAsync() {
-    const isInitialized = await this.computeTask.init();
-    if (!isInitialized) return;
-
-    // LOD regions rely on a non zero firstInstance in the indirect draw
-    // arguments, which WebGPU gates behind this feature
-    if (!rendererManager.renderer.hasFeature(INDIRECT_FIRST_INSTANCE_FEATURE)) {
-      console.error(
-        `[Grass] "${INDIRECT_FIRST_INSTANCE_FEATURE}" is unavailable, every LOD will draw the nearest region`,
-      );
-    }
-
-    monitoringManager?.registerProvider("grass", this.getMonitoringStatsAsync);
+  private configureFallback() {
+    const { indexCount, segments } = config.FALLBACK_DRAW_PROFILE;
+    this.compute.configureSingleDraw(indexCount);
+    console.warn(
+      `[Grass] "${INDIRECT_FIRST_INSTANCE_FEATURE}" is unavailable; using one ${segments}-segment draw`,
+    );
   }
 
   private createMesh(segments: number, lod: number) {
@@ -126,10 +129,17 @@ export default class Grass {
 
     try {
       await computePromise;
+      this.registerMonitoringProvider();
     } catch {
       this.playerDeltaXZ.x += deltaX;
       this.playerDeltaXZ.y += deltaZ;
     }
+  }
+
+  private registerMonitoringProvider() {
+    if (!monitoringManager || this.hasRegisteredMonitoringProvider) return;
+    monitoringManager.registerProvider("grass", this.getMonitoringStatsAsync);
+    this.hasRegisteredMonitoringProvider = true;
   }
 
   private getMonitoringStatsAsync = async (): Promise<GrassMonitoringStats> => {
@@ -137,7 +147,7 @@ export default class Grass {
       this.compute.indirectDrawAttribute,
     );
     const drawArguments = new Uint32Array(buffer);
-    const renderedPerLod = config.LOD_SEGMENTS.map(
+    const renderedPerLod = this.drawProfiles.map(
       (_, lod) =>
         drawArguments[
           lod * config.INDIRECT_ARGS_STRIDE + config.INSTANCE_COUNT_INDEX
@@ -147,8 +157,9 @@ export default class Grass {
     let rendered = 0;
     let totalTriangles = 0;
     let renderedTriangles = 0;
-    for (let lod = 0; lod < config.LOD_COUNT; lod++) {
-      const trianglesPerBlade = config.LOD_INDEX_COUNTS[lod] / 3;
+    for (let lod = 0; lod < this.drawProfiles.length; lod++) {
+      const { indexCount } = this.drawProfiles[lod];
+      const trianglesPerBlade = indexCount / 3;
       rendered += renderedPerLod[lod];
       // every LOD geometry is allocated at COUNT instances, so the scene
       // triangle substitution in MonitoringManager must account for all of them
@@ -160,8 +171,8 @@ export default class Grass {
       rendered,
       renderedPerLod,
       total: config.COUNT,
-      segmentsPerLod: config.LOD_SEGMENTS,
-      drawCalls: config.LOD_COUNT,
+      segmentsPerLod: this.drawProfiles.map(({ segments }) => segments),
+      drawCalls: this.drawProfiles.length,
       totalTriangles,
       renderedTriangles,
     };

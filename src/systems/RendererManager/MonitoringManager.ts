@@ -164,7 +164,7 @@ export class MonitoringManager {
         rate: physicsRate,
       },
       render: {
-        calls: this.drawCalls,
+        drawCalls: this.drawCalls,
         triangles,
         grass,
       },

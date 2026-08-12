@@ -136,7 +136,7 @@
 		<div class="row">
 			<span class="category">SYNC</span>
 			<span class="metric">
-				<span class="metric-label">Display</span>
+				<span class="metric-label">Refresh</span>
 				<span class="metric-value">{formatInteger(snapshot.sync.refreshHz)} Hz</span>
 			</span>
 			<span class="metric">
@@ -152,7 +152,7 @@
 		<div class="row">
 			<span class="category">PHYSICS</span>
 			<span class="metric">
-				<span class="metric-label">Rate</span>
+				<span class="metric-label">Steps/s</span>
 				<span class="metric-value">{formatDecimal(snapshot.physics.rate)}/s</span>
 			</span>
 			<span class="metric"></span>
@@ -162,8 +162,8 @@
 		<div class="row">
 			<span class="category">RENDER</span>
 			<span class="metric">
-				<span class="metric-label"># Calls</span>
-				<span class="metric-value">{formatInteger(snapshot.render.calls)}</span>
+				<span class="metric-label">Draw Calls</span>
+				<span class="metric-value">{formatInteger(snapshot.render.drawCalls)}</span>
 			</span>
 			<span class="metric">
 				<span class="metric-label"># Tris</span>
@@ -176,7 +176,7 @@
 			<div class="row">
 				<span class="category">GRASS</span>
 				<span class="metric">
-					<span class="metric-label"># Blades</span>
+					<span class="metric-label">Visible</span>
 					<span class="metric-value">{formatCompact(snapshot.render.grass.rendered)}</span>
 				</span>
 				<span class="metric">
@@ -190,7 +190,7 @@
 					>
 				</span>
 				<span class="metric">
-					<span class="metric-label"># Draws</span>
+					<span class="metric-label">Draw Calls</span>
 					<span class="metric-value">{formatInteger(snapshot.render.grass.drawCalls)}</span>
 				</span>
 			</div>
@@ -198,12 +198,12 @@
 				<span class="category"></span>
 				{#each snapshot.render.grass.renderedPerLod as bladeCount, lod (lod)}
 					<span class="metric">
-						<span class="metric-label"># LOD{lod}</span>
+						<span class="metric-label"># LOD {lod}</span>
 						<span class="metric-value">{formatCompact(bladeCount)}</span>
 					</span>
 				{/each}
 				<span class="metric">
-					<span class="metric-label">Segments</span>
+					<span class="metric-label"># Segments</span>
 					<span class="metric-value">{snapshot.render.grass.segmentsPerLod.join('/')}</span>
 				</span>
 			</div>

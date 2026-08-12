@@ -24,7 +24,7 @@ export type MonitoringSnapshot = {
     rate: number;
   };
   render: {
-    calls: number;
+    drawCalls: number;
     triangles: number;
     grass: GrassMonitoringStats | null;
   };

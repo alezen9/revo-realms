@@ -17,6 +17,7 @@ import {
   inputManager,
   lightingManager,
   physicsManager,
+  physicsScheduler,
   sceneManager,
 } from "../../systems";
 import { playerConfig as config } from "./config";
@@ -39,6 +40,7 @@ export default class Player {
   private water: PlayerWater;
 
   private yawInRadians = 0;
+  private previousYawInRadians = 0;
   private yawQuaternion = new Quaternion();
   private newLinVel = new Vector3();
   private newAngVel = new Vector3();
@@ -59,8 +61,6 @@ export default class Player {
     this.visualRoot = this.createVisualRoot(this.mesh);
     sceneManager.scene.add(this.visualRoot);
 
-    lightingManager.setTarget(this.visualRoot);
-
     const rigidBodyDesc = this.createRigidBodyDesc();
     this.rigidBody = physicsManager.world.createRigidBody(rigidBodyDesc);
     const colliderDesc = this.createColliderDesc();
@@ -77,6 +77,8 @@ export default class Player {
     eventsManager.on("engine-after-physics", this.onAfterPhysics);
     eventsManager.on("engine-render-update", this.onEngineUpdate);
     eventsManager.on("engine-render-update-throttle-64x", this.onGateUpdate);
+    // light tracking must run after visual interpolation
+    lightingManager.setTarget(this.visualRoot);
     debugPlayer(this.collider);
   }
 
@@ -145,7 +147,14 @@ export default class Player {
     } = config;
 
     this.visual.interpolate(delta);
-    this.camera.update(delta, this.visualRoot.position, this.yawInRadians);
+    const yawOffset = this.yawInRadians - this.previousYawInRadians;
+    const shortestYawOffset = Math.atan2(
+      Math.sin(yawOffset),
+      Math.cos(yawOffset),
+    );
+    const interpolatedYaw =
+      this.previousYawInRadians + shortestYawOffset * physicsScheduler.alpha;
+    this.camera.update(delta, this.visualRoot.position, interpolatedYaw);
 
     const { x, y, z } = this.rigidBody.angvel();
     const spinRate = Math.hypot(x, y, z);
@@ -273,6 +282,7 @@ export default class Player {
   private updateYaw(delta: number) {
     const { TURN_SPEED_IN_RADIANS_PER_SECOND: turnSpeed } = config;
 
+    this.previousYawInRadians = this.yawInRadians;
     if (inputManager.isLeftward()) this.yawInRadians += turnSpeed * delta;
     if (inputManager.isRightward()) this.yawInRadians -= turnSpeed * delta;
 

@@ -9,6 +9,7 @@ import {
 import { type SceneManager } from "./SceneManager";
 import { type DebugManager } from "./DebugManager";
 import { type EventsManager } from "./EventsManager";
+import { type State } from "../Game";
 import { uniform } from "three/tsl";
 import { srgbColorTarget } from "../utils/TweakpaneColor";
 
@@ -34,6 +35,7 @@ export class LightingManager {
   private directionalLight: DirectionalLight;
   private hemisphereLight: HemisphereLight;
   private fog: FogExp2;
+  private eventsManager: EventsManager;
 
   sunDirection = config.LIGHT_POSITION_OFFSET.clone().normalize().negate();
   uSunDir = uniform(this.sunDirection);
@@ -53,6 +55,7 @@ export class LightingManager {
     debugManager: DebugManager,
     eventsManager: EventsManager,
   ) {
+    this.eventsManager = eventsManager;
     this.directionalLight = this.setupDirectionalLighting();
     sceneManager.scene.add(this.directionalLight);
 
@@ -64,13 +67,6 @@ export class LightingManager {
 
     eventsManager.on("engine-camera-change", () => {
       sceneManager.scene.fog = sceneManager.scene.fog ? null : this.fog;
-    });
-
-    eventsManager.on("engine-render-update-throttle-4x", ({ player }) => {
-      this.directionalLight.position
-        .copy(player.position)
-        .add(config.LIGHT_POSITION_OFFSET);
-      this.sunDirection.copy(config.LIGHT_POSITION_OFFSET).normalize().negate();
     });
 
     this.debugLight(debugManager, sceneManager);
@@ -110,6 +106,13 @@ export class LightingManager {
     const fog = new FogExp2(config.fogColor, config.fogDensity);
     return fog;
   }
+
+  private onEngineUpdate = ({ player }: State) => {
+    this.directionalLight.position
+      .copy(player.position)
+      .add(config.LIGHT_POSITION_OFFSET);
+    this.sunDirection.copy(config.LIGHT_POSITION_OFFSET).normalize().negate();
+  };
 
   private debugLight(debugManager: DebugManager, sceneManager: SceneManager) {
     const lightFolder = debugManager.panel.addFolder({ title: "💡 Light" });
@@ -216,5 +219,6 @@ export class LightingManager {
 
   setTarget(target: Object3D) {
     this.directionalLight.target = target;
+    this.eventsManager.on("engine-render-update", this.onEngineUpdate);
   }
 }

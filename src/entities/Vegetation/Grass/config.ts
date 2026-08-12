@@ -4,21 +4,27 @@ import { uniform, uniformArray } from "three/tsl";
 const getBladeIndexCount = (segments: number) =>
   Math.max(0, segments - 1) * 6 + 3;
 
+const getDrawProfile = (segments: number) => ({
+  segments,
+  indexCount: getBladeIndexCount(segments),
+});
+
 const getConfig = () => {
   const BLADE_WIDTH = 0.075;
   const BLADE_HEIGHT = 1.75;
   const TILE_SIZE = 130;
   // near to far, one indirect draw per entry
-  const LOD_SEGMENTS = [8, 4, 2];
+  const LOD_DRAW_PROFILES = [8, 4, 2].map(getDrawProfile);
+  const FALLBACK_DRAW_PROFILE = getDrawProfile(4);
   const BLADES_PER_SIDE = 512 + 512;
   const COUNT = BLADES_PER_SIDE * BLADES_PER_SIDE;
   const MIN_VISIBLE_SCALE = 0.15;
   const DETAILED_WIND_TRANSITION_WIDTH = 5;
 
   return {
-    LOD_SEGMENTS,
-    LOD_INDEX_COUNTS: LOD_SEGMENTS.map(getBladeIndexCount),
-    LOD_COUNT: LOD_SEGMENTS.length,
+    LOD_DRAW_PROFILES,
+    LOD_COUNT: LOD_DRAW_PROFILES.length,
+    FALLBACK_DRAW_PROFILE,
     // indexCount, instanceCount, firstIndex, baseVertex, firstInstance
     INDIRECT_ARGS_STRIDE: 5,
     INDEX_COUNT_INDEX: 0,
@@ -54,8 +60,9 @@ export const uniforms = {
   // LOD
   uLod0Radius: uniform(15),
   uLod0RadiusSquared: uniform(15 * 15),
-  uLod1Radius: uniform(40),
-  uLod1RadiusSquared: uniform(40 * 40),
+  uLod1Radius: uniform(30),
+  uLod1RadiusSquared: uniform(30 * 30),
+  uLodEnabled: uniform(1),
   uLodDebugEnabled: uniform(0),
   uLodDebugColors: uniformArray(
     [new Color("green"), new Color("blue"), new Color("red")],
@@ -102,8 +109,8 @@ export const uniforms = {
 
   // Color
   uBaseColorDark: uniform(new Color(0.09, 0.15, 0.075).convertSRGBToLinear()),
-  uBaseColor: uniform(new Color(0.33, 0.43, 0.3).convertSRGBToLinear()),
-  uTipColor: uniform(new Color(0.4, 0.43, 0.32).convertSRGBToLinear()),
+  uBaseColor: uniform(new Color(0.23, 0.38, 0.19).convertSRGBToLinear()),
+  uTipColor: uniform(new Color(0.35, 0.43, 0.32).convertSRGBToLinear()),
   uWarmColor: uniform(new Color(0.66, 0.53, 0.41).convertSRGBToLinear()),
   uRustColor: uniform(new Color(0.38, 0.19, 0.11).convertSRGBToLinear()),
   uColorMixFactor: uniform(0.4),

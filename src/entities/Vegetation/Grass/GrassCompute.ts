@@ -63,12 +63,13 @@ type StochasticKeepArgs = [
 // each draw at its own region of the visible index list, which is how the material
 // resolves its LOD without being told: instance_index starts at firstInstance.
 const createIndirectDrawArguments = () => {
-  const { LOD_COUNT, INDIRECT_ARGS_STRIDE, LOD_INDEX_COUNTS, COUNT } = config;
+  const { LOD_DRAW_PROFILES, LOD_COUNT, INDIRECT_ARGS_STRIDE, COUNT } = config;
   const drawArguments = new Uint32Array(LOD_COUNT * INDIRECT_ARGS_STRIDE);
 
   for (let lod = 0; lod < LOD_COUNT; lod++) {
     const argsBase = lod * INDIRECT_ARGS_STRIDE;
-    drawArguments[argsBase + config.INDEX_COUNT_INDEX] = LOD_INDEX_COUNTS[lod];
+    drawArguments[argsBase + config.INDEX_COUNT_INDEX] =
+      LOD_DRAW_PROFILES[lod].indexCount;
     drawArguments[argsBase + config.FIRST_INSTANCE_INDEX] = lod * COUNT;
   }
 
@@ -168,6 +169,11 @@ export class GrassCompute {
 
   get visibleIndexBuffer() {
     return this.visibleIndices;
+  }
+
+  configureSingleDraw(indexCount: number) {
+    uniforms.uLodEnabled.value = 0;
+    this.indirectDrawAttribute.array[config.INDEX_COUNT_INDEX] = indexCount;
   }
 
   computeInit = Fn(() => {
@@ -551,15 +557,19 @@ export class GrassCompute {
           bladeState.assign(setBend(bladeState, bendXZ.add(trailBend)));
 
           // 0, 1 or 2 without branching: each radius passed contributes one step
+          const cameraOffset = worldPos.xz.sub(uniforms.uCameraPosition.xz);
+          const cameraDistanceSquared = cameraOffset.dot(cameraOffset);
           const isPastNearRadius = step(
             uniforms.uLod0RadiusSquared,
-            distanceSquared,
+            cameraDistanceSquared,
           );
           const isPastMidRadius = step(
             uniforms.uLod1RadiusSquared,
-            distanceSquared,
+            cameraDistanceSquared,
           );
-          const lodIndex = uint(isPastNearRadius.add(isPastMidRadius));
+          const lodIndex = uint(isPastNearRadius.add(isPastMidRadius)).mul(
+            uint(uniforms.uLodEnabled),
+          );
 
           const drawArgsBase = lodIndex.mul(config.INDIRECT_ARGS_STRIDE);
           const instanceCountIndex = drawArgsBase.add(
