@@ -90,12 +90,6 @@ export const debugGrass = (uniforms: GrassUniforms, config: GrassConfig) => {
     max: 1,
     step: 0.01,
   });
-  lighting.addBinding(uniforms.uNormalTiltGain, "value", {
-    label: "Normal tilt gain",
-    min: 0,
-    max: 4,
-    step: 0.05,
-  });
 
   const ao = folder.addFolder({ title: "AO" });
   ao.addBinding(uniforms.uAoScale, "value", {

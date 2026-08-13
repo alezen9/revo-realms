@@ -10,7 +10,7 @@ const getDrawProfile = (segments: number) => ({
 });
 
 const getConfig = () => {
-  const BLADE_WIDTH = 0.075;
+  const BLADE_WIDTH = 0.1;
   const BLADE_HEIGHT = 1.75;
   const TILE_SIZE = 130;
   // near to far, one indirect draw per entry
@@ -130,7 +130,6 @@ export const uniforms = {
   uHighlightStrength: uniform(0.02),
   uBacklightStrength: uniform(0.13),
   uRootSkyVisibility: uniform(0.6),
-  uNormalTiltGain: uniform(1),
 
   // Stochastic keep
   uFullDensityRadius: uniform(16),
