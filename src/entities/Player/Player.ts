@@ -352,6 +352,10 @@ export default class Player {
     return this.visualRoot.position;
   }
 
+  get yaw() {
+    return this.yawInRadians;
+  }
+
   get radius() {
     return config.RADIUS_IN_METERS;
   }

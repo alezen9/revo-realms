@@ -4,8 +4,31 @@ import { mountUi } from "./ui/mountUi";
 import { setupAsync } from "./systems/setupAsync";
 import { eventsManager, prewarmManager } from "./systems";
 
+const hasWebGpuSupportAsync = async () => {
+  if (!navigator.gpu) return false;
+
+  try {
+    const adapter = await navigator.gpu.requestAdapter({
+      powerPreference: "high-performance",
+    });
+    return adapter !== null;
+  } catch {
+    return false;
+  }
+};
+
 const bootstrap = async () => {
   mountUi();
+
+  const doesSupportWebGpu = await hasWebGpuSupportAsync();
+  if (!doesSupportWebGpu) {
+    console.error("[main] Startup failed.", "WebGPU is required");
+    eventsManager.emit("engine-loading-failed", {
+      headline: "WebGPU is required",
+      hint: "This experience relies on WebGPU-specific rendering and simulation features. Please use a browser and device that support WebGPU.",
+    });
+    return;
+  }
 
   try {
     await setupAsync();

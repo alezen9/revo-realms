@@ -2,9 +2,10 @@
 	import { onMount } from "svelte"
 	import { fade } from "svelte/transition"
 	import { eventsManager } from "../../systems"
+	import type { LoadingFailure } from "../../systems/EventsManager"
 
 	let progress = $state(0)
-	let hasFailed = $state(false)
+	let failure = $state<LoadingFailure | null>(null)
 
 	let coreProgress = 0
 	let resourcesProgress = 0
@@ -27,8 +28,11 @@
 				progress = coreProgress + resourcesProgress
 				if (progress === 100) stopLoadingSubscriptions()
 			}),
-			eventsManager.on("engine-loading-failed", () => {
-				hasFailed = true
+			eventsManager.on("engine-loading-failed", loadingFailure => {
+				failure = loadingFailure ?? {
+					headline: "Something went wrong",
+					hint: "Please reload the page to try again",
+				}
 				stopLoadingSubscriptions()
 			}),
 		]
@@ -37,10 +41,10 @@
 	})
 </script>
 
-{#if hasFailed}
+{#if failure}
 	<div class="screen failed" in:fade={{ duration: 600 }}>
-		<span class="headline">Something went wrong</span>
-		<span class="hint">Please reload the page to try again</span>
+		<span class="headline">{failure.headline}</span>
+		<span class="hint">{failure.hint}</span>
 	</div>
 {:else if progress < 100}
 	<div class="screen" out:fade={{ delay: 80, duration: 1000 }}>{progress}%</div>

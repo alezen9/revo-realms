@@ -4,6 +4,11 @@ import { type Sizes, type State } from "../Game";
 type UpdateEvent = (state: State) => void;
 type ResizeEvent = (sizes: Sizes) => void;
 
+export type LoadingFailure = {
+  headline: string;
+  hint: string;
+};
+
 export type MonitoringSnapshot = {
   fps: {
     current: number;
@@ -61,7 +66,7 @@ type EngineEvents = {
   "engine-loading-resources-progress": (percentage: number) => void;
   "engine-loading-audio-progress": (percentage: number) => void;
   "engine-loading-core-progress": (percentage: number) => void;
-  "engine-loading-failed": VoidFunction;
+  "engine-loading-failed": (failure?: LoadingFailure) => void;
   "engine-monitoring-update": (snapshot: MonitoringSnapshot) => void;
   "engine-time-scale": (scale: number) => void;
   "engine-pause-change": (paused: boolean) => void;
