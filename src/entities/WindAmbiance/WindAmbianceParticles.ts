@@ -79,6 +79,10 @@ class WindParticlesSsbo {
     assetManager.resources.heightmap.userData.max,
   );
 
+  constructor() {
+    this.buffer.value.name = "windParticles.particles";
+  }
+
   get computeBuffer() {
     return this.buffer;
   }

@@ -1,129 +1,156 @@
+import { attach, type Agrimensor } from "agrimensor";
 import type { FrameScheduler } from "../FrameScheduler";
-import type { PhysicsScheduler } from "../PhysicsScheduler";
 import type {
+  DeviceGpuMetrics,
+  DeviceMetrics,
   EventsManager,
   GrassMonitoringStats,
   MonitoringSnapshot,
 } from "../EventsManager";
 import { type RendererManager } from "./RendererManager";
 
-const SNAPSHOT_INTERVAL_MS = 1000;
+const SNAPSHOT_INTERVAL_MS = 1_000;
 const LATE_FRAME_TOLERANCE_MS = 1;
+const LARGEST_RESOURCE_COUNT = 5;
 
-type MonitoringProviders = {
-  grass: () => Promise<GrassMonitoringStats>;
+type GrassProvider = () => Promise<GrassMonitoringStats>;
+
+type DeviceAccumulator = {
+  gpuExecutionSum: number;
+  gpuExecutionCount: number;
+  gpuGapMs: number;
 };
 
-type MonitoringProviderValues = {
-  grass: GrassMonitoringStats | null;
-};
-
-type MonitoringProviderLoading = {
-  grass: boolean;
-};
+const createAccumulator = (): DeviceAccumulator => ({
+  gpuExecutionSum: 0,
+  gpuExecutionCount: 0,
+  gpuGapMs: 0,
+});
 
 export class MonitoringManager {
   private eventsManager: EventsManager;
   private rendererManager: RendererManager;
   private frameScheduler: FrameScheduler;
-  private physicsScheduler: PhysicsScheduler;
+  private agrimensor?: Agrimensor;
   private lastSnapshotUpdate = performance.now();
   private lastRenderSampleTime = 0;
   private frameCount = 0;
-  private physicsStepCount = 0;
-  private frameMsSum = 0;
-  private frameMsCount = 0;
   private lateFrames = 0;
-  private targetFps = 0;
-  private effectiveFps = 0;
-  private refreshHz = 0;
-  private divisor = 1;
-  private alpha = 0;
-  private drawCalls = 0;
-  private triangles = 0;
-  private providers: Partial<MonitoringProviders> = {};
-  private providerValues: MonitoringProviderValues = { grass: null };
-  private providerLoading: MonitoringProviderLoading = { grass: false };
+  private device: DeviceAccumulator | null = null;
+  private grassProvider?: GrassProvider;
+  private grassStats: GrassMonitoringStats | null = null;
+  private isGrassPending = false;
   private readonly snapshotInterval: ReturnType<typeof window.setInterval>;
-  private readonly unsubscribePhysics: VoidFunction;
 
   constructor(
     eventsManager: EventsManager,
     rendererManager: RendererManager,
     frameScheduler: FrameScheduler,
-    physicsScheduler: PhysicsScheduler,
   ) {
     this.eventsManager = eventsManager;
     this.rendererManager = rendererManager;
     this.frameScheduler = frameScheduler;
-    this.physicsScheduler = physicsScheduler;
     this.snapshotInterval = window.setInterval(
       this.onSnapshotInterval,
       SNAPSHOT_INTERVAL_MS,
     );
-    this.unsubscribePhysics = this.eventsManager.on(
-      "engine-after-physics",
-      this.onPhysicsStep,
-    );
+    eventsManager.on("engine-renderer-ready", this.attachAgrimensor);
     import.meta.hot?.dispose(this.dispose);
   }
 
-  registerProvider<T extends keyof MonitoringProviders>(
-    name: T,
-    provider: MonitoringProviders[T],
-  ) {
-    this.providers[name] = provider;
+  setGrassProvider(provider: GrassProvider) {
+    this.grassProvider = provider;
   }
+
+  beginFrame() {
+    this.agrimensor?.beginRenderFrame();
+  }
+
+  // must run before assets and entities allocate, since agrimensor only tracks
+  // resources created after it attaches
+  private attachAgrimensor = () => {
+    const { backend } = this.rendererManager.renderer;
+    const device = "device" in backend ? backend.device : undefined;
+    if (!(device instanceof GPUDevice)) {
+      console.warn(
+        "[agrimensor] no WebGPU device on the backend; not attached",
+      );
+      return;
+    }
+    this.agrimensor = attach(device);
+  };
 
   sample(renderTimestamp: DOMHighResTimeStamp) {
     this.frameCount++;
 
-    this.targetFps = this.frameScheduler.targetFps;
-    this.effectiveFps = this.frameScheduler.effectiveFps;
-    this.refreshHz = this.frameScheduler.refreshHz;
-    this.divisor = this.frameScheduler.divisor;
-    this.alpha = this.physicsScheduler.alpha;
-
-    const budgetMs = 1000 / this.effectiveFps;
+    const budgetMs = 1000 / this.frameScheduler.effectiveFps;
     if (this.lastRenderSampleTime > 0) {
       const frameIntervalMs = renderTimestamp - this.lastRenderSampleTime;
-      this.frameMsSum += frameIntervalMs;
-      this.frameMsCount++;
       if (frameIntervalMs > budgetMs + LATE_FRAME_TOLERANCE_MS)
         this.lateFrames++;
     }
     this.lastRenderSampleTime = renderTimestamp;
 
-    const { render } = this.rendererManager.renderer.info;
-    this.drawCalls = render.drawCalls;
-    this.triangles = render.triangles;
+    this.accumulateDevice();
+  }
+
+  private accumulateDevice() {
+    const agrimensor = this.agrimensor;
+    if (!agrimensor) return;
+
+    const { gpu } = agrimensor.snapshot();
+    if (!gpu) return;
+
+    if (!this.device) this.device = createAccumulator();
+    const device = this.device;
+
+    const executionMs = gpu.submittedRenderAndComputePassExecutionInMs;
+    device.gpuExecutionSum += executionMs;
+    device.gpuExecutionCount++;
+    device.gpuGapMs = gpu.submittedRenderAndComputePassGapSumInMs;
   }
 
   private onSnapshotInterval = () => {
-    this.refreshProviders();
+    this.refreshGrassStats();
     this.emitSnapshot();
   };
 
-  private onPhysicsStep = () => {
-    this.physicsStepCount++;
-  };
+  private async refreshGrassStats() {
+    if (!this.grassProvider || this.isGrassPending) return;
 
-  private refreshProviders() {
-    this.refreshGrassProvider();
-  }
-
-  private async refreshGrassProvider() {
-    const provider = this.providers.grass;
-    if (!provider || this.providerLoading.grass) return;
-
-    this.providerLoading.grass = true;
+    this.isGrassPending = true;
     try {
-      this.providerValues.grass = await provider();
+      this.grassStats = await this.grassProvider();
     } catch (error) {
       console.error("[Monitoring] grass provider failed:", error);
     } finally {
-      this.providerLoading.grass = false;
+      this.isGrassPending = false;
     }
+  }
+
+  private buildDeviceMetrics(): DeviceMetrics | null {
+    const agrimensor = this.agrimensor;
+    if (!agrimensor) return null;
+
+    const { resources } = agrimensor.snapshot();
+    const accumulator = this.device;
+
+    let gpu: DeviceGpuMetrics | null = null;
+    if (accumulator && accumulator.gpuExecutionCount > 0) {
+      gpu = {
+        averageMs: accumulator.gpuExecutionSum / accumulator.gpuExecutionCount,
+        gapMs: accumulator.gpuGapMs,
+      };
+    }
+
+    return {
+      liveBytes: resources.liveResourceAllocationSumInBytes,
+      peakBytes: resources.liveResourceAllocationPeakInBytes,
+      textureBytes: resources.liveTextureAllocationSumInBytes,
+      bufferBytes: resources.liveBufferAllocationSumInBytes,
+      largestResources: agrimensor.largestResources(LARGEST_RESOURCE_COUNT),
+      gpu,
+    };
   }
 
   private emitSnapshot() {
@@ -134,53 +161,38 @@ export class MonitoringManager {
       return;
     }
 
-    const grass = this.providerValues.grass;
-    const triangles = grass
-      ? this.triangles - grass.totalTriangles + grass.renderedTriangles
-      : this.triangles;
-    const elapsedSeconds = elapsedMs / 1000;
-    const currentFps = this.frameCount / elapsedSeconds;
-    const averageFrameMs =
-      this.frameMsCount > 0 ? this.frameMsSum / this.frameMsCount : 0;
-    const physicsRate = this.physicsStepCount / elapsedSeconds;
+    const { effectiveFps, refreshHz } = this.frameScheduler;
+    const grass = this.grassStats;
+    const { triangles } = this.rendererManager.renderer.info.render;
 
     const snapshot: MonitoringSnapshot = {
       fps: {
-        current: currentFps,
-        effective: this.effectiveFps,
-        target: this.targetFps,
-      },
-      frame: {
-        budgetMs: 1000 / this.effectiveFps,
-        averageMs: averageFrameMs,
+        live: this.frameCount / (elapsedMs / 1000),
+        target: effectiveFps,
+        refreshHz,
         lateFrames: this.lateFrames,
       },
-      sync: {
-        refreshHz: this.refreshHz,
-        divisor: this.divisor,
-        alpha: this.alpha,
-      },
-      physics: {
-        rate: physicsRate,
-      },
-      render: {
-        drawCalls: this.drawCalls,
-        triangles,
-        grass,
-      },
+      frameBudgetMs: 1000 / effectiveFps,
+      sampleRateMs: SNAPSHOT_INTERVAL_MS,
+      sceneTriangles: grass
+        ? triangles - grass.allocatedTriangles + grass.renderedTriangles
+        : triangles,
+      grass,
+      device: this.buildDeviceMetrics(),
     };
 
     this.eventsManager.emit("engine-monitoring-update", snapshot);
     this.lastSnapshotUpdate = now;
     this.frameCount = 0;
-    this.physicsStepCount = 0;
-    this.frameMsSum = 0;
-    this.frameMsCount = 0;
     this.lateFrames = 0;
+    this.device = null;
   }
 
   private dispose = () => {
     window.clearInterval(this.snapshotInterval);
-    this.unsubscribePhysics();
+    const agrimensor = this.agrimensor;
+    // dropped first: beginRenderFrame throws on a destroyed instance
+    this.agrimensor = undefined;
+    agrimensor?.destroy();
   };
 }

@@ -102,6 +102,7 @@ export default class Game {
 
     this.renderState.delta = timeManager.consumeRenderDelta();
 
+    monitoringManager?.beginFrame();
     eventsManager.emit("engine-render-update", this.renderState);
     rendererManager.render();
 

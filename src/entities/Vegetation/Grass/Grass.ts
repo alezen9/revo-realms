@@ -136,7 +136,7 @@ export default class Grass {
 
   private registerMonitoringProvider() {
     if (!monitoringManager || this.hasRegisteredMonitoringProvider) return;
-    monitoringManager.registerProvider("grass", this.getMonitoringStatsAsync);
+    monitoringManager.setGrassProvider(this.getMonitoringStatsAsync);
     this.hasRegisteredMonitoringProvider = true;
   }
 
@@ -153,26 +153,22 @@ export default class Grass {
     );
 
     let rendered = 0;
-    let totalTriangles = 0;
     let renderedTriangles = 0;
+    let allocatedTriangles = 0;
     for (let lod = 0; lod < this.drawProfiles.length; lod++) {
-      const { indexCount } = this.drawProfiles[lod];
-      const trianglesPerBlade = indexCount / 3;
+      const trianglesPerBlade = this.drawProfiles[lod].indexCount / 3;
       rendered += renderedPerLod[lod];
-      // every LOD geometry is allocated at COUNT instances, so the scene
-      // triangle substitution in MonitoringManager must account for all of them
-      totalTriangles += config.COUNT * trianglesPerBlade;
       renderedTriangles += renderedPerLod[lod] * trianglesPerBlade;
+      allocatedTriangles += config.COUNT * trianglesPerBlade;
     }
 
     return {
       rendered,
       renderedPerLod,
-      total: config.COUNT,
       segmentsPerLod: this.drawProfiles.map(({ segments }) => segments),
-      drawCalls: this.drawProfiles.length,
-      totalTriangles,
+      total: config.COUNT,
       renderedTriangles,
+      allocatedTriangles,
     };
   };
 }

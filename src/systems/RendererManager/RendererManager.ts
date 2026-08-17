@@ -36,11 +36,13 @@ export class RendererManager {
 
     const renderer = new WebGPURenderer({
       canvas,
-      antialias: true,
+      // the scene pass carries the MSAA
+      antialias: false,
       trackTimestamp: false,
       powerPreference: "high-performance",
       stencil: false,
-      depth: true,
+      // only the fallback path draws depth tested geometry straight to the canvas
+      depth: !this.IS_POSTPROCESSING_ENABLED,
     });
     renderer.setClearColor(0x000000, 1);
 
@@ -61,6 +63,7 @@ export class RendererManager {
 
   async init() {
     await this.renderer.init();
+    this.eventsManager.emit("engine-renderer-ready");
     this.sceneManager.init(this.canvas, this.debugManager);
   }
 

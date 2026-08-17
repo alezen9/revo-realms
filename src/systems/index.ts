@@ -46,7 +46,6 @@ const init = () => {
     eventsManager,
     rendererManager,
     frameScheduler,
-    physicsScheduler,
   );
   const timeManager = new TimeManager(
     eventsManager,

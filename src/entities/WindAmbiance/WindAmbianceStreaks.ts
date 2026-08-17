@@ -151,6 +151,11 @@ class WindStreaksSsbo {
   readonly streaks = instancedArray(STREAK_COUNT, "vec4");
   readonly spinePoints = instancedArray(config.TOTAL_SPINE_POINT_COUNT, "vec4");
 
+  constructor() {
+    this.streaks.value.name = "windStreaks.streaks";
+    this.spinePoints.value.name = "windStreaks.spinePoints";
+  }
+
   readonly computeStreaks = Fn(() => {
     const streakIndex = float(instanceIndex);
     const seed = hash(streakIndex);

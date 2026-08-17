@@ -1,4 +1,7 @@
 import { EventEmitter } from "tseep/lib/ee-safe";
+import type { ResourceEntry } from "agrimensor";
+
+export type { ResourceEntry };
 import { type Sizes, type State } from "../Game";
 
 type UpdateEvent = (state: State) => void;
@@ -9,40 +12,41 @@ export type LoadingFailure = {
   hint: string;
 };
 
+export type DeviceGpuMetrics = {
+  averageMs: number;
+  gapMs: number;
+};
+
+export type DeviceMetrics = {
+  liveBytes: number;
+  peakBytes: number;
+  textureBytes: number;
+  bufferBytes: number;
+  largestResources: readonly ResourceEntry[];
+  gpu: DeviceGpuMetrics | null;
+};
+
 export type MonitoringSnapshot = {
   fps: {
-    current: number;
-    effective: number;
+    live: number;
     target: number;
-  };
-  frame: {
-    budgetMs: number;
-    averageMs: number;
+    refreshHz: number;
     lateFrames: number;
   };
-  sync: {
-    refreshHz: number;
-    divisor: number;
-    alpha: number;
-  };
-  physics: {
-    rate: number;
-  };
-  render: {
-    drawCalls: number;
-    triangles: number;
-    grass: GrassMonitoringStats | null;
-  };
+  frameBudgetMs: number;
+  sampleRateMs: number;
+  sceneTriangles: number;
+  grass: GrassMonitoringStats | null;
+  device: DeviceMetrics | null;
 };
 
 export type GrassMonitoringStats = {
   rendered: number;
   renderedPerLod: number[];
-  total: number;
   segmentsPerLod: number[];
-  drawCalls: number;
-  totalTriangles: number;
+  total: number;
   renderedTriangles: number;
+  allocatedTriangles: number;
 };
 
 const throttleLanes = [
@@ -62,6 +66,7 @@ type EngineEvents = {
   "engine-after-physics": UpdateEvent;
   "engine-render-update": UpdateEvent;
   "engine-camera-change": VoidFunction;
+  "engine-renderer-ready": VoidFunction;
   "engine-render-target-resize": ResizeEvent;
   "engine-loading-resources-progress": (percentage: number) => void;
   "engine-loading-audio-progress": (percentage: number) => void;

@@ -15,6 +15,7 @@
     "@tweakpane/core": "^2.0.5",
     "@types/lodash-es": "^4.17.12",
     "@types/three": "^0.185.1",
+    "agrimensor": "^0.1.0-alpha.7",
     "prettier": "^3.9.5",
     "rollup": "^4.62.2",
     "svelte": "^5.56.4",

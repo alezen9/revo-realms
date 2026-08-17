@@ -1,74 +1,72 @@
 <script lang="ts">
-	import { flip } from "svelte/animate"
 	import { onMount } from "svelte"
+	import { fade, slide } from "svelte/transition"
 	import { eventsManager } from "../../systems"
-	import type { MonitoringSnapshot } from "../../systems/EventsManager"
+	import type { MonitoringSnapshot, ResourceEntry } from "../../systems/EventsManager"
 
-	type TraceSample = {
-		id: number
-		value: number
-	}
+	const REVEAL = { duration: 220 }
 
 	let snapshot = $state<MonitoringSnapshot | null>(null)
-	let fpsTrace = $state<TraceSample[]>([])
-	let frameTrace = $state<TraceSample[]>([])
-	let traceId = 0
 
-	const TRACE_LENGTH = 10
-	const FPS_TRACE_HEADROOM = 50
-	const FRAME_TRACE_HEADROOM = 1.5
+	const msFormat = new Intl.NumberFormat("en-US", {
+		style: "unit",
+		unit: "millisecond",
+		minimumFractionDigits: 2,
+		maximumFractionDigits: 2,
+	})
+	const kilobyteFormat = new Intl.NumberFormat("en-US", {
+		style: "unit",
+		unit: "kilobyte",
+		maximumFractionDigits: 0,
+	})
+	const megabyteFormat = new Intl.NumberFormat("en-US", {
+		style: "unit",
+		unit: "megabyte",
+		maximumFractionDigits: 0,
+	})
+	const countFormat = new Intl.NumberFormat("en-US", {
+		notation: "compact",
+		maximumFractionDigits: 1,
+	})
+	const rateFormat = new Intl.NumberFormat("en-US", {
+		minimumFractionDigits: 1,
+		maximumFractionDigits: 1,
+	})
+	const integerFormat = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 })
+	const secondsFormat = new Intl.NumberFormat("en-US", {
+		style: "unit",
+		unit: "second",
+		unitDisplay: "narrow",
+		minimumFractionDigits: 2,
+		maximumFractionDigits: 2,
+	})
 
-	const formatDecimal = (value: number, digits = 1) => {
-		return value.toFixed(digits)
+	const formatMs = (value: number) => msFormat.format(value)
+
+	const formatCount = (value: number) => countFormat.format(value)
+
+	const formatBytes = (value: number) => {
+		const megabytes = value / 1024 ** 2
+		if (megabytes < 1) return kilobyteFormat.format(value / 1024)
+		return megabyteFormat.format(megabytes)
 	}
 
-	const formatInteger = (value: number) => {
-		return Math.round(value).toString()
+	const describeEntry = (entry: ResourceEntry) => {
+		const samples = entry.sampleCount && entry.sampleCount > 1 ? ` x${entry.sampleCount}` : ""
+		if (entry.label) return `${entry.label}${samples}`
+		if (entry.kind === "buffer") return "unlabelled buffer"
+		return `${entry.format} ${entry.width}x${entry.height}${samples}`
 	}
 
-	const formatCompact = (value: number) => {
-		return Intl.NumberFormat("en-US", {
-			notation: "compact",
-			maximumFractionDigits: 1,
-		}).format(value)
-	}
-
-	const fpsClass = (value: number, effective: number) => {
-		if (value >= effective * 0.95) return "good"
-		if (value >= effective * 0.85) return "warn"
-		return "bad"
-	}
-
-	const frameClass = (value: number, budget: number) => {
+	const budgetClass = (value: number, budget: number) => {
 		if (value <= budget) return "good"
 		if (value <= budget * 1.25) return "warn"
 		return "bad"
 	}
 
-	const fpsHeight = (value: number, refreshHz: number) => {
-		if (refreshHz <= 0) return 0
-		return Math.min(100, (value / (refreshHz + FPS_TRACE_HEADROOM)) * 100)
-	}
-
-	const frameHeight = (value: number, refreshHz: number) => {
-		if (refreshHz <= 0) return 0
-		const displayFrameBudget = 1000 / refreshHz
-		return Math.min(
-			100,
-			(value / (displayFrameBudget * 2 + FRAME_TRACE_HEADROOM)) * 100,
-		)
-	}
-
-	const addTraceValue = (trace: TraceSample[], value: number) => {
-		traceId++
-		return [...trace, { id: traceId, value }].slice(-TRACE_LENGTH)
-	}
-
 	onMount(() => {
 		const unsubscribe = eventsManager.on("engine-monitoring-update", value => {
 			snapshot = value
-			fpsTrace = addTraceValue(fpsTrace, value.fps.current)
-			frameTrace = addTraceValue(frameTrace, value.frame.averageMs)
 		})
 
 		return () => {
@@ -78,133 +76,115 @@
 </script>
 
 {#if snapshot}
-	<div class="revo-monitor" aria-hidden="true">
+	{@const device = snapshot.device}
+	{@const gpu = device?.gpu}
+	{@const grass = snapshot.grass}
+	{@const budgetMs = snapshot.frameBudgetMs}
+	<div class="revo-monitor" aria-hidden="true" transition:fade={REVEAL}>
 		<div class="row">
-			<span class="category">FPS</span>
-			<span class="metric">
-				<span class="metric-label">Current</span>
-				<span class={["metric-value", fpsClass(snapshot.fps.current, snapshot.fps.effective)]}>
-					{formatDecimal(snapshot.fps.current)}
+			<span class="category">FRAMES</span>
+			<span class="cell">
+				<span class="label">Current</span>
+				<span class={["value", snapshot.fps.live >= snapshot.fps.target * 0.95 ? "good" : "warn"]}>
+					{rateFormat.format(snapshot.fps.live)}
 				</span>
 			</span>
-			<span class="metric">
-				<span class="metric-label">Effective</span>
-				<span class="metric-value">{formatInteger(snapshot.fps.effective)}</span>
+			<span class="cell">
+				<span class="label">Target</span>
+				<span class="value">{integerFormat.format(snapshot.fps.target)}</span>
 			</span>
-			<span class="metric">
-				<span class="metric-label">Target</span>
-				<span class="metric-value">{formatInteger(snapshot.fps.target)}</span>
+			<span class="cell">
+				<span class="label">Refresh</span>
+				<span class="value">{integerFormat.format(snapshot.fps.refreshHz)} Hz</span>
 			</span>
-			<span class="metric">
-				<span class="trace trace-full">
-					{#each fpsTrace as sample (sample.id)}
-						<i
-							animate:flip={{ duration: 180 }}
-							class={fpsClass(sample.value, snapshot.fps.effective)}
-							style={`--height: ${fpsHeight(sample.value, snapshot.sync.refreshHz)}%;`}
-						></i>
-					{/each}
+			<span class="cell">
+				<span class="label"># Late</span>
+				<span class={["value", snapshot.fps.lateFrames === 0 ? "good" : "warn"]}>
+					{integerFormat.format(snapshot.fps.lateFrames)}
 				</span>
 			</span>
 		</div>
+
 		<div class="row">
-			<span class="category">FRAME</span>
-			<span class="metric">
-				<span class="metric-label">Average</span>
-				<span class="metric-value">{formatDecimal(snapshot.frame.averageMs, 2)} ms</span>
-			</span>
-			<span class="metric">
-				<span class="metric-label">Budget</span>
-				<span class="metric-value">{formatDecimal(snapshot.frame.budgetMs, 2)} ms</span>
-			</span>
-			<span class="metric">
-				<span class="metric-label">Late</span>
-				<span class="metric-value">{snapshot.frame.lateFrames}</span>
-			</span>
-			<span class="metric">
-				<span class="trace trace-full">
-					{#each frameTrace as sample (sample.id)}
-						<i
-							animate:flip={{ duration: 180 }}
-							class={frameClass(sample.value, snapshot.frame.budgetMs)}
-							style={`--height: ${frameHeight(sample.value, snapshot.sync.refreshHz)}%;`}
-						></i>
-					{/each}
+			<span class="category">GPU</span>
+			<span class="cell">
+				<span class="label">Usage</span>
+				<span class={["value", gpu && budgetClass(gpu.averageMs, budgetMs)]}>
+					{gpu ? formatMs(gpu.averageMs) : "-"}
 				</span>
 			</span>
+			<span class="cell">
+				<span class="label">Gap</span>
+				<span class="value">{gpu ? formatMs(gpu.gapMs) : "-"}</span>
+			</span>
+			<span class="cell">
+				<span class="label"># Tris</span>
+				<span class="value">{formatCount(snapshot.sceneTriangles)}</span>
+			</span>
+			<span class="cell meta">
+				<span class="label">Sampling</span>
+				<span class="value">{secondsFormat.format(snapshot.sampleRateMs / 1000)}</span>
+			</span>
 		</div>
-		<div class="row">
-			<span class="category">SYNC</span>
-			<span class="metric">
-				<span class="metric-label">Refresh</span>
-				<span class="metric-value">{formatInteger(snapshot.sync.refreshHz)} Hz</span>
-			</span>
-			<span class="metric">
-				<span class="metric-label">Divisor</span>
-				<span class="metric-value">{snapshot.sync.divisor}</span>
-			</span>
-			<span class="metric">
-				<span class="metric-label">Alpha</span>
-				<span class="metric-value">{formatDecimal(snapshot.sync.alpha, 2)}</span>
-			</span>
-			<span class="metric"></span>
-		</div>
-		<div class="row">
-			<span class="category">PHYSICS</span>
-			<span class="metric">
-				<span class="metric-label">Steps/s</span>
-				<span class="metric-value">{formatDecimal(snapshot.physics.rate)}/s</span>
-			</span>
-			<span class="metric"></span>
-			<span class="metric"></span>
-			<span class="metric"></span>
-		</div>
-		<div class="row">
-			<span class="category">RENDER</span>
-			<span class="metric">
-				<span class="metric-label">Draw Calls</span>
-				<span class="metric-value">{formatInteger(snapshot.render.drawCalls)}</span>
-			</span>
-			<span class="metric">
-				<span class="metric-label"># Tris</span>
-				<span class="metric-value">{formatCompact(snapshot.render.triangles)}</span>
-			</span>
-			<span class="metric"></span>
-			<span class="metric"></span>
-		</div>
-		{#if snapshot.render.grass}
-			<div class="row">
-				<span class="category">GRASS</span>
-				<span class="metric">
-					<span class="metric-label">Visible</span>
-					<span class="metric-value">{formatCompact(snapshot.render.grass.rendered)}</span>
+
+		{#if device}
+			<div class="row" transition:slide={REVEAL}>
+				<span class="category">MEMORY</span>
+				<span class="cell">
+					<span class="label">Current</span>
+					<span class="value">{formatBytes(device.liveBytes)}</span>
 				</span>
-				<span class="metric">
-					<span class="metric-label"># Total</span>
-					<span class="metric-value">{formatCompact(snapshot.render.grass.total)}</span>
+				<span class="cell">
+					<span class="label">Peak</span>
+					<span class="value">{formatBytes(device.peakBytes)}</span>
 				</span>
-				<span class="metric">
-					<span class="metric-label"># Tris</span>
-					<span class="metric-value"
-						>{formatCompact(snapshot.render.grass.renderedTriangles)}</span
-					>
+				<span class="cell">
+					<span class="label">Textures</span>
+					<span class="value">{formatBytes(device.textureBytes)}</span>
 				</span>
-				<span class="metric">
-					<span class="metric-label">Draw Calls</span>
-					<span class="metric-value">{formatInteger(snapshot.render.grass.drawCalls)}</span>
+				<span class="cell">
+					<span class="label">Buffers</span>
+					<span class="value">{formatBytes(device.bufferBytes)}</span>
 				</span>
 			</div>
-			<div class="row">
+
+			{#each device.largestResources as entry (entry.id)}
+				<div class="row resource" transition:slide={REVEAL}>
+					<span class="category"></span>
+					<span class="resource-name">{describeEntry(entry)}</span>
+					<span class="value">{formatBytes(entry.allocationInBytes)}</span>
+				</div>
+			{/each}
+		{/if}
+
+		{#if grass}
+			<div class="row" transition:slide={REVEAL}>
+				<span class="category">GRASS</span>
+				<span class="cell">
+					<span class="label"># Visible</span>
+					<span class="value">{formatCount(grass.rendered)}</span>
+				</span>
+				<span class="cell">
+					<span class="label"># Total</span>
+					<span class="value">{formatCount(grass.total)}</span>
+				</span>
+				<span class="cell">
+					<span class="label"># Tris</span>
+					<span class="value">{formatCount(grass.renderedTriangles)}</span>
+				</span>
+				<span class="cell"></span>
+			</div>
+			<div class="row" transition:slide={REVEAL}>
 				<span class="category"></span>
-				{#each snapshot.render.grass.renderedPerLod as bladeCount, lod (lod)}
-					<span class="metric">
-						<span class="metric-label"># LOD {lod}</span>
-						<span class="metric-value">{formatCompact(bladeCount)}</span>
+				{#each grass.renderedPerLod as bladeCount, lod (lod)}
+					<span class="cell">
+						<span class="label"># LOD {lod}</span>
+						<span class="value">{formatCount(bladeCount)}</span>
 					</span>
 				{/each}
-				<span class="metric">
-					<span class="metric-label"># Segments</span>
-					<span class="metric-value">{snapshot.render.grass.segmentsPerLod.join('/')}</span>
+				<span class="cell">
+					<span class="label">Segments</span>
+					<span class="value">{grass.segmentsPerLod.join("/")}</span>
 				</span>
 			</div>
 		{/if}
@@ -219,28 +199,23 @@
 		z-index: 20;
 		width: 340px;
 		max-width: calc(100vw - 1rem);
-		padding: 0;
 		display: grid;
-		gap: 0;
 		border: 1px solid rgba(218, 229, 211, 0.16);
 		border-radius: 4px;
-		background: rgba(9, 13, 10, 0.78);
+		background: rgba(9, 13, 10);
 		color: rgba(242, 247, 238, 0.9);
 		font:
-			11px/1.2 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+			10px/1.15 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
 			"Liberation Mono", monospace;
-		letter-spacing: 0;
 		pointer-events: none;
-		backdrop-filter: blur(3px);
 	}
 
 	.row {
 		display: grid;
-		grid-template-columns: 3.7rem repeat(3, 4.15rem) minmax(0, 1fr);
-		gap: 0.24rem;
+		grid-template-columns: 3rem repeat(4, minmax(0, 1fr));
+		gap: 0.25rem;
 		align-items: end;
-		min-height: 1.58rem;
-		padding: 0.18rem 0.34rem;
+		padding: 0.35rem;
 		white-space: nowrap;
 	}
 
@@ -250,29 +225,43 @@
 
 	.category {
 		align-self: end;
-		padding-bottom: 0.02rem;
 		color: rgba(177, 190, 169, 0.68);
 		font-weight: 700;
 	}
 
-	.metric {
+	.cell {
 		display: grid;
-		gap: 0.12rem;
+		gap: 0.25rem;
 		min-width: 0;
-		min-height: 1.22rem;
 		align-content: end;
 	}
 
-	.metric-label {
+	.meta {
+		background: rgba(167, 154, 224, 0.25);
+		padding: 0 0.24rem;
+		margin: -0.35rem;
+		padding: 0.35rem;
+	}
+
+	.label {
 		color: rgba(177, 190, 169, 0.58);
-		font-size: 0.78em;
+		font-size: 1em;
+		line-height: 1;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	.value {
+		color: rgba(242, 247, 238, 0.86);
+		font-size: 1.05em;
 		line-height: 1;
 	}
 
-	.metric-value {
-		color: rgba(242, 247, 238, 0.86);
-		font-size: 1.03em;
-		line-height: 1;
+	.resource-name {
+		grid-column: 2 / 5;
+		color: rgba(177, 190, 169, 0.58);
+		overflow: hidden;
+		text-overflow: ellipsis;
 	}
 
 	.good {
@@ -285,33 +274,5 @@
 
 	.bad {
 		color: rgb(236, 92, 82);
-	}
-
-	.trace {
-		height: 0.85rem;
-		display: flex;
-		justify-content: flex-end;
-		align-items: end;
-		gap: 1px;
-		overflow: hidden;
-	}
-
-	.trace-full {
-		height: 100%;
-		min-height: 1.22rem;
-	}
-
-	.trace i {
-		flex: 0 0 0.34rem;
-		width: 0.34rem;
-		height: var(--height);
-		min-height: 1px;
-		border-radius: 1px 1px 0 0;
-		background: currentColor;
-		opacity: 0.88;
-		transform-origin: bottom;
-		transition:
-			height 140ms linear,
-			color 140ms linear;
 	}
 </style>

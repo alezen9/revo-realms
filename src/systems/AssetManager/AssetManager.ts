@@ -61,6 +61,7 @@ export class AssetManager {
         const loader =
           resource.type === "ktx2" ? this.ktx2Loader : this.textureLoader;
         const texture = await loader.loadAsync(resource.url);
+        texture.name = resource.name;
         texture.flipY = resource.flipY ?? true;
         texture.colorSpace = resource.colorSpace ?? NoColorSpace;
         texture.anisotropy = resource.anisotropy ?? Texture.DEFAULT_ANISOTROPY;
@@ -73,14 +74,14 @@ export class AssetManager {
         break;
       }
       case "gltf":
-        this.resources[resource.name] = await this.gltfLoader.loadAsync(
-          resource.url,
-        );
+        const file = await this.gltfLoader.loadAsync(resource.url);
+        this.resources[resource.name] = file;
         break;
       case "cubeTexture": {
         const cubeTexture = await this.cubeTextureLoader.loadAsync(
           resource.urls,
         );
+        cubeTexture.name = resource.name;
         cubeTexture.colorSpace = resource.colorSpace ?? NoColorSpace;
         this.resources[resource.name] = cubeTexture;
         break;

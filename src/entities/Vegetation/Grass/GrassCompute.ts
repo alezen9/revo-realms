@@ -100,6 +100,15 @@ export class GrassCompute {
     "uint",
   );
 
+  constructor() {
+    this.indirectDrawAttribute.name = "grass.indirectDrawArguments";
+    this.bladeState.value.name = "grass.bladeState";
+    this.bladeTerrain.value.name = "grass.bladeTerrain";
+    this.cachedGrassScale.value.name = "grass.cachedGrassScale";
+    this.windState.value.name = "grass.windState";
+    this.visibleIndices.value.name = "grass.visibleIndices";
+  }
+
   private computeStochasticKeep = Fn<StochasticKeepArgs, Node<"float">>(
     ([worldPos, distanceSquared, bladeHeight, previousKeep]) => {
       const fullDensityRadiusSquared = uniforms.uFullDensityRadius.mul(

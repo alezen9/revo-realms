@@ -2,7 +2,6 @@ import { Pane } from "tweakpane";
 import { DebugManager, DevDebugManager } from "../DebugManager";
 import type { EventsManager } from "../EventsManager";
 import type { FrameScheduler } from "../FrameScheduler";
-import type { PhysicsScheduler } from "../PhysicsScheduler";
 import { MonitoringManager } from "../RendererManager/MonitoringManager";
 import type { RendererManager } from "../RendererManager/RendererManager";
 import { TOOLING_FLAGS } from "./ToolingFlags";
@@ -17,15 +16,9 @@ export const createMonitoringManager = (
   eventsManager: EventsManager,
   rendererManager: RendererManager,
   frameScheduler: FrameScheduler,
-  physicsScheduler: PhysicsScheduler,
 ) => {
   if (!TOOLING_FLAGS.monitoring) return undefined;
-  return new MonitoringManager(
-    eventsManager,
-    rendererManager,
-    frameScheduler,
-    physicsScheduler,
-  );
+  return new MonitoringManager(eventsManager, rendererManager, frameScheduler);
 };
 
 export { TOOLING_FLAGS };

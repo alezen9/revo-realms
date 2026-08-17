@@ -29,6 +29,7 @@ import { assetManager, lightingManager } from "..";
 import { playerUniforms } from "../../entities/Player/PlayerMaterial";
 import { TSLUtils } from "../../utils/TSLUtils";
 
+const SCENE_PASS_SAMPLES = 4;
 const LUMINANCE_WEIGHTS = vec3(0.2126, 0.7152, 0.0722);
 const BALL_SHADOW_PENUMBRA = 0.08;
 const BALL_DEPTH_MATCH_EPSILON = 0.05;
@@ -65,6 +66,7 @@ export class PostprocessingManager extends RenderPipeline {
     this.scenePass = pass(
       this.sceneManager.scene,
       this.sceneManager.renderCamera,
+      { samples: SCENE_PASS_SAMPLES },
     );
     this.syncCameraUniforms();
 

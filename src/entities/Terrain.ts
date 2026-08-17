@@ -324,6 +324,7 @@ class InnerTerrain {
     }
 
     const tex = new DataTexture(fixed, N, N, RedFormat, FloatType);
+    tex.name = "terrain.heightmap";
     tex.colorSpace = NoColorSpace;
     tex.magFilter = LinearFilter;
     tex.minFilter = LinearFilter;
