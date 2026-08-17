@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host",
-    "build": "tsc && vite build",
+    "build": "tsc && npm run check && vite build",
+    "check": "svelte-check --tsconfig ./tsconfig.json",
     "preview": "vite preview --host",
     "textures:atlases:process": "node src/atlases/combine-atlases.mjs"
   },
@@ -15,10 +16,11 @@
     "@tweakpane/core": "^2.0.5",
     "@types/lodash-es": "^4.17.12",
     "@types/three": "^0.185.1",
-    "agrimensor": "^0.1.0-alpha.7",
+    "agrimensor": "^0.1.0-alpha.8",
     "prettier": "^3.9.5",
     "rollup": "^4.62.2",
     "svelte": "^5.56.4",
+    "svelte-check": "^4.7.6",
     "typescript": "^6.0.3",
     "vite": "^8.1.4",
     "vite-plugin-wasm": "^3.6.0"

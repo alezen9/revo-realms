@@ -15,10 +15,16 @@ class KeyboardManager {
     this.handleKeyDown = this.handleKeyDown.bind(this);
     this.handleKeyUp = this.handleKeyUp.bind(this);
     this.handleWheel = this.handleWheel.bind(this);
+    this.handleBlur = this.handleBlur.bind(this);
 
     window.addEventListener("keydown", this.handleKeyDown);
     window.addEventListener("keyup", this.handleKeyUp);
     window.addEventListener("wheel", this.handleWheel, { passive: true });
+    window.addEventListener("blur", this.handleBlur);
+  }
+
+  private handleBlur() {
+    this.keysPressed.clear();
   }
 
   private handleWheel(event: WheelEvent) {
@@ -59,6 +65,7 @@ class KeyboardManager {
     window.removeEventListener("keydown", this.handleKeyDown);
     window.removeEventListener("keyup", this.handleKeyUp);
     window.removeEventListener("wheel", this.handleWheel);
+    window.removeEventListener("blur", this.handleBlur);
   }
 }
 

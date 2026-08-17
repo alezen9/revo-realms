@@ -11,6 +11,8 @@ type CreateComputeTaskOptions = {
   update: ComputeNode | ComputeNode[];
 };
 
+const RESOLUTION_SCALE = 0.85;
+
 export class RendererManager {
   renderer: WebGPURenderer;
   canvas: HTMLCanvasElement;
@@ -51,13 +53,11 @@ export class RendererManager {
     this.debugManager.setVisibility(isDebugEnabled);
 
     this.eventsManager.on("engine-render-target-resize", (sizes) => {
-      // reduce dpr to 85% if postprocessing enabled, min dpr = 1
-      const dpr = Math.max(
-        this.IS_POSTPROCESSING_ENABLED ? sizes.dpr * 0.85 : sizes.dpr,
-        1,
-      );
+      const scaled = this.IS_POSTPROCESSING_ENABLED
+        ? sizes.dpr * RESOLUTION_SCALE
+        : sizes.dpr;
       renderer.setSize(sizes.width, sizes.height);
-      renderer.setPixelRatio(dpr);
+      renderer.setPixelRatio(Math.max(scaled, 1));
     });
   }
 
