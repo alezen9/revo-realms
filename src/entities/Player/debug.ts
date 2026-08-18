@@ -20,6 +20,12 @@ export const debugPlayer = (collider: Collider) => {
     min: 5,
     max: 100,
   });
+  physics.addBinding(config, "TURN_SPEED_IN_RADIANS_PER_SECOND", {
+    label: "Turn speed",
+    min: 0.5,
+    max: 8,
+    step: 0.1,
+  });
   physics.addBinding(config, "AIR_CONTROL_FACTOR", {
     label: "Air control",
     min: 0,

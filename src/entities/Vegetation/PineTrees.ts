@@ -55,8 +55,6 @@ class PineTreeBarkMaterial extends MeshLambertNodeMaterial {
     const _uv = uv().mul(uniforms.uBarkUvScale);
     const diffuse = texture(assetManager.resources.treeBarkDiffuse, _uv);
     this.colorNode = diffuse.rgb.mul(uniforms.uBarkDiffuseScale);
-    this.opacityNode = diffuse.a;
-    this.alphaTest = 0.35;
 
     const normal = texture(assetManager.resources.treeBarkNormal, _uv);
     this.normalNode = normalMap(normal, uniforms.uBarkNormalScale);
