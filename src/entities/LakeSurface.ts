@@ -1,4 +1,4 @@
-import { Color, Mesh, Vector2, Vector3 } from "three";
+import { Color, Mesh, NoBlending, Vector2, Vector3 } from "three";
 import { MeshBasicNodeMaterial } from "three/webgpu";
 import {
   cameraFar,
@@ -23,8 +23,6 @@ import {
   uniform,
   uv,
   vec3,
-  viewportDepthTexture,
-  viewportTexture,
 } from "three/tsl";
 import { gameTime } from "../utils/GameTime";
 import { TSLUtils } from "../utils/TSLUtils";
@@ -34,6 +32,7 @@ import {
   lightingManager,
   debugManager,
   sceneManager,
+  rendererManager,
   eventsManager,
   landmarkManager,
   windManager,
@@ -71,7 +70,19 @@ export class LakeSurface {
     const bsLocal = geom.boundingSphere!;
     bsLocal.radius = bsLocal.radius * 0.75;
 
-    sceneManager.scene.add(lakeSurface);
+    sceneManager.waterScene.add(lakeSurface);
+
+    setTimeout(async () => {
+      const shader = await rendererManager.renderer.debug.getShaderAsync(
+        sceneManager.waterScene,
+        sceneManager.renderCamera,
+        lakeSurface,
+      );
+      const lines = (shader.fragmentShader ?? "")
+        .split("\n")
+        .filter((l: string) => /depth|textureSample|textureLoad/i.test(l));
+      console.info("[watershader]\n" + lines.join("\n"));
+    }, 4000);
 
     // Register landmark for radial menu discovery
     const landmarkId = landmarkManager.register({
@@ -252,6 +263,8 @@ class WaterMaterial extends MeshBasicNodeMaterial {
     this.precision = "lowp";
     this.fog = false;
     this.depthWrite = false;
+    this.transparent = true;
+    this.blending = NoBlending;
 
     // 0. normal
     const speed = gameTime.mul(this.uniforms.uSpeed);
@@ -280,7 +293,9 @@ class WaterMaterial extends MeshBasicNodeMaterial {
       .normalize();
 
     // 1. depth
-    const zNdc = viewportDepthTexture(screenUV).r;
+    const sceneColor = rendererManager.postprocessingManager.sceneColorNode;
+    const sceneDepth = rendererManager.postprocessingManager.sceneDepthNode;
+    const zNdc = sceneDepth.sample(screenUV).r;
     const zLinear = perspectiveDepthToViewZ(
       zNdc,
       cameraNear,
@@ -299,7 +314,7 @@ class WaterMaterial extends MeshBasicNodeMaterial {
     );
     const distortion = tsn.xy.mul(distortionStrength); // tangent tilt, not outward, drives wobble
     const refractedScreenUv = screenUV.add(distortion.mul(isUnderWater));
-    const zNdcRefr = viewportDepthTexture(refractedScreenUv).r;
+    const zNdcRefr = sceneDepth.sample(refractedScreenUv).r;
     const zLinearRefr = perspectiveDepthToViewZ(
       zNdcRefr,
       cameraNear,
@@ -311,7 +326,7 @@ class WaterMaterial extends MeshBasicNodeMaterial {
       .div(this.uniforms.uDepthDistance)
       .clamp();
     const safeScreenUv = mix(screenUV, refractedScreenUv, isSafe).clamp();
-    const screenColor = viewportTexture(safeScreenUv).rgb;
+    const screenColor = sceneColor.sample(safeScreenUv).rgb;
 
     // 3. reflections
     const viewDir = normalize(cameraPosition.sub(positionWorld));
@@ -372,8 +387,9 @@ class WaterMaterial extends MeshBasicNodeMaterial {
       this.uniforms.uHighlightsDepthOpacityScale,
       waterThickness,
     );
-    const sunGlint = this.uniforms.uSunColor
-      .mul(spec.mul(this.uniforms.uHighlightsGlow).mul(fresnelSpecBoost))
+    const sunGlint = spec
+      .mul(this.uniforms.uHighlightsGlow)
+      .mul(fresnelSpecBoost)
       .mul(highlightsDepthOpacity);
 
     // 7. opacity
@@ -400,7 +416,9 @@ class WaterMaterial extends MeshBasicNodeMaterial {
     // 8. final color
     const shadedWater = mix(throughWater, reflectedColor, fresnelWeight);
     const color = mix(screenColor, shadedWater, opacity);
-    this.colorNode = color.add(sunGlint);
+    const final = mix(color, this.uniforms.uSunColor, sunGlint);
+    this.colorNode = final;
+    this.opacityNode = float(1);
     // this.colorNode = mix(
     //   color,
     //   vec3(0.5, 0.75, 0.5),

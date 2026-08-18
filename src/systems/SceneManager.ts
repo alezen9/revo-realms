@@ -5,6 +5,7 @@ import type { DebugManager } from "./DebugManager";
 
 export class SceneManager {
   scene: Scene;
+  waterScene = new Scene();
   playerCamera: PerspectiveCamera;
   renderCamera: PerspectiveCamera;
   private eventsManager: EventsManager;

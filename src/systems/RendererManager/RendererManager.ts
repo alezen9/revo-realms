@@ -19,7 +19,7 @@ export class RendererManager {
   private sceneManager: SceneManager;
   private debugManager: DebugManager;
   private eventsManager: EventsManager;
-  private postprocessingManager!: PostprocessingManager;
+  postprocessingManager!: PostprocessingManager;
   private readonly IS_POSTPROCESSING_ENABLED = true;
 
   constructor(
@@ -46,7 +46,7 @@ export class RendererManager {
       // only the fallback path draws depth tested geometry straight to the canvas
       depth: !this.IS_POSTPROCESSING_ENABLED,
     });
-    renderer.setClearColor(0x000000, 1);
+    renderer.setClearColor(0x000000, 0);
 
     renderer.toneMappingExposure = 1.5;
     this.renderer = renderer;

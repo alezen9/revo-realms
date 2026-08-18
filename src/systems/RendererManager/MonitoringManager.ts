@@ -16,12 +16,14 @@ const LARGEST_RESOURCE_COUNT = 5;
 type GrassProvider = () => Promise<GrassMonitoringStats>;
 
 type DeviceAccumulator = {
+  renderPasses: number;
   gpuExecutionSum: number;
   gpuExecutionCount: number;
   gpuGapMs: number;
 };
 
 const createAccumulator = (): DeviceAccumulator => ({
+  renderPasses: 0,
   gpuExecutionSum: 0,
   gpuExecutionCount: 0,
   gpuGapMs: 0,
@@ -98,11 +100,14 @@ export class MonitoringManager {
     const agrimensor = this.agrimensor;
     if (!agrimensor) return;
 
-    const { gpu } = agrimensor.snapshot();
-    if (!gpu) return;
+    const { frame, gpu } = agrimensor.snapshot();
+    if (!frame) return;
 
     if (!this.device) this.device = createAccumulator();
     const device = this.device;
+    device.renderPasses = Math.max(device.renderPasses, frame.renderPassCount);
+
+    if (!gpu) return;
 
     const executionMs = gpu.submittedRenderAndComputePassExecutionInMs;
     device.gpuExecutionSum += executionMs;
@@ -144,6 +149,7 @@ export class MonitoringManager {
     }
 
     return {
+      renderPasses: accumulator?.renderPasses ?? 0,
       liveBytes: resources.liveResourceAllocationSumInBytes,
       peakBytes: resources.liveResourceAllocationPeakInBytes,
       textureBytes: resources.liveTextureAllocationSumInBytes,

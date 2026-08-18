@@ -36,6 +36,7 @@ const BALL_DEPTH_MATCH_EPSILON = 0.05;
 
 export class PostprocessingManager extends RenderPipeline {
   private scenePass: ReturnType<typeof pass>;
+  private waterPass: ReturnType<typeof pass>;
   private uSaturation = uniform(1);
   private uProjectionMatrixInverse = uniform(new Matrix4());
   private uCameraWorldMatrix = uniform(new Matrix4());
@@ -68,6 +69,15 @@ export class PostprocessingManager extends RenderPipeline {
       this.sceneManager.renderCamera,
       { samples: SCENE_PASS_SAMPLES },
     );
+    this.waterPass = pass(
+      this.sceneManager.waterScene,
+      this.sceneManager.renderCamera,
+      { samples: 0, depthBuffer: false },
+    );
+    const scenePassDepth = this.scenePass.renderTarget.depthTexture;
+    if (scenePassDepth)
+      scenePassDepth.renderTarget = this.scenePass.renderTarget;
+
     this.syncCameraUniforms();
 
     const passes = this.makeGraph();
@@ -76,6 +86,8 @@ export class PostprocessingManager extends RenderPipeline {
     this.eventsManager.on("engine-camera-change", () => {
       this.scenePass.camera = this.sceneManager.renderCamera;
       this.scenePass.needsUpdate = true;
+      this.waterPass.camera = this.sceneManager.renderCamera;
+      this.waterPass.needsUpdate = true;
       this.syncCameraUniforms();
     });
 
@@ -163,9 +175,19 @@ export class PostprocessingManager extends RenderPipeline {
     return ballShadow;
   });
 
+  get sceneColorNode() {
+    return this.scenePass.getTextureNode();
+  }
+
+  get sceneDepthNode() {
+    return this.scenePass.getTextureNode("depth");
+  }
+
   private makeGraph() {
     this.outputColorTransform = false;
-    const colorHDR = this.scenePass.getTextureNode();
+    const sceneColor = this.scenePass.getTextureNode();
+    const water = this.waterPass.getTextureNode();
+    const colorHDR = sceneColor.mul(water.a.oneMinus()).add(water.rgb);
 
     const bloomPass = bloom(colorHDR, 0.25, 0.15, 1);
     bloomPass.smoothWidth.value = 0.04;

@@ -33,13 +33,6 @@
 		maximumFractionDigits: 1,
 	})
 	const integerFormat = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 })
-	const secondsFormat = new Intl.NumberFormat("en-US", {
-		style: "unit",
-		unit: "second",
-		unitDisplay: "narrow",
-		minimumFractionDigits: 2,
-		maximumFractionDigits: 2,
-	})
 
 	const formatMs = (value: number) => msFormat.format(value)
 
@@ -121,9 +114,9 @@
 				<span class="label"># Tris</span>
 				<span class="value">{formatCount(snapshot.sceneTriangles)}</span>
 			</span>
-			<span class="cell meta">
-				<span class="label">Sampling</span>
-				<span class="value">{secondsFormat.format(snapshot.sampleRateMs / 1000)}</span>
+			<span class="cell">
+				<span class="label"># Passes</span>
+				<span class="value">{device ? integerFormat.format(device.renderPasses) : "-"}</span>
 			</span>
 		</div>
 
