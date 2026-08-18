@@ -4,6 +4,7 @@ import { type DebugManager } from "../DebugManager";
 import { type EventsManager } from "../EventsManager";
 import type { SceneManager } from "../SceneManager";
 import { ComputeTask } from "./ComputeTask";
+import type { Sizes } from "../../Game";
 
 type CreateComputeTaskOptions = {
   label: string;
@@ -11,7 +12,9 @@ type CreateComputeTaskOptions = {
   update: ComputeNode | ComputeNode[];
 };
 
-const RESOLUTION_SCALE = 0.85;
+export const rendererConfig = {
+  resolutionScale: 0.85,
+};
 
 export class RendererManager {
   renderer: WebGPURenderer;
@@ -20,6 +23,7 @@ export class RendererManager {
   private debugManager: DebugManager;
   private eventsManager: EventsManager;
   private postprocessingManager!: PostprocessingManager;
+  private sizes?: Sizes;
 
   constructor(
     sceneManager: SceneManager,
@@ -51,9 +55,16 @@ export class RendererManager {
     this.debugManager.setVisibility(isDebugEnabled);
 
     this.eventsManager.on("engine-render-target-resize", (sizes) => {
-      renderer.setSize(sizes.width, sizes.height);
-      renderer.setPixelRatio(Math.max(sizes.dpr * RESOLUTION_SCALE, 1));
+      this.sizes = sizes;
+      this.applyResolution();
     });
+  }
+
+  applyResolution() {
+    if (!this.sizes) return;
+    const { width, height, dpr } = this.sizes;
+    this.renderer.setSize(width, height);
+    this.renderer.setPixelRatio(dpr * rendererConfig.resolutionScale);
   }
 
   async init() {

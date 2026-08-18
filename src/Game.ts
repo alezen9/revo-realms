@@ -1,6 +1,7 @@
 import Player from "./entities/Player/Player";
 import RevoRealm from "./realm/RevoRealm";
 import { debounce } from "lodash-es";
+import { rendererConfig } from "./systems/RendererManager/RendererManager";
 import {
   debugManager,
   monitoringManager,
@@ -64,6 +65,15 @@ export default class Game {
         options,
       })
       .on("change", ({ value }) => frameScheduler.setRenderDivisor(value));
+
+    folder
+      .addBinding(rendererConfig, "resolutionScale", {
+        label: "Resolution scale",
+        min: 0.4,
+        max: 1,
+        step: 0.05,
+      })
+      .on("change", () => rendererManager.applyResolution());
   }
 
   private getSizes(): Sizes {
