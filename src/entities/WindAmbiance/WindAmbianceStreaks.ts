@@ -227,7 +227,7 @@ export default class WindAmbianceStreaks {
       update: this.ssbo.computeStreaks,
     });
     this.mesh = this.createMesh();
-    sceneManager.scene.add(this.mesh);
+    sceneManager.mainScene.add(this.mesh);
     void this.computeTask.init()?.then(this.clearReset, this.clearReset);
     this.registerPrewarmTask();
     eventsManager.on("game-wind-start", this.onWindStart);
@@ -326,7 +326,6 @@ class WindStreakMaterial extends MeshBasicNodeMaterial {
   constructor(ssbo: WindStreaksSsbo) {
     super();
 
-    this.precision = "lowp";
     this.transparent = true;
     this.blending = AdditiveBlending;
     this.depthWrite = false;

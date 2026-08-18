@@ -34,7 +34,6 @@ export class PlayerMaterial extends MeshLambertNodeMaterial {
     const { uDiffuseScale, uSpinFactor, uSpinBlurMax, uSunTintStrength } =
       playerUniforms;
 
-    this.precision = "lowp";
     this.flatShading = false;
 
     const blurAmount = uSpinFactor.mul(uSpinBlurMax);

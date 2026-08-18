@@ -163,7 +163,6 @@ class TerrainMaterial extends MeshLambertNodeMaterial {
   }
 
   private createMaterial() {
-    this.precision = "lowp";
     const worldUv = TSLUtils.computeMapUvByPosition(positionWorld.xz);
     const terrainNoiseUv = TSLUtils.computeAtlasUv(
       vec2(0.5),
@@ -227,7 +226,6 @@ class TerrainMaterial extends MeshLambertNodeMaterial {
 class OuterTerrainMaterial extends MeshLambertNodeMaterial {
   constructor() {
     super();
-    this.precision = "lowp";
     this.colorNode = uniforms.uGrassTerrainColor;
   }
 }
@@ -235,7 +233,7 @@ class OuterTerrainMaterial extends MeshLambertNodeMaterial {
 class InnerTerrain {
   constructor(material: TerrainMaterial) {
     const innerMap = this.createFloor(material);
-    sceneManager.scene.add(innerMap);
+    sceneManager.mainScene.add(innerMap);
   }
 
   private createFloor(material: TerrainMaterial) {
@@ -376,7 +374,7 @@ class OuterTerrain {
     this.outerFloor = this.createOuterFloorVisual();
     this.outerFloor.material = new OuterTerrainMaterial();
     this.kintoun = this.createKintoun();
-    sceneManager.scene.add(this.outerFloor);
+    sceneManager.mainScene.add(this.outerFloor);
 
     eventsManager.on("engine-render-update", this.onEngineUpdate);
   }

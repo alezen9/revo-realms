@@ -29,13 +29,13 @@ import { assetManager, lightingManager } from "..";
 import { playerUniforms } from "../../entities/Player/PlayerMaterial";
 import { TSLUtils } from "../../utils/TSLUtils";
 
-const SCENE_PASS_SAMPLES = 4;
+const MAIN_SCENE_PASS_SAMPLES = 4;
 const LUMINANCE_WEIGHTS = vec3(0.2126, 0.7152, 0.0722);
 const BALL_SHADOW_PENUMBRA = 0.08;
 const BALL_DEPTH_MATCH_EPSILON = 0.05;
 
 export class PostprocessingManager extends RenderPipeline {
-  private scenePass: ReturnType<typeof pass>;
+  private mainScenePass: ReturnType<typeof pass>;
   private waterPass: ReturnType<typeof pass>;
   private uSaturation = uniform(1);
   private uProjectionMatrixInverse = uniform(new Matrix4());
@@ -64,19 +64,19 @@ export class PostprocessingManager extends RenderPipeline {
       title: "⭐️ Postprocessing",
       expanded: false,
     });
-    this.scenePass = pass(
-      this.sceneManager.scene,
+    this.mainScenePass = pass(
+      this.sceneManager.mainScene,
       this.sceneManager.renderCamera,
-      { samples: SCENE_PASS_SAMPLES },
+      { samples: MAIN_SCENE_PASS_SAMPLES },
     );
     this.waterPass = pass(
       this.sceneManager.waterScene,
       this.sceneManager.renderCamera,
       { samples: 0, depthBuffer: false },
     );
-    const scenePassDepth = this.scenePass.renderTarget.depthTexture;
-    if (scenePassDepth)
-      scenePassDepth.renderTarget = this.scenePass.renderTarget;
+    const mainScenePassDepth = this.mainScenePass.renderTarget.depthTexture;
+    if (mainScenePassDepth)
+      mainScenePassDepth.renderTarget = this.mainScenePass.renderTarget;
 
     this.syncCameraUniforms();
 
@@ -84,8 +84,8 @@ export class PostprocessingManager extends RenderPipeline {
     this.outputNode = passes;
 
     this.eventsManager.on("engine-camera-change", () => {
-      this.scenePass.camera = this.sceneManager.renderCamera;
-      this.scenePass.needsUpdate = true;
+      this.mainScenePass.camera = this.sceneManager.renderCamera;
+      this.mainScenePass.needsUpdate = true;
       this.waterPass.camera = this.sceneManager.renderCamera;
       this.waterPass.needsUpdate = true;
       this.syncCameraUniforms();
@@ -115,7 +115,7 @@ export class PostprocessingManager extends RenderPipeline {
     const radiusSq = radius.mul(radius);
     const sunDir = lightingManager.uSunDir;
 
-    const depth = this.scenePass.getTextureNode("depth").sample(screenUV).r;
+    const depth = this.mainScenePass.getTextureNode("depth").sample(screenUV).r;
     const viewPosition = getViewPosition(
       screenUV,
       depth,
@@ -175,19 +175,19 @@ export class PostprocessingManager extends RenderPipeline {
     return ballShadow;
   });
 
-  get sceneColorNode() {
-    return this.scenePass.getTextureNode();
+  get mainSceneColorNode() {
+    return this.mainScenePass.getTextureNode();
   }
 
-  get sceneDepthNode() {
-    return this.scenePass.getTextureNode("depth");
+  get mainSceneDepthNode() {
+    return this.mainScenePass.getTextureNode("depth");
   }
 
   private makeGraph() {
     this.outputColorTransform = false;
-    const sceneColor = this.scenePass.getTextureNode();
+    const mainSceneColor = this.mainScenePass.getTextureNode();
     const water = this.waterPass.getTextureNode();
-    const colorHDR = sceneColor.mul(water.a.oneMinus()).add(water.rgb);
+    const colorHDR = mainSceneColor.mul(water.a.oneMinus()).add(water.rgb);
 
     const bloomPass = bloom(colorHDR, 0.25, 0.15, 1);
     bloomPass.smoothWidth.value = 0.04;

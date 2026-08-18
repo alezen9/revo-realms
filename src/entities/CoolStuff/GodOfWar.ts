@@ -24,7 +24,6 @@ const uniforms = {
 class LeviathanAxeMaterial extends MeshStandardNodeMaterial {
   constructor() {
     super();
-    this.precision = "lowp";
 
     const diffuseEmission = texture(
       assetManager.resources.leviathanAxeDiffuseEmissive,
@@ -55,7 +54,7 @@ export default class GodOfWar {
     ) as Mesh;
     axe.material = new LeviathanAxeMaterial();
 
-    sceneManager.scene.add(axe);
+    sceneManager.mainScene.add(axe);
 
     // Physics
     const scale = axe.scale.x;

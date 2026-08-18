@@ -29,7 +29,6 @@ export class GrassMaterial extends SpriteNodeMaterial {
   constructor(compute: GrassCompute) {
     super();
 
-    this.precision = "lowp";
     this.transparent = false;
     this.stencilWrite = false;
     this.forceSinglePass = true;

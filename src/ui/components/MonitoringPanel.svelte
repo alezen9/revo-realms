@@ -229,13 +229,6 @@
 		align-content: end;
 	}
 
-	.meta {
-		background: rgba(167, 154, 224, 0.25);
-		padding: 0 0.24rem;
-		margin: -0.35rem;
-		padding: 0.35rem;
-	}
-
 	.label {
 		color: rgba(177, 190, 169, 0.58);
 		font-size: 1em;

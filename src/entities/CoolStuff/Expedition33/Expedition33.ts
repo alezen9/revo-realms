@@ -46,7 +46,7 @@ export default class Expedition33 {
     this.staffQuaternion.setFromUnitVectors(UP, this.staffAxis);
     uniforms.uStaffAxis.value.copy(this.staffAxis);
 
-    sceneManager.scene.add(this.createStaff(), this.createFlag());
+    sceneManager.mainScene.add(this.createStaff(), this.createFlag());
     this.createPhysics();
 
     this.computeTask = rendererManager.createComputeTask({

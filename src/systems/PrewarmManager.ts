@@ -36,12 +36,13 @@ export class PrewarmManager {
 
   private collectFrustumCullStates() {
     const states: FrustumCullState[] = [];
-    this.sceneManager.scene.traverse((object) => {
-      states.push({
-        object,
-        frustumCulled: object.frustumCulled,
+    for (const scene of this.sceneManager.scenes)
+      scene.traverse((object) => {
+        states.push({
+          object,
+          frustumCulled: object.frustumCulled,
+        });
       });
-    });
     return states;
   }
 
@@ -75,8 +76,8 @@ export class PrewarmManager {
     const prewarmPromise = (async (): Promise<StartupPrewarmResult> => {
       try {
         for (const task of this.tasks) await task.prepare();
-        await this.rendererManager.compileSceneOnceAsync();
-        if (!timedOut) await this.rendererManager.renderSceneOnceAsync();
+        await this.rendererManager.compileScenesOnceAsync();
+        if (!timedOut) this.rendererManager.render();
         restoreOnce();
         return {
           completed: !timedOut,

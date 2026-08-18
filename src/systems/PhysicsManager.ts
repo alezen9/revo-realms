@@ -162,7 +162,7 @@ export class PhysicsManager {
     const { debugMesh } = this.createDebugMesh(debugBuffer.vertices);
     this.fixedDebugMesh = debugMesh;
     debugMesh.visible = this.debug.enabled;
-    this.sceneManager.scene.add(debugMesh);
+    this.sceneManager.mainScene.add(debugMesh);
   }
 
   private updateDynamicDebugMesh() {
@@ -176,7 +176,7 @@ export class PhysicsManager {
       this.dynamicDebugMesh = debugMesh;
       this.dynamicDebugGeometry = geometry;
       debugMesh.visible = this.debug.enabled;
-      this.sceneManager.scene.add(debugMesh);
+      this.sceneManager.mainScene.add(debugMesh);
       return;
     }
 

@@ -4,7 +4,7 @@ import { type EventsManager } from "./EventsManager";
 import type { DebugManager } from "./DebugManager";
 
 export class SceneManager {
-  scene: Scene;
+  mainScene: Scene;
   waterScene = new Scene();
   playerCamera: PerspectiveCamera;
   renderCamera: PerspectiveCamera;
@@ -16,8 +16,8 @@ export class SceneManager {
   constructor(eventsManager: EventsManager) {
     this.eventsManager = eventsManager;
     // Scene
-    const scene = new Scene();
-    this.scene = scene;
+    const mainScene = new Scene();
+    this.mainScene = mainScene;
 
     const width = window.innerWidth;
     const height = window.innerHeight;
@@ -27,7 +27,7 @@ export class SceneManager {
     const camera = new PerspectiveCamera(45, aspect, 0.5, 150);
     camera.position.set(0, 5, 10);
     this.playerCamera = camera;
-    scene.add(camera);
+    mainScene.add(camera);
 
     // Default render camera
     this.renderCamera = camera;
@@ -83,7 +83,7 @@ export class SceneManager {
     if (!import.meta.env.DEV) return;
     const cameraHelper = new CameraHelper(this.playerCamera);
     cameraHelper.visible = false;
-    this.scene.add(cameraHelper);
+    this.mainScene.add(cameraHelper);
     this.cameraHelper = cameraHelper;
 
     // Map controls with orbit-style mouse buttons
@@ -113,6 +113,10 @@ export class SceneManager {
 
     // Debug
     this.debugScene(debugManager);
+  }
+
+  get scenes() {
+    return [this.mainScene, this.waterScene];
   }
 
   private updateDebugControls = () => {

@@ -19,8 +19,7 @@ export class RendererManager {
   private sceneManager: SceneManager;
   private debugManager: DebugManager;
   private eventsManager: EventsManager;
-  postprocessingManager!: PostprocessingManager;
-  private readonly IS_POSTPROCESSING_ENABLED = true;
+  private postprocessingManager!: PostprocessingManager;
 
   constructor(
     sceneManager: SceneManager,
@@ -43,8 +42,7 @@ export class RendererManager {
       trackTimestamp: false,
       powerPreference: "high-performance",
       stencil: false,
-      // only the fallback path draws depth tested geometry straight to the canvas
-      depth: !this.IS_POSTPROCESSING_ENABLED,
+      depth: false,
     });
     renderer.setClearColor(0x000000, 0);
 
@@ -53,11 +51,8 @@ export class RendererManager {
     this.debugManager.setVisibility(isDebugEnabled);
 
     this.eventsManager.on("engine-render-target-resize", (sizes) => {
-      const scaled = this.IS_POSTPROCESSING_ENABLED
-        ? sizes.dpr * RESOLUTION_SCALE
-        : sizes.dpr;
       renderer.setSize(sizes.width, sizes.height);
-      renderer.setPixelRatio(Math.max(scaled, 1));
+      renderer.setPixelRatio(Math.max(sizes.dpr * RESOLUTION_SCALE, 1));
     });
   }
 
@@ -76,24 +71,18 @@ export class RendererManager {
     );
   }
 
-  private renderScene() {
-    if (this.IS_POSTPROCESSING_ENABLED) this.postprocessingManager.render();
-    else
-      this.renderer.render(
-        this.sceneManager.scene,
-        this.sceneManager.renderCamera,
-      );
+  get mainSceneColorNode() {
+    return this.postprocessingManager.mainSceneColorNode;
   }
 
-  async compileSceneOnceAsync() {
-    return this.renderer.compileAsync(
-      this.sceneManager.scene,
-      this.sceneManager.renderCamera,
-    );
+  get mainSceneDepthNode() {
+    return this.postprocessingManager.mainSceneDepthNode;
   }
 
-  async renderSceneOnceAsync() {
-    this.renderScene();
+  async compileScenesOnceAsync() {
+    const { scenes, renderCamera } = this.sceneManager;
+    for (const scene of scenes)
+      await this.renderer.compileAsync(scene, renderCamera);
   }
 
   createComputeTask(options: CreateComputeTaskOptions) {
@@ -104,6 +93,6 @@ export class RendererManager {
   }
 
   render() {
-    this.renderScene();
+    this.postprocessingManager.render();
   }
 }

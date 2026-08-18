@@ -251,7 +251,7 @@ export default class WindAmbianceParticles {
       update: this.ssbo.computeUpdate,
     });
     this.mesh = this.createMesh();
-    sceneManager.scene.add(this.mesh);
+    sceneManager.mainScene.add(this.mesh);
     this.computeTask.init();
     this.registerPrewarmTask();
     eventsManager.on("engine-render-update", this.onEngineUpdate);
@@ -337,7 +337,6 @@ class WindParticleMaterial extends SpriteNodeMaterial {
   constructor(ssbo: WindParticlesSsbo) {
     super();
 
-    this.precision = "lowp";
     this.transparent = false;
     this.depthWrite = true;
     this.forceSinglePass = true;

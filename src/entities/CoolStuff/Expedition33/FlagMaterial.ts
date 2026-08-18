@@ -8,7 +8,6 @@ import type { FlagSsbo } from "./FlagSsbo";
 export class FlagMaterial extends MeshBasicNodeMaterial {
   constructor(ssbo: FlagSsbo) {
     super();
-    this.precision = "lowp";
     this.side = DoubleSide;
 
     this.positionNode = ssbo.positions.element(vertexIndex).xyz;

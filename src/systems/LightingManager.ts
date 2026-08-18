@@ -57,16 +57,16 @@ export class LightingManager {
   ) {
     this.eventsManager = eventsManager;
     this.directionalLight = this.setupDirectionalLighting();
-    sceneManager.scene.add(this.directionalLight);
+    sceneManager.mainScene.add(this.directionalLight);
 
     this.hemisphereLight = this.setupHemisphereLight();
-    sceneManager.scene.add(this.hemisphereLight);
+    sceneManager.mainScene.add(this.hemisphereLight);
 
     this.fog = this.setupFog();
-    sceneManager.scene.fog = this.fog;
+    sceneManager.mainScene.fog = this.fog;
 
     eventsManager.on("engine-camera-change", () => {
-      sceneManager.scene.fog = sceneManager.scene.fog ? null : this.fog;
+      sceneManager.mainScene.fog = sceneManager.mainScene.fog ? null : this.fog;
     });
 
     this.debugLight(debugManager, sceneManager);
@@ -174,7 +174,7 @@ export class LightingManager {
         label: "Fog enabled",
       })
       .on("change", ({ value }) => {
-        sceneManager.scene.fog = value ? this.fog : null;
+        sceneManager.mainScene.fog = value ? this.fog : null;
       });
 
     // lightFolder.addBinding(this.ambientLight, "color", {

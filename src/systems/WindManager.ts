@@ -155,7 +155,7 @@ export class WindManager {
     geom.rotateX(-Math.PI / 2);
     const mesh = new Mesh(geom, material);
 
-    this.sceneManager.scene.add(mesh);
+    this.sceneManager.mainScene.add(mesh);
 
     this.eventsManager.on("engine-render-update", ({ player }) => {
       mesh.position.copy(player.position).setY(5);

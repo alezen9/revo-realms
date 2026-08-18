@@ -55,7 +55,6 @@ export class LakeSurface {
     };
 
     lakeSurface.material = new WaterMaterial(uniforms);
-    lakeSurface.renderOrder = 100;
     uniforms.uTworld.value
       .transformDirection(lakeSurface.matrixWorld)
       .normalize();
@@ -71,18 +70,6 @@ export class LakeSurface {
     bsLocal.radius = bsLocal.radius * 0.75;
 
     sceneManager.waterScene.add(lakeSurface);
-
-    setTimeout(async () => {
-      const shader = await rendererManager.renderer.debug.getShaderAsync(
-        sceneManager.waterScene,
-        sceneManager.renderCamera,
-        lakeSurface,
-      );
-      const lines = (shader.fragmentShader ?? "")
-        .split("\n")
-        .filter((l: string) => /depth|textureSample|textureLoad/i.test(l));
-      console.info("[watershader]\n" + lines.join("\n"));
-    }, 4000);
 
     // Register landmark for radial menu discovery
     const landmarkId = landmarkManager.register({
@@ -260,9 +247,6 @@ class WaterMaterial extends MeshBasicNodeMaterial {
   }
 
   private createMaterial() {
-    this.precision = "lowp";
-    this.fog = false;
-    this.depthWrite = false;
     this.transparent = true;
     this.blending = NoBlending;
 
@@ -293,9 +277,9 @@ class WaterMaterial extends MeshBasicNodeMaterial {
       .normalize();
 
     // 1. depth
-    const sceneColor = rendererManager.postprocessingManager.sceneColorNode;
-    const sceneDepth = rendererManager.postprocessingManager.sceneDepthNode;
-    const zNdc = sceneDepth.sample(screenUV).r;
+    const mainSceneColor = rendererManager.mainSceneColorNode;
+    const mainSceneDepth = rendererManager.mainSceneDepthNode;
+    const zNdc = mainSceneDepth.sample(screenUV).r;
     const zLinear = perspectiveDepthToViewZ(
       zNdc,
       cameraNear,
@@ -314,7 +298,7 @@ class WaterMaterial extends MeshBasicNodeMaterial {
     );
     const distortion = tsn.xy.mul(distortionStrength); // tangent tilt, not outward, drives wobble
     const refractedScreenUv = screenUV.add(distortion.mul(isUnderWater));
-    const zNdcRefr = sceneDepth.sample(refractedScreenUv).r;
+    const zNdcRefr = mainSceneDepth.sample(refractedScreenUv).r;
     const zLinearRefr = perspectiveDepthToViewZ(
       zNdcRefr,
       cameraNear,
@@ -326,7 +310,7 @@ class WaterMaterial extends MeshBasicNodeMaterial {
       .div(this.uniforms.uDepthDistance)
       .clamp();
     const safeScreenUv = mix(screenUV, refractedScreenUv, isSafe).clamp();
-    const screenColor = sceneColor.sample(safeScreenUv).rgb;
+    const screenColor = mainSceneColor.sample(safeScreenUv).rgb;
 
     // 3. reflections
     const viewDir = normalize(cameraPosition.sub(positionWorld));
@@ -416,13 +400,7 @@ class WaterMaterial extends MeshBasicNodeMaterial {
     // 8. final color
     const shadedWater = mix(throughWater, reflectedColor, fresnelWeight);
     const color = mix(screenColor, shadedWater, opacity);
-    const final = mix(color, this.uniforms.uSunColor, sunGlint);
-    this.colorNode = final;
+    this.colorNode = mix(color, this.uniforms.uSunColor, sunGlint);
     this.opacityNode = float(1);
-    // this.colorNode = mix(
-    //   color,
-    //   vec3(0.5, 0.75, 0.5),
-    //   smoothstep(0, 10, tex1.a.add(tex2.a)),
-    // ).add(sunGlint);
   }
 }

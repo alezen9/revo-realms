@@ -47,7 +47,7 @@ export class Campfire {
     });
     fire.position.copy(campfire.position).setY(-0.15);
 
-    sceneManager.scene.add(campfire, fire);
+    sceneManager.mainScene.add(campfire, fire);
 
     // Physics
     const fireColliderMesh =

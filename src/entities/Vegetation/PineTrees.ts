@@ -31,7 +31,6 @@ const uniforms = {
 class PineTreeCanopyMaterial extends MeshLambertNodeMaterial {
   constructor() {
     super();
-    this.precision = "lowp";
     this.forceSinglePass = true;
 
     const windWeight = attribute<"float">("_windweight");
@@ -52,7 +51,6 @@ class PineTreeCanopyMaterial extends MeshLambertNodeMaterial {
 class PineTreeBarkMaterial extends MeshLambertNodeMaterial {
   constructor() {
     super();
-    this.precision = "lowp";
     this.forceSinglePass = true;
     const _uv = uv().mul(uniforms.uBarkUvScale);
     const diffuse = texture(assetManager.resources.treeBarkDiffuse, _uv);
@@ -113,7 +111,7 @@ export default class PineTrees {
       };
     }
 
-    sceneManager.scene.add(barkBatch, canopyBatch);
+    sceneManager.mainScene.add(barkBatch, canopyBatch);
     this.debug();
   }
 

@@ -22,7 +22,6 @@ const uniforms = {
 class DragonSlayerMaterial extends MeshStandardNodeMaterial {
   constructor() {
     super();
-    this.precision = "lowp";
     const diffuse = texture(
       assetManager.resources.dragonSlayerSwordDiffuse,
       uv(),
@@ -48,7 +47,7 @@ export default class Berserk {
       "dragon_slayer",
     ) as Mesh;
     sword.material = new DragonSlayerMaterial();
-    sceneManager.scene.add(sword);
+    sceneManager.mainScene.add(sword);
 
     // Physics
     sword.geometry.computeBoundingBox();

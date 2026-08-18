@@ -20,7 +20,6 @@ const uniforms = {
 class GokuStatueMaterial extends MeshStandardNodeMaterial {
   constructor() {
     super();
-    this.precision = "lowp";
 
     const _uv = uv().mul(uniforms.uUvScale);
     const diffuse = texture(assetManager.resources.concreteDiffuse, _uv);
@@ -40,7 +39,7 @@ export default class DragonBall {
       "goku_statue",
     ) as Mesh;
     gokuStatue.material = new GokuStatueMaterial();
-    sceneManager.scene.add(gokuStatue);
+    sceneManager.mainScene.add(gokuStatue);
 
     // Physics
     const collider = assetManager.resources.worldModel.scene.getObjectByName(

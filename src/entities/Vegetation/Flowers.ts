@@ -273,7 +273,7 @@ export default class Flowers {
 
   constructor() {
     this.mesh = this.createMesh();
-    sceneManager.scene.add(this.mesh);
+    sceneManager.mainScene.add(this.mesh);
 
     eventsManager.on("engine-render-update-throttle-16x", this.onEngineUpdate);
     this.debug();
@@ -395,7 +395,6 @@ class FlowerMaterial extends SpriteNodeMaterial {
   }
 
   private createFlowersMaterial() {
-    this.precision = "lowp";
     this.stencilWrite = false;
     this.forceSinglePass = true;
     this.transparent = false;

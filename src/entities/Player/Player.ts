@@ -59,7 +59,7 @@ export default class Player {
   constructor() {
     this.mesh = this.createCharacterMesh();
     this.visualRoot = this.createVisualRoot(this.mesh);
-    sceneManager.scene.add(this.visualRoot);
+    sceneManager.mainScene.add(this.visualRoot);
 
     const rigidBodyDesc = this.createRigidBodyDesc();
     this.rigidBody = physicsManager.world.createRigidBody(rigidBodyDesc);

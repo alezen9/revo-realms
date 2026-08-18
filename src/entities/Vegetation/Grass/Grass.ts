@@ -47,7 +47,7 @@ export default class Grass {
     this.drawProfiles.forEach(({ segments }, lod) => {
       this.tile.add(this.createMesh(segments, lod, this.material));
     });
-    sceneManager.scene.add(this.tile);
+    sceneManager.mainScene.add(this.tile);
     void this.computeTask.init();
 
     eventsManager.on("engine-render-update", this.onEngineUpdate);

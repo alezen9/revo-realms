@@ -82,7 +82,6 @@ export default class ParticleSystem extends InstancedMesh {
     super(new PlaneGeometry(), undefined, params.count);
 
     this.mainBuffer = createParticleBuffer(params.count); // holds: vec4 = (x, y, z, alpha)
-    this.mainBuffer.setPBO(true);
 
     switch (params.preset) {
       case "custom":
@@ -212,7 +211,6 @@ const getFirePresetConfig = (
   });
 
   const material = new SpriteNodeMaterial();
-  material.precision = "lowp";
   material.transparent = true;
   material.depthWrite = false;
   material.blending = CustomBlending;
