@@ -72,32 +72,6 @@ export const debugPlayer = (collider: Collider) => {
     max: 10,
   });
 
-  const camera = folder.addFolder({ title: "Camera" });
-  camera.addBinding(config.CAMERA_OFFSET, "y", {
-    label: "Camera height",
-  });
-  camera.addBinding(config.CAMERA_OFFSET, "z", {
-    label: "Camera distance",
-  });
-  camera.addBinding(config, "CAMERA_POSITION_FOLLOW_SPEED_IN_INVERSE_SECONDS", {
-    label: "Position follow",
-    min: 1,
-    max: 40,
-    step: 0.5,
-  });
-  camera.addBinding(config, "CAMERA_TARGET_FOLLOW_SPEED_IN_INVERSE_SECONDS", {
-    label: "Target follow",
-    min: 1,
-    max: 50,
-    step: 0.5,
-  });
-  camera.addBinding(config, "CAMERA_ROTATION_FOLLOW_SPEED_IN_INVERSE_SECONDS", {
-    label: "Rotation follow",
-    min: 1,
-    max: 50,
-    step: 0.5,
-  });
-
   const visuals = folder.addFolder({ title: "Visuals" });
   visuals.addBinding(config, "ACCELERATION_SQUASH_STRENGTH", {
     label: "Acceleration",

@@ -20,13 +20,13 @@ import {
 } from "../../../systems";
 import type { ComputeTask } from "../../../systems/RendererManager/ComputeTask";
 import { RevoColliderType } from "../../../types";
+import { UP } from "../../../utils/axes";
 import { config, uniforms } from "./config";
 import { FlagMaterial } from "./FlagMaterial";
 import { FlagSsbo } from "./FlagSsbo";
 
 // top of the hill, sampled once from the terrain heightmap
 const HILLTOP = new Vector3(-115.74, 3.5, 215.79);
-const UP = new Vector3(0, 1, 0);
 
 export default class Expedition33 {
   private ssbo = new FlagSsbo();

@@ -2,6 +2,7 @@ import { MathUtils, Mesh, Object3D, Quaternion, Vector3 } from "three";
 import type { RigidBody } from "@dimforge/rapier3d";
 import { physicsScheduler } from "../../systems";
 import { playerConfig as config } from "./config";
+import { FORWARD } from "../../utils/axes";
 
 export class PlayerVisual {
   private visualRoot: Object3D;
@@ -211,7 +212,7 @@ export class PlayerVisual {
     }
 
     this.targetSquashQuaternion.setFromUnitVectors(
-      config.FORWARD,
+      FORWARD,
       this.deformationDirection,
     );
   }

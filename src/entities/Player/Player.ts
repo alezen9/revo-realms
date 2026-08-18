@@ -21,6 +21,7 @@ import {
   sceneManager,
 } from "../../systems";
 import { playerConfig as config } from "./config";
+import { DOWN, FORWARD, UP } from "../../utils/axes";
 import { PlayerCamera } from "./PlayerCamera";
 import { PlayerVisual } from "./PlayerVisual";
 import { PlayerWater } from "./PlayerWater";
@@ -35,7 +36,7 @@ export default class Player {
   private rigidBody: RigidBody;
   private collider: Collider;
 
-  private camera = new PlayerCamera();
+  private camera = new PlayerCamera(sceneManager.playerCamera);
   private visual: PlayerVisual;
   private water: PlayerWater;
 
@@ -48,7 +49,7 @@ export default class Player {
   private jumpImpulse = new Vector3();
   private bodyPosition = new Vector3();
   private rayOrigin = new Vector3();
-  private ray = new Ray(this.rayOrigin, config.DOWN);
+  private ray = new Ray(this.rayOrigin, DOWN);
 
   private isOnGround = false;
   private jumpsRemaining = 0;
@@ -286,8 +287,8 @@ export default class Player {
     if (inputManager.isLeftward()) this.yawInRadians += turnSpeed * delta;
     if (inputManager.isRightward()) this.yawInRadians -= turnSpeed * delta;
 
-    this.yawQuaternion.setFromAxisAngle(config.UP, this.yawInRadians);
-    this.forwardVec.copy(config.FORWARD).applyQuaternion(this.yawQuaternion);
+    this.yawQuaternion.setFromAxisAngle(UP, this.yawInRadians);
+    this.forwardVec.copy(FORWARD).applyQuaternion(this.yawQuaternion);
   }
 
   private getMovementMultiplier() {
@@ -338,12 +339,10 @@ export default class Player {
         (driveSign * Math.abs(alongForward) * config.DRIFT_SPIN_MULTIPLIER) /
         radius;
       this.newAngVel
-        .crossVectors(config.UP, this.forwardVec)
+        .crossVectors(UP, this.forwardVec)
         .multiplyScalar(driftSpin);
     } else {
-      this.newAngVel
-        .crossVectors(config.UP, this.newLinVel)
-        .divideScalar(radius);
+      this.newAngVel.crossVectors(UP, this.newLinVel).divideScalar(radius);
     }
     this.rigidBody.setAngvel(this.newAngVel, true);
   }
