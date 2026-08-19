@@ -203,7 +203,7 @@ export class PostprocessingManager extends RenderPipeline {
     this.debugFolder.addBinding(this.renderer, "toneMappingExposure", {
       label: "Exposure",
       min: 0,
-      max: 2,
+      max: 10,
       step: 0.01,
     });
 

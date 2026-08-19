@@ -5,6 +5,7 @@ import { type EventsManager } from "../EventsManager";
 import type { SceneManager } from "../SceneManager";
 import { ComputeTask } from "./ComputeTask";
 import type { Sizes } from "../../Game";
+import { TOOLING_FLAGS } from "@systems-tooling-runtime";
 
 type CreateComputeTaskOptions = {
   label: string;
@@ -29,7 +30,6 @@ export class RendererManager {
     sceneManager: SceneManager,
     debugManager: DebugManager,
     eventsManager: EventsManager,
-    isDebugEnabled: boolean,
   ) {
     this.sceneManager = sceneManager;
     this.debugManager = debugManager;
@@ -52,7 +52,7 @@ export class RendererManager {
 
     renderer.toneMappingExposure = 1.5;
     this.renderer = renderer;
-    this.debugManager.setVisibility(isDebugEnabled);
+    this.debugManager.setVisibility(TOOLING_FLAGS.debug);
 
     this.eventsManager.on("engine-render-target-resize", (sizes) => {
       this.sizes = sizes;

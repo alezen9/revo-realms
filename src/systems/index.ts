@@ -22,6 +22,7 @@ import {
 const init = () => {
   const eventsManager = new EventsManager();
   const frameScheduler = new FrameScheduler();
+  const assetManager = new AssetManager(eventsManager);
   const sceneManager = new SceneManager(eventsManager);
   const cullingManager = new CullingManager(eventsManager, sceneManager);
   const debugManager = createDebugManager();
@@ -30,10 +31,8 @@ const init = () => {
     sceneManager,
     debugManager,
     eventsManager,
-    TOOLING_FLAGS.debug,
   );
   const prewarmManager = new PrewarmManager(rendererManager, sceneManager);
-  const assetManager = new AssetManager(eventsManager);
   const audioManager = new AudioManager(sceneManager, eventsManager);
   const inputManager = new InputManager(eventsManager);
   const physicsManager = new PhysicsManager(
@@ -57,6 +56,7 @@ const init = () => {
     sceneManager,
     debugManager,
     eventsManager,
+    assetManager,
   );
   const windManager = new WindManager(eventsManager, sceneManager);
   return {

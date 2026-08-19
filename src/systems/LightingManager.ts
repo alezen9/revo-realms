@@ -9,6 +9,7 @@ import {
 import { type SceneManager } from "./SceneManager";
 import { type DebugManager } from "./DebugManager";
 import { type EventsManager } from "./EventsManager";
+import type { AssetManager } from "./AssetManager/AssetManager";
 import { type State } from "../Game";
 import { uniform } from "three/tsl";
 import { srgbColorTarget } from "../utils/TweakpaneColor";
@@ -29,6 +30,7 @@ const config = {
   fogColor: new Color(0.64, 0.6, 0.48).convertSRGBToLinear(), // Light
   fogDensity: 0.0044, // Light
   fogEnabled: true,
+  backgroundEnabled: false,
 };
 
 export class LightingManager {
@@ -36,6 +38,7 @@ export class LightingManager {
   private hemisphereLight: HemisphereLight;
   private fog: FogExp2;
   private eventsManager: EventsManager;
+  private assetManager: AssetManager;
 
   sunDirection = config.LIGHT_POSITION_OFFSET.clone().normalize().negate();
   uSunDir = uniform(this.sunDirection);
@@ -54,7 +57,9 @@ export class LightingManager {
     sceneManager: SceneManager,
     debugManager: DebugManager,
     eventsManager: EventsManager,
+    assetManager: AssetManager,
   ) {
+    this.assetManager = assetManager;
     this.eventsManager = eventsManager;
     this.directionalLight = this.setupDirectionalLighting();
     sceneManager.mainScene.add(this.directionalLight);
@@ -175,6 +180,15 @@ export class LightingManager {
       })
       .on("change", ({ value }) => {
         sceneManager.mainScene.fog = value ? this.fog : null;
+      });
+    lightFolder
+      .addBinding(config, "backgroundEnabled", {
+        label: "Background enabled",
+      })
+      .on("change", ({ value }) => {
+        sceneManager.mainScene.background = value
+          ? this.assetManager.resources.envMapTexture
+          : null;
       });
 
     // lightFolder.addBinding(this.ambientLight, "color", {

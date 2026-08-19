@@ -18,6 +18,7 @@ export type DeviceGpuMetrics = {
 };
 
 export type DeviceMetrics = {
+  drawCallCount: number;
   renderPasses: number;
   liveBytes: number;
   peakBytes: number;

@@ -83,10 +83,6 @@
 				</span>
 			</span>
 			<span class="cell">
-				<span class="label">Target</span>
-				<span class="value">{integerFormat.format(snapshot.fps.target)}</span>
-			</span>
-			<span class="cell">
 				<span class="label">Refresh</span>
 				<span class="value">{integerFormat.format(snapshot.fps.refreshHz)} Hz</span>
 			</span>
@@ -95,6 +91,10 @@
 				<span class={["value", snapshot.fps.lateFrames === 0 ? "good" : "warn"]}>
 					{integerFormat.format(snapshot.fps.lateFrames)}
 				</span>
+			</span>
+			<span class="cell">
+				<span class="label"># Draws</span>
+				<span class="value">{device ? integerFormat.format(device.drawCallCount) : "-"}</span>
 			</span>
 		</div>
 

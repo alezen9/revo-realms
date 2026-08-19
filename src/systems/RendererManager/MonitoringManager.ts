@@ -20,6 +20,7 @@ type DeviceAccumulator = {
   gpuExecutionSum: number;
   gpuExecutionCount: number;
   gpuGapMs: number;
+  drawCallCount: number;
 };
 
 const createAccumulator = (): DeviceAccumulator => ({
@@ -27,6 +28,7 @@ const createAccumulator = (): DeviceAccumulator => ({
   gpuExecutionSum: 0,
   gpuExecutionCount: 0,
   gpuGapMs: 0,
+  drawCallCount: 0,
 });
 
 export class MonitoringManager {
@@ -104,15 +106,18 @@ export class MonitoringManager {
     if (!frame) return;
 
     if (!this.device) this.device = createAccumulator();
-    const device = this.device;
-    device.renderPasses = Math.max(device.renderPasses, frame.renderPassCount);
+    this.device.renderPasses = Math.max(
+      this.device.renderPasses,
+      frame.renderPassCount,
+    );
 
     if (!gpu) return;
 
     const executionMs = gpu.submittedRenderAndComputePassExecutionInMs;
-    device.gpuExecutionSum += executionMs;
-    device.gpuExecutionCount++;
-    device.gpuGapMs = gpu.submittedRenderAndComputePassGapSumInMs;
+    this.device.gpuExecutionSum += executionMs;
+    this.device.gpuExecutionCount++;
+    this.device.gpuGapMs = gpu.submittedRenderAndComputePassGapSumInMs;
+    this.device.drawCallCount = frame.drawCallCount;
   }
 
   private onSnapshotInterval = () => {
@@ -149,6 +154,7 @@ export class MonitoringManager {
     }
 
     return {
+      drawCallCount: accumulator?.drawCallCount ?? 0,
       renderPasses: accumulator?.renderPasses ?? 0,
       liveBytes: resources.liveResourceAllocationSumInBytes,
       peakBytes: resources.liveResourceAllocationPeakInBytes,
