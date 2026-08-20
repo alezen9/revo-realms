@@ -33,8 +33,6 @@ import { TSLUtils } from "../../../utils/TSLUtils";
 import { gameDeltaTime, gameTime } from "../../../utils/GameTime";
 import { config, uniforms } from "./config";
 import {
-  getBakedShadowFactor,
-  getBend,
   getOriginalScale,
   getPositionNoise,
   getScale,
@@ -68,9 +66,10 @@ const createIndirectDrawArguments = () => {
 
   for (let lod = 0; lod < LOD_COUNT; lod++) {
     const argsBase = lod * INDIRECT_ARGS_STRIDE;
-    drawArguments[argsBase + config.INDEX_COUNT_INDEX] =
-      LOD_DRAW_PROFILES[lod].indexCount;
-    drawArguments[argsBase + config.FIRST_INSTANCE_INDEX] = lod * COUNT;
+    const argCountIdx = argsBase + config.INDEX_COUNT_INDEX;
+    drawArguments[argCountIdx] = LOD_DRAW_PROFILES[lod].indexCount;
+    const argFirstInstanceIdx = argsBase + config.FIRST_INSTANCE_INDEX;
+    drawArguments[argFirstInstanceIdx] = lod * COUNT;
   }
 
   return drawArguments;
@@ -108,65 +107,6 @@ export class GrassCompute {
     this.windState.value.name = "grass.windState";
     this.visibleIndices.value.name = "grass.visibleIndices";
   }
-
-  private computeStochasticKeep = Fn<StochasticKeepArgs, Node<"float">>(
-    ([worldPos, distanceSquared, bladeHeight, previousKeep]) => {
-      const fullDensityRadiusSquared = uniforms.uFullDensityRadius.mul(
-        uniforms.uFullDensityRadius,
-      );
-      const densityFalloffRadiusSquared = uniforms.uDensityFalloffRadius.mul(
-        uniforms.uDensityFalloffRadius,
-      );
-      const distanceFactor = distanceSquared
-        .sub(fullDensityRadiusSquared)
-        .div(
-          max(
-            densityFalloffRadiusSquared.sub(fullDensityRadiusSquared),
-            EPSILON,
-          ),
-        )
-        .clamp();
-      const distanceKeep = mix(1, uniforms.uFarDensity, distanceFactor);
-      const cameraDistance = worldPos
-        .distance(uniforms.uCameraPosition)
-        .max(EPSILON);
-      const projectedBladeHeight = uniforms.uFy
-        .mul(bladeHeight)
-        .div(cameraDistance);
-      const screenKeep = smoothstep(
-        uniforms.uProjectedHeightMin,
-        uniforms.uProjectedHeightFull,
-        projectedBladeHeight,
-      );
-      const keepProbability = distanceKeep.mul(screenKeep);
-      const cell = floor(worldPos.xz.div(config.SPACING));
-      const randomThreshold = hash(cell.x.mul(12.9898).add(cell.y.mul(78.233)));
-      const enterThreshold = randomThreshold
-        .add(uniforms.uStochasticHysteresis)
-        .clamp();
-      const stayThreshold = randomThreshold
-        .sub(uniforms.uStochasticHysteresis)
-        .clamp(EPSILON, 1);
-      const enterKeep = step(enterThreshold, keepProbability);
-      const stayKeep = step(stayThreshold, keepProbability);
-      return mix(enterKeep, stayKeep, previousKeep);
-    },
-  );
-
-  // cubic bezier with P0 = 0 and P3 = 1 over normalized blade height
-  private computeWindResponse = Fn<[scaleY: Node<"float">], Node<"float">>(
-    ([scaleY]) => {
-      const t = scaleY.div(uniforms.uBladeMaxScale).clamp();
-      const inverse = float(1).sub(t);
-      const p1Term = inverse
-        .mul(inverse)
-        .mul(t)
-        .mul(3)
-        .mul(uniforms.uWindCurveP1);
-      const p2Term = inverse.mul(t).mul(t).mul(3).mul(uniforms.uWindCurveP2);
-      return p1Term.add(p2Term).add(t.mul(t).mul(t));
-    },
-  );
 
   get bladeStateBuffer() {
     return this.bladeState;
@@ -230,154 +170,6 @@ export class GrassCompute {
     this.cachedGrassScale.element(instanceIndex).assign(0);
     this.windState.element(instanceIndex).assign(vec2(0));
   })().compute(config.COUNT, [config.WORKGROUP_SIZE]);
-
-  private computeWind = Fn<
-    [
-      prevWindXZ: Node<"vec2">,
-      worldPos: Node<"vec3">,
-      positionNoise: Node<"float">,
-      resetWind: Node<"float">,
-    ],
-    Node<"vec3">
-  >(([prevWindXZ, worldPos, positionNoise, resetWind]) => {
-    const baseDir = windManager.uDirection;
-    const windEvent = windManager.uIntensityDirectional;
-    const perp = vec2(baseDir.y.negate(), baseDir.x);
-
-    const scrollDir = perp.mul(0.3717).sub(baseDir);
-    const uv = worldPos.xz
-      .mul(uniforms.uWindUvScale.mul(0.01))
-      .add(scrollDir.mul(uniforms.uWindSpeed.mul(gameTime)));
-    const noise = texture(assetManager.resources.noiseAtlas, uv);
-
-    const fastGust = sin(noise.g.mul(18.85)).mul(0.5).add(0.5);
-    const gustField = mix(noise.r, fastGust, windEvent);
-    const gustStart = float(1).sub(uniforms.uWindGustCoverage);
-    const gust = smoothstep(gustStart, gustStart.add(0.25), gustField);
-    const windFactor = uniforms.uWindStrength
-      .mul(mix(uniforms.uWindLull, 1, gust))
-      .mul(mix(1, 4, windEvent));
-
-    const veer = noise.g.sub(0.5).mul(2).mul(uniforms.uWindEddyStrength);
-    const target = baseDir.add(perp.mul(veer)).mul(windFactor);
-
-    const rate = mix(3.5, 11, positionNoise).mul(mix(0.3, 1, gust));
-    const k = min(rate.mul(gameDeltaTime), 1);
-    const dampedWind = prevWindXZ.add(target.sub(prevWindXZ).mul(k));
-    const newWind = mix(dampedWind, target, resetWind);
-
-    return vec3(newWind, gust);
-  });
-
-  private computeBladeDeformation = Fn<
-    [
-      windXZ: Node<"vec2">,
-      gust: Node<"float">,
-      worldPos: Node<"vec3">,
-      scaleY: Node<"float">,
-    ],
-    Node<"vec2">
-  >(([windXZ, gust, worldPos, scaleY]) => {
-    const bladeSeed = hash(instanceIndex);
-    const instanceNoise = bladeSeed.mul(0.25).sub(0.125);
-    const spriteNoise = bladeSeed.mul(31.7).fract().mul(2).sub(1);
-    const scaleWindFactor = this.computeWindResponse(scaleY);
-    const windBend = windXZ.dot(windXZ).mul(3.5).clamp();
-    const windNoiseShade = smoothstep(0.2, 1, gust);
-    const windNoiseFactor = max(windBend, windNoiseShade.mul(0.45));
-    const swayEnvelope = mix(0.75, 1.35, windNoiseFactor);
-    const randomPhase = instanceNoise.mul(25.13);
-    const heightPhase = swayEnvelope.mul(0.55);
-    const swayRate = spriteNoise.remap(-1, 1, 0.7, 1.45);
-    const swayA = sin(
-      gameTime.mul(swayRate.mul(1.35)).add(randomPhase).add(heightPhase),
-    );
-    const swayB = sin(
-      gameTime
-        .mul(swayRate.mul(2.15))
-        .add(worldPos.x.mul(0.17))
-        .add(worldPos.z.mul(0.11))
-        .add(randomPhase.mul(1.7))
-        .add(heightPhase.mul(1.6)),
-    ).mul(0.45);
-    const ambientAngle = bladeSeed.mul(53.3).fract().mul(PI2);
-    const ambientOffset = vec2(cos(ambientAngle), sin(ambientAngle)).mul(
-      swayA.add(swayB).mul(uniforms.uAmbientSwayStrength).mul(swayEnvelope),
-    );
-    const perpendicularWind = vec2(
-      windManager.uDirection.y.negate(),
-      windManager.uDirection.x,
-    );
-    const bendStrength = uniforms.uBaseBending.mul(scaleWindFactor);
-    const flutterPhase = bladeSeed
-      .mul(97.13)
-      .fract()
-      .mul(PI2)
-      .add(worldPos.x.mul(0.13))
-      .add(worldPos.z.mul(0.07));
-    const flutter = sin(
-      gameTime
-        .mul(uniforms.uWindSpeed.mul(1.7))
-        .add(flutterPhase.mul(1.3))
-        .add(heightPhase.mul(2.2)),
-    )
-      .mul(0.025)
-      .mul(windNoiseFactor)
-      .mul(bendStrength);
-
-    return windXZ
-      .mul(bendStrength)
-      .add(ambientOffset.mul(scaleWindFactor))
-      .add(perpendicularWind.mul(flutter));
-  });
-
-  private computeDistantWind = Fn<[worldPos: Node<"vec3">], Node<"vec3">>(
-    ([worldPos]) => {
-      const baseDir = windManager.uDirection;
-      const windEvent = windManager.uIntensityDirectional;
-      const phase = worldPos.x
-        .mul(0.035)
-        .add(worldPos.z.mul(0.025))
-        .add(gameTime.mul(uniforms.uWindSpeed.mul(2.2)));
-      const wave = sin(phase);
-      const gust = wave.mul(0.5).add(0.5);
-      const windFactor = uniforms.uWindStrength
-        .mul(mix(uniforms.uWindLull, 1, gust))
-        .mul(mix(1, 4, windEvent));
-
-      return vec3(baseDir.mul(windFactor), gust);
-    },
-  );
-
-  private computeDistantBladeDeformation = Fn<
-    [windXZ: Node<"vec2">, gust: Node<"float">, scaleY: Node<"float">],
-    Node<"vec2">
-  >(([windXZ, gust, scaleY]) => {
-    const scaleWindFactor = this.computeWindResponse(scaleY);
-    const perpendicularWind = vec2(
-      windManager.uDirection.y.negate(),
-      windManager.uDirection.x,
-    );
-    const broadSway = gust.sub(0.5).mul(uniforms.uAmbientSwayStrength.mul(0.7));
-
-    return windXZ
-      .mul(uniforms.uBaseBending.mul(scaleWindFactor))
-      .add(perpendicularWind.mul(broadSway.mul(scaleWindFactor)));
-  });
-
-  // only the instance counts are cleared; indexCount and firstInstance are set
-  // once at construction and must survive every frame
-  computeResetInstanceCount = Fn(() => {
-    // unrolled at graph build time, no GPU branching
-    for (let lod = 0; lod < config.LOD_COUNT; lod++) {
-      const argsBase = lod * config.INDIRECT_ARGS_STRIDE;
-      const instanceCountIndex = argsBase + config.INSTANCE_COUNT_INDEX;
-      atomicStore(
-        this.atomicIndirectDrawArguments.element(instanceCountIndex),
-        0,
-      );
-    }
-  })().compute(1, [1]); // one invocation in a one-thread workgroup
 
   computeUpdate = Fn(() => {
     const bladeState = this.bladeState.element(instanceIndex);
@@ -596,4 +388,211 @@ export class GrassCompute {
       });
     });
   })().compute(config.COUNT, [config.WORKGROUP_SIZE]);
+
+  // only the instance counts are cleared; indexCount and firstInstance are set
+  // once at construction and must survive every frame
+  computeResetInstanceCount = Fn(() => {
+    // unrolled at graph build time, no GPU branching
+    for (let lod = 0; lod < config.LOD_COUNT; lod++) {
+      const argsBase = lod * config.INDIRECT_ARGS_STRIDE;
+      const instanceCountIndex = argsBase + config.INSTANCE_COUNT_INDEX;
+      atomicStore(
+        this.atomicIndirectDrawArguments.element(instanceCountIndex),
+        0,
+      );
+    }
+  })().compute(1, [1]); // one invocation in a one-thread workgroup
+
+  private computeStochasticKeep = Fn<StochasticKeepArgs, Node<"float">>(
+    ([worldPos, distanceSquared, bladeHeight, previousKeep]) => {
+      const fullDensityRadiusSquared = uniforms.uFullDensityRadius.mul(
+        uniforms.uFullDensityRadius,
+      );
+      const densityFalloffRadiusSquared = uniforms.uDensityFalloffRadius.mul(
+        uniforms.uDensityFalloffRadius,
+      );
+      const distanceFactor = distanceSquared
+        .sub(fullDensityRadiusSquared)
+        .div(
+          max(
+            densityFalloffRadiusSquared.sub(fullDensityRadiusSquared),
+            EPSILON,
+          ),
+        )
+        .clamp();
+      const distanceKeep = mix(1, uniforms.uFarDensity, distanceFactor);
+      const cameraDistance = worldPos
+        .distance(uniforms.uCameraPosition)
+        .max(EPSILON);
+      const projectedBladeHeight = uniforms.uFy
+        .mul(bladeHeight)
+        .div(cameraDistance);
+      const screenKeep = smoothstep(
+        uniforms.uProjectedHeightMin,
+        uniforms.uProjectedHeightFull,
+        projectedBladeHeight,
+      );
+      const keepProbability = distanceKeep.mul(screenKeep);
+      const cell = floor(worldPos.xz.div(config.SPACING));
+      const randomThreshold = hash(cell.x.mul(12.9898).add(cell.y.mul(78.233)));
+      const enterThreshold = randomThreshold
+        .add(uniforms.uStochasticHysteresis)
+        .clamp();
+      const stayThreshold = randomThreshold
+        .sub(uniforms.uStochasticHysteresis)
+        .clamp(EPSILON, 1);
+      const enterKeep = step(enterThreshold, keepProbability);
+      const stayKeep = step(stayThreshold, keepProbability);
+      return mix(enterKeep, stayKeep, previousKeep);
+    },
+  );
+
+  // cubic bezier with P0 = 0 and P3 = 1 over normalized blade height
+  private computeWindResponse = Fn<[scaleY: Node<"float">], Node<"float">>(
+    ([scaleY]) => {
+      const t = scaleY.div(uniforms.uBladeMaxScale).clamp();
+      const inverse = float(1).sub(t);
+      const p1Term = inverse
+        .mul(inverse)
+        .mul(t)
+        .mul(3)
+        .mul(uniforms.uWindCurveP1);
+      const p2Term = inverse.mul(t).mul(t).mul(3).mul(uniforms.uWindCurveP2);
+      return p1Term.add(p2Term).add(t.mul(t).mul(t));
+    },
+  );
+
+  private computeWind = Fn<
+    [
+      prevWindXZ: Node<"vec2">,
+      worldPos: Node<"vec3">,
+      positionNoise: Node<"float">,
+      resetWind: Node<"float">,
+    ],
+    Node<"vec3">
+  >(([prevWindXZ, worldPos, positionNoise, resetWind]) => {
+    const baseDir = windManager.uDirection;
+    const windEvent = windManager.uIntensityDirectional;
+    const perp = vec2(baseDir.y.negate(), baseDir.x);
+
+    const scrollDir = perp.mul(0.3717).sub(baseDir);
+    const uv = worldPos.xz
+      .mul(uniforms.uWindUvScale.mul(0.01))
+      .add(scrollDir.mul(uniforms.uWindSpeed.mul(gameTime)));
+    const noise = texture(assetManager.resources.noiseAtlas, uv);
+
+    const fastGust = sin(noise.g.mul(18.85)).mul(0.5).add(0.5);
+    const gustField = mix(noise.r, fastGust, windEvent);
+    const gustStart = float(1).sub(uniforms.uWindGustCoverage);
+    const gust = smoothstep(gustStart, gustStart.add(0.25), gustField);
+    const windFactor = uniforms.uWindStrength
+      .mul(mix(uniforms.uWindLull, 1, gust))
+      .mul(mix(1, 4, windEvent));
+
+    const veer = noise.g.sub(0.5).mul(2).mul(uniforms.uWindEddyStrength);
+    const target = baseDir.add(perp.mul(veer)).mul(windFactor);
+
+    const rate = mix(3.5, 11, positionNoise).mul(mix(0.3, 1, gust));
+    const k = min(rate.mul(gameDeltaTime), 1);
+    const dampedWind = prevWindXZ.add(target.sub(prevWindXZ).mul(k));
+    const newWind = mix(dampedWind, target, resetWind);
+
+    return vec3(newWind, gust);
+  });
+
+  private computeBladeDeformation = Fn<
+    [
+      windXZ: Node<"vec2">,
+      gust: Node<"float">,
+      worldPos: Node<"vec3">,
+      scaleY: Node<"float">,
+    ],
+    Node<"vec2">
+  >(([windXZ, gust, worldPos, scaleY]) => {
+    const bladeSeed = hash(instanceIndex);
+    const instanceNoise = bladeSeed.mul(0.25).sub(0.125);
+    const spriteNoise = bladeSeed.mul(31.7).fract().mul(2).sub(1);
+    const scaleWindFactor = this.computeWindResponse(scaleY);
+    const windBend = windXZ.dot(windXZ).mul(3.5).clamp();
+    const windNoiseShade = smoothstep(0.2, 1, gust);
+    const windNoiseFactor = max(windBend, windNoiseShade.mul(0.45));
+    const swayEnvelope = mix(0.75, 1.35, windNoiseFactor);
+    const randomPhase = instanceNoise.mul(25.13);
+    const heightPhase = swayEnvelope.mul(0.55);
+    const swayRate = spriteNoise.remap(-1, 1, 0.7, 1.45);
+    const swayA = sin(
+      gameTime.mul(swayRate.mul(1.35)).add(randomPhase).add(heightPhase),
+    );
+    const swayB = sin(
+      gameTime
+        .mul(swayRate.mul(2.15))
+        .add(worldPos.x.mul(0.17))
+        .add(worldPos.z.mul(0.11))
+        .add(randomPhase.mul(1.7))
+        .add(heightPhase.mul(1.6)),
+    ).mul(0.45);
+    const ambientAngle = bladeSeed.mul(53.3).fract().mul(PI2);
+    const ambientOffset = vec2(cos(ambientAngle), sin(ambientAngle)).mul(
+      swayA.add(swayB).mul(uniforms.uAmbientSwayStrength).mul(swayEnvelope),
+    );
+    const perpendicularWind = vec2(
+      windManager.uDirection.y.negate(),
+      windManager.uDirection.x,
+    );
+    const bendStrength = uniforms.uBaseBending.mul(scaleWindFactor);
+    const flutterPhase = bladeSeed
+      .mul(97.13)
+      .fract()
+      .mul(PI2)
+      .add(worldPos.x.mul(0.13))
+      .add(worldPos.z.mul(0.07));
+    const flutter = sin(
+      gameTime
+        .mul(uniforms.uWindSpeed.mul(1.7))
+        .add(flutterPhase.mul(1.3))
+        .add(heightPhase.mul(2.2)),
+    )
+      .mul(0.025)
+      .mul(windNoiseFactor)
+      .mul(bendStrength);
+
+    return windXZ
+      .mul(bendStrength)
+      .add(ambientOffset.mul(scaleWindFactor))
+      .add(perpendicularWind.mul(flutter));
+  });
+
+  private computeDistantWind = Fn<[worldPos: Node<"vec3">], Node<"vec3">>(
+    ([worldPos]) => {
+      const baseDir = windManager.uDirection;
+      const windEvent = windManager.uIntensityDirectional;
+      const phase = worldPos.x
+        .mul(0.035)
+        .add(worldPos.z.mul(0.025))
+        .add(gameTime.mul(uniforms.uWindSpeed.mul(2.2)));
+      const wave = sin(phase);
+      const gust = wave.mul(0.5).add(0.5);
+      const windFactor = uniforms.uWindStrength
+        .mul(mix(uniforms.uWindLull, 1, gust))
+        .mul(mix(1, 4, windEvent));
+
+      return vec3(baseDir.mul(windFactor), gust);
+    },
+  );
+
+  private computeDistantBladeDeformation = Fn<
+    [windXZ: Node<"vec2">, gust: Node<"float">, scaleY: Node<"float">],
+    Node<"vec2">
+  >(([windXZ, gust, scaleY]) => {
+    const scaleWindFactor = this.computeWindResponse(scaleY);
+    const perpendicularWind = vec2(
+      windManager.uDirection.y.negate(),
+      windManager.uDirection.x,
+    );
+    const broadSway = gust.sub(0.5).mul(uniforms.uAmbientSwayStrength.mul(0.7));
+
+    return windXZ
+      .mul(uniforms.uBaseBending.mul(scaleWindFactor))
+      .add(perpendicularWind.mul(broadSway.mul(scaleWindFactor)));
+  });
 }

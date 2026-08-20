@@ -14,12 +14,29 @@ export type LoadingFailure = {
 
 export type DeviceGpuMetrics = {
   averageMs: number;
-  gapMs: number;
+  renderAverageMs: number;
+  computeAverageMs: number;
+  gapAverageMs: number;
+  uninstrumentedPassMax: number;
+  slowestPasses: DeviceGpuPassMetrics[];
+};
+
+export type DeviceGpuPassMetrics = {
+  kind: "render" | "compute";
+  label: string;
+  averageMs: number;
 };
 
 export type DeviceMetrics = {
   drawCallCount: number;
-  renderPasses: number;
+  renderPassCount: number;
+  computePassCount: number;
+  computeDispatchCount: number;
+  gpuSubmissionCount: number;
+  queueWriteMaxBytes: number;
+  commandCopyMaxBytes: number;
+  pipelineCreationCount: number;
+  pipelineBlockingMaxMs: number;
   liveBytes: number;
   peakBytes: number;
   textureBytes: number;
@@ -33,7 +50,24 @@ export type MonitoringSnapshot = {
     live: number;
     target: number;
     refreshHz: number;
-    lateFrames: number;
+    missedFrames: number;
+  };
+  frame: {
+    intervalAverageMs: number;
+    intervalP95Ms: number;
+    intervalP99Ms: number;
+    intervalMaxMs: number;
+  };
+  physics: {
+    rate: number;
+    maxSteps: number;
+    discardedMs: number;
+    remainderMs: number;
+  };
+  output: {
+    width: number;
+    height: number;
+    pixelRatio: number;
   };
   frameBudgetMs: number;
   sampleRateMs: number;

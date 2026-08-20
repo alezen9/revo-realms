@@ -3,14 +3,13 @@ import type { DebugManager } from "./DebugManager";
 import type { EventsManager } from "./EventsManager";
 import type { InputManager } from "./InputManager";
 import { GameTime } from "../utils/GameTime";
+import { MAX_CATCH_UP_SECONDS } from "./PhysicsScheduler";
 
 type TimeState = {
   isPaused: boolean;
   isSlowMotion: boolean;
   slowMotionScale: number;
 };
-
-const MAX_FRAME_DELTA_SECONDS = 1 / 15;
 
 export class TimeManager {
   private eventsManager: EventsManager;
@@ -25,6 +24,7 @@ export class TimeManager {
   private lastPauseState = false;
   private lastSlowMoState = false;
   delta = 0;
+  discardedDelta = 0;
 
   constructor(
     eventsManager: EventsManager,
@@ -45,21 +45,24 @@ export class TimeManager {
     this.timer.connect(document);
     this.pendingRenderDelta = 0;
     this.delta = 0;
+    this.discardedDelta = 0;
     GameTime.reset();
   }
 
   update(timestamp: DOMHighResTimeStamp) {
     this.timer.update(timestamp);
     const rawDelta = this.timer.getDelta();
-    const clampedDelta = Math.min(rawDelta, MAX_FRAME_DELTA_SECONDS);
+    const clampedDelta = Math.min(rawDelta, MAX_CATCH_UP_SECONDS);
 
     if (this.state.isPaused) {
       this.pendingRenderDelta = 0;
       this.delta = 0;
+      this.discardedDelta = 0;
       return;
     }
 
     this.delta = clampedDelta * this.timeScale;
+    this.discardedDelta = (rawDelta - clampedDelta) * this.timeScale;
     this.pendingRenderDelta += this.delta;
     GameTime.update(this.delta);
   }

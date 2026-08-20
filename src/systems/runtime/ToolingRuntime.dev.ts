@@ -3,7 +3,9 @@ import { DebugManager, DevDebugManager } from "../DebugManager";
 import { MonitoringManager } from "../RendererManager/MonitoringManager";
 import type { EventsManager } from "../EventsManager";
 import type { FrameScheduler } from "../FrameScheduler";
+import type { PhysicsScheduler } from "../PhysicsScheduler";
 import type { RendererManager } from "../RendererManager/RendererManager";
+import type { TimeManager } from "../TimeManager";
 import { TOOLING_FLAGS } from "./ToolingFlags";
 
 export const createDebugManager = () => {
@@ -15,9 +17,17 @@ export const createMonitoringManager = (
   eventsManager: EventsManager,
   rendererManager: RendererManager,
   frameScheduler: FrameScheduler,
+  physicsScheduler: PhysicsScheduler,
+  timeManager: TimeManager,
 ) => {
   if (!TOOLING_FLAGS.monitoring) return undefined;
-  return new MonitoringManager(eventsManager, rendererManager, frameScheduler);
+  return new MonitoringManager(
+    eventsManager,
+    rendererManager,
+    frameScheduler,
+    physicsScheduler,
+    timeManager,
+  );
 };
 
 export { TOOLING_FLAGS };

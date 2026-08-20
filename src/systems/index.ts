@@ -41,15 +41,17 @@ const init = () => {
     debugManager,
   );
   const physicsScheduler = new PhysicsScheduler();
-  const monitoringManager = createMonitoringManager(
-    eventsManager,
-    rendererManager,
-    frameScheduler,
-  );
   const timeManager = new TimeManager(
     eventsManager,
     inputManager,
     debugManager,
+  );
+  const monitoringManager = createMonitoringManager(
+    eventsManager,
+    rendererManager,
+    frameScheduler,
+    physicsScheduler,
+    timeManager,
   );
   const landmarkManager = new LandmarkManager(eventsManager);
   const lightingManager = new LightingManager(

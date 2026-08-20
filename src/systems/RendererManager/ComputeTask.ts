@@ -9,13 +9,20 @@ type ComputeTaskOptions = {
   update: ComputeTaskNodes;
 };
 
+const setNodeNames = (nodes: ComputeTaskNodes | undefined, name: string) => {
+  if (!nodes) return;
+  const nodeList = Array.isArray(nodes) ? nodes : [nodes];
+  for (const node of nodeList) {
+    if (!node.name) node.name = name;
+  }
+};
+
 export class ComputeTask {
   private label: string;
   private renderer: WebGPURenderer;
   private initNodes?: ComputeTaskNodes;
   private updateNodes: ComputeTaskNodes;
   private initPromise?: Promise<boolean>;
-  private updatePromise?: Promise<void>;
   private hasInitialized: boolean;
 
   constructor(options: ComputeTaskOptions) {
@@ -24,10 +31,12 @@ export class ComputeTask {
     this.initNodes = options.init;
     this.updateNodes = options.update;
     this.hasInitialized = !options.init;
+    setNodeNames(this.initNodes, `${this.label} init`);
+    setNodeNames(this.updateNodes, this.label);
   }
 
   get canUpdate() {
-    return this.hasInitialized && !this.initPromise && !this.updatePromise;
+    return this.hasInitialized && !this.initPromise;
   }
 
   init() {
@@ -39,10 +48,15 @@ export class ComputeTask {
   }
 
   update() {
-    if (!this.canUpdate) return;
+    if (!this.canUpdate) return false;
 
-    this.updatePromise = this.runUpdate();
-    return this.updatePromise;
+    try {
+      this.renderer.compute(this.updateNodes);
+      return true;
+    } catch (error) {
+      console.error(`[${this.label}] compute update failed:`, error);
+      return false;
+    }
   }
 
   private async runInit() {
@@ -56,17 +70,6 @@ export class ComputeTask {
       return false;
     } finally {
       this.initPromise = undefined;
-    }
-  }
-
-  private async runUpdate() {
-    try {
-      await this.renderer.computeAsync(this.updateNodes);
-    } catch (error) {
-      console.error(`[${this.label}] compute update failed:`, error);
-      throw error;
-    } finally {
-      this.updatePromise = undefined;
     }
   }
 }

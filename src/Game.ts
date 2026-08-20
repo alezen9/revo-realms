@@ -106,13 +106,14 @@ export default class Game {
       eventsManager.emit("engine-after-physics", this.physicsState);
       physicsManager.flush();
     }
+    monitoringManager?.samplePhysics();
 
     frameScheduler.update();
     if (!frameScheduler.shouldRender) return;
 
     this.renderState.delta = timeManager.consumeRenderDelta();
 
-    monitoringManager?.beginFrame();
+    monitoringManager?.sampleRender(timestamp);
     eventsManager.emit("engine-render-update", this.renderState);
     rendererManager.render();
 
@@ -120,8 +121,6 @@ export default class Game {
       this.hasRenderedFirstFrame = true;
       eventsManager.emit("engine-loading-core-progress", 100);
     }
-
-    monitoringManager?.sample(timestamp);
   };
 
   private dispose = () => {

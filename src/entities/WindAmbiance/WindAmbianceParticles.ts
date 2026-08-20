@@ -292,7 +292,7 @@ export default class WindAmbianceParticles {
   };
 
   private updateSsbo() {
-    void this.computeTask.update()?.catch(() => undefined);
+    this.computeTask.update();
   }
 
   private debug() {

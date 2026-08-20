@@ -74,6 +74,8 @@ export class PostprocessingManager extends RenderPipeline {
       this.sceneManager.renderCamera,
       { samples: 0, depthBuffer: false },
     );
+    this.mainScenePass.name = "Main scene";
+    this.waterPass.name = "Water";
     const mainScenePassDepth = this.mainScenePass.renderTarget.depthTexture;
     if (mainScenePassDepth)
       mainScenePassDepth.renderTarget = this.mainScenePass.renderTarget;

@@ -99,6 +99,7 @@ class FlowersSsbo {
   private buffer = instancedArray(config.COUNT, "vec4");
 
   constructor() {
+    this.computeUpdate.name = "Flowers";
     this.computeUpdate.onInit(({ renderer }) => {
       renderer.computeAsync(this.computeInit);
     });
@@ -269,7 +270,6 @@ class FlowersSsbo {
 export default class Flowers {
   private ssbo = new FlowersSsbo();
   private mesh: InstancedMesh;
-  private isComputeInFlight = false;
 
   constructor() {
     this.mesh = this.createMesh();
@@ -311,17 +311,11 @@ export default class Flowers {
   }
 
   private updateSsbo() {
-    if (this.isComputeInFlight) return;
-
-    this.isComputeInFlight = true;
-    rendererManager.renderer
-      .computeAsync(this.ssbo.computeUpdate)
-      .catch((error) => {
-        console.error("[Flowers] computeAsync failed:", error);
-      })
-      .finally(() => {
-        this.isComputeInFlight = false;
-      });
+    try {
+      rendererManager.renderer.compute(this.ssbo.computeUpdate);
+    } catch (error) {
+      console.error("[Flowers] compute update failed:", error);
+    }
   }
 
   private debug() {

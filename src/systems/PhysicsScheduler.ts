@@ -1,5 +1,6 @@
 const FIXED_DELTA = 1 / 60;
-const MAX_STEPS_PER_FRAME = 4;
+export const MAX_CATCH_UP_SECONDS = 1 / 15;
+const MAX_STEPS_PER_FRAME = Math.floor(MAX_CATCH_UP_SECONDS / FIXED_DELTA);
 
 export class PhysicsScheduler {
   private accumulator = 0;

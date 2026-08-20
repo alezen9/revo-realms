@@ -286,12 +286,12 @@ export default class WindAmbianceStreaks {
     uniforms.uDelta.value = this.elapsedSinceUpdate;
     uniforms.uReset.value = this.isResetPending ? 1 : 0;
 
-    const updatePromise = this.computeTask.update();
-    if (!updatePromise) return;
+    const didUpdate = this.computeTask.update();
+    if (!didUpdate) return;
 
     this.elapsedSinceUpdate = 0;
     this.isResetPending = false;
-    void updatePromise.then(this.clearReset, this.clearReset);
+    this.clearReset();
   }
 
   private clearReset = () => {

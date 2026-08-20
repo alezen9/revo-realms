@@ -1,4 +1,5 @@
 import { Group, Mesh, Vector2 } from "three";
+import { ReadbackBuffer } from "three/webgpu";
 import { type State } from "../../../Game";
 import {
   sceneManager,
@@ -16,6 +17,8 @@ import type { GrassMonitoringStats } from "../../../systems/EventsManager";
 
 const UINT32_BYTE_SIZE = Uint32Array.BYTES_PER_ELEMENT;
 const INDIRECT_FIRST_INSTANCE_FEATURE = "indirect-first-instance";
+const INDIRECT_DRAW_BYTE_LENGTH =
+  config.LOD_COUNT * config.INDIRECT_ARGS_STRIDE * UINT32_BYTE_SIZE;
 
 export default class Grass {
   private compute = new GrassCompute();
@@ -26,8 +29,10 @@ export default class Grass {
   private playerDeltaXZ = new Vector2(0, 0);
   private drawProfiles: typeof config.LOD_DRAW_PROFILES;
   private hasRegisteredMonitoringProvider = false;
+  private monitoringReadback = new ReadbackBuffer(INDIRECT_DRAW_BYTE_LENGTH);
 
   constructor() {
+    this.monitoringReadback.name = "grass.indirectDrawArguments";
     const isLodEnabled = rendererManager.renderer.hasFeature(
       INDIRECT_FIRST_INSTANCE_FEATURE,
     );
@@ -114,24 +119,18 @@ export default class Grass {
     this.playerDeltaXZ.set(0, 0);
     uniforms.uPlayerDeltaXZ.value.set(deltaX, deltaZ);
 
-    this.computeGrassAsync(deltaX, deltaZ);
+    this.computeGrass(deltaX, deltaZ);
   }
 
-  private async computeGrassAsync(deltaX: number, deltaZ: number) {
-    const computePromise = this.computeTask.update();
-    if (!computePromise) {
+  private computeGrass(deltaX: number, deltaZ: number) {
+    const didCompute = this.computeTask.update();
+    if (!didCompute) {
       this.playerDeltaXZ.x += deltaX;
       this.playerDeltaXZ.y += deltaZ;
       return;
     }
 
-    try {
-      await computePromise;
-      this.registerMonitoringProvider();
-    } catch {
-      this.playerDeltaXZ.x += deltaX;
-      this.playerDeltaXZ.y += deltaZ;
-    }
+    this.registerMonitoringProvider();
   }
 
   private registerMonitoringProvider() {
@@ -141,34 +140,43 @@ export default class Grass {
   }
 
   private getMonitoringStatsAsync = async (): Promise<GrassMonitoringStats> => {
-    const buffer = await rendererManager.renderer.getArrayBufferAsync(
+    const readback = await rendererManager.renderer.getArrayBufferAsync(
       this.compute.indirectDrawAttribute,
+      this.monitoringReadback,
     );
-    const drawArguments = new Uint32Array(buffer);
-    const renderedPerLod = this.drawProfiles.map(
-      (_, lod) =>
-        drawArguments[
-          lod * config.INDIRECT_ARGS_STRIDE + config.INSTANCE_COUNT_INDEX
-        ],
-    );
+    try {
+      const buffer = readback.buffer;
+      if (!buffer)
+        throw new Error("[Grass] monitoring readback returned no data");
 
-    let rendered = 0;
-    let renderedTriangles = 0;
-    let allocatedTriangles = 0;
-    for (let lod = 0; lod < this.drawProfiles.length; lod++) {
-      const trianglesPerBlade = this.drawProfiles[lod].indexCount / 3;
-      rendered += renderedPerLod[lod];
-      renderedTriangles += renderedPerLod[lod] * trianglesPerBlade;
-      allocatedTriangles += config.COUNT * trianglesPerBlade;
+      const drawArguments = new Uint32Array(buffer);
+      const renderedPerLod = this.drawProfiles.map(
+        (_, lod) =>
+          drawArguments[
+            lod * config.INDIRECT_ARGS_STRIDE + config.INSTANCE_COUNT_INDEX
+          ],
+      );
+
+      let rendered = 0;
+      let renderedTriangles = 0;
+      let allocatedTriangles = 0;
+      for (let lod = 0; lod < this.drawProfiles.length; lod++) {
+        const trianglesPerBlade = this.drawProfiles[lod].indexCount / 3;
+        rendered += renderedPerLod[lod];
+        renderedTriangles += renderedPerLod[lod] * trianglesPerBlade;
+        allocatedTriangles += config.COUNT * trianglesPerBlade;
+      }
+
+      return {
+        rendered,
+        renderedPerLod,
+        segmentsPerLod: this.drawProfiles.map(({ segments }) => segments),
+        total: config.COUNT,
+        renderedTriangles,
+        allocatedTriangles,
+      };
+    } finally {
+      readback.release();
     }
-
-    return {
-      rendered,
-      renderedPerLod,
-      segmentsPerLod: this.drawProfiles.map(({ segments }) => segments),
-      total: config.COUNT,
-      renderedTriangles,
-      allocatedTriangles,
-    };
   };
 }

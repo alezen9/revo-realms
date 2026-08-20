@@ -104,6 +104,8 @@ export default class ParticleSystem extends InstancedMesh {
     const computeUpdate = onUpdate(this.mainBuffer).compute(params.count, [
       params.workGroupSize ?? 1,
     ]);
+    computeUpdate.name =
+      params.preset === "fire" ? "Campfire particles" : "Particles";
     const computeInit = onInit?.(this.mainBuffer).compute(params.count, [
       params.workGroupSize ?? 1,
     ]);
@@ -121,7 +123,7 @@ export default class ParticleSystem extends InstancedMesh {
 
     eventsManager.on("engine-render-update-throttle-2x", () => {
       if (!shouldCompute) return;
-      rendererManager.renderer.computeAsync(computeUpdate);
+      rendererManager.renderer.compute(computeUpdate);
     });
   }
 }
