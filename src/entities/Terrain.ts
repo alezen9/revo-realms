@@ -48,11 +48,11 @@ import {
 
 const uniforms = {
   uGrassTerrainColor: uniform(
-    new Color(0.57, 0.65, 0.46).convertSRGBToLinear(),
+    new Color(0.63, 0.64, 0.43).convertSRGBToLinear(),
   ),
   uWaterSandColor: uniform(new Color(0.95, 0.87, 0.68).convertSRGBToLinear()),
   uTerrainColor: uniform(new Color(0.9, 0.82, 0.65).convertSRGBToLinear()),
-  uGrassNormalScale: uniform(2),
+  uGrassNormalScale: uniform(3.5),
   uTerrainNormalScale: uniform(1),
   uWaterNormalScale: uniform(0.35),
   uCausticsHighlightScale: uniform(0.4),

@@ -217,7 +217,7 @@ export const debugGrass = (uniforms: GrassUniforms, config: GrassConfig) => {
   width.addBinding(uniforms.uWidthFarGain, "value", {
     label: "Far width gain",
     min: 1,
-    max: 4,
+    max: 10,
     step: 0.05,
   });
   width

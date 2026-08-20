@@ -1,4 +1,4 @@
-import { Color, Matrix4, Vector2, Vector3 } from "three";
+import { Color, Vector2, Vector3 } from "three";
 import { uniform, uniformArray } from "three/tsl";
 
 const getBladeIndexCount = (segments: number) =>
@@ -10,7 +10,7 @@ const getDrawProfile = (segments: number) => ({
 });
 
 const getConfig = () => {
-  const BLADE_WIDTH = 0.175;
+  const BLADE_WIDTH = 0.125;
   const BLADE_HEIGHT = 1.75;
   const TILE_SIZE = 130;
   // near to far, one indirect draw per entry
@@ -71,15 +71,15 @@ export const uniforms = {
 
   // Width
   uBladeWidth: uniform(config.BLADE_WIDTH),
-  uWidthFarGain: uniform(1),
-  uWidthNearRadius: uniform(20),
-  uWidthNearRadiusSquared: uniform(20 * 20),
-  uWidthFarRadius: uniform(60),
-  uWidthFarRadiusSquared: uniform(60 * 60),
+  uWidthFarGain: uniform(4),
+  uWidthNearRadius: uniform(15),
+  uWidthNearRadiusSquared: uniform(15 * 15),
+  uWidthFarRadius: uniform(45),
+  uWidthFarRadiusSquared: uniform(45 * 45),
 
   // Scale
-  uBladeMinScale: uniform(0.85),
-  uBladeMaxScale: uniform(2.35),
+  uBladeMinScale: uniform(0.33),
+  uBladeMaxScale: uniform(2.65),
 
   // Trail
   uTrailGrowthRate: uniform(5),
@@ -97,22 +97,22 @@ export const uniforms = {
   uWindLull: uniform(0.09),
   uWindEddyStrength: uniform(0.9),
   uWindGustCoverage: uniform(0.6),
-  uDetailedWindRadius: uniform(30),
+  uDetailedWindRadius: uniform(60),
   uWindCurveP1: uniform(0.003),
   uWindCurveP2: uniform(0.85),
   uBendDropStrength: uniform(1.3),
   uBendControlPoint: uniform(0.4),
 
   // Color
-  uBaseColorDark: uniform(new Color(0.09, 0.15, 0.075).convertSRGBToLinear()),
-  uBaseColor: uniform(new Color(0.23, 0.38, 0.19).convertSRGBToLinear()),
-  uTipColor: uniform(new Color(0.35, 0.43, 0.32).convertSRGBToLinear()),
+  uBaseColorDark: uniform(new Color(0.12, 0.15, 0.07).convertSRGBToLinear()),
+  uBaseColor: uniform(new Color(0.28, 0.38, 0.19).convertSRGBToLinear()),
+  uTipColor: uniform(new Color(0.46, 0.49, 0.37).convertSRGBToLinear()),
   uWarmColor: uniform(new Color(0.66, 0.53, 0.41).convertSRGBToLinear()),
   uRustColor: uniform(new Color(0.38, 0.19, 0.11).convertSRGBToLinear()),
-  uColorMixFactor: uniform(0.4),
+  uColorMixFactor: uniform(0.25),
   uColorVariationStrength: uniform(0.9),
   uWarmVariationStrength: uniform(0.48),
-  uRustVariationStrength: uniform(0.08),
+  uRustVariationStrength: uniform(0.21),
 
   // AO
   uAoScale: uniform(0.5),
