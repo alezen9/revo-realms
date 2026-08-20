@@ -10,13 +10,13 @@ const getDrawProfile = (segments: number) => ({
 });
 
 const getConfig = () => {
-  const BLADE_WIDTH = 0.1;
+  const BLADE_WIDTH = 0.175;
   const BLADE_HEIGHT = 1.75;
   const TILE_SIZE = 130;
   // near to far, one indirect draw per entry
   const LOD_DRAW_PROFILES = [8, 4, 2].map(getDrawProfile);
   const FALLBACK_DRAW_PROFILE = getDrawProfile(4);
-  const BLADES_PER_SIDE = 512 + 512;
+  const BLADES_PER_SIDE = 512 + 256 + 128;
   const COUNT = BLADES_PER_SIDE * BLADES_PER_SIDE;
   const MIN_VISIBLE_SCALE = 0.15;
   const DETAILED_WIND_TRANSITION_WIDTH = 5;
@@ -49,13 +49,9 @@ export type GrassConfig = typeof config;
 
 export const uniforms = {
   // Culling
-  uCameraMatrix: uniform(new Matrix4()),
-  uFx: uniform(1.0),
-  uFy: uniform(1.0),
   uCullPadNDCX: uniform(0.075),
   uCullPadNDCYNear: uniform(0.75),
   uCullPadNDCYFar: uniform(0.2),
-  uCameraPosition: uniform(new Vector3(0, 0, 0)),
 
   // LOD
   uLod0Radius: uniform(15),

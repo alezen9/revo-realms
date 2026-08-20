@@ -1,8 +1,16 @@
-import { CameraHelper, PerspectiveCamera, Scene, MOUSE } from "three";
+import {
+  CameraHelper,
+  PerspectiveCamera,
+  Scene,
+  MOUSE,
+  Matrix4,
+  Vector3,
+} from "three";
 import { MapControls } from "three/addons/controls/MapControls.js";
 import { type EventsManager } from "./EventsManager";
 import type { DebugManager } from "./DebugManager";
 import { playerCameraConfig } from "../entities/Player/PlayerCamera";
+import { uniform } from "three/tsl";
 
 export class SceneManager {
   mainScene: Scene;
@@ -13,6 +21,10 @@ export class SceneManager {
   private cameraHelper?: CameraHelper;
   private controls?: MapControls;
   private orbitControlsCamera?: PerspectiveCamera;
+  readonly uFx = uniform(1);
+  readonly uFy = uniform(1);
+  readonly uCameraMatrix = uniform(new Matrix4());
+  readonly uPlayerCameraPosition = uniform(new Vector3());
 
   constructor(eventsManager: EventsManager) {
     this.eventsManager = eventsManager;
@@ -36,6 +48,16 @@ export class SceneManager {
     this.eventsManager.on("engine-render-target-resize", (sizes) => {
       this.playerCamera.aspect = sizes.aspect;
       this.syncPlayerCameraProjection();
+    });
+
+    this.eventsManager.on("engine-render-update", () => {
+      this.uPlayerCameraPosition.value.copy(this.playerCamera.position);
+      const projectionMatrix = this.playerCamera.projectionMatrix;
+      this.uFx.value = projectionMatrix.elements[0];
+      this.uFy.value = projectionMatrix.elements[5];
+      this.uCameraMatrix.value
+        .copy(projectionMatrix)
+        .multiply(this.playerCamera.matrixWorldInverse);
     });
   }
 

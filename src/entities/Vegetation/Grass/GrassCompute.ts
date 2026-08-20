@@ -28,7 +28,7 @@ import {
   uint,
 } from "three/tsl";
 import { IndirectStorageBufferAttribute, type Node } from "three/webgpu";
-import { assetManager, windManager } from "../../../systems";
+import { assetManager, sceneManager, windManager } from "../../../systems";
 import { TSLUtils } from "../../../utils/TSLUtils";
 import { gameDeltaTime, gameTime } from "../../../utils/GameTime";
 import { config, uniforms } from "./config";
@@ -201,11 +201,11 @@ export class GrassCompute {
     const wasVisible = getVisibility(bladeState).toVar();
     const currentScale = getScale(bladeState);
     const originalScale = getOriginalScale(bladeState);
-    const clipPosition = uniforms.uCameraMatrix.mul(vec4(worldPos, 1));
+    const clipPosition = sceneManager.uCameraMatrix.mul(vec4(worldPos, 1));
     const isInFrustum = TSLUtils.computeFrustumVisibility(
       clipPosition,
-      uniforms.uFx,
-      uniforms.uFy,
+      sceneManager.uFx,
+      sceneManager.uFy,
       config.BLADE_BOUNDING_SPHERE_RADIUS,
       uniforms.uCullPadNDCX,
       uniforms.uCullPadNDCYNear,
@@ -358,7 +358,9 @@ export class GrassCompute {
           bladeState.assign(setBend(bladeState, bendXZ.add(trailBend)));
 
           // 0, 1 or 2 without branching: each radius passed contributes one step
-          const cameraOffset = worldPos.xz.sub(uniforms.uCameraPosition.xz);
+          const cameraOffset = worldPos.xz.sub(
+            sceneManager.uPlayerCameraPosition.xz,
+          );
           const cameraDistanceSquared = cameraOffset.dot(cameraOffset);
           const isPastNearRadius = step(
             uniforms.uLod0RadiusSquared,
@@ -422,9 +424,9 @@ export class GrassCompute {
         .clamp();
       const distanceKeep = mix(1, uniforms.uFarDensity, distanceFactor);
       const cameraDistance = worldPos
-        .distance(uniforms.uCameraPosition)
+        .distance(sceneManager.uPlayerCameraPosition)
         .max(EPSILON);
-      const projectedBladeHeight = uniforms.uFy
+      const projectedBladeHeight = sceneManager.uFy
         .mul(bladeHeight)
         .div(cameraDistance);
       const screenKeep = smoothstep(

@@ -1,4 +1,6 @@
 import {
+  atomicAdd,
+  atomicStore,
   float,
   floor,
   Fn,
@@ -10,9 +12,11 @@ import {
   mix,
   mod,
   PI2,
+  positionLocal,
   sin,
   smoothstep,
   step,
+  storage,
   texture,
   uniform,
   uv,
@@ -21,15 +25,17 @@ import {
   vec4,
 } from "three/tsl";
 import {
+  BufferAttribute,
   Color,
-  InstancedMesh,
+  IndirectStorageBufferAttribute,
+  InstancedBufferGeometry,
   Matrix4,
-  PlaneGeometry,
-  SpriteNodeMaterial,
+  Mesh,
+  MeshBasicNodeMaterial,
   Vector2,
   Vector3,
 } from "three/webgpu";
-import type { Node } from "three/webgpu";
+import type { Node, StorageArrayElementNode } from "three/webgpu";
 import {
   assetManager,
   rendererManager,
@@ -42,14 +48,15 @@ import { type State } from "../../Game";
 import { gameTime } from "../../utils/GameTime";
 import { TSLUtils } from "../../utils/TSLUtils";
 import { srgbColorTarget } from "../../utils/TweakpaneColor";
+import type { ComputeTask } from "../../systems/RendererManager/ComputeTask";
 
 const getConfig = () => {
   const FLOWER_WIDTH = 0.5;
   const FLOWER_HEIGHT = 1;
   const TILE_SIZE = 150;
   const FLOWERS_PER_SIDE = 64;
-  const MIN_SCALE = 0.1;
-  const MAX_SCALE = 0.2;
+  const MIN_SCALE = 0.3;
+  const MAX_SCALE = 0.5;
   return {
     MIN_SCALE,
     MAX_SCALE,
@@ -69,11 +76,7 @@ const config = getConfig();
 const uniforms = {
   uPlayerDeltaXZ: uniform(new Vector2(0, 0)),
   uPlayerPosition: uniform(new Vector3(0, 0, 0)),
-  uCameraForward: uniform(new Vector3(0, 0, 0)),
   // culling
-  uCameraMatrix: uniform(new Matrix4()), // MVP = Projection * View
-  uFx: uniform(1.0),
-  uFy: uniform(1.0),
   uCullPadNDCX: uniform(0.075), // small padding to hide rotation lag
   uCullPadNDCYNear: uniform(0.75), // small padding to avoid near clipping
   uCullPadNDCYFar: uniform(0.2), // small padding to avoid far clipping
@@ -97,12 +100,12 @@ class FlowersSsbo {
   // z -> 0/12 offsetY - 12/1 visibility - 13/6 grass scale (5 unused)
   // w -> noise (0 unused - also not used currently)
   private buffer = instancedArray(config.COUNT, "vec4");
+  visibleFlowerIndices = instancedArray(config.COUNT, "uint");
+  private atomicCounter: StorageArrayElementNode<"uint">;
 
-  constructor() {
+  constructor(atomicCounter: StorageArrayElementNode<"uint">) {
+    this.atomicCounter = atomicCounter;
     this.computeUpdate.name = "Flowers";
-    this.computeUpdate.onInit(({ renderer }) => {
-      renderer.computeAsync(this.computeInit);
-    });
   }
 
   get computeBuffer() {
@@ -177,7 +180,7 @@ class FlowersSsbo {
     return data;
   });
 
-  private computeInit = Fn(() => {
+  computeInit = Fn(() => {
     const data = this.buffer.element(instanceIndex);
 
     // Position XZ
@@ -229,13 +232,13 @@ class FlowersSsbo {
     data.y = wrappedOffset.z;
 
     const worldPos = wrappedOffset.add(uniforms.uPlayerPosition);
-    const clipPosition = uniforms.uCameraMatrix.mul(vec4(worldPos, 1));
+    const clipPosition = sceneManager.uCameraMatrix.mul(vec4(worldPos, 1));
 
     // Visibility
     const isVisible = TSLUtils.computeFrustumVisibility(
       clipPosition,
-      uniforms.uFx,
-      uniforms.uFy,
+      sceneManager.uFx,
+      sceneManager.uFy,
       config.FLOWER_BOUNDING_SPHERE_RADIUS,
       uniforms.uCullPadNDCX,
       uniforms.uCullPadNDCYNear,
@@ -257,42 +260,142 @@ class FlowersSsbo {
         TSLUtils.computeMapUvByPosition(worldPos.xz),
       ).g;
       const grassScale = grassMapValue
-        .sub(0.25)
-        .div(1 - 0.25)
+        .sub(0.5)
+        .div(1 - 0.5)
         .clamp();
       const grassVisibility = step(0.05, grassScale);
       data.assign(this.setGrassScale(data, grassScale));
       data.assign(this.setVisibility(data, grassVisibility));
+
+      const drawIndex = atomicAdd(this.atomicCounter, 1);
+
+      this.visibleFlowerIndices.element(drawIndex).assign(instanceIndex);
     });
   })().compute(config.COUNT, [config.WORKGROUP_SIZE]);
+
+  computeResetInstanceCount = Fn(() => {
+    atomicStore(this.atomicCounter, 0);
+  })().compute(1, [1]); // one counter only needs one thread
 }
 
 export default class Flowers {
-  private ssbo = new FlowersSsbo();
-  private mesh: InstancedMesh;
+  private mesh: Mesh;
+  private computeTask: ComputeTask;
 
   constructor() {
-    this.mesh = this.createMesh();
+    const geometry = this.createGeometry();
+    geometry.rotateX(-Math.PI / 2);
+    geometry.instanceCount = config.COUNT;
+
+    const indexCount = geometry.index?.count ?? 0;
+    const indirectDrawAttribute = new IndirectStorageBufferAttribute(
+      new Uint32Array([
+        indexCount, // indexCount
+        0, // instance count, updated every frame by the atomic counter
+        0, // firstIndex
+        0, // baseVertex
+        0, // firstInstance
+      ]),
+      1, // size of each argument, all of them are uint so 1
+    );
+
+    const atomicIndirectDrawArguments = storage(
+      indirectDrawAttribute,
+      "uint",
+      indirectDrawAttribute.count,
+    ).toAtomic();
+
+    // instance count is the second indirect draw argument
+    const atomicCounter = atomicIndirectDrawArguments.element(1);
+    geometry.setIndirect(indirectDrawAttribute);
+
+    const ssbo = new FlowersSsbo(atomicCounter);
+    const material = new FlowerMaterial(ssbo);
+    const mesh = new Mesh(geometry, material);
+
+    this.mesh = mesh;
     sceneManager.mainScene.add(this.mesh);
 
-    eventsManager.on("engine-render-update-throttle-16x", this.onEngineUpdate);
+    this.computeTask = rendererManager.createComputeTask({
+      label: "Flowers",
+      init: ssbo.computeInit,
+      update: [
+        ssbo.computeResetInstanceCount, // always reset first
+        ssbo.computeUpdate, // then rebuild the visible list
+      ],
+    });
+
+    this.computeTask.init();
+
+    eventsManager.on("engine-render-update", this.onEngineUpdate);
     this.debug();
   }
 
-  private createMesh() {
-    const material = new FlowerMaterial(this.ssbo);
-    const mesh = new InstancedMesh(
-      new PlaneGeometry(1, 1),
-      material,
-      config.COUNT,
-    );
-    return mesh;
+  private createGeometry() {
+    // 1 ------- 2
+    // | \     / |
+    // |   \ /   |
+    // |    0    |
+    // |   / \   |
+    // | /     \ |
+    // 4 ------- 3
+    const geometry = new InstancedBufferGeometry();
+
+    const halfWidth = 0.5;
+    const halfHeight = 0.5;
+
+    const topLeftDepth = 0.15;
+    const topRightDepth = 0.22;
+    const bottomRightDepth = 0.35;
+    const bottomLeftDepth = 0.27;
+
+    const positions = new Float32Array([
+      0,
+      0,
+      0, // center
+
+      -halfWidth,
+      halfHeight,
+      -topLeftDepth,
+      halfWidth,
+      halfHeight,
+      -topRightDepth,
+      halfWidth,
+      -halfHeight,
+      -bottomRightDepth,
+      -halfWidth,
+      -halfHeight,
+      -bottomLeftDepth,
+    ]);
+
+    const uvs = new Float32Array([
+      0.5,
+      0.5, // center
+
+      0,
+      1,
+      1,
+      1,
+      1,
+      0,
+      0,
+      0,
+    ]);
+
+    const indices = new Uint8Array([0, 2, 1, 0, 3, 2, 0, 4, 3, 0, 1, 4]);
+
+    geometry.setAttribute("position", new BufferAttribute(positions, 3));
+    geometry.setAttribute("uv", new BufferAttribute(uvs, 2));
+    geometry.setIndex(new BufferAttribute(indices, 1));
+
+    return geometry;
   }
 
   private onEngineUpdate = ({ player }: State) => {
+    if (!this.computeTask.canUpdate) return;
+    this.computeTask.update();
     this.syncFrameUniforms(player.position);
     this.mesh.position.copy(player.position).setY(0);
-    this.updateSsbo();
   };
 
   private syncFrameUniforms(playerPosition: Vector3) {
@@ -300,22 +403,6 @@ export default class Flowers {
     const dz = playerPosition.z - this.mesh.position.z;
     uniforms.uPlayerDeltaXZ.value.set(dx, dz);
     uniforms.uPlayerPosition.value.copy(playerPosition);
-
-    const projectionMatrix = sceneManager.playerCamera.projectionMatrix;
-    uniforms.uFx.value = projectionMatrix.elements[0];
-    uniforms.uFy.value = projectionMatrix.elements[5];
-    uniforms.uCameraMatrix.value
-      .copy(projectionMatrix)
-      .multiply(sceneManager.playerCamera.matrixWorldInverse);
-    sceneManager.playerCamera.getWorldDirection(uniforms.uCameraForward.value);
-  }
-
-  private updateSsbo() {
-    try {
-      rendererManager.renderer.compute(this.ssbo.computeUpdate);
-    } catch (error) {
-      console.error("[Flowers] compute update failed:", error);
-    }
   }
 
   private debug() {
@@ -379,7 +466,7 @@ export default class Flowers {
   }
 }
 
-class FlowerMaterial extends SpriteNodeMaterial {
+class FlowerMaterial extends MeshBasicNodeMaterial {
   private ssbo: FlowersSsbo;
   constructor(ssbo: FlowersSsbo) {
     super();
@@ -393,19 +480,24 @@ class FlowerMaterial extends SpriteNodeMaterial {
     this.forceSinglePass = true;
     this.transparent = false;
 
-    const data = this.ssbo.computeBuffer.element(instanceIndex);
-    const isVisible = this.ssbo.getVisibility(data);
+    const flowerIndex = this.ssbo.visibleFlowerIndices.element(instanceIndex);
+
+    const data = this.ssbo.computeBuffer.element(flowerIndex);
     const grassScale = this.ssbo.getGrassScale(data);
     const noise = this.ssbo.getNoise(data);
     const x = data.x;
     const y = this.ssbo.getYOffset(data);
     const z = data.y;
 
-    const rand1 = hash(instanceIndex.add(9234));
-    const rand2 = hash(instanceIndex.add(33.87));
-    const rand3 = hash(float(instanceIndex).add(noise.r.mul(97.13)));
+    const rand1 = hash(flowerIndex.add(9234));
+    const rand2 = hash(flowerIndex.add(33.87));
+    const rand3 = hash(float(flowerIndex).add(noise.r.mul(97.13)));
 
     // Position
+    const scale = rand1
+      .remap(0, 1, uniforms.uMinScale, uniforms.uMaxScale)
+      .mul(grassScale);
+
     const windDirection = windManager.uDirection;
     const windEvent = windManager.uIntensityDirectional;
     const timer = gameTime.mul(uniforms.uWindSwaySpeed);
@@ -446,18 +538,13 @@ class FlowerMaterial extends SpriteNodeMaterial {
       );
     const swayZ = ambientLean.y.add(windLean.y);
     const swayOffset = vec3(swayX, swayY, swayZ);
-    const offscreenOffset = uniforms.uCameraForward
-      .mul(INFINITY)
-      .mul(float(1).sub(isVisible));
     const baseHeight = rand1.add(rand2).add(0.25).clamp().mul(grassScale);
     const offsetY = y.add(baseHeight);
     const basePosition = vec3(x, offsetY, z);
-    this.positionNode = basePosition.add(swayOffset).add(offscreenOffset);
-
-    // Size
-    this.scaleNode = vec3(
-      rand1.remap(0, 1, uniforms.uMinScale, uniforms.uMaxScale),
-    ).mul(grassScale.remap(0, 1, 0.6, 1));
+    this.positionNode = positionLocal
+      .mul(scale)
+      .add(basePosition)
+      .add(swayOffset);
 
     // Diffuse
     const flower = texture(assetManager.resources.edelweiss, uv());
@@ -465,7 +552,7 @@ class FlowerMaterial extends SpriteNodeMaterial {
     this.colorNode = tint.mul(flower.rgb).mul(uniforms.uBrightness);
 
     // Opacity
-    this.opacityNode = isVisible.mul(flower.a);
+    this.opacityNode = flower.a;
     this.alphaTest = 0.15;
   }
 }

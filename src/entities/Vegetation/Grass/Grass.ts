@@ -53,7 +53,7 @@ export default class Grass {
       this.tile.add(this.createMesh(segments, lod, this.material));
     });
     sceneManager.mainScene.add(this.tile);
-    void this.computeTask.init();
+    this.computeTask.init();
 
     eventsManager.on("engine-render-update", this.onEngineUpdate);
     debugGrass(uniforms, config);
@@ -101,14 +101,6 @@ export default class Grass {
 
   private syncPlayerAndCameraUniforms(player: State["player"]) {
     uniforms.uPlayerPosition.value.copy(player.position);
-    uniforms.uCameraPosition.value.copy(sceneManager.playerCamera.position);
-
-    const projectionMatrix = sceneManager.playerCamera.projectionMatrix;
-    uniforms.uFx.value = projectionMatrix.elements[0];
-    uniforms.uFy.value = projectionMatrix.elements[5];
-    uniforms.uCameraMatrix.value
-      .copy(projectionMatrix)
-      .multiply(sceneManager.playerCamera.matrixWorldInverse);
   }
 
   private updateCompute() {
