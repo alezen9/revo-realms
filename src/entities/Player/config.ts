@@ -69,6 +69,6 @@ export const playerConfig = {
   SPIN_NORMAL_SCALE_MIN: 1.2,
   DIFFUSE_BOOST: 2.45,
 
-  PLAYER_INITIAL_POSITION: new Vector3(...POSITIONS.dragonball),
+  PLAYER_INITIAL_POSITION: new Vector3(...POSITIONS.campfire),
   RESET_Y_IN_METERS: -15,
 };

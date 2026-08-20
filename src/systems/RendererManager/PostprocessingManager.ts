@@ -20,7 +20,6 @@ import {
   vec3,
   vec4,
 } from "three/tsl";
-import { bloom } from "three/addons/tsl/display/BloomNode.js";
 import type { DebugManager } from "../DebugManager";
 import type { EventsManager } from "../EventsManager";
 import type { SceneManager } from "../SceneManager";
@@ -28,6 +27,7 @@ import type { FolderApi } from "tweakpane";
 import { assetManager, lightingManager } from "..";
 import { playerUniforms } from "../../entities/Player/PlayerMaterial";
 import { TSLUtils } from "../../utils/TSLUtils";
+import { AntiFlickerBloomNode } from "./AntiFlickerBloomNode";
 
 const MAIN_SCENE_PASS_SAMPLES = 4;
 const LUMINANCE_WEIGHTS = vec3(0.2126, 0.7152, 0.0722);
@@ -191,10 +191,14 @@ export class PostprocessingManager extends RenderPipeline {
     const water = this.waterPass.getTextureNode();
     const colorHDR = mainSceneColor.mul(water.a.oneMinus()).add(water.rgb);
 
-    const bloomPass = bloom(colorHDR, 0.25, 0.15, 1);
+    const bloomPass = new AntiFlickerBloomNode(
+      mainSceneColor,
+      water,
+      0.25,
+      0.15,
+      1,
+    );
     bloomPass.smoothWidth.value = 0.04;
-    // @ts-expect-error I know its private but looks good enough and reduces workload
-    bloomPass._nMips = 2;
 
     this.debugFolder.addBinding(bloomPass.strength, "value", {
       label: "Bloom strength",
