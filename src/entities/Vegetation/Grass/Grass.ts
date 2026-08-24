@@ -72,7 +72,7 @@ export default class Grass {
       nSegments: segments,
       bladeHeight: config.BLADE_HEIGHT,
     });
-    geometry.instanceCount = config.COUNT;
+    geometry.instanceCount = config.BLADE_COUNT;
     const indirectByteOffset =
       lod * config.INDIRECT_ARGS_STRIDE * UINT32_BYTE_SIZE;
     geometry.setIndirect(
@@ -156,14 +156,14 @@ export default class Grass {
         const trianglesPerBlade = this.drawProfiles[lod].indexCount / 3;
         rendered += renderedPerLod[lod];
         renderedTriangles += renderedPerLod[lod] * trianglesPerBlade;
-        allocatedTriangles += config.COUNT * trianglesPerBlade;
+        allocatedTriangles += config.BLADE_COUNT * trianglesPerBlade;
       }
 
       return {
         rendered,
         renderedPerLod,
         segmentsPerLod: this.drawProfiles.map(({ segments }) => segments),
-        total: config.COUNT,
+        total: config.BLADE_COUNT,
         renderedTriangles,
         allocatedTriangles,
       };

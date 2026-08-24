@@ -16,6 +16,7 @@ export type DeviceGpuMetrics = {
   averageMs: number;
   renderAverageMs: number;
   computeAverageMs: number;
+  grassComputeAverageMs: number | null;
   gapAverageMs: number;
   uninstrumentedPassMax: number;
   slowestPasses: DeviceGpuPassMetrics[];

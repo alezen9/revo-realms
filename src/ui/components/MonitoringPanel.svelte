@@ -284,7 +284,12 @@
 					<span class="label"># Tris</span>
 					<span class="value">{formatCount(grass.renderedTriangles)}</span>
 				</span>
-				<span class="cell"></span>
+				<span class="cell">
+					<span class="label">GPU</span>
+					<span class="value">
+						{gpu?.grassComputeAverageMs != null ? formatMs(gpu.grassComputeAverageMs) : "-"}
+					</span>
+				</span>
 			</div>
 			<div class="row" transition:slide={REVEAL}>
 				<span class="category"></span>

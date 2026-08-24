@@ -10,14 +10,18 @@ const getDrawProfile = (segments: number) => ({
 });
 
 const getConfig = () => {
-  const BLADE_WIDTH = 0.125;
+  const BLADE_WIDTH = 0.1;
   const BLADE_HEIGHT = 1.75;
   const TILE_SIZE = 130;
   // near to far, one indirect draw per entry
-  const LOD_DRAW_PROFILES = [8, 4, 2].map(getDrawProfile);
-  const FALLBACK_DRAW_PROFILE = getDrawProfile(4);
-  const BLADES_PER_SIDE = 512 + 256 + 128;
-  const COUNT = BLADES_PER_SIDE * BLADES_PER_SIDE;
+  const LOD_DRAW_PROFILES = [6, 3, 2].map(getDrawProfile);
+  const FALLBACK_DRAW_PROFILE = getDrawProfile(3);
+  const BLADES_PER_CLUMP = 5;
+  const CLUMPS_PER_SIDE = 448;
+  const CLUMP_COUNT = CLUMPS_PER_SIDE * CLUMPS_PER_SIDE;
+  const BLADE_COUNT = CLUMP_COUNT * BLADES_PER_CLUMP;
+  const CLUMP_SPACING = TILE_SIZE / CLUMPS_PER_SIDE;
+  const CLUMP_LOCAL_RADIUS = CLUMP_SPACING * 0.6;
   const MIN_VISIBLE_SCALE = 0.15;
   const DETAILED_WIND_TRANSITION_WIDTH = 5;
 
@@ -35,9 +39,12 @@ const getConfig = () => {
     BLADE_BOUNDING_SPHERE_RADIUS: BLADE_HEIGHT,
     TILE_SIZE,
     TILE_HALF_SIZE: TILE_SIZE / 2,
-    BLADES_PER_SIDE,
-    COUNT,
-    SPACING: TILE_SIZE / BLADES_PER_SIDE,
+    BLADES_PER_CLUMP,
+    CLUMPS_PER_SIDE,
+    CLUMP_COUNT,
+    BLADE_COUNT,
+    CLUMP_SPACING,
+    CLUMP_LOCAL_RADIUS,
     WORKGROUP_SIZE: 64,
     MIN_VISIBLE_SCALE,
     DETAILED_WIND_TRANSITION_WIDTH,
@@ -52,6 +59,7 @@ export const uniforms = {
   uCullPadNDCX: uniform(0.075),
   uCullPadNDCYNear: uniform(0.75),
   uCullPadNDCYFar: uniform(0.2),
+  uClumpBoundMultiplier: uniform(1),
 
   // LOD
   uLod0Radius: uniform(15),

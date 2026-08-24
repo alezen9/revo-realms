@@ -316,12 +316,16 @@ export class MonitoringManager {
 
     let gpu: DeviceGpuMetrics | null = null;
     if (accumulator && accumulator.gpuExecutionCount > 0) {
+      const grassPass = accumulator.passDurations.get("compute:Grass");
       gpu = {
         averageMs: accumulator.gpuExecutionSum / accumulator.gpuExecutionCount,
         renderAverageMs:
           accumulator.gpuRenderSum / accumulator.gpuExecutionCount,
         computeAverageMs:
           accumulator.gpuComputeSum / accumulator.gpuExecutionCount,
+        grassComputeAverageMs: grassPass
+          ? grassPass.sumMs / grassPass.count
+          : null,
         gapAverageMs: accumulator.gpuGapSum / accumulator.gpuExecutionCount,
         uninstrumentedPassMax: accumulator.gpuUninstrumentedPassMax,
         slowestPasses: this.buildSlowestPasses(accumulator),

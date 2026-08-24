@@ -19,7 +19,9 @@ import { config, uniforms } from "./config";
 import type { GrassCompute } from "./GrassCompute";
 import {
   getBakedShadowFactor,
+  getBladeLocalOffset,
   getBend,
+  getClumpRotation,
   getPositionNoise,
   getScale,
   getYOffset,
@@ -34,16 +36,20 @@ export class GrassMaterial extends SpriteNodeMaterial {
     this.forceSinglePass = true;
 
     const bladeIndex = compute.visibleIndexBuffer.element(instanceIndex);
-    const lodIndex = instanceIndex.div(config.COUNT);
+    const lodIndex = instanceIndex.div(config.BLADE_COUNT);
+    const clumpIndex = bladeIndex.div(config.BLADES_PER_CLUMP);
+    const bladeSlot = bladeIndex.mod(config.BLADES_PER_CLUMP);
+    const clumpState = compute.clumpStateBuffer.element(clumpIndex);
+    const clumpRotation = getClumpRotation(clumpState).toVar();
     const bladeState = compute.bladeStateBuffer.element(bladeIndex);
-    const bladeTerrain = compute.bladeTerrainBuffer.element(bladeIndex);
-    const offsetX = bladeState.x;
-    const offsetY = getYOffset(bladeTerrain);
-    const offsetZ = bladeState.y;
+    const localOffset = getBladeLocalOffset(bladeSlot, clumpRotation).toVar();
+    const offsetX = clumpState.x.add(localOffset.x);
+    const offsetY = getYOffset(clumpState);
+    const offsetZ = clumpState.y.add(localOffset.y);
     const bendXZ = getBend(bladeState);
     const scaleY = getScale(bladeState);
-    const positionNoise = getPositionNoise(bladeTerrain);
-    const bakedShadowFactor = getBakedShadowFactor(bladeTerrain);
+    const positionNoise = getPositionNoise(bladeState);
+    const bakedShadowFactor = getBakedShadowFactor(clumpState);
     const bladeUv = uv();
     const bladeHeight = bladeUv.y;
     const bladeHash = hash(bladeIndex);

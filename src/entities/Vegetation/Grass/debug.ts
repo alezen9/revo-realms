@@ -207,6 +207,32 @@ export const debugGrass = (uniforms: GrassUniforms, config: GrassConfig) => {
     step: 0.01,
   });
 
+  const culling = folder.addFolder({ title: "Culling" });
+  culling.addBinding(uniforms.uCullPadNDCX, "value", {
+    label: "Horizontal pad",
+    min: 0,
+    max: 2,
+    step: 0.01,
+  });
+  culling.addBinding(uniforms.uCullPadNDCYNear, "value", {
+    label: "Near vertical pad",
+    min: 0,
+    max: 2,
+    step: 0.01,
+  });
+  culling.addBinding(uniforms.uCullPadNDCYFar, "value", {
+    label: "Far vertical pad",
+    min: 0,
+    max: 2,
+    step: 0.01,
+  });
+  culling.addBinding(uniforms.uClumpBoundMultiplier, "value", {
+    label: "Clump bound",
+    min: 0.5,
+    max: 2,
+    step: 0.05,
+  });
+
   const width = folder.addFolder({ title: "Width" });
   width.addBinding(uniforms.uBladeWidth, "value", {
     label: "Blade width",
