@@ -15,7 +15,6 @@ const getConfig = () => {
   const TILE_SIZE = 130;
   // near to far, one indirect draw per entry
   const LOD_DRAW_PROFILES = [6, 3, 2].map(getDrawProfile);
-  const FALLBACK_DRAW_PROFILE = getDrawProfile(3);
   const BLADES_PER_CLUMP = 5;
   const CLUMPS_PER_SIDE = 448;
   const CLUMP_COUNT = CLUMPS_PER_SIDE * CLUMPS_PER_SIDE;
@@ -28,7 +27,6 @@ const getConfig = () => {
   return {
     LOD_DRAW_PROFILES,
     LOD_COUNT: LOD_DRAW_PROFILES.length,
-    FALLBACK_DRAW_PROFILE,
     // indexCount, instanceCount, firstIndex, baseVertex, firstInstance
     INDIRECT_ARGS_STRIDE: 5,
     INDEX_COUNT_INDEX: 0,
@@ -66,7 +64,6 @@ export const uniforms = {
   uLod0RadiusSquared: uniform(15 * 15),
   uLod1Radius: uniform(35),
   uLod1RadiusSquared: uniform(35 * 35),
-  uLodEnabled: uniform(1),
   uLodDebugEnabled: uniform(0),
   uLodDebugColors: uniformArray(
     [new Color("green"), new Color("blue"), new Color("red")],

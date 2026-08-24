@@ -26,6 +26,7 @@ import {
   atomicStore,
   storage,
   uint,
+  Loop,
 } from "three/tsl";
 import { IndirectStorageBufferAttribute, type Node } from "three/webgpu";
 import { assetManager, sceneManager, windManager } from "../../../systems";
@@ -36,6 +37,7 @@ import {
   getBladeLocalOffset,
   getClumpRotation,
   getOriginalScale,
+  getPreviousVisibility,
   getScale,
   getTerrainCacheValidity,
   getVisibility,
@@ -45,6 +47,7 @@ import {
   setClumpOrientation,
   setOriginalScale,
   setPositionNoise,
+  setPreviousVisibility,
   setScale,
   setTerrainCacheValidity,
   setVisibility,
@@ -119,11 +122,6 @@ export class GrassCompute {
     return this.visibleIndices;
   }
 
-  configureSingleDraw(indexCount: number) {
-    uniforms.uLodEnabled.value = 0;
-    this.indirectDrawAttribute.array[config.INDEX_COUNT_INDEX] = indexCount;
-  }
-
   computeInit = Fn(() => {
     const clumpState = this.clumpState.element(instanceIndex);
     const row = floor(float(instanceIndex).div(config.CLUMPS_PER_SIDE));
@@ -146,35 +144,38 @@ export class GrassCompute {
     this.clumpWind.element(instanceIndex).assign(vec2(0));
     const clumpRotation = getClumpRotation(clumpState);
 
-    for (let bladeSlot = 0; bladeSlot < config.BLADES_PER_CLUMP; bladeSlot++) {
-      const bladeIndex = instanceIndex
-        .mul(config.BLADES_PER_CLUMP)
-        .add(bladeSlot);
-      const bladeState = this.bladeState.element(bladeIndex);
-      const localOffset = getBladeLocalOffset(uint(bladeSlot), clumpRotation);
-      const bladeOffset = vec2(offsetX, offsetZ).add(localOffset);
-      const noiseUv = bladeOffset
-        .add(config.TILE_HALF_SIZE)
-        .div(config.TILE_SIZE)
-        .abs()
-        .fract();
-      const noise = texture(assetManager.resources.noiseAtlas, noiseUv);
-      const scaleNoise = noise.b;
-      const shapedScaleNoise = scaleNoise.mul(scaleNoise);
-      const randomScale = remap(
-        shapedScaleNoise,
-        0,
-        1,
-        uniforms.uBladeMinScale,
-        uniforms.uBladeMaxScale,
-      );
-      bladeState.assign(vec2(0));
-      bladeState.assign(setScale(bladeState, randomScale));
-      bladeState.assign(setOriginalScale(bladeState, randomScale));
-      bladeState.assign(setVisibility(bladeState, 0));
-      bladeState.assign(setBend(bladeState, vec2(0)));
-      bladeState.assign(setPositionNoise(bladeState, noise.g));
-    }
+    Loop(
+      { start: 0, end: config.BLADES_PER_CLUMP, type: "uint" },
+      ({ i: bladeSlot }) => {
+        const bladeIndex = instanceIndex
+          .mul(config.BLADES_PER_CLUMP)
+          .add(bladeSlot);
+        const bladeState = this.bladeState.element(bladeIndex);
+        const localOffset = getBladeLocalOffset(bladeSlot, clumpRotation);
+        const bladeOffset = vec2(offsetX, offsetZ).add(localOffset);
+        const noiseUv = bladeOffset
+          .add(config.TILE_HALF_SIZE)
+          .div(config.TILE_SIZE)
+          .abs()
+          .fract();
+        const noise = texture(assetManager.resources.noiseAtlas, noiseUv);
+        const scaleNoise = noise.b;
+        const shapedScaleNoise = scaleNoise.mul(scaleNoise);
+        const randomScale = remap(
+          shapedScaleNoise,
+          0,
+          1,
+          uniforms.uBladeMinScale,
+          uniforms.uBladeMaxScale,
+        );
+        bladeState.assign(vec2(0));
+        bladeState.assign(setScale(bladeState, randomScale));
+        bladeState.assign(setOriginalScale(bladeState, randomScale));
+        bladeState.assign(setVisibility(bladeState, 0));
+        bladeState.assign(setBend(bladeState, vec2(0)));
+        bladeState.assign(setPositionNoise(bladeState, noise.g));
+      },
+    );
   })().compute(config.CLUMP_COUNT, [config.WORKGROUP_SIZE]);
 
   computeUpdate = Fn(() => {
@@ -223,18 +224,22 @@ export class GrassCompute {
       .toVar();
     clumpState.assign(setTerrainCacheValidity(clumpState, cacheValidity));
 
-    const previousVisibility: Node<"float">[] = [];
     const previousClumpVisibility = float(0).toVar();
-    for (let bladeSlot = 0; bladeSlot < config.BLADES_PER_CLUMP; bladeSlot++) {
-      const bladeIndex = instanceIndex
-        .mul(config.BLADES_PER_CLUMP)
-        .add(bladeSlot);
-      const bladeState = this.bladeState.element(bladeIndex);
-      const wasVisible = getVisibility(bladeState).toVar();
-      previousVisibility.push(wasVisible);
-      previousClumpVisibility.assign(max(previousClumpVisibility, wasVisible));
-      bladeState.assign(setVisibility(bladeState, 0));
-    }
+    Loop(
+      { start: 0, end: config.BLADES_PER_CLUMP, type: "uint" },
+      ({ i: bladeSlot }) => {
+        const bladeIndex = instanceIndex
+          .mul(config.BLADES_PER_CLUMP)
+          .add(bladeSlot);
+        const bladeState = this.bladeState.element(bladeIndex);
+        const wasVisible = getVisibility(bladeState);
+        previousClumpVisibility.assign(
+          max(previousClumpVisibility, wasVisible),
+        );
+        bladeState.assign(setPreviousVisibility(bladeState, wasVisible));
+        bladeState.assign(setVisibility(bladeState, 0));
+      },
+    );
 
     If(isInFrustum, () => {
       const needsTerrainRefresh = float(1).sub(cacheValidity);
@@ -261,7 +266,6 @@ export class GrassCompute {
       );
 
       If(hasGrass, () => {
-        const survivorFlags: Node<"float">[] = [];
         const keptCount = uint(0).toVar();
         const clumpDistanceSquared = wrappedCenter.dot(wrappedCenter);
         const fullDensityRadiusSquared = uniforms.uFullDensityRadius.mul(
@@ -292,36 +296,34 @@ export class GrassCompute {
           .div(cameraDistance)
           .toVar();
 
-        for (
-          let bladeSlot = 0;
-          bladeSlot < config.BLADES_PER_CLUMP;
-          bladeSlot++
-        ) {
-          const bladeIndex = instanceIndex
-            .mul(config.BLADES_PER_CLUMP)
-            .add(bladeSlot);
-          const bladeState = this.bladeState.element(bladeIndex);
-          const previousKeep = previousVisibility[bladeSlot].mul(
-            float(1).sub(isWrapped),
-          );
-          const currentScale = getScale(bladeState);
-          const passesStochasticThinning = this.computeStochasticKeep(
-            projectedHeightBase,
-            distanceKeep,
-            currentScale,
-            previousKeep,
-            bladeIndex,
-          );
-          const originalScale = getOriginalScale(bladeState);
-          const baseScale = originalScale.mul(clumpState.z);
-          const isTerrainVisible = step(config.MIN_VISIBLE_SCALE, baseScale);
-          const isSurvivor = passesStochasticThinning
-            .mul(isTerrainVisible)
-            .toVar();
-          survivorFlags.push(isSurvivor);
-          keptCount.addAssign(uint(isSurvivor));
-          bladeState.assign(setVisibility(bladeState, isSurvivor));
-        }
+        Loop(
+          { start: 0, end: config.BLADES_PER_CLUMP, type: "uint" },
+          ({ i: bladeSlot }) => {
+            const bladeIndex = instanceIndex
+              .mul(config.BLADES_PER_CLUMP)
+              .add(bladeSlot);
+            const bladeState = this.bladeState.element(bladeIndex);
+            const previousKeep = getPreviousVisibility(bladeState).mul(
+              float(1).sub(isWrapped),
+            );
+            const currentScale = getScale(bladeState);
+            const passesStochasticThinning = this.computeStochasticKeep(
+              projectedHeightBase,
+              distanceKeep,
+              currentScale,
+              previousKeep,
+              bladeIndex,
+            );
+            const originalScale = getOriginalScale(bladeState);
+            const baseScale = originalScale.mul(clumpState.z);
+            const isTerrainVisible = step(config.MIN_VISIBLE_SCALE, baseScale);
+            const isSurvivor = passesStochasticThinning
+              .mul(isTerrainVisible)
+              .toVar();
+            keptCount.addAssign(uint(isSurvivor));
+            bladeState.assign(setVisibility(bladeState, isSurvivor));
+          },
+        );
 
         If(keptCount, () => {
           const clumpRotation = getClumpRotation(clumpState).toVar();
@@ -372,9 +374,7 @@ export class GrassCompute {
             uniforms.uLod1RadiusSquared,
             cameraDistanceSquared,
           );
-          const lodIndex = uint(isPastNearRadius.add(isPastMidRadius)).mul(
-            uint(uniforms.uLodEnabled),
-          );
+          const lodIndex = uint(isPastNearRadius.add(isPastMidRadius));
           const drawArgsBase = lodIndex.mul(config.INDIRECT_ARGS_STRIDE);
           const instanceCountIndex = drawArgsBase.add(
             config.INSTANCE_COUNT_INDEX,
@@ -386,125 +386,132 @@ export class GrassCompute {
           const lodRegionStart = lodIndex.mul(config.BLADE_COUNT);
           const localDrawIndex = uint(0).toVar();
 
-          for (
-            let bladeSlot = 0;
-            bladeSlot < config.BLADES_PER_CLUMP;
-            bladeSlot++
-          ) {
-            If(survivorFlags[bladeSlot], () => {
+          Loop(
+            { start: 0, end: config.BLADES_PER_CLUMP, type: "uint" },
+            ({ i: bladeSlot }) => {
               const bladeIndex = instanceIndex
                 .mul(config.BLADES_PER_CLUMP)
                 .add(bladeSlot);
               const bladeState = this.bladeState.element(bladeIndex);
-              const localOffset = getBladeLocalOffset(
-                uint(bladeSlot),
-                clumpRotation,
-              );
-              const playerOffset = wrappedCenter.add(localOffset);
-              const bladeWorldPos = vec3(
-                playerOffset.x.add(uniforms.uPlayerPosition.x),
-                uniforms.uPlayerPosition.y,
-                playerOffset.y.add(uniforms.uPlayerPosition.z),
-              );
-              const distanceSquared = playerOffset.dot(playerOffset);
-              const currentScale = getScale(bladeState);
-              const originalScale = getOriginalScale(bladeState);
-              const baseScale = originalScale.mul(clumpState.z);
-              const recoveryFactor = min(
-                uniforms.uTrailGrowthRate.mul(gameDeltaTime),
-                1,
-              );
-              const recoveredScale = mix(
-                currentScale,
-                baseScale,
-                recoveryFactor,
-              );
-              const didAppear = float(1).sub(previousVisibility[bladeSlot]);
-              const shouldReset = max(isWrapped, didAppear);
-              const scaleBeforeTrail = mix(
-                recoveredScale,
-                baseScale,
-                shouldReset,
-              );
-              const yOffset = getYOffset(clumpState);
-              const isPlayerGrounded = step(
-                0.1,
-                float(1).sub(uniforms.uPlayerPosition.y.sub(yOffset)),
-              );
-              const contact = float(1)
-                .sub(
-                  smoothstep(0, uniforms.uTrailRadiusSquared, distanceSquared),
-                )
-                .mul(isPlayerGrounded);
-              const crushedScale = min(baseScale, uniforms.uTrailMinScale);
-              const crushingFactor = min(
-                uniforms.uKDown.mul(contact).mul(gameDeltaTime),
-                1,
-              );
-              const nextScale = mix(
-                scaleBeforeTrail,
-                crushedScale,
-                crushingFactor,
-              );
-              bladeState.assign(setScale(bladeState, nextScale));
+              If(getVisibility(bladeState), () => {
+                const localOffset = getBladeLocalOffset(
+                  bladeSlot,
+                  clumpRotation,
+                );
+                const playerOffset = wrappedCenter.add(localOffset);
+                const bladeWorldPos = vec3(
+                  playerOffset.x.add(uniforms.uPlayerPosition.x),
+                  uniforms.uPlayerPosition.y,
+                  playerOffset.y.add(uniforms.uPlayerPosition.z),
+                );
+                const distanceSquared = playerOffset.dot(playerOffset);
+                const currentScale = getScale(bladeState);
+                const originalScale = getOriginalScale(bladeState);
+                const baseScale = originalScale.mul(clumpState.z);
+                const recoveryFactor = min(
+                  uniforms.uTrailGrowthRate.mul(gameDeltaTime),
+                  1,
+                );
+                const recoveredScale = mix(
+                  currentScale,
+                  baseScale,
+                  recoveryFactor,
+                );
+                const didAppear = float(1).sub(
+                  getPreviousVisibility(bladeState),
+                );
+                const shouldReset = max(isWrapped, didAppear);
+                const scaleBeforeTrail = mix(
+                  recoveredScale,
+                  baseScale,
+                  shouldReset,
+                );
+                const yOffset = getYOffset(clumpState);
+                const isPlayerGrounded = step(
+                  0.1,
+                  float(1).sub(uniforms.uPlayerPosition.y.sub(yOffset)),
+                );
+                const contact = float(1)
+                  .sub(
+                    smoothstep(
+                      0,
+                      uniforms.uTrailRadiusSquared,
+                      distanceSquared,
+                    ),
+                  )
+                  .mul(isPlayerGrounded);
+                const crushedScale = min(baseScale, uniforms.uTrailMinScale);
+                const crushingFactor = min(
+                  uniforms.uKDown.mul(contact).mul(gameDeltaTime),
+                  1,
+                );
+                const nextScale = mix(
+                  scaleBeforeTrail,
+                  crushedScale,
+                  crushingFactor,
+                );
+                bladeState.assign(setScale(bladeState, nextScale));
 
-              const trailDirection = playerOffset
-                .mul(uniforms.uTrailRadius)
-                .div(max(distanceSquared, uniforms.uTrailRadiusSquared));
-              const trailAmount = float(1)
-                .sub(nextScale.div(max(baseScale, config.MIN_VISIBLE_SCALE)))
-                .clamp();
-              const trailBend = trailDirection.mul(
-                trailAmount.mul(uniforms.uTrailBendStrength),
-              );
-              const bendXZ = vec2(0).toVar();
+                const trailDirection = playerOffset
+                  .mul(uniforms.uTrailRadius)
+                  .div(max(distanceSquared, uniforms.uTrailRadiusSquared));
+                const trailAmount = float(1)
+                  .sub(nextScale.div(max(baseScale, config.MIN_VISIBLE_SCALE)))
+                  .clamp();
+                const trailBend = trailDirection.mul(
+                  trailAmount.mul(uniforms.uTrailBendStrength),
+                );
+                const bendXZ = vec2(0).toVar();
 
-              If(isFarOnly, () => {
-                bendXZ.assign(
-                  this.computeDistantBladeDeformation(
-                    distantWind.xy.clamp(-2, 2),
-                    distantWind.z,
-                    nextScale,
-                    bladeIndex,
-                  ),
-                );
-              }).Else(() => {
-                const detailedBend = this.computeBladeDeformation(
-                  detailedWind.xy.clamp(-2, 2),
-                  detailedWind.z,
-                  bladeWorldPos,
-                  nextScale,
-                  bladeIndex,
-                );
-                bendXZ.assign(detailedBend);
-                const usesTransition = step(
-                  transitionInnerSquared,
-                  clumpDistanceSquared,
-                );
-                If(usesTransition, () => {
-                  const distantBend = this.computeDistantBladeDeformation(
-                    distantWind.xy.clamp(-2, 2),
-                    distantWind.z,
+                If(isFarOnly, () => {
+                  bendXZ.assign(
+                    this.computeDistantBladeDeformation(
+                      distantWind.xy.clamp(-2, 2),
+                      distantWind.z,
+                      nextScale,
+                      bladeIndex,
+                    ),
+                  );
+                }).Else(() => {
+                  const detailedBend = this.computeBladeDeformation(
+                    detailedWind.xy.clamp(-2, 2),
+                    detailedWind.z,
+                    bladeWorldPos,
                     nextScale,
                     bladeIndex,
                   );
-                  const transitionMix = smoothstep(
+                  bendXZ.assign(detailedBend);
+                  const usesTransition = step(
                     transitionInnerSquared,
-                    transitionOuterSquared,
                     clumpDistanceSquared,
                   );
-                  bendXZ.assign(mix(detailedBend, distantBend, transitionMix));
+                  If(usesTransition, () => {
+                    const distantBend = this.computeDistantBladeDeformation(
+                      distantWind.xy.clamp(-2, 2),
+                      distantWind.z,
+                      nextScale,
+                      bladeIndex,
+                    );
+                    const transitionMix = smoothstep(
+                      transitionInnerSquared,
+                      transitionOuterSquared,
+                      clumpDistanceSquared,
+                    );
+                    bendXZ.assign(
+                      mix(detailedBend, distantBend, transitionMix),
+                    );
+                  });
                 });
-              });
 
-              bladeState.assign(setBend(bladeState, bendXZ.add(trailBend)));
-              const drawSlot = lodRegionStart
-                .add(drawIndex)
-                .add(localDrawIndex);
-              this.visibleIndices.element(drawSlot).assign(bladeIndex);
-              localDrawIndex.addAssign(1);
-            });
-          }
+                bladeState.assign(setBend(bladeState, bendXZ.add(trailBend)));
+                const drawSlot = lodRegionStart
+                  .add(drawIndex)
+                  .add(localDrawIndex);
+                this.visibleIndices.element(drawSlot).assign(bladeIndex);
+                localDrawIndex.addAssign(1);
+              });
+            },
+          );
         });
       });
     });
@@ -513,15 +520,18 @@ export class GrassCompute {
   // only the instance counts are cleared; indexCount and firstInstance are set
   // once at construction and must survive every frame
   computeResetInstanceCount = Fn(() => {
-    // unrolled at graph build time, no GPU branching
-    for (let lod = 0; lod < config.LOD_COUNT; lod++) {
-      const argsBase = lod * config.INDIRECT_ARGS_STRIDE;
-      const instanceCountIndex = argsBase + config.INSTANCE_COUNT_INDEX;
-      atomicStore(
-        this.atomicIndirectDrawArguments.element(instanceCountIndex),
-        0,
-      );
-    }
+    Loop(
+      { start: 0, end: config.LOD_COUNT, type: "uint" },
+      ({ i: lodIndex }) => {
+        const instanceCountIndex = lodIndex
+          .mul(config.INDIRECT_ARGS_STRIDE)
+          .add(config.INSTANCE_COUNT_INDEX);
+        atomicStore(
+          this.atomicIndirectDrawArguments.element(instanceCountIndex),
+          0,
+        );
+      },
+    );
   })().compute(1, [1]); // one invocation in a one-thread workgroup
 
   private computeStochasticKeep = Fn<StochasticKeepArgs, Node<"float">>(

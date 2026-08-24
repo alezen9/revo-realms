@@ -27,19 +27,20 @@ export default class Grass {
   // every LOD mesh rides the same wrapping tile, so only the group moves
   private tile = new Group();
   private playerDeltaXZ = new Vector2(0, 0);
-  private drawProfiles: typeof config.LOD_DRAW_PROFILES;
+  private drawProfiles = config.LOD_DRAW_PROFILES;
   private hasRegisteredMonitoringProvider = false;
   private monitoringReadback = new ReadbackBuffer(INDIRECT_DRAW_BYTE_LENGTH);
 
   constructor() {
     this.monitoringReadback.name = "grass.indirectDrawArguments";
-    const isLodEnabled = rendererManager.renderer.hasFeature(
+    const hasIndirectFirstInstance = rendererManager.renderer.hasFeature(
       INDIRECT_FIRST_INSTANCE_FEATURE,
     );
-    this.drawProfiles = isLodEnabled
-      ? config.LOD_DRAW_PROFILES
-      : [config.FALLBACK_DRAW_PROFILE];
-    if (!isLodEnabled) this.configureFallback();
+    if (!hasIndirectFirstInstance) {
+      throw new Error(
+        `[Grass] This device does not support the required WebGPU feature "${INDIRECT_FIRST_INSTANCE_FEATURE}"`,
+      );
+    }
 
     this.computeTask = rendererManager.createComputeTask({
       label: "Grass",
@@ -57,14 +58,6 @@ export default class Grass {
 
     eventsManager.on("engine-render-update", this.onEngineUpdate);
     debugGrass(uniforms, config);
-  }
-
-  private configureFallback() {
-    const { indexCount, segments } = config.FALLBACK_DRAW_PROFILE;
-    this.compute.configureSingleDraw(indexCount);
-    console.warn(
-      `[Grass] "${INDIRECT_FIRST_INSTANCE_FEATURE}" is unavailable; using one ${segments}-segment draw`,
-    );
   }
 
   private createMesh(segments: number, lod: number, material: GrassMaterial) {

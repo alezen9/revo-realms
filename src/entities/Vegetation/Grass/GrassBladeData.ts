@@ -14,7 +14,7 @@ import { config, uniforms } from "./config";
 //
 // bladeState vec2
 //   x -> 0/12 bend X - 12/12 bend Z
-//   y -> 0/8 scale - 8/8 original scale - 16 previous visibility - 17/4 position noise
+//   y -> 0/8 scale - 8/8 original scale - 16 visibility - 17/4 position noise - 21 previous visibility
 //
 // Every helper is a lazily built Fn, so bodies only run when the graph is
 // assembled inside a compute kernel or material, never at import time. That is
@@ -114,6 +114,20 @@ export const setVisibility = Fn<
   Node<"vec2">
 >(([data, value]) => {
   data.y = TSLUtils.packFlag(data.y, 16, value);
+  return data;
+});
+
+export const getPreviousVisibility = Fn<[data: Node<"vec2">], Node<"float">>(
+  ([data]) => {
+    return TSLUtils.unpackFlag(data.y, 21);
+  },
+);
+
+export const setPreviousVisibility = Fn<
+  [data: Node<"vec2">, value: Node<"float">],
+  Node<"vec2">
+>(([data, value]) => {
+  data.y = TSLUtils.packFlag(data.y, 21, value);
   return data;
 });
 
