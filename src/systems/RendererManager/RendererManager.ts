@@ -89,6 +89,10 @@ export class RendererManager {
     return this.postprocessingManager.mainSceneDepthNode;
   }
 
+  setDynamicResolutionScale(scale: number) {
+    this.postprocessingManager.setResolutionScale(scale);
+  }
+
   async compileScenesOnceAsync() {
     const { scenes, renderCamera } = this.sceneManager;
     for (const scene of scenes)

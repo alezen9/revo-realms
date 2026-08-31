@@ -8,6 +8,7 @@ import { LandmarkManager } from "./LandmarkManager";
 import { LightingManager } from "./LightingManager";
 import { PhysicsManager } from "./PhysicsManager";
 import { PhysicsScheduler } from "./PhysicsScheduler";
+import { ResolutionScheduler } from "./ResolutionScheduler";
 import { RendererManager } from "./RendererManager/RendererManager";
 import { SceneManager } from "./SceneManager";
 import { TimeManager } from "./TimeManager";
@@ -41,6 +42,7 @@ const init = () => {
     debugManager,
   );
   const physicsScheduler = new PhysicsScheduler();
+  const resolutionScheduler = new ResolutionScheduler();
   const timeManager = new TimeManager(
     eventsManager,
     inputManager,
@@ -76,6 +78,7 @@ const init = () => {
     inputManager,
     physicsManager,
     physicsScheduler,
+    resolutionScheduler,
     timeManager,
     landmarkManager,
     windManager,
@@ -97,6 +100,7 @@ export const {
   inputManager,
   physicsManager,
   physicsScheduler,
+  resolutionScheduler,
   timeManager,
   landmarkManager,
   windManager,

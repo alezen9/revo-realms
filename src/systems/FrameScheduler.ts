@@ -5,6 +5,29 @@ const REFRESH_RATES = [
   30, 48, 50, 60, 72, 75, 90, 100, 120, 144, 165, 180, 240,
 ] as const;
 const MIN_RENDER_FPS_OPTION = 30;
+const REFRESH_TRACKING_WINDOW = 180;
+
+const medianOf = (values: number[]) => {
+  const sorted = [...values].sort((a, b) => a - b);
+  const middle = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 1
+    ? sorted[middle]
+    : (sorted[middle - 1] + sorted[middle]) / 2;
+};
+
+const snapToRefreshRate = (measuredHz: number) => {
+  let nearest: number = REFRESH_RATES[0];
+  let nearestDistance = Math.abs(measuredHz - nearest);
+
+  for (const rate of REFRESH_RATES) {
+    const distance = Math.abs(measuredHz - rate);
+    if (distance >= nearestDistance) continue;
+    nearest = rate;
+    nearestDistance = distance;
+  }
+
+  return nearest;
+};
 
 export class FrameScheduler {
   shouldRender = false;
@@ -18,6 +41,8 @@ export class FrameScheduler {
   private calibrationTimestamps: number[] = [];
   private resolveCalibration?: () => void;
   private displayFrame = 0;
+  private trackedIntervals: number[] = [];
+  private lastTrackedTimestamp = 0;
 
   initAsync(targetFps = this.targetFps) {
     this.targetFps = targetFps;
@@ -30,12 +55,9 @@ export class FrameScheduler {
     return this.initPromise;
   }
 
-  setRenderDivisor(divisor: number) {
-    this.divisor = Math.max(1, divisor);
-    this.effectiveFps = this.refreshHz / this.divisor;
-    this.targetFps = this.effectiveFps;
-    this.displayFrame = 0;
-    this.shouldRender = false;
+  setTargetFps(targetFps: number) {
+    this.targetFps = targetFps;
+    this.updateCadence();
   }
 
   getRenderCadences() {
@@ -53,9 +75,31 @@ export class FrameScheduler {
     return cadences;
   }
 
-  update() {
+  update(timestamp: DOMHighResTimeStamp) {
+    this.trackRefresh(timestamp);
     this.displayFrame++;
     this.shouldRender = this.displayFrame % this.divisor === 0;
+  }
+
+  private trackRefresh(timestamp: DOMHighResTimeStamp) {
+    const previousTimestamp = this.lastTrackedTimestamp;
+    this.lastTrackedTimestamp = timestamp;
+    if (previousTimestamp === 0) return;
+
+    const delta = (timestamp - previousTimestamp) / 1000;
+    if (delta <= 0 || delta > MAX_REFRESH_SAMPLE_SECONDS) return;
+
+    this.trackedIntervals.push(delta);
+    if (this.trackedIntervals.length < REFRESH_TRACKING_WINDOW) return;
+
+    const measuredHz = 1 / medianOf(this.trackedIntervals);
+    this.trackedIntervals.length = 0;
+
+    const snappedHz = snapToRefreshRate(measuredHz);
+    if (snappedHz === this.refreshHz) return;
+
+    this.refreshHz = snappedHz;
+    this.updateCadence();
   }
 
   private startCalibration = (resolve: () => void) => {
@@ -81,26 +125,8 @@ export class FrameScheduler {
       deltas.push(delta);
     }
 
-    if (deltas.length > 0) {
-      deltas.sort((a, b) => a - b);
-      const middle = Math.floor(deltas.length / 2);
-      const medianDelta =
-        deltas.length % 2 === 1
-          ? deltas[middle]
-          : (deltas[middle - 1] + deltas[middle]) / 2;
-      const measuredHz = 1 / medianDelta;
-      let nearest: number = REFRESH_RATES[0];
-      let nearestDistance = Math.abs(measuredHz - nearest);
-
-      for (const rate of REFRESH_RATES) {
-        const distance = Math.abs(measuredHz - rate);
-        if (distance >= nearestDistance) continue;
-        nearest = rate;
-        nearestDistance = distance;
-      }
-
-      this.refreshHz = nearest;
-    }
+    if (deltas.length > 0)
+      this.refreshHz = snapToRefreshRate(1 / medianOf(deltas));
 
     this.isInitialized = true;
     this.updateCadence();
@@ -112,7 +138,6 @@ export class FrameScheduler {
   private updateCadence() {
     this.divisor = Math.max(1, Math.ceil(this.refreshHz / this.targetFps));
     this.effectiveFps = this.refreshHz / this.divisor;
-    this.targetFps = this.effectiveFps;
     this.displayFrame = 0;
     this.shouldRender = false;
   }

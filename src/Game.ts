@@ -11,6 +11,7 @@ import {
   eventsManager,
   timeManager,
   frameScheduler,
+  resolutionScheduler,
 } from "./systems";
 
 export type State = {
@@ -49,22 +50,63 @@ export default class Game {
       expanded: false,
     });
     const config = {
-      renderDivisor: frameScheduler.divisor,
+      renderFps: frameScheduler.effectiveFps,
+      scaleStepIndex: resolutionScheduler.stepIndex,
+      isDynamicResolution: resolutionScheduler.isEnabled,
+      minScaleStepIndex: resolutionScheduler.minStepIndex,
     };
 
     const cadences = frameScheduler.getRenderCadences();
     const options = cadences.reduce((acc, cadence) => {
       const formattedLabel = cadence.fps.toFixed(2);
-      acc[formattedLabel] = cadence.divisor;
+      acc[formattedLabel] = cadence.fps;
       return acc;
     }, {});
 
     folder
-      .addBinding(config, "renderDivisor", {
+      .addBinding(config, "renderFps", {
         label: "Render FPS",
         options,
       })
-      .on("change", ({ value }) => frameScheduler.setRenderDivisor(value));
+      .on("change", ({ value }) => frameScheduler.setTargetFps(value));
+
+    const scaleOptions = resolutionScheduler.steps.reduce(
+      (acc, scale, index) => {
+        acc[scale.toFixed(2)] = index;
+        return acc;
+      },
+      {},
+    );
+
+    folder
+      .addBinding(config, "scaleStepIndex", {
+        label: "Render scale",
+        options: scaleOptions,
+      })
+      .on("change", ({ value }) => {
+        const scale = resolutionScheduler.setStepIndex(value);
+        rendererManager.setDynamicResolutionScale(scale);
+      });
+
+    folder
+      .addBinding(config, "isDynamicResolution", {
+        label: "Dynamic resolution",
+      })
+      .on("change", ({ value }) => resolutionScheduler.setEnabled(value));
+
+    folder
+      .addBinding(config, "minScaleStepIndex", {
+        label: "Min render scale",
+        options: scaleOptions,
+      })
+      .on("change", ({ value }) => {
+        resolutionScheduler.minStepIndex = value;
+      });
+
+    folder.addBinding(resolutionScheduler, "scale", {
+      label: "Live render scale",
+      readonly: true,
+    });
 
     folder
       .addBinding(rendererConfig, "resolutionScale", {
@@ -108,10 +150,14 @@ export default class Game {
     }
     monitoringManager?.samplePhysics();
 
-    frameScheduler.update();
+    frameScheduler.update(timestamp);
     if (!frameScheduler.shouldRender) return;
 
     this.renderState.delta = timeManager.consumeRenderDelta();
+
+    const budgetMs = 1000 / frameScheduler.effectiveFps;
+    if (resolutionScheduler.update(timestamp, budgetMs))
+      rendererManager.setDynamicResolutionScale(resolutionScheduler.scale);
 
     monitoringManager?.sampleRender(timestamp);
     eventsManager.emit("engine-render-update", this.renderState);

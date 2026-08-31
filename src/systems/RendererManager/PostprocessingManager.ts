@@ -10,6 +10,7 @@ import {
   mix,
   pass,
   renderOutput,
+  rtt,
   screenUV,
   smoothstep,
   step,
@@ -21,6 +22,7 @@ import {
   vec4,
 } from "three/tsl";
 import { bloom } from "three/addons/tsl/display/BloomNode.js";
+import { fsr1 } from "three/addons/tsl/display/FSR1Node.js";
 import type { DebugManager } from "../DebugManager";
 import type { EventsManager } from "../EventsManager";
 import type { SceneManager } from "../SceneManager";
@@ -38,6 +40,10 @@ export class PostprocessingManager extends RenderPipeline {
   private mainScenePass: ReturnType<typeof pass>;
   private waterPass: ReturnType<typeof pass>;
   private uSaturation = uniform(1);
+  private uSharpness = uniform(0.2);
+  private compositeTarget!: ReturnType<typeof rtt>;
+  private directOutputNode!: ReturnType<typeof renderOutput>;
+  private upscaledOutputNode!: ReturnType<typeof renderOutput>;
   private uProjectionMatrixInverse = uniform(new Matrix4());
   private uCameraWorldMatrix = uniform(new Matrix4());
   private uCameraPosition = uniform(new Vector3());
@@ -185,6 +191,19 @@ export class PostprocessingManager extends RenderPipeline {
     return this.mainScenePass.getTextureNode("depth");
   }
 
+  setResolutionScale(scale: number) {
+    this.mainScenePass.setResolutionScale(scale);
+    this.waterPass.setResolutionScale(scale);
+    this.compositeTarget.setResolutionScale(scale);
+  }
+
+  setUpscalerEnabled(isEnabled: boolean) {
+    this.outputNode = isEnabled
+      ? this.upscaledOutputNode
+      : this.directOutputNode;
+    this.needsUpdate = true;
+  }
+
   private makeGraph() {
     this.outputColorTransform = false;
     const mainSceneColor = this.mainScenePass.getTextureNode();
@@ -209,6 +228,17 @@ export class PostprocessingManager extends RenderPipeline {
       step: 0.01,
     });
 
+    const upscalerConfig = { isEnabled: false };
+    this.debugFolder
+      .addBinding(upscalerConfig, "isEnabled", { label: "FSR1 upscaler" })
+      .on("change", ({ value }) => this.setUpscalerEnabled(value));
+    this.debugFolder.addBinding(this.uSharpness, "value", {
+      label: "FSR1 sharpness",
+      min: 0,
+      max: 2,
+      step: 0.05,
+    });
+
     const withBloomHDR = colorHDR.add(bloomPass);
     const shadowFactor = this.computeBallShadowFactor();
     const shadowedHDR = mix(
@@ -225,6 +255,13 @@ export class PostprocessingManager extends RenderPipeline {
     const luminance = toneMapped.dot(LUMINANCE_WEIGHTS);
     const desaturated = mix(vec3(luminance), toneMapped, this.uSaturation);
 
-    return renderOutput(desaturated, NoToneMapping);
+    this.compositeTarget = rtt(desaturated);
+    this.directOutputNode = renderOutput(desaturated, NoToneMapping);
+    this.upscaledOutputNode = renderOutput(
+      fsr1(this.compositeTarget, this.uSharpness),
+      NoToneMapping,
+    );
+
+    return this.directOutputNode;
   }
 }
