@@ -159,7 +159,7 @@ export class GrassMaterial extends SpriteNodeMaterial {
     const localBacklight = saturate(restingNormal.dot(lightDirection).negate());
     const viewSunAlignment = viewDirection.xz
       .normalize()
-      .dot(lightingManager.uSunDir.xz.normalize())
+      .dot(lightingManager.uSunDirXZ)
       .mul(0.5)
       .add(0.5)
       .clamp();

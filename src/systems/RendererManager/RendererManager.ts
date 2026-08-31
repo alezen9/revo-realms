@@ -50,7 +50,6 @@ export class RendererManager {
     });
     renderer.setClearColor(0x000000, 0);
 
-    renderer.toneMappingExposure = 1.5;
     this.renderer = renderer;
     this.debugManager.setVisibility(TOOLING_FLAGS.debug);
 

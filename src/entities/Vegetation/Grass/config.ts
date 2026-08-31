@@ -110,7 +110,7 @@ export const uniforms = {
 
   // Color
   uBaseColorDark: uniform(new Color(0.12, 0.15, 0.07).convertSRGBToLinear()),
-  uBaseColor: uniform(new Color(0.28, 0.38, 0.19).convertSRGBToLinear()),
+  uBaseColor: uniform(new Color(0.2, 0.38, 0.19).convertSRGBToLinear()),
   uTipColor: uniform(new Color(0.46, 0.49, 0.37).convertSRGBToLinear()),
   uWarmColor: uniform(new Color(0.66, 0.53, 0.41).convertSRGBToLinear()),
   uRustColor: uniform(new Color(0.38, 0.19, 0.11).convertSRGBToLinear()),

@@ -4,6 +4,7 @@ import {
   FogExp2,
   HemisphereLight,
   Object3D,
+  Vector2,
   Vector3,
 } from "three";
 import { type SceneManager } from "./SceneManager";
@@ -41,7 +42,12 @@ export class LightingManager {
   private assetManager: AssetManager;
 
   sunDirection = config.LIGHT_POSITION_OFFSET.clone().normalize().negate();
+  sunDirectionXZ = new Vector2(
+    this.sunDirection.x,
+    this.sunDirection.z,
+  ).normalize();
   uSunDir = uniform(this.sunDirection);
+  uSunDirXZ = uniform(this.sunDirectionXZ);
   uSunColor = uniform(config.directionalColor.clone());
   uSunIntensity = uniform(config.directionalIntensity);
   uSunRadiance = uniform(
@@ -117,6 +123,9 @@ export class LightingManager {
       .copy(player.position)
       .add(config.LIGHT_POSITION_OFFSET);
     this.sunDirection.copy(config.LIGHT_POSITION_OFFSET).normalize().negate();
+    this.sunDirectionXZ
+      .set(this.sunDirection.x, this.sunDirection.z)
+      .normalize();
   };
 
   private debugLight(debugManager: DebugManager, sceneManager: SceneManager) {
