@@ -10,12 +10,12 @@ const getDrawProfile = (segments: number) => ({
 });
 
 const getConfig = () => {
-  const BLADE_WIDTH = 0.1;
+  const BLADE_WIDTH = 0.065;
   const BLADE_HEIGHT = 1.75;
   const TILE_SIZE = 130;
   // near to far, one indirect draw per entry
-  const LOD_DRAW_PROFILES = [6, 3, 2].map(getDrawProfile);
-  const BLADES_PER_CLUMP = 5;
+  const LOD_DRAW_PROFILES = [8, 4, 2].map(getDrawProfile);
+  const BLADES_PER_CLUMP = 8;
   const CLUMPS_PER_SIDE = 448;
   const CLUMP_COUNT = CLUMPS_PER_SIDE * CLUMPS_PER_SIDE;
   const BLADE_COUNT = CLUMP_COUNT * BLADES_PER_CLUMP;
@@ -133,11 +133,11 @@ export const uniforms = {
   uRootSkyVisibility: uniform(0.6),
 
   // Stochastic keep
-  uFullDensityRadius: uniform(16),
-  uDensityFalloffRadius: uniform(75),
-  uFarDensity: uniform(0.1),
-  uProjectedHeightMin: uniform(0.004),
-  uProjectedHeightFull: uniform(0.022),
+  uFullDensityRadius: uniform(18),
+  uDensityFalloffRadius: uniform(72),
+  uFarDensity: uniform(0.0625),
+  uProjectedHeightMin: uniform(0.01),
+  uProjectedHeightFull: uniform(0.04),
   uStochasticHysteresis: uniform(0.11),
 
   // Rotation

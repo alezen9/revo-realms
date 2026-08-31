@@ -1,24 +1,8 @@
-import { Fn, array, float, mix, step, vec2 } from "three/tsl";
+import { Fn, cos, float, mix, sin, step, vec2 } from "three/tsl";
 import { type Node } from "three/webgpu";
 import { assetManager } from "../../../systems";
 import { TSLUtils } from "../../../utils/TSLUtils";
 import { config, uniforms } from "./config";
-
-// Bit packing for the per blade buffers, shared by the compute pass and the material.
-//
-// clumpState vec4
-//   x, y -> wrapped center XZ
-//   z -> cached grass scale
-//   w -> 0/16 offsetY - 16/4 baked shadow - 20 terrain cache valid - 21/2 orientation
-// bits 0..22 cap the packed integer at 2^23 - 1, exactly representable in f32
-//
-// bladeState vec2
-//   x -> 0/12 bend X - 12/12 bend Z
-//   y -> 0/8 scale - 8/8 original scale - 16 visibility - 17/4 position noise - 21 previous visibility
-//
-// Every helper is a lazily built Fn, so bodies only run when the graph is
-// assembled inside a compute kernel or material, never at import time. That is
-// what lets getYOffset read the heightmap bounds after assets have loaded.
 
 const getHeightmapMax = () =>
   Math.ceil(assetManager.resources.heightmap.userData.max);
@@ -165,13 +149,7 @@ export const setPositionNoise = Fn<
   return data;
 });
 
-const BLADE_LOCAL_OFFSETS = array([
-  vec2(0.316227766017, 0),
-  vec2(-0.403873567726, 0.369981271543),
-  vec2(0.061819322798, -0.704399298217),
-  vec2(0.509056473571, 0.663974025633),
-  vec2(-0.934181236884, -0.165243507147),
-]);
+const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5));
 
 export const getClumpRotation = Fn<[data: Node<"vec4">], Node<"vec2">>(
   ([data]) => {
@@ -186,7 +164,10 @@ export const getBladeLocalOffset = Fn<
   [bladeSlot: Node<"uint">, clumpRotation: Node<"vec2">],
   Node<"vec2">
 >(([bladeSlot, clumpRotation]) => {
-  const baseOffset = BLADE_LOCAL_OFFSETS.element(bladeSlot);
+  const slot = float(bladeSlot);
+  const discRadius = slot.add(0.5).div(config.BLADES_PER_CLUMP).sqrt();
+  const discAngle = slot.mul(GOLDEN_ANGLE);
+  const baseOffset = vec2(cos(discAngle), sin(discAngle)).mul(discRadius);
   const quarterTurnOffset = vec2(baseOffset.y.negate(), baseOffset.x);
   return mix(baseOffset, quarterTurnOffset, clumpRotation.x)
     .mul(clumpRotation.y)

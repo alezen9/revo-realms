@@ -37,8 +37,8 @@ export class GrassMaterial extends SpriteNodeMaterial {
 
     const bladeIndex = compute.visibleIndexBuffer.element(instanceIndex);
     const lodIndex = instanceIndex.div(config.BLADE_COUNT);
-    const clumpIndex = bladeIndex.div(config.BLADES_PER_CLUMP);
-    const bladeSlot = bladeIndex.mod(config.BLADES_PER_CLUMP);
+    const clumpIndex = bladeIndex.mod(config.CLUMP_COUNT);
+    const bladeSlot = bladeIndex.div(config.CLUMP_COUNT);
     const clumpState = compute.clumpStateBuffer.element(clumpIndex);
     const clumpRotation = getClumpRotation(clumpState).toVar();
     const bladeState = compute.bladeStateBuffer.element(bladeIndex);

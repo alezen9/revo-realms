@@ -147,9 +147,7 @@ export class GrassCompute {
     Loop(
       { start: 0, end: config.BLADES_PER_CLUMP, type: "uint" },
       ({ i: bladeSlot }) => {
-        const bladeIndex = instanceIndex
-          .mul(config.BLADES_PER_CLUMP)
-          .add(bladeSlot);
+        const bladeIndex = bladeSlot.mul(config.CLUMP_COUNT).add(instanceIndex);
         const bladeState = this.bladeState.element(bladeIndex);
         const localOffset = getBladeLocalOffset(bladeSlot, clumpRotation);
         const bladeOffset = vec2(offsetX, offsetZ).add(localOffset);
@@ -224,23 +222,6 @@ export class GrassCompute {
       .toVar();
     clumpState.assign(setTerrainCacheValidity(clumpState, cacheValidity));
 
-    const previousClumpVisibility = float(0).toVar();
-    Loop(
-      { start: 0, end: config.BLADES_PER_CLUMP, type: "uint" },
-      ({ i: bladeSlot }) => {
-        const bladeIndex = instanceIndex
-          .mul(config.BLADES_PER_CLUMP)
-          .add(bladeSlot);
-        const bladeState = this.bladeState.element(bladeIndex);
-        const wasVisible = getVisibility(bladeState);
-        previousClumpVisibility.assign(
-          max(previousClumpVisibility, wasVisible),
-        );
-        bladeState.assign(setPreviousVisibility(bladeState, wasVisible));
-        bladeState.assign(setVisibility(bladeState, 0));
-      },
-    );
-
     If(isInFrustum, () => {
       const needsTerrainRefresh = float(1).sub(cacheValidity);
 
@@ -296,16 +277,18 @@ export class GrassCompute {
           .div(cameraDistance)
           .toVar();
 
+        const previousClumpVisibility = float(0).toVar();
+
         Loop(
           { start: 0, end: config.BLADES_PER_CLUMP, type: "uint" },
           ({ i: bladeSlot }) => {
-            const bladeIndex = instanceIndex
-              .mul(config.BLADES_PER_CLUMP)
-              .add(bladeSlot);
+            const bladeIndex = bladeSlot
+              .mul(config.CLUMP_COUNT)
+              .add(instanceIndex);
             const bladeState = this.bladeState.element(bladeIndex);
-            const previousKeep = getPreviousVisibility(bladeState).mul(
-              float(1).sub(isWrapped),
-            );
+            const previousKeep = getVisibility(bladeState)
+              .mul(float(1).sub(isWrapped))
+              .toVar();
             const currentScale = getScale(bladeState);
             const passesStochasticThinning = this.computeStochasticKeep(
               projectedHeightBase,
@@ -321,6 +304,10 @@ export class GrassCompute {
               .mul(isTerrainVisible)
               .toVar();
             keptCount.addAssign(uint(isSurvivor));
+            previousClumpVisibility.assign(
+              max(previousClumpVisibility, previousKeep),
+            );
+            bladeState.assign(setPreviousVisibility(bladeState, previousKeep));
             bladeState.assign(setVisibility(bladeState, isSurvivor));
           },
         );
@@ -337,10 +324,7 @@ export class GrassCompute {
           const detailedWind = vec3(0).toVar();
           const distantWind = vec3(0).toVar();
           const clumpWind = this.clumpWind.element(instanceIndex);
-          const shouldResetWind = max(
-            isWrapped,
-            float(1).sub(previousClumpVisibility),
-          );
+          const shouldResetWind = float(1).sub(previousClumpVisibility);
 
           If(isFarOnly, () => {
             distantWind.assign(this.computeDistantWind(clumpWorldPos));
@@ -389,9 +373,9 @@ export class GrassCompute {
           Loop(
             { start: 0, end: config.BLADES_PER_CLUMP, type: "uint" },
             ({ i: bladeSlot }) => {
-              const bladeIndex = instanceIndex
-                .mul(config.BLADES_PER_CLUMP)
-                .add(bladeSlot);
+              const bladeIndex = bladeSlot
+                .mul(config.CLUMP_COUNT)
+                .add(instanceIndex);
               const bladeState = this.bladeState.element(bladeIndex);
               If(getVisibility(bladeState), () => {
                 const localOffset = getBladeLocalOffset(
@@ -417,10 +401,9 @@ export class GrassCompute {
                   baseScale,
                   recoveryFactor,
                 );
-                const didAppear = float(1).sub(
+                const shouldReset = float(1).sub(
                   getPreviousVisibility(bladeState),
                 );
-                const shouldReset = max(isWrapped, didAppear);
                 const scaleBeforeTrail = mix(
                   recoveredScale,
                   baseScale,
