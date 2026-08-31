@@ -62,6 +62,7 @@ export type MonitoringSnapshot = {
   physics: {
     rate: number;
     maxSteps: number;
+    catchUpSteps: number;
     discardedMs: number;
     remainderMs: number;
   };

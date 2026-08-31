@@ -1,11 +1,11 @@
 <script lang="ts">
 	import { onMount } from "svelte"
-	import { fade, slide } from "svelte/transition"
+	import { fade } from "svelte/transition"
 	import { eventsManager } from "../../systems"
 	import type { MonitoringSnapshot, ResourceEntry } from "../../systems/EventsManager"
 
 	const REVEAL = { duration: 220 }
-	const LEADERBOARD_ROWS = [0, 1, 2, 3, 4] as const
+	const RANK_ROWS = [0, 1, 2] as const
 
 	let snapshot = $state<MonitoringSnapshot | null>(null)
 
@@ -29,13 +29,17 @@
 		notation: "compact",
 		maximumFractionDigits: 1,
 	})
+	const shortCountFormat = new Intl.NumberFormat("en-US", {
+		notation: "compact",
+		maximumFractionDigits: 0,
+	})
 	const rateFormat = new Intl.NumberFormat("en-US", {
 		minimumFractionDigits: 1,
 		maximumFractionDigits: 1,
 	})
 	const ratioFormat = new Intl.NumberFormat("en-US", {
 		minimumFractionDigits: 2,
-		maximumFractionDigits: 3,
+		maximumFractionDigits: 2,
 	})
 	const integerFormat = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 })
 
@@ -56,9 +60,15 @@
 		return `${entry.format} ${entry.width}x${entry.height}${samples}`
 	}
 
-	const budgetClass = (value: number, budget: number) => {
-		if (value <= budget) return "good"
+	const paceClass = (value: number, budget: number) => {
+		if (value <= budget * 1.05) return "good"
 		if (value <= budget * 1.25) return "warn"
+		return "bad"
+	}
+
+	const headroomClass = (value: number, budget: number) => {
+		if (value <= budget * 0.75) return "good"
+		if (value <= budget) return "warn"
 		return "bad"
 	}
 
@@ -81,229 +91,200 @@
 	{@const frame = snapshot.frame}
 	{@const physics = snapshot.physics}
 	{@const output = snapshot.output}
-	<div class="revo-monitor" aria-hidden="true" transition:fade={REVEAL}>
-		<div class="row">
-			<span class="category">FRAMES</span>
-			<span class="cell">
-				<span class="label">Current</span>
-				<span class={["value", snapshot.fps.live >= snapshot.fps.target * 0.95 ? "good" : "warn"]}>
-					{rateFormat.format(snapshot.fps.live)}
-				</span>
-			</span>
-			<span class="cell">
-				<span class="label">Target</span>
-				<span class="value">{rateFormat.format(snapshot.fps.target)}</span>
-			</span>
-			<span class="cell">
-				<span class="label">Refresh</span>
-				<span class="value">{integerFormat.format(snapshot.fps.refreshHz)} Hz</span>
-			</span>
-			<span class="cell">
-				<span class="label"># Missed</span>
-				<span class={["value", snapshot.fps.missedFrames === 0 ? "good" : "warn"]}>
-					{integerFormat.format(snapshot.fps.missedFrames)}
-				</span>
-			</span>
-			<span class="cell">
-				<span class="label">Budget</span>
-				<span class="value">{formatMs(budgetMs)}</span>
-			</span>
-		</div>
+	{@const gpuElapsedMs = gpu ? gpu.averageMs + gpu.gapAverageMs : null}
+	{@const isOnTarget = snapshot.fps.live >= snapshot.fps.target * 0.95}
+	<div class="revo-monitor" transition:fade={REVEAL}>
+		<header>
+			<span class="title">MONITORING</span>
+			<span class="hz">{integerFormat.format(snapshot.fps.refreshHz)} Hz</span>
+		</header>
 
-		<div class="row">
-			<span class="category">TIMING</span>
-			<span class="cell">
-				<span class="label">Average</span>
-				<span class="value">{formatMs(frame.intervalAverageMs)}</span>
-			</span>
-			<span class="cell">
-				<span class="label">P95</span>
-				<span class="value">{formatMs(frame.intervalP95Ms)}</span>
-			</span>
-			<span class="cell">
-				<span class="label">P99</span>
-				<span class="value">{formatMs(frame.intervalP99Ms)}</span>
-			</span>
-			<span class="cell">
-				<span class="label">Maximum</span>
-				<span class="value">{formatMs(frame.intervalMaxMs)}</span>
-			</span>
-		</div>
-
-		<div class="row">
-			<span class="category">GPU</span>
-			<span class="cell">
-				<span class="label">Total</span>
-				<span class={["value", gpu && budgetClass(gpu.averageMs, budgetMs)]}>
-					{gpu ? formatMs(gpu.averageMs) : "-"}
-				</span>
-			</span>
-			<span class="cell">
-				<span class="label">Render sum</span>
-				<span class="value">{gpu ? formatMs(gpu.renderAverageMs) : "-"}</span>
-			</span>
-			<span class="cell">
-				<span class="label">Compute sum</span>
-				<span class="value">{gpu ? formatMs(gpu.computeAverageMs) : "-"}</span>
-			</span>
-			<span class="cell">
-				<span class="label">Gap</span>
-				<span class="value">{gpu ? formatMs(gpu.gapAverageMs) : "-"}</span>
-			</span>
-			<span class="cell">
-				<span class="label">Headroom</span>
-				<span class={["value", gpu && budgetClass(gpu.averageMs, budgetMs)]}>
-					{gpu ? formatMs(budgetMs - gpu.averageMs) : "-"}
-				</span>
-			</span>
-		</div>
-
-		<div class="row">
-			<span class="category">PHYSICS</span>
-			<span class="cell">
-				<span class="label">Rate</span>
-				<span class="value">{rateFormat.format(physics.rate)} Hz</span>
-			</span>
-			<span class="cell">
-				<span class="label">Max steps</span>
-				<span class="value">{integerFormat.format(physics.maxSteps)}</span>
-			</span>
-			<span class="cell">
-				<span class="label">Discarded</span>
-				<span class={["value", physics.discardedMs > 0 && "warn"]}>
-					{formatMs(physics.discardedMs)}
-				</span>
-			</span>
-			<span class="cell">
-				<span class="label">Remainder</span>
-				<span class="value">{formatMs(physics.remainderMs)}</span>
-			</span>
-		</div>
-
-		<div class="row">
-			<span class="category">SCENE</span>
-			<span class="cell">
-				<span class="label">Output</span>
-				<span class="value">{output.width}x{output.height}</span>
-			</span>
-			<span class="cell">
-				<span class="label">DPR</span>
-				<span class="value">{ratioFormat.format(output.pixelRatio)}</span>
-			</span>
-			<span class="cell">
-				<span class="label"># Tris</span>
-				<span class="value">{formatCount(snapshot.sceneTriangles)}</span>
-			</span>
-			<span class="cell">
-				<span class="label"># Draws</span>
-				<span class="value">{device ? integerFormat.format(device.drawCallCount) : "-"}</span>
-			</span>
-		</div>
-
-		{#if device}
-			<div class="row" transition:slide={REVEAL}>
-				<span class="category">WORK</span>
-				<span class="cell">
-					<span class="label">Render passes</span>
-					<span class="value">{integerFormat.format(device.renderPassCount)}</span>
-				</span>
-				<span class="cell">
-					<span class="label">Compute passes</span>
-					<span class="value">{integerFormat.format(device.computePassCount)}</span>
-				</span>
-				<span class="cell">
-					<span class="label">Dispatches</span>
-					<span class="value">{integerFormat.format(device.computeDispatchCount)}</span>
-				</span>
-				<span class="cell">
-					<span class="label">Submissions</span>
-					<span class="value">{integerFormat.format(device.gpuSubmissionCount)}</span>
-				</span>
-			</div>
-
-			<div class="row" transition:slide={REVEAL}>
-				<span class="category">MEMORY</span>
+		<section>
+			<span class="category">Frames</span>
+			<div class="metrics">
 				<span class="cell">
 					<span class="label">Current</span>
-					<span class="value">{formatBytes(device.liveBytes)}</span>
+					<span class={["value", isOnTarget ? "good" : "warn"]}>
+						{rateFormat.format(snapshot.fps.live)}
+					</span>
 				</span>
 				<span class="cell">
-					<span class="label">Peak</span>
-					<span class="value">{formatBytes(device.peakBytes)}</span>
+					<span class="label">Target</span>
+					<span class="value">{rateFormat.format(snapshot.fps.target)}</span>
 				</span>
 				<span class="cell">
-					<span class="label">Textures</span>
-					<span class="value">{formatBytes(device.textureBytes)}</span>
+					<span class="label">P99</span>
+					<span class={["value", paceClass(frame.intervalP99Ms, budgetMs)]}>
+						{formatMs(frame.intervalP99Ms)}
+					</span>
 				</span>
 				<span class="cell">
-					<span class="label">Buffers</span>
-					<span class="value">{formatBytes(device.bufferBytes)}</span>
+					<span class="label">Missed</span>
+					<span class={["value", snapshot.fps.missedFrames === 0 ? "good" : "warn"]}>
+						{integerFormat.format(snapshot.fps.missedFrames)}
+					</span>
 				</span>
 			</div>
+		</section>
 
-			{#if (gpu?.slowestPasses.length ?? 0) > 0 || device.largestResources.length > 0}
-				<div class="row leaderboard" transition:slide={REVEAL}>
-					<span class="category">RANK</span>
-					<span class="leaderboard-title">SLOWEST PASSES</span>
-					<span></span>
-					<span class="leaderboard-title">LARGEST RESOURCES</span>
-					<span></span>
-				</div>
-				{#each LEADERBOARD_ROWS as rank (rank)}
-					{@const pass = gpu?.slowestPasses[rank]}
-					{@const resource = device.largestResources[rank]}
-					{#if pass || resource}
-						<div class="row leaderboard" transition:slide={REVEAL}>
-							<span class="category">#{rank + 1}</span>
-							<span class="leaderboard-name">{pass?.label ?? ""}</span>
-							<span class="value">{pass ? formatMs(pass.averageMs) : ""}</span>
-							<span class="leaderboard-name">
-								{resource ? describeEntry(resource) : ""}
-							</span>
-							<span class="value">
-								{resource ? formatBytes(resource.allocationInBytes) : ""}
-							</span>
-						</div>
-					{/if}
-				{/each}
-			{/if}
-		{/if}
+		<section>
+			<span class="category">GPU</span>
+			<div class="metrics">
+				<span class="cell">
+					<span class="label">Elapsed</span>
+					<span class={["value", gpuElapsedMs != null && headroomClass(gpuElapsedMs, budgetMs)]}>
+						{gpuElapsedMs != null ? formatMs(gpuElapsedMs) : "-"}
+					</span>
+				</span>
+				<span class="cell">
+					<span class="label">Headroom</span>
+					<span class={["value", gpuElapsedMs != null && headroomClass(gpuElapsedMs, budgetMs)]}>
+						{gpuElapsedMs != null ? formatMs(budgetMs - gpuElapsedMs) : "-"}
+					</span>
+				</span>
+				<span class="cell">
+					<span class="label">Render</span>
+					<span class="value">{gpu ? formatMs(gpu.renderAverageMs) : "-"}</span>
+				</span>
+				<span class="cell">
+					<span class="label">Compute</span>
+					<span class="value">{gpu ? formatMs(gpu.computeAverageMs) : "-"}</span>
+				</span>
+			</div>
+		</section>
 
 		{#if grass}
-			<div class="row" transition:slide={REVEAL}>
-				<span class="category">GRASS</span>
-				<span class="cell">
-					<span class="label"># Visible</span>
-					<span class="value">{formatCount(grass.rendered)}</span>
-				</span>
-				<span class="cell">
-					<span class="label"># Total</span>
-					<span class="value">{formatCount(grass.total)}</span>
-				</span>
-				<span class="cell">
-					<span class="label"># Tris</span>
-					<span class="value">{formatCount(grass.renderedTriangles)}</span>
-				</span>
-				<span class="cell">
-					<span class="label">GPU</span>
-					<span class="value">
-						{gpu?.grassComputeAverageMs != null ? formatMs(gpu.grassComputeAverageMs) : "-"}
-					</span>
-				</span>
-			</div>
-			<div class="row" transition:slide={REVEAL}>
-				<span class="category"></span>
-				{#each grass.renderedPerLod as bladeCount, lod (lod)}
+			<section>
+				<span class="category">Grass</span>
+				<div class="metrics">
 					<span class="cell">
-						<span class="label"># LOD {lod}</span>
-						<span class="value">{formatCount(bladeCount)}</span>
+						<span class="label">Drawn</span>
+						<span class="value">
+							{shortCountFormat.format(grass.rendered)}
+							<span class="aside">/{formatCount(grass.total)}</span>
+						</span>
 					</span>
-				{/each}
+					<span class="cell">
+						<span class="label">Compute</span>
+						<span class="value">
+							{gpu?.grassComputeAverageMs != null ? formatMs(gpu.grassComputeAverageMs) : "-"}
+						</span>
+					</span>
+					<span class="cell wide">
+						<span class="label">Levels</span>
+						<span class="value">
+							{grass.renderedPerLod.map(count => Math.round(count / 1000)).join("/")}
+							<span class="aside">K</span>
+						</span>
+					</span>
+				</div>
+			</section>
+		{/if}
+
+		<section>
+			<span class="category">Physics</span>
+			<div class="metrics">
 				<span class="cell">
-					<span class="label">Segments</span>
-					<span class="value">{grass.segmentsPerLod.join("/")}</span>
+					<span class="label">Rate</span>
+					<span class="value">
+						{rateFormat.format(physics.rate)}
+						<span class="aside">Hz</span>
+					</span>
+				</span>
+				<span class="cell">
+					<span class="label">Max steps</span>
+					<span class="value">{integerFormat.format(physics.maxSteps)}</span>
+				</span>
+				<span class="cell">
+					<span class="label">Catch-up</span>
+					<span class={["value", physics.catchUpSteps > 0 && "warn"]}>
+						{integerFormat.format(physics.catchUpSteps)}
+					</span>
+				</span>
+				<span class="cell">
+					<span class="label">Dropped</span>
+					<span class={["value", physics.discardedMs > 0 && "warn"]}>
+						{formatMs(physics.discardedMs)}
+					</span>
 				</span>
 			</div>
+		</section>
+
+		<section>
+			<span class="category">Output</span>
+			<div class="metrics">
+				<span class="cell wide">
+					<span class="label">Resolution</span>
+					<span class="value">
+						{output.width}x{output.height}
+						<span class="aside">@{ratioFormat.format(output.pixelRatio)}</span>
+					</span>
+				</span>
+				<span class="cell">
+					<span class="label">Draws</span>
+					<span class="value">{device ? integerFormat.format(device.drawCallCount) : "-"}</span>
+				</span>
+				<span class="cell">
+					<span class="label">Passes</span>
+					<span class="value">
+						{device ? integerFormat.format(device.renderPassCount + device.computePassCount) : "-"}
+					</span>
+				</span>
+			</div>
+		</section>
+
+		{#if device}
+			<section>
+				<span class="category">Memory</span>
+				<div class="metrics">
+					<span class="cell">
+						<span class="label">Live</span>
+						<span class="value">{formatBytes(device.liveBytes)}</span>
+					</span>
+					<span class="cell">
+						<span class="label">Peak</span>
+						<span class="value">{formatBytes(device.peakBytes)}</span>
+					</span>
+					<span class="cell">
+						<span class="label">Textures</span>
+						<span class="value">{formatBytes(device.textureBytes)}</span>
+					</span>
+					<span class="cell">
+						<span class="label">Buffers</span>
+						<span class="value">{formatBytes(device.bufferBytes)}</span>
+					</span>
+				</div>
+			</section>
+		{/if}
+
+		{#if (gpu?.slowestPasses.length ?? 0) > 0}
+			<section class="ranked">
+				<span class="category">Slowest</span>
+				<div class="rows">
+					{#each RANK_ROWS as rank (rank)}
+						{@const pass = gpu?.slowestPasses[rank]}
+						{#if pass}
+							<div class="row">
+								<span class="name">{pass.label}</span>
+								<span class="value">{formatMs(pass.averageMs)}</span>
+							</div>
+						{/if}
+					{/each}
+				</div>
+			</section>
+		{/if}
+
+		{#if device && device.largestResources.length > 0}
+			{@const resource = device.largestResources[0]}
+			<section class="ranked">
+				<span class="category">Largest</span>
+				<div class="rows">
+					<div class="row">
+						<span class="name">{describeEntry(resource)}</span>
+						<span class="value">{formatBytes(resource.allocationInBytes)}</span>
+					</div>
+				</div>
+			</section>
 		{/if}
 	</div>
 {/if}
@@ -314,72 +295,108 @@
 		left: 0.5rem;
 		bottom: 0.5rem;
 		z-index: 20;
-		width: 600px;
+		width: 21rem;
 		max-width: calc(100vw - 1rem);
 		display: grid;
 		border: 1px solid rgba(218, 229, 211, 0.16);
 		border-radius: 4px;
-		background: rgba(9, 13, 10);
+		background: rgb(9, 13, 10);
 		color: rgba(242, 247, 238, 0.9);
 		font:
-			10px/1.15 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+			10px/1.1 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
 			"Liberation Mono", monospace;
-		pointer-events: none;
+		font-variant-numeric: tabular-nums;
+		pointer-events: auto;
 	}
 
-	.row {
+	header {
 		display: grid;
-		grid-template-columns: 3rem repeat(5, minmax(0, 1fr));
-		gap: 0.25rem;
-		align-items: end;
-		padding: 0.35rem;
-		white-space: nowrap;
+		grid-template-columns: 1fr auto;
+		align-items: center;
+		min-height: 1.5rem;
+		padding: 0 0.5rem;
+		border-bottom: 1px solid rgba(218, 229, 211, 0.16);
 	}
 
-	.row:nth-child(odd) {
-		background: rgba(255, 255, 255, 0.028);
+	.title {
+		font-weight: 700;
+		letter-spacing: 0.06em;
+	}
+
+	.hz {
+		color: rgba(177, 190, 169, 0.7);
+	}
+
+	section {
+		display: grid;
+		grid-template-columns: 3.25rem minmax(0, 1fr);
+		gap: 0.4rem;
+		padding: 0.3rem 0.5rem;
+	}
+
+	section + section {
+		border-top: 1px solid rgba(218, 229, 211, 0.08);
 	}
 
 	.category {
-		align-self: end;
-		color: rgba(177, 190, 169, 0.68);
+		align-self: start;
+		padding-top: 0.1rem;
+		color: rgba(177, 190, 169, 0.62);
 		font-weight: 700;
+		letter-spacing: 0.02em;
+	}
+
+	.metrics {
+		display: grid;
+		grid-template-columns: repeat(4, minmax(0, 1fr));
+		gap: 0.35rem 0.4rem;
+		min-width: 0;
 	}
 
 	.cell {
 		display: grid;
-		gap: 0.25rem;
+		gap: 0.15rem;
 		min-width: 0;
-		align-content: end;
+	}
+
+	.cell.wide {
+		grid-column: span 2;
 	}
 
 	.label {
-		color: rgba(177, 190, 169, 0.58);
-		font-size: 1em;
+		color: rgba(177, 190, 169, 0.55);
 		line-height: 1;
-		overflow: hidden;
-		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 
 	.value {
-		color: rgba(242, 247, 238, 0.86);
-		font-size: 1.05em;
+		color: rgba(242, 247, 238, 0.88);
 		line-height: 1;
+		white-space: nowrap;
 	}
 
-	.leaderboard {
-		grid-template-columns: 3rem minmax(0, 1.7fr) 4.6rem minmax(0, 1.7fr) 4.6rem;
+	.aside {
+		color: rgba(177, 190, 169, 0.5);
 	}
 
-	.leaderboard-title,
-	.leaderboard-name {
-		color: rgba(177, 190, 169, 0.58);
+	.rows {
+		display: grid;
+		gap: 0.25rem;
+		min-width: 0;
+	}
+
+	.row {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) auto;
+		gap: 0.5rem;
+		align-items: baseline;
+	}
+
+	.name {
+		color: rgba(177, 190, 169, 0.62);
 		overflow: hidden;
 		text-overflow: ellipsis;
-	}
-
-	.leaderboard-title {
-		font-weight: 700;
+		white-space: nowrap;
 	}
 
 	.good {

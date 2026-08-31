@@ -109,6 +109,7 @@ export class MonitoringManager {
   private frameIntervals: number[] = [];
   private physicsStepCount = 0;
   private physicsMaxSteps = 0;
+  private physicsCatchUpSteps = 0;
   private physicsDiscardedMs = 0;
   private physicsRemainderMs = 0;
   private device: DeviceAccumulator | null = null;
@@ -153,6 +154,7 @@ export class MonitoringManager {
     const steps = pendingSteps;
     this.physicsStepCount += steps;
     this.physicsMaxSteps = Math.max(this.physicsMaxSteps, steps);
+    this.physicsCatchUpSteps += Math.max(0, steps - 1);
     this.physicsDiscardedMs += discardedDelta * 1_000;
     this.physicsRemainderMs = remainderDelta * 1_000;
   }
@@ -380,6 +382,7 @@ export class MonitoringManager {
       physics: {
         rate: this.physicsStepCount / (elapsedMs / 1_000),
         maxSteps: this.physicsMaxSteps,
+        catchUpSteps: this.physicsCatchUpSteps,
         discardedMs: this.physicsDiscardedMs,
         remainderMs: this.physicsRemainderMs,
       },
@@ -406,6 +409,7 @@ export class MonitoringManager {
     this.frameIntervals = [];
     this.physicsStepCount = 0;
     this.physicsMaxSteps = 0;
+    this.physicsCatchUpSteps = 0;
     this.physicsDiscardedMs = 0;
     this.device = null;
   }
