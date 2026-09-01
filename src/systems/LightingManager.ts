@@ -74,17 +74,29 @@ export class LightingManager {
     sceneManager.mainScene.add(this.hemisphereLight);
 
     this.fog = this.setupFog();
-    sceneManager.mainScene.fog = this.fog;
+    this.syncFog(sceneManager);
 
-    eventsManager.on("engine-camera-change", () => {
-      sceneManager.mainScene.fog = sceneManager.mainScene.fog ? null : this.fog;
-    });
+    eventsManager.on("engine-camera-change", () => this.syncFog(sceneManager));
 
     this.debugLight(debugManager, sceneManager);
   }
 
   get sunColor() {
     return this.uSunColor.value;
+  }
+
+  private syncFog(sceneManager: SceneManager) {
+    const isPlayerCamera =
+      sceneManager.renderCamera === sceneManager.playerCamera;
+    sceneManager.mainScene.fog =
+      config.fogEnabled && isPlayerCamera ? this.fog : null;
+  }
+
+  private syncSunDirection() {
+    this.sunDirection.copy(config.LIGHT_POSITION_OFFSET).normalize().negate();
+    this.sunDirectionXZ
+      .set(this.sunDirection.x, this.sunDirection.z)
+      .normalize();
   }
 
   private syncSunRadiance() {
@@ -122,24 +134,26 @@ export class LightingManager {
     this.directionalLight.position
       .copy(player.position)
       .add(config.LIGHT_POSITION_OFFSET);
-    this.sunDirection.copy(config.LIGHT_POSITION_OFFSET).normalize().negate();
-    this.sunDirectionXZ
-      .set(this.sunDirection.x, this.sunDirection.z)
-      .normalize();
   };
 
   private debugLight(debugManager: DebugManager, sceneManager: SceneManager) {
     const lightFolder = debugManager.panel.addFolder({ title: "💡 Light" });
     lightFolder.expanded = false;
-    lightFolder.addBinding(config.LIGHT_POSITION_OFFSET, "x", {
-      label: "Sun position X",
-    });
-    lightFolder.addBinding(config.LIGHT_POSITION_OFFSET, "z", {
-      label: "Sun position Z",
-    });
-    lightFolder.addBinding(config.LIGHT_POSITION_OFFSET, "y", {
-      label: "Sun height",
-    });
+    lightFolder
+      .addBinding(config.LIGHT_POSITION_OFFSET, "x", {
+        label: "Sun position X",
+      })
+      .on("change", () => this.syncSunDirection());
+    lightFolder
+      .addBinding(config.LIGHT_POSITION_OFFSET, "z", {
+        label: "Sun position Z",
+      })
+      .on("change", () => this.syncSunDirection());
+    lightFolder
+      .addBinding(config.LIGHT_POSITION_OFFSET, "y", {
+        label: "Sun height",
+      })
+      .on("change", () => this.syncSunDirection());
     lightFolder
       .addBinding(srgbColorTarget(this.uSunColor.value), "value", {
         label: "Directional Color",
@@ -187,9 +201,7 @@ export class LightingManager {
       .addBinding(config, "fogEnabled", {
         label: "Fog enabled",
       })
-      .on("change", ({ value }) => {
-        sceneManager.mainScene.fog = value ? this.fog : null;
-      });
+      .on("change", () => this.syncFog(sceneManager));
     lightFolder
       .addBinding(config, "backgroundEnabled", {
         label: "Background enabled",

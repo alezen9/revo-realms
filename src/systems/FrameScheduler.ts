@@ -33,7 +33,6 @@ export class FrameScheduler {
   setRenderDivisor(divisor: number) {
     this.divisor = Math.max(1, divisor);
     this.effectiveFps = this.refreshHz / this.divisor;
-    this.targetFps = this.effectiveFps;
     this.displayFrame = 0;
     this.shouldRender = false;
   }
@@ -61,6 +60,16 @@ export class FrameScheduler {
   private startCalibration = (resolve: () => void) => {
     this.resolveCalibration = resolve;
     this.calibrationTimestamps = [];
+    if (document.hidden) {
+      document.addEventListener("visibilitychange", this.onVisibilityChange);
+      return;
+    }
+    requestAnimationFrame(this.onCalibrationFrame);
+  };
+
+  private onVisibilityChange = () => {
+    if (document.hidden) return;
+    document.removeEventListener("visibilitychange", this.onVisibilityChange);
     requestAnimationFrame(this.onCalibrationFrame);
   };
 
@@ -112,7 +121,6 @@ export class FrameScheduler {
   private updateCadence() {
     this.divisor = Math.max(1, Math.ceil(this.refreshHz / this.targetFps));
     this.effectiveFps = this.refreshHz / this.divisor;
-    this.targetFps = this.effectiveFps;
     this.displayFrame = 0;
     this.shouldRender = false;
   }

@@ -48,7 +48,7 @@ const bootstrap = async () => {
       );
     else console.warn("[main] Prewarm exited early. Continuing startup.");
 
-    game.startLoop();
+    await game.startLoopAsync();
   } catch (error) {
     console.error("[main] Startup failed.", error);
     eventsManager.emit("engine-loading-failed");

@@ -130,7 +130,7 @@ export default class Game {
     this.onResizeDebounced.cancel();
   };
 
-  async startLoop() {
+  async startLoopAsync() {
     await frameScheduler.initAsync();
     this.debugGame();
     timeManager.reset();

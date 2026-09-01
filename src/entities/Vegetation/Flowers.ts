@@ -205,10 +205,8 @@ class FlowersSsbo {
 
     const noise = texture(assetManager.resources.noiseAtlas, _uv);
     data.assign(this.setNoise(data, noise));
-    const wrapNoise = noise.r;
-
-    const noiseX = wrapNoise.mul(99.37);
-    const noiseZ = wrapNoise.mul(49.71);
+    const noiseX = noise.r.mul(99.37);
+    const noiseZ = noise.g.mul(49.71);
 
     data.x = offsetX.add(noiseX);
     data.y = offsetZ.add(noiseZ);

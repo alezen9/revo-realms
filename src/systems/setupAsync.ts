@@ -16,5 +16,7 @@ export const setupAsync = async () => {
   ]);
   rendererManager.initPostprocessing();
   eventsManager.emit("engine-loading-core-progress", 75);
-  audioManager.initAsync(); // bg loading
+  audioManager
+    .initAsync()
+    .catch((error) => console.error("[setup] Audio init failed.", error)); // bg loading
 };
