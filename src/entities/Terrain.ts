@@ -25,6 +25,7 @@ import {
   RedFormat,
   type Node,
   Vector3,
+  MeshBasicNodeMaterial,
 } from "three/webgpu";
 import { realmConfig } from "../realm/config";
 import {
@@ -223,13 +224,6 @@ class TerrainMaterial extends MeshLambertNodeMaterial {
   }
 }
 
-class OuterTerrainMaterial extends MeshLambertNodeMaterial {
-  constructor() {
-    super();
-    this.colorNode = uniforms.uGrassTerrainColor;
-  }
-}
-
 class InnerTerrain {
   constructor(material: TerrainMaterial) {
     const innerMap = this.createFloor(material);
@@ -370,9 +364,9 @@ class OuterTerrain {
   private kintoun: RigidBody; // Kintoun = Flying Nimbus cloud from dragon ball
   private kintounPosition = new Vector3();
 
-  constructor() {
+  constructor(terrainMaterial: TerrainMaterial) {
     this.outerFloor = this.createOuterFloorVisual();
-    this.outerFloor.material = new OuterTerrainMaterial();
+    this.outerFloor.material = terrainMaterial;
     this.kintoun = this.createKintoun();
     sceneManager.mainScene.add(this.outerFloor);
 
@@ -448,6 +442,6 @@ export default class Terrain {
   constructor() {
     const terrainMaterial = new TerrainMaterial();
     new InnerTerrain(terrainMaterial);
-    new OuterTerrain();
+    new OuterTerrain(terrainMaterial);
   }
 }
