@@ -103,6 +103,11 @@ export const uniforms = {
   uWindEddyStrength: uniform(0.9),
   uWindGustCoverage: uniform(0.6),
   uDetailedWindRadius: uniform(60),
+  uDetailedWindRadiusSquared: uniform(60 * 60),
+  uDetailedWindOuterRadiusSquared: uniform(
+    (60 + config.DETAILED_WIND_TRANSITION_WIDTH) *
+      (60 + config.DETAILED_WIND_TRANSITION_WIDTH),
+  ),
   uWindCurveP1: uniform(0.003),
   uWindCurveP2: uniform(0.85),
   uBendDropStrength: uniform(1.3),
@@ -134,7 +139,9 @@ export const uniforms = {
 
   // Stochastic keep
   uFullDensityRadius: uniform(18),
+  uFullDensityRadiusSquared: uniform(18 * 18),
   uDensityFalloffRadius: uniform(72),
+  uDensityFalloffRadiusSquared: uniform(72 * 72),
   uFarDensity: uniform(0.0625),
   uProjectedHeightMin: uniform(0.01),
   uProjectedHeightFull: uniform(0.04),

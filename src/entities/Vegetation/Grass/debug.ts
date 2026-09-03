@@ -156,12 +156,21 @@ export const debugGrass = (uniforms: GrassUniforms, config: GrassConfig) => {
     max: 1,
     step: 0.01,
   });
-  wind.addBinding(uniforms.uDetailedWindRadius, "value", {
-    label: "Detailed radius",
-    min: 0,
-    max: config.TILE_HALF_SIZE * Math.SQRT2,
-    step: 1,
-  });
+  wind
+    .addBinding(uniforms.uDetailedWindRadius, "value", {
+      label: "Detailed radius",
+      min: 0,
+      max: config.TILE_HALF_SIZE * Math.SQRT2,
+      step: 1,
+    })
+    .on("change", ({ value }) => {
+      uniforms.uDetailedWindRadiusSquared.value = value * value;
+
+      const outerRadius = value + config.DETAILED_WIND_TRANSITION_WIDTH;
+
+      uniforms.uDetailedWindOuterRadiusSquared.value =
+        outerRadius * outerRadius;
+    });
   wind.addBinding(uniforms.uWindCurveP1, "value", {
     label: "Wind curve short",
     min: 0,
@@ -188,12 +197,26 @@ export const debugGrass = (uniforms: GrassUniforms, config: GrassConfig) => {
   });
 
   const density = folder.addFolder({ title: "Density" });
-  density.addBinding(uniforms.uDensityFalloffRadius, "value", {
-    label: "Density falloff radius",
-    min: 0,
-    max: config.TILE_SIZE,
-    step: 0.1,
-  });
+  density
+    .addBinding(uniforms.uFullDensityRadius, "value", {
+      label: "Full density radius",
+      min: 0,
+      max: config.TILE_SIZE,
+      step: 0.1,
+    })
+    .on("change", ({ value }) => {
+      uniforms.uFullDensityRadiusSquared.value = value * value;
+    });
+  density
+    .addBinding(uniforms.uDensityFalloffRadius, "value", {
+      label: "Density falloff radius",
+      min: 0,
+      max: config.TILE_SIZE,
+      step: 0.1,
+    })
+    .on("change", ({ value }) => {
+      uniforms.uDensityFalloffRadiusSquared.value = value * value;
+    });
   density.addBinding(uniforms.uFarDensity, "value", {
     label: "Far density",
     min: 0,
@@ -269,7 +292,9 @@ export const debugGrass = (uniforms: GrassUniforms, config: GrassConfig) => {
 
   const lod = folder.addFolder({ title: "LOD" });
   lod
-    .addBinding({ enabled: false }, "enabled", { label: "Show LOD colors" })
+    .addBinding({ enabled: false }, "enabled", {
+      label: "Show LOD colors",
+    })
     .on("change", ({ value }) => {
       uniforms.uLodDebugEnabled.value = value ? 1 : 0;
     });
