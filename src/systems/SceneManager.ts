@@ -11,6 +11,7 @@ import { type EventsManager } from "./EventsManager";
 import type { DebugManager } from "./DebugManager";
 import { playerCameraConfig } from "../entities/Player/PlayerCamera";
 import { uniform } from "three/tsl";
+import { TOOLING_FLAGS } from "@systems-tooling-runtime";
 
 export class SceneManager {
   mainScene: Scene;
@@ -170,7 +171,7 @@ export class SceneManager {
   }
 
   init(rendererCanvas: HTMLCanvasElement, debugManager: DebugManager) {
-    if (!import.meta.env.DEV) return;
+    if (!TOOLING_FLAGS.debug) return;
     const cameraHelper = new CameraHelper(this.playerCamera);
     cameraHelper.visible = false;
     this.mainScene.add(cameraHelper);
