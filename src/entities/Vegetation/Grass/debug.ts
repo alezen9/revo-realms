@@ -59,7 +59,9 @@ export const debugGrass = (uniforms: GrassUniforms, config: GrassConfig) => {
     step: 0.01,
   });
 
-  const lighting = folder.addFolder({ title: "Lighting" });
+  const lighting = folder.addFolder({
+    title: "Lighting",
+  });
   lighting.addBinding(uniforms.uDiffuseContrast, "value", {
     label: "Diffuse contrast",
     min: 0,
@@ -196,7 +198,9 @@ export const debugGrass = (uniforms: GrassUniforms, config: GrassConfig) => {
     step: 0.01,
   });
 
-  const density = folder.addFolder({ title: "Density" });
+  const density = folder.addFolder({
+    title: "Density",
+  });
   density
     .addBinding(uniforms.uFullDensityRadius, "value", {
       label: "Full density radius",
@@ -230,7 +234,9 @@ export const debugGrass = (uniforms: GrassUniforms, config: GrassConfig) => {
     step: 0.01,
   });
 
-  const culling = folder.addFolder({ title: "Culling" });
+  const culling = folder.addFolder({
+    title: "Culling",
+  });
   culling.addBinding(uniforms.uCullPadNDCX, "value", {
     label: "Horizontal pad",
     min: 0,
@@ -256,7 +262,9 @@ export const debugGrass = (uniforms: GrassUniforms, config: GrassConfig) => {
     step: 0.05,
   });
 
-  const width = folder.addFolder({ title: "Width" });
+  const width = folder.addFolder({
+    title: "Width",
+  });
   width.addBinding(uniforms.uBladeWidth, "value", {
     label: "Blade width",
     min: 0.01,
@@ -319,7 +327,9 @@ export const debugGrass = (uniforms: GrassUniforms, config: GrassConfig) => {
       uniforms.uLod1RadiusSquared.value = value * value;
     });
 
-  const trail = folder.addFolder({ title: "Trail" });
+  const trail = folder.addFolder({
+    title: "Trail",
+  });
   trail.addBinding(uniforms.uTrailGrowthRate, "value", {
     label: "Growth rate",
     min: 0,
@@ -355,7 +365,9 @@ export const debugGrass = (uniforms: GrassUniforms, config: GrassConfig) => {
       uniforms.uTrailRadiusSquared.value = value * value;
     });
 
-  const general = folder.addFolder({ title: "General" });
+  const general = folder.addFolder({
+    title: "General",
+  });
   general.addBinding(uniforms.uBaseBending, "value", {
     label: "Base bend",
     min: -Math.PI * 2,

@@ -21,21 +21,24 @@ const INDIRECT_DRAW_BYTE_LENGTH =
   config.LOD_COUNT * config.INDIRECT_ARGS_STRIDE * UINT32_BYTE_SIZE;
 
 export default class Grass {
-  private compute = new GrassCompute();
-  private computeTask: ComputeTask;
-  private material = new GrassMaterial(this.compute);
+  private readonly compute = new GrassCompute();
+  private readonly material = new GrassMaterial(this.compute);
   // every LOD mesh rides the same wrapping tile, so only the group moves
-  private tile = new Group();
-  private playerDeltaXZ = new Vector2(0, 0);
-  private drawProfiles = config.LOD_DRAW_PROFILES;
+  private readonly tile = new Group();
+  private readonly playerDeltaXZ = new Vector2();
+  private readonly monitoringReadback = new ReadbackBuffer(
+    INDIRECT_DRAW_BYTE_LENGTH,
+  );
+  private readonly computeTask: ComputeTask;
   private hasRegisteredMonitoringProvider = false;
-  private monitoringReadback = new ReadbackBuffer(INDIRECT_DRAW_BYTE_LENGTH);
 
   constructor() {
     this.monitoringReadback.name = "grass.indirectDrawArguments";
+
     const hasIndirectFirstInstance = rendererManager.renderer.hasFeature(
       INDIRECT_FIRST_INSTANCE_FEATURE,
     );
+
     if (!hasIndirectFirstInstance) {
       throw new Error(
         `[Grass] This device does not support the required WebGPU feature "${INDIRECT_FIRST_INSTANCE_FEATURE}"`,
@@ -50,50 +53,55 @@ export default class Grass {
         this.compute.computeUpdate,
       ],
     });
-    this.drawProfiles.forEach(({ segments }, lod) => {
-      this.tile.add(this.createMesh(segments, lod, this.material));
+
+    config.LOD_DRAW_PROFILES.forEach(({ segments }, lod) => {
+      this.tile.add(this.createMesh(segments, lod));
     });
+
     sceneManager.mainScene.add(this.tile);
     this.computeTask.init();
 
     eventsManager.on("engine-render-update", this.onEngineUpdate);
+
     debugGrass(uniforms, config);
   }
 
-  private createMesh(segments: number, lod: number, material: GrassMaterial) {
+  private createMesh(segments: number, lod: number) {
     const geometry = new GrassBladeGeometry({
       nSegments: segments,
       bladeHeight: config.BLADE_HEIGHT,
     });
+
     geometry.instanceCount = config.BLADE_COUNT;
+
     const indirectByteOffset =
       lod * config.INDIRECT_ARGS_STRIDE * UINT32_BYTE_SIZE;
+
     geometry.setIndirect(
       this.compute.indirectDrawAttribute,
       indirectByteOffset,
     );
 
-    const mesh = new Mesh(geometry, material);
+    const mesh = new Mesh(geometry, this.material);
     mesh.frustumCulled = false;
+
     return mesh;
   }
 
   private onEngineUpdate = ({ player }: State) => {
     this.accumulatePlayerDelta(player);
-    this.syncPlayerAndCameraUniforms(player);
+
+    uniforms.uPlayerPosition.value.copy(player.position);
+
     this.updateCompute();
-    this.tile.position.copy(player.position).setY(0);
+
+    this.tile.position.set(player.position.x, 0, player.position.z);
   };
 
   private accumulatePlayerDelta(player: State["player"]) {
-    const dx = player.position.x - this.tile.position.x;
-    const dz = player.position.z - this.tile.position.z;
-    this.playerDeltaXZ.x += dx;
-    this.playerDeltaXZ.y += dz;
-  }
+    this.playerDeltaXZ.x += player.position.x - this.tile.position.x;
 
-  private syncPlayerAndCameraUniforms(player: State["player"]) {
-    uniforms.uPlayerPosition.value.copy(player.position);
+    this.playerDeltaXZ.y += player.position.z - this.tile.position.z;
   }
 
   private updateCompute() {
@@ -101,17 +109,12 @@ export default class Grass {
 
     const deltaX = this.playerDeltaXZ.x;
     const deltaZ = this.playerDeltaXZ.y;
-    this.playerDeltaXZ.set(0, 0);
+
     uniforms.uPlayerDeltaXZ.value.set(deltaX, deltaZ);
+    this.playerDeltaXZ.set(0, 0);
 
-    this.computeGrass(deltaX, deltaZ);
-  }
-
-  private computeGrass(deltaX: number, deltaZ: number) {
-    const didCompute = this.computeTask.update();
-    if (!didCompute) {
-      this.playerDeltaXZ.x += deltaX;
-      this.playerDeltaXZ.y += deltaZ;
+    if (!this.computeTask.update()) {
+      this.playerDeltaXZ.set(deltaX, deltaZ);
       return;
     }
 
@@ -120,7 +123,9 @@ export default class Grass {
 
   private registerMonitoringProvider() {
     if (!monitoringManager || this.hasRegisteredMonitoringProvider) return;
+
     monitoringManager.setGrassProvider(this.getMonitoringStatsAsync);
+
     this.hasRegisteredMonitoringProvider = true;
   }
 
@@ -129,33 +134,43 @@ export default class Grass {
       this.compute.indirectDrawAttribute,
       this.monitoringReadback,
     );
+
     try {
       const buffer = readback.buffer;
-      if (!buffer)
+
+      if (!buffer) {
         throw new Error("[Grass] monitoring readback returned no data");
+      }
 
       const drawArguments = new Uint32Array(buffer);
-      const renderedPerLod = this.drawProfiles.map(
-        (_, lod) =>
-          drawArguments[
-            lod * config.INDIRECT_ARGS_STRIDE + config.INSTANCE_COUNT_INDEX
-          ],
-      );
+      const renderedPerLod = new Array<number>(config.LOD_COUNT);
 
       let rendered = 0;
       let renderedTriangles = 0;
       let allocatedTriangles = 0;
-      for (let lod = 0; lod < this.drawProfiles.length; lod++) {
-        const trianglesPerBlade = this.drawProfiles[lod].indexCount / 3;
-        rendered += renderedPerLod[lod];
-        renderedTriangles += renderedPerLod[lod] * trianglesPerBlade;
+
+      for (let lod = 0; lod < config.LOD_COUNT; lod++) {
+        const profile = config.LOD_DRAW_PROFILES[lod];
+
+        const renderedBlades =
+          drawArguments[
+            lod * config.INDIRECT_ARGS_STRIDE + config.INSTANCE_COUNT_INDEX
+          ];
+
+        const trianglesPerBlade = profile.indexCount / 3;
+
+        renderedPerLod[lod] = renderedBlades;
+        rendered += renderedBlades;
+        renderedTriangles += renderedBlades * trianglesPerBlade;
         allocatedTriangles += config.BLADE_COUNT * trianglesPerBlade;
       }
 
       return {
         rendered,
         renderedPerLod,
-        segmentsPerLod: this.drawProfiles.map(({ segments }) => segments),
+        segmentsPerLod: config.LOD_DRAW_PROFILES.map(
+          ({ segments }) => segments,
+        ),
         total: config.BLADE_COUNT,
         renderedTriangles,
         allocatedTriangles,

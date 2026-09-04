@@ -14,7 +14,7 @@ const getConfig = () => {
   const BLADE_HEIGHT = 1.75;
   const TILE_SIZE = 130;
   // near to far, one indirect draw per entry
-  const LOD_DRAW_PROFILES = [8, 4, 2].map(getDrawProfile);
+  const LOD_DRAW_PROFILES = [6, 4, 2].map(getDrawProfile);
   const BLADES_PER_CLUMP = 8;
   const CLUMPS_PER_SIDE = 8 * 50; // multiple of BLADES_PER_CLUMP
   const CLUMP_COUNT = CLUMPS_PER_SIDE * CLUMPS_PER_SIDE;
