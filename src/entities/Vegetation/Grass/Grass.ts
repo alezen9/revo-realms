@@ -8,12 +8,12 @@ import {
   monitoringManager,
 } from "../../../systems";
 import { config, uniforms } from "./config";
-import { debugGrass } from "./debug";
 import { GrassBladeGeometry } from "./GrassBladeGeometry";
 import { GrassMaterial } from "./GrassMaterial";
 import { GrassCompute } from "./GrassCompute";
 import type { ComputeTask } from "../../../systems/RendererManager/ComputeTask";
 import type { GrassMonitoringStats } from "../../../systems/EventsManager";
+import { TOOLING_FLAGS } from "@systems-tooling-runtime";
 
 const UINT32_BYTE_SIZE = Uint32Array.BYTES_PER_ELEMENT;
 const INDIRECT_FIRST_INSTANCE_FEATURE = "indirect-first-instance";
@@ -21,29 +21,16 @@ const INDIRECT_DRAW_BYTE_LENGTH =
   config.LOD_COUNT * config.INDIRECT_ARGS_STRIDE * UINT32_BYTE_SIZE;
 
 export default class Grass {
-  private readonly compute = new GrassCompute();
-  private readonly material = new GrassMaterial(this.compute);
+  private compute = new GrassCompute();
+  private material = new GrassMaterial(this.compute);
   // every LOD mesh rides the same wrapping tile, so only the group moves
-  private readonly tile = new Group();
-  private readonly playerDeltaXZ = new Vector2();
-  private readonly monitoringReadback = new ReadbackBuffer(
-    INDIRECT_DRAW_BYTE_LENGTH,
-  );
-  private readonly computeTask: ComputeTask;
-  private hasRegisteredMonitoringProvider = false;
+  private tile = new Group();
+  private playerDeltaXZ = new Vector2();
+  private computeTask: ComputeTask;
+  private monitoringReadback?: ReadbackBuffer;
 
   constructor() {
-    this.monitoringReadback.name = "grass.indirectDrawArguments";
-
-    const hasIndirectFirstInstance = rendererManager.renderer.hasFeature(
-      INDIRECT_FIRST_INSTANCE_FEATURE,
-    );
-
-    if (!hasIndirectFirstInstance) {
-      throw new Error(
-        `[Grass] This device does not support the required WebGPU feature "${INDIRECT_FIRST_INSTANCE_FEATURE}"`,
-      );
-    }
+    this.validateRequiredFeatures();
 
     this.computeTask = rendererManager.createComputeTask({
       label: "Grass",
@@ -63,7 +50,21 @@ export default class Grass {
 
     eventsManager.on("engine-render-update", this.onEngineUpdate);
 
-    debugGrass(uniforms, config);
+    if (TOOLING_FLAGS.debug) {
+      import("./debug").then(({ debugGrass }) => {
+        debugGrass(uniforms, config);
+      });
+    }
+  }
+
+  private validateRequiredFeatures() {
+    if (rendererManager.renderer.hasFeature(INDIRECT_FIRST_INSTANCE_FEATURE)) {
+      return;
+    }
+
+    throw new Error(
+      `[Grass] This device does not support the required WebGPU feature "${INDIRECT_FIRST_INSTANCE_FEATURE}"`,
+    );
   }
 
   private createMesh(segments: number, lod: number) {
@@ -122,17 +123,26 @@ export default class Grass {
   }
 
   private registerMonitoringProvider() {
-    if (!monitoringManager || this.hasRegisteredMonitoringProvider) return;
+    if (!TOOLING_FLAGS.monitoring) return;
+    if (!monitoringManager) return;
+    if (this.monitoringReadback) return;
+
+    this.monitoringReadback = new ReadbackBuffer(INDIRECT_DRAW_BYTE_LENGTH);
+    this.monitoringReadback.name = "grass.indirectDrawArguments";
 
     monitoringManager.setGrassProvider(this.getMonitoringStatsAsync);
-
-    this.hasRegisteredMonitoringProvider = true;
   }
 
   private getMonitoringStatsAsync = async (): Promise<GrassMonitoringStats> => {
+    const monitoringReadback = this.monitoringReadback;
+
+    if (!monitoringReadback) {
+      throw new Error("[Grass] monitoring readback is not initialized");
+    }
+
     const readback = await rendererManager.renderer.getArrayBufferAsync(
       this.compute.indirectDrawAttribute,
-      this.monitoringReadback,
+      monitoringReadback,
     );
 
     try {
