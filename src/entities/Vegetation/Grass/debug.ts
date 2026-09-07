@@ -86,12 +86,6 @@ export const debugGrass = (uniforms: GrassUniforms, config: GrassConfig) => {
     max: 1,
     step: 0.01,
   });
-  lighting.addBinding(uniforms.uRootSkyVisibility, "value", {
-    label: "Root sky visibility",
-    min: 0,
-    max: 1,
-    step: 0.01,
-  });
 
   const ao = folder.addFolder({ title: "AO" });
   ao.addBinding(uniforms.uAoScale, "value", {

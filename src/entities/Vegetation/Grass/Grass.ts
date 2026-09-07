@@ -8,12 +8,12 @@ import {
   monitoringManager,
 } from "../../../systems";
 import { config, uniforms } from "./config";
+import { debugGrass } from "./debug";
 import { GrassBladeGeometry } from "./GrassBladeGeometry";
 import { GrassMaterial } from "./GrassMaterial";
 import { GrassCompute } from "./GrassCompute";
 import type { ComputeTask } from "../../../systems/RendererManager/ComputeTask";
 import type { GrassMonitoringStats } from "../../../systems/EventsManager";
-import { TOOLING_FLAGS } from "@systems-tooling-runtime";
 
 const UINT32_BYTE_SIZE = Uint32Array.BYTES_PER_ELEMENT;
 const INDIRECT_FIRST_INSTANCE_FEATURE = "indirect-first-instance";
@@ -50,11 +50,7 @@ export default class Grass {
 
     eventsManager.on("engine-render-update", this.onEngineUpdate);
 
-    if (TOOLING_FLAGS.debug) {
-      import("./debug").then(({ debugGrass }) => {
-        debugGrass(uniforms, config);
-      });
-    }
+    debugGrass(uniforms, config);
   }
 
   private validateRequiredFeatures() {
@@ -123,8 +119,7 @@ export default class Grass {
   }
 
   private registerMonitoringProvider() {
-    if (!TOOLING_FLAGS.monitoring) return;
-    if (!monitoringManager) return;
+    if (!monitoringManager.isEnabled) return;
     if (this.monitoringReadback) return;
 
     this.monitoringReadback = new ReadbackBuffer(INDIRECT_DRAW_BYTE_LENGTH);

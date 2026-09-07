@@ -29,10 +29,7 @@ export class AudioManager {
   hitWood!: Audio;
   hitStone!: Audio;
 
-  constructor(
-    sceneManager: SceneManager,
-    eventsManager: EventsManager,
-  ) {
+  constructor(sceneManager: SceneManager, eventsManager: EventsManager) {
     this.eventsManager = eventsManager;
     const manager = new LoadingManager();
     manager.onProgress = (_, itemsLoaded, itemsTotal) => {

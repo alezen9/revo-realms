@@ -5,9 +5,16 @@ export type AtlasEntry = {
 
 type Values<T extends readonly unknown[]> = T[number];
 
-const entryKeysMap = {"stones":["stoneDiffuse","stoneMossyDiffuse","stoneMossyNormalAo","stoneNormalAo"]} as const
+const entryKeysMap = {
+  stones: [
+    "stoneDiffuse",
+    "stoneMossyDiffuse",
+    "stoneMossyNormalAo",
+    "stoneNormalAo",
+  ],
+} as const;
 export type Atlases = {
   [K in keyof typeof entryKeysMap]: {
-    [T in Values<typeof entryKeysMap[K]>]: AtlasEntry;
+    [T in Values<(typeof entryKeysMap)[K]>]: AtlasEntry;
   };
-}
+};

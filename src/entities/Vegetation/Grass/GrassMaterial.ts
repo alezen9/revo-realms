@@ -42,7 +42,9 @@ export class GrassMaterial extends SpriteNodeMaterial {
 
     const clumpState = compute.clumpStateBuffer.element(clumpIndex);
     const bladeState = compute.bladeStateBuffer.element(bladeIndex);
+
     const clumpRotation = getClumpRotation(clumpState).toVar();
+
     const bladeLocalOffset = getBladeLocalOffset(
       bladeSlot,
       clumpRotation,
@@ -72,6 +74,7 @@ export class GrassMaterial extends SpriteNodeMaterial {
       bladeOffsetZ.add(uniforms.uPlayerPosition.z),
     );
 
+    // WIDTH
     const widthDistanceFactor = smoothstep(
       uniforms.uWidthNearRadiusSquared,
       uniforms.uWidthFarRadiusSquared,
@@ -85,10 +88,12 @@ export class GrassMaterial extends SpriteNodeMaterial {
     );
 
     const bladeWidth = uniforms.uBladeWidth.mul(distanceWidthGain);
+
     const bladeWidthScale = positionNoise.add(0.5).mul(bladeWidth);
 
     this.scaleNode = vec3(bladeWidthScale, scaleY, 1);
 
+    // ROTATION
     const randomBendOffset = bladeHash.mul(0.25).sub(0.125);
 
     const spriteRotationNoise = bladeHash.mul(31.7).fract().mul(2).sub(1);
@@ -107,6 +112,7 @@ export class GrassMaterial extends SpriteNodeMaterial {
 
     this.rotationNode = spriteRotation.add(baseBending);
 
+    // POSITION / BEND
     const bendLengthSquared = bendXZ.dot(bendXZ);
 
     const bendDrop = bendLengthSquared
@@ -127,6 +133,7 @@ export class GrassMaterial extends SpriteNodeMaterial {
       bendOffset,
     );
 
+    // NEAR DETAIL / AO
     const nearDetailMask = float(1).sub(
       smoothstep(0, uniforms.uAoRadiusSquared, playerDistanceSquared),
     );
@@ -135,6 +142,7 @@ export class GrassMaterial extends SpriteNodeMaterial {
       .mul(0.25)
       .mul(nearDetailMask);
 
+    // COLOR
     const colorVariation = mix(
       1,
       positionNoise,
@@ -170,6 +178,7 @@ export class GrassMaterial extends SpriteNodeMaterial {
       bakedShadowFactor,
     );
 
+    // LIGHTING
     const lightingAngle = bladeHash.mul(53.3).fract().mul(TWO_PI);
 
     const lightingNormal = vec3(cos(lightingAngle), 0, sin(lightingAngle));
@@ -202,18 +211,17 @@ export class GrassMaterial extends SpriteNodeMaterial {
       mix(0.35, 1, diffuseFacing),
     );
 
-    const skyVisibility = mix(uniforms.uRootSkyVisibility, 1, bladeHeight);
-
     const hemisphereLight = mix(
       lightingManager.uHemiGroundColor,
       lightingManager.uHemiSkyColor,
-      skyVisibility.mul(0.5),
+      bladeHeight.mul(0.5),
     ).mul(lightingManager.uHemiIntensity);
 
     const sceneLight = hemisphereLight
       .add(sunDiffuse)
       .mul(uniforms.uLightExposure);
 
+    // PACK VARYINGS
     const colorShadow = varying(vec4(variedColor, bakedShadow));
 
     const lightingGrazing = varying(vec4(sceneLight, grazing));
@@ -224,12 +232,15 @@ export class GrassMaterial extends SpriteNodeMaterial {
 
     const bladeColor = colorShadow.rgb;
     const shadow = colorShadow.a;
+
     const sceneLighting = lightingGrazing.rgb;
     const bladeGrazing = lightingGrazing.a;
+
     const bladeBacklight = viewLightingDetail.x;
     const bladeViewSunAlignment = viewLightingDetail.y;
     const nearDetailOcclusion = viewLightingDetail.z;
 
+    // FRAGMENT DETAIL
     const bladeEdgeDistance = bladeUv.x.mul(2).sub(1).abs();
 
     const edgeOcclusionMask = smoothstep(
@@ -252,6 +263,7 @@ export class GrassMaterial extends SpriteNodeMaterial {
 
     const albedo = mix(bladeColor, uniforms.uTipColor, tipColorFactor);
 
+    // SHEEN / TRANSMISSION
     const grazingSheen = bladeGrazing
       .mul(bladeGrazing)
       .mul(mix(0.25, 1, bladeViewSunAlignment))
@@ -278,6 +290,7 @@ export class GrassMaterial extends SpriteNodeMaterial {
 
     const shadedColor = diffuseColor.add(sheenColor).add(transmittedColor);
 
+    // LOD DEBUG
     const lodIndex = instanceIndex.div(config.BLADE_COUNT);
 
     const lodDebugColor = uniforms.uLodDebugColors.element(lodIndex);

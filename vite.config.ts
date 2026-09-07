@@ -4,9 +4,16 @@ import { svelte } from "@sveltejs/vite-plugin-svelte";
 import path from "node:path";
 
 export default defineConfig(({ mode }) => {
-  const toolingRuntimePath = mode === "production"
-    ? path.resolve(process.cwd(), "src/systems/runtime/ToolingRuntime.prod.ts")
-    : path.resolve(process.cwd(), "src/systems/runtime/ToolingRuntime.dev.ts");
+  const toolingRuntimePath =
+    mode === "production"
+      ? path.resolve(
+          process.cwd(),
+          "src/systems/runtime/ToolingRuntime.prod.ts",
+        )
+      : path.resolve(
+          process.cwd(),
+          "src/systems/runtime/ToolingRuntime.dev.ts",
+        );
 
   return {
     resolve: {
@@ -19,7 +26,7 @@ export default defineConfig(({ mode }) => {
     build: {
       target: "esnext",
       chunkSizeWarningLimit: 1024,
-      rollupOptions: {
+      rolldownOptions: {
         output: {
           manualChunks(id) {
             if (id.includes("node_modules")) {

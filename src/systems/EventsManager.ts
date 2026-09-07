@@ -104,7 +104,6 @@ type EngineEvents = {
   "engine-after-physics": UpdateEvent;
   "engine-render-update": UpdateEvent;
   "engine-camera-change": VoidFunction;
-  "engine-renderer-ready": VoidFunction;
   "engine-render-target-resize": ResizeEvent;
   "engine-loading-resources-progress": (percentage: number) => void;
   "engine-loading-audio-progress": (percentage: number) => void;

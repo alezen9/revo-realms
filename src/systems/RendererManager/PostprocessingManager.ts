@@ -21,10 +21,9 @@ import {
   vec4,
 } from "three/tsl";
 import { bloom } from "three/addons/tsl/display/BloomNode.js";
-import type { DebugManager } from "../DebugManager";
+import type { DebugFolder, DebugManager } from "../DebugManager";
 import type { EventsManager } from "../EventsManager";
 import type { SceneManager } from "../SceneManager";
-import type { FolderApi } from "tweakpane";
 import { assetManager, lightingManager } from "..";
 import { playerUniforms } from "../../entities/Player/PlayerMaterial";
 import { TSLUtils } from "../../utils/TSLUtils";
@@ -46,7 +45,7 @@ export class PostprocessingManager extends RenderPipeline {
   private sceneManager: SceneManager;
   private eventsManager: EventsManager;
   private debugManager: DebugManager;
-  private debugFolder: FolderApi;
+  private debugFolder: DebugFolder;
 
   constructor(
     renderer: WebGPURenderer,

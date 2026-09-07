@@ -12,7 +12,6 @@ import {
   vec2,
   vec3,
 } from "three/tsl";
-import { RevoColliderType } from "../types";
 import {
   Color,
   DataTexture,
@@ -25,36 +24,36 @@ import {
   RedFormat,
   type Node,
   Vector3,
-  MeshBasicNodeMaterial,
 } from "three/webgpu";
-import { realmConfig } from "../realm/config";
 import {
   ColliderDesc,
   HeightFieldFlags,
-  RigidBody,
+  type RigidBody,
   RigidBodyDesc,
 } from "@dimforge/rapier3d";
 import { type State } from "../Game";
-import { gameTime } from "../utils/GameTime";
-import { TSLUtils } from "../utils/TSLUtils";
-import { srgbColorTarget } from "../utils/TweakpaneColor";
+import { realmConfig } from "../realm/config";
+import { RevoColliderType } from "../types";
 import {
   assetManager,
   debugManager,
-  lightingManager,
-  sceneManager,
-  physicsManager,
   eventsManager,
+  lightingManager,
+  physicsManager,
+  sceneManager,
 } from "../systems";
+import { gameTime } from "../utils/GameTime";
+import { srgbColorTarget } from "../utils/TweakpaneColor";
+import { TSLUtils } from "../utils/TSLUtils";
 
 const uniforms = {
-  uGrassTerrainColor: uniform(
-    new Color(0.59, 0.64, 0.43).convertSRGBToLinear(),
+  uGrassColor: uniform(new Color(0.59, 0.64, 0.43).convertSRGBToLinear()),
+  uUnderwaterSandColor: uniform(
+    new Color(0.95, 0.87, 0.68).convertSRGBToLinear(),
   ),
-  uWaterSandColor: uniform(new Color(0.95, 0.87, 0.68).convertSRGBToLinear()),
-  uTerrainColor: uniform(new Color(0.9, 0.82, 0.65).convertSRGBToLinear()),
+  uSandColor: uniform(new Color(0.9, 0.82, 0.65).convertSRGBToLinear()),
   uGrassNormalScale: uniform(3.5),
-  uTerrainNormalScale: uniform(1),
+  uSandNormalScale: uniform(1),
   uWaterNormalScale: uniform(0.35),
   uCausticsHighlightScale: uniform(0.4),
   uCausticsUv1Scale: uniform(31.53),
@@ -62,34 +61,51 @@ const uniforms = {
 };
 
 type CausticsArgs = [
-  vUv: Node<"vec2">,
-  depth: Node<"float">,
-  isWater: Node<"float">,
+  mapUv: Node<"vec2">,
+  waterDepth: Node<"float">,
+  waterMask: Node<"float">,
 ];
 
 const computeCausticsColor = Fn<CausticsArgs, Node<"vec3">>(
-  ([vUv, depth, isWater]) => {
+  ([mapUv, waterDepth, waterMask]) => {
     const causticsColor = vec3(0).toVar();
 
-    If(isWater, () => {
-      const timer = gameTime.mul(0.15);
-      const uv1 = vUv
+    If(waterMask, () => {
+      const causticsTime = gameTime.mul(0.15);
+
+      const causticsUv1 = mapUv
         .mul(uniforms.uCausticsUv1Scale)
-        .add(vec2(timer, 0))
+        .add(vec2(causticsTime, 0))
         .fract();
-      const noiseA = texture(assetManager.resources.noiseAtlas, uv1, 1).a;
-      const uv2 = vUv
+
+      const noiseA = texture(
+        assetManager.resources.noiseAtlas,
+        causticsUv1,
+        1,
+      ).a;
+
+      const causticsUv2 = mapUv
         .mul(uniforms.uCausticsUv2Scale)
-        .add(vec2(0, timer.negate()))
+        .add(vec2(0, causticsTime.negate()))
         .fract();
-      const noiseB = texture(assetManager.resources.noiseAtlas, uv2, 3).a;
+
+      const noiseB = texture(
+        assetManager.resources.noiseAtlas,
+        causticsUv2,
+        3,
+      ).a;
+
       const caustics = noiseA.add(noiseB);
-      const caustics3 = caustics.mul(caustics).mul(caustics);
-      const depthFalloff = smoothstep(-1, 7.5, depth);
-      const adjustedCaustics = caustics3.mul(float(1).sub(depthFalloff));
+      const causticsCubed = caustics.mul(caustics).mul(caustics);
+
+      const depthFalloff = smoothstep(-1, 7.5, waterDepth);
+
+      const adjustedCaustics = causticsCubed.mul(float(1).sub(depthFalloff));
+
       const causticsHighlightColor = vec3(0.3, 0.4, 0.5).mul(
         uniforms.uCausticsHighlightScale,
       );
+
       causticsColor.assign(causticsHighlightColor.mul(adjustedCaustics));
     });
 
@@ -100,8 +116,88 @@ const computeCausticsColor = Fn<CausticsArgs, Node<"vec3">>(
 class TerrainMaterial extends MeshLambertNodeMaterial {
   constructor() {
     super();
+
     this.createMaterial();
     this.debugTerrain();
+  }
+
+  private createMaterial() {
+    const worldUv = TSLUtils.computeMapUvByPosition(positionWorld.xz);
+
+    const grassNoiseUv = TSLUtils.computeAtlasUv(
+      vec2(0.5),
+      vec2(0, 0),
+      worldUv.mul(6).fract(),
+    );
+
+    const grassNoise = texture(assetManager.resources.noiseAtlas, grassNoiseUv);
+
+    const mapUv = varying(worldUv);
+
+    const terrainMapSample = texture(assetManager.resources.terrainMaps, mapUv);
+
+    // LAND
+    const grassMask = terrainMapSample.g;
+
+    const grassBlend = smoothstep(0.05, 0.35, grassMask);
+
+    const grassColor = uniforms.uGrassColor.mul(mix(0.86, 1.12, grassNoise.b));
+
+    const landColor = mix(uniforms.uSandColor, grassColor, grassBlend);
+
+    // WATER
+    const waterMask = terrainMapSample.b;
+    const waterDepth = positionWorld.y.negate();
+
+    const waterDepthBlend = smoothstep(0, 8, waterDepth);
+
+    const waterTint = vec3(0.35, 0.45, 0.55).mul(0.65);
+
+    const causticsColor = computeCausticsColor(mapUv, waterDepth, waterMask);
+
+    const shallowBoost = smoothstep(0, 1.5, waterDepth);
+
+    const sandHighlight = vec3(1, 0.9, 0.7).mul(0.1).mul(shallowBoost);
+
+    const waterBaseColor = mix(
+      uniforms.uUnderwaterSandColor,
+      waterTint,
+      waterDepthBlend,
+    ).add(sandHighlight);
+
+    const waterColor = waterBaseColor.add(causticsColor);
+
+    const surfaceColor = mix(landColor, waterColor, waterMask);
+
+    const shadowedColor = mix(
+      surfaceColor.mul(lightingManager.uBakedShadowBrightness),
+      surfaceColor,
+      terrainMapSample.r,
+    );
+
+    this.colorNode = shadowedColor;
+
+    // NORMAL
+    const normalAoSample = texture(
+      assetManager.resources.terrainNormAo,
+      mapUv.mul(41.7),
+    );
+
+    const landNormalScale = mix(
+      uniforms.uSandNormalScale,
+      uniforms.uGrassNormalScale,
+      grassBlend,
+    );
+
+    const normalScale = mix(
+      landNormalScale,
+      uniforms.uWaterNormalScale,
+      waterMask,
+    );
+
+    this.normalNode = normalMap(normalAoSample.rgb, normalScale);
+
+    this.aoNode = normalAoSample.a;
   }
 
   private debugTerrain() {
@@ -110,51 +206,66 @@ class TerrainMaterial extends MeshLambertNodeMaterial {
       expanded: false,
     });
 
-    const color = folder.addFolder({ title: "Color" });
-    color.addBinding(srgbColorTarget(uniforms.uTerrainColor.value), "value", {
-      label: "Terrain",
+    const color = folder.addFolder({
+      title: "Color",
+    });
+
+    color.addBinding(srgbColorTarget(uniforms.uSandColor.value), "value", {
+      label: "Sand",
       view: "color",
       color: { type: "float" },
     });
+
+    color.addBinding(srgbColorTarget(uniforms.uGrassColor.value), "value", {
+      label: "Grass",
+      view: "color",
+      color: { type: "float" },
+    });
+
     color.addBinding(
-      srgbColorTarget(uniforms.uGrassTerrainColor.value),
+      srgbColorTarget(uniforms.uUnderwaterSandColor.value),
       "value",
       {
-        label: "Grass",
+        label: "Underwater sand",
         view: "color",
         color: { type: "float" },
       },
     );
-    color.addBinding(srgbColorTarget(uniforms.uWaterSandColor.value), "value", {
-      label: "Water",
-      view: "color",
-      color: { type: "float" },
+
+    const normal = folder.addFolder({
+      title: "Normal scale",
     });
 
-    const normal = folder.addFolder({ title: "Normal scale" });
-    normal.addBinding(uniforms.uTerrainNormalScale, "value", {
-      label: "Terrain",
+    normal.addBinding(uniforms.uSandNormalScale, "value", {
+      label: "Sand",
     });
+
     normal.addBinding(uniforms.uGrassNormalScale, "value", {
       label: "Grass",
     });
+
     normal.addBinding(uniforms.uWaterNormalScale, "value", {
       label: "Water",
     });
 
-    const caustics = folder.addFolder({ title: "Caustics" });
+    const caustics = folder.addFolder({
+      title: "Caustics",
+    });
+
     caustics.addBinding(uniforms.uCausticsUv1Scale, "value", {
       label: "UV 1 scale",
       min: 0,
       max: 100,
       step: 0.001,
     });
+
     caustics.addBinding(uniforms.uCausticsUv2Scale, "value", {
       label: "UV 2 scale",
       min: 0,
       max: 100,
       step: 0.001,
     });
+
     caustics.addBinding(uniforms.uCausticsHighlightScale, "value", {
       label: "Highlight scale",
       min: 0,
@@ -162,183 +273,163 @@ class TerrainMaterial extends MeshLambertNodeMaterial {
       step: 0.001,
     });
   }
-
-  private createMaterial() {
-    const worldUv = TSLUtils.computeMapUvByPosition(positionWorld.xz);
-    const terrainNoiseUv = TSLUtils.computeAtlasUv(
-      vec2(0.5),
-      vec2(0, 0),
-      worldUv.mul(6).fract(),
-    );
-    const noise = texture(assetManager.resources.noiseAtlas, terrainNoiseUv);
-    const vUv = varying(worldUv);
-
-    const terrainTypes = texture(assetManager.resources.terrainMaps, vUv);
-    // LAND
-    const isGrass = terrainTypes.g;
-    const smoothIsGrass = smoothstep(0.05, 0.35, isGrass);
-    const grassColor = uniforms.uGrassTerrainColor.mul(
-      mix(0.86, 1.12, noise.b),
-    );
-    const terrainColor = mix(uniforms.uTerrainColor, grassColor, smoothIsGrass);
-
-    // WATER
-    const isWater = terrainTypes.b;
-    const depth = positionWorld.y.negate();
-    const blendFactor = smoothstep(0, 8, depth);
-    const waterTint = vec3(0.35, 0.45, 0.55).mul(0.65);
-
-    const causticsColor = computeCausticsColor(vUv, depth, isWater);
-
-    const shallowBoost = smoothstep(0.0, 1.5, depth);
-    const sandHighlight = vec3(1.0, 0.9, 0.7).mul(0.1).mul(shallowBoost);
-    const waterBaseColor = mix(
-      uniforms.uWaterSandColor,
-      waterTint,
-      blendFactor,
-    ).add(sandHighlight);
-    const waterColor = waterBaseColor.add(causticsColor);
-
-    const final = mix(terrainColor, waterColor, isWater);
-    const withShadow = mix(
-      final.mul(lightingManager.uBakedShadowBrightness),
-      final,
-      terrainTypes.r,
-    );
-    this.colorNode = withShadow;
-
-    // NORMAL
-    const norAo = texture(assetManager.resources.terrainNormAo, vUv.mul(41.7));
-    const normalScaleTerrainGrass = mix(
-      uniforms.uTerrainNormalScale,
-      uniforms.uGrassNormalScale,
-      smoothIsGrass,
-    );
-    const normalScale = mix(
-      normalScaleTerrainGrass,
-      uniforms.uWaterNormalScale,
-      isWater,
-    );
-    this.normalNode = normalMap(norAo.rgb, normalScale);
-    this.aoNode = norAo.a;
-  }
 }
 
 class InnerTerrain {
   constructor(material: TerrainMaterial) {
-    const innerMap = this.createFloor(material);
-    sceneManager.mainScene.add(innerMap);
+    const innerTerrain = this.createInnerTerrain(material);
+
+    sceneManager.mainScene.add(innerTerrain);
   }
 
-  private createFloor(material: TerrainMaterial) {
-    // Visual
-    const meshes = assetManager.resources.worldModel.scene.children.filter(
-      (obj) => obj.name.startsWith("terrain-") && obj.name !== "terrain-outer",
-    ) as Mesh[];
+  private createInnerTerrain(material: TerrainMaterial) {
+    const terrainMeshes =
+      assetManager.resources.worldModel.scene.children.filter(
+        (object) =>
+          object.name.startsWith("terrain-") && object.name !== "terrain-outer",
+      ) as Mesh[];
 
-    let heightfield: Mesh | undefined;
-    const innerMap = new Group();
+    let heightfieldMesh: Mesh | undefined;
+    const innerTerrain = new Group();
 
-    for (const mesh of meshes) {
-      if (mesh.name === "terrain-heightfield") heightfield = mesh;
-      else {
+    for (const mesh of terrainMeshes) {
+      if (mesh.name === "terrain-heightfield") {
+        heightfieldMesh = mesh;
+      } else {
         mesh.material = material;
         mesh.geometry.computeBoundingSphere();
         mesh.geometry.computeBoundingBox();
-        innerMap.add(mesh);
+
+        innerTerrain.add(mesh);
       }
     }
 
-    if (!heightfield) throw new Error("No heightfield");
+    if (!heightfieldMesh) {
+      throw new Error("No heightfield");
+    }
 
-    // Physics
-    this.createFloorPhysics(heightfield);
-    return innerMap;
+    this.createHeightfieldPhysics(heightfieldMesh);
+
+    return innerTerrain;
   }
 
-  private getFloorDisplacementData(mesh: Mesh) {
-    const displacement = mesh.geometry.attributes._displacement.array[0]; // they are all the same
+  private getHeightfieldData(mesh: Mesh) {
+    // They are all the same.
+    const displacement = mesh.geometry.attributes._displacement.array[0];
+
     const positionAttribute = mesh.geometry.attributes.position;
-    if (!mesh.geometry.boundingBox) mesh.geometry.computeBoundingBox();
-    const boundingBoxAttribute = mesh.geometry.boundingBox!;
-    const totalCount = positionAttribute.count;
-    const rowsCount = Math.sqrt(totalCount);
 
-    // half extent of the plane size, plane is a square centred at 0,0 in Blender <- IMPORTANT
-    const halfExtent = boundingBoxAttribute.max.x;
+    if (!mesh.geometry.boundingBox) {
+      mesh.geometry.computeBoundingBox();
+    }
 
-    const heights = new Float32Array(totalCount);
+    const boundingBox = mesh.geometry.boundingBox!;
 
-    for (let i = 0; i < totalCount; i++) {
-      const x = positionAttribute.array[i * 3 + 0]; // in [-halfExtent..+halfExtent]
-      const y = positionAttribute.array[i * 3 + 1]; // in [0, someHeight]
-      const z = positionAttribute.array[i * 3 + 2]; // in [-halfExtent..+halfExtent]
+    const vertexCount = positionAttribute.count;
 
-      // Map x from [-halfExtent..+halfExtent] to [0..1] => index in [0..(rowsCount - 1)]
-      const indexX = Math.round((x / (halfExtent * 2) + 0.5) * (rowsCount - 1));
-      const indexZ = Math.round((z / (halfExtent * 2) + 0.5) * (rowsCount - 1));
+    const gridSize = Math.sqrt(vertexCount);
 
-      // col-major: row = indexZ, col = indexX
-      const index = indexZ + indexX * rowsCount;
+    // Half extent of the plane size.
+    // Plane is a square centred at 0,0 in Blender.
+    const halfExtent = boundingBox.max.x;
 
-      heights[index] = y;
+    const heights = new Float32Array(vertexCount);
+
+    for (let vertexIndex = 0; vertexIndex < vertexCount; vertexIndex++) {
+      const positionOffset = vertexIndex * 3;
+
+      const x = positionAttribute.array[positionOffset];
+
+      const y = positionAttribute.array[positionOffset + 1];
+
+      const z = positionAttribute.array[positionOffset + 2];
+
+      const gridX = Math.round((x / (halfExtent * 2) + 0.5) * (gridSize - 1));
+
+      const gridZ = Math.round((z / (halfExtent * 2) + 0.5) * (gridSize - 1));
+
+      const heightIndex = gridZ + gridX * gridSize;
+
+      heights[heightIndex] = y;
     }
 
     return {
-      rowsCount,
+      gridSize,
       heights,
       displacement,
     };
   }
 
-  private createDisplacementTexture(
-    rowsCount: number,
+  private createHeightmapTexture(
+    gridSize: number,
     heights: Float32Array,
     displacement: number,
   ) {
-    const N = rowsCount;
-    const fixed = new Float32Array(heights.length);
+    const heightmapData = new Float32Array(heights.length);
 
     let min = 0;
     let max = 0;
 
-    for (let z = 0; z < N; z++) {
-      for (let x = 0; x < N; x++) {
-        const srcZ = N - 1 - z;
-        const srcX = x;
-        const srcIndex = srcZ + srcX * N;
-        const dstIndex = x + z * N;
-        const h = heights[srcIndex] - displacement;
-        fixed[dstIndex] = h;
-        if (h < min) min = h;
-        if (h > max) max = h;
+    for (let z = 0; z < gridSize; z++) {
+      for (let x = 0; x < gridSize; x++) {
+        const sourceZ = gridSize - 1 - z;
+
+        const sourceX = x;
+
+        const sourceIndex = sourceZ + sourceX * gridSize;
+
+        const targetIndex = x + z * gridSize;
+
+        const height = heights[sourceIndex] - displacement;
+
+        heightmapData[targetIndex] = height;
+
+        if (height < min) min = height;
+        if (height > max) max = height;
       }
     }
 
-    const tex = new DataTexture(fixed, N, N, RedFormat, FloatType);
-    tex.name = "terrain.heightmap";
-    tex.colorSpace = NoColorSpace;
-    tex.magFilter = LinearFilter;
-    tex.minFilter = LinearFilter;
-    tex.generateMipmaps = false;
-    tex.needsUpdate = true;
-    tex.userData = { min, max };
-    return tex;
+    const heightmap = new DataTexture(
+      heightmapData,
+      gridSize,
+      gridSize,
+      RedFormat,
+      FloatType,
+    );
+
+    heightmap.name = "terrain.heightmap";
+
+    heightmap.colorSpace = NoColorSpace;
+
+    heightmap.magFilter = LinearFilter;
+
+    heightmap.minFilter = LinearFilter;
+
+    heightmap.generateMipmaps = false;
+    heightmap.needsUpdate = true;
+    heightmap.userData = {
+      min,
+      max,
+    };
+
+    return heightmap;
   }
 
-  private createFloorPhysics(heightfield: Mesh) {
-    const displaceMentData = this.getFloorDisplacementData(heightfield);
-    const { rowsCount, heights, displacement } = displaceMentData;
-    const heightMap = this.createDisplacementTexture(
-      rowsCount,
+  private createHeightfieldPhysics(heightfieldMesh: Mesh) {
+    const { gridSize, heights, displacement } =
+      this.getHeightfieldData(heightfieldMesh);
+
+    const heightmap = this.createHeightmapTexture(
+      gridSize,
       heights,
       displacement,
     );
-    assetManager.resources.heightmap.copy(heightMap);
+
+    assetManager.resources.heightmap.copy(heightmap);
 
     const colliderDesc = ColliderDesc.heightfield(
-      rowsCount - 1,
-      rowsCount - 1,
+      gridSize - 1,
+      gridSize - 1,
       heights,
       {
         x: realmConfig.MAP_SIZE,
@@ -360,34 +451,42 @@ class InnerTerrain {
 }
 
 class OuterTerrain {
-  private outerFloor: Mesh;
-  private kintoun: RigidBody; // Kintoun = Flying Nimbus cloud from dragon ball
+  private outerTerrain: Mesh;
+  // Kintoun = Flying Nimbus cloud from Dragon Ball.
+  private kintoun: RigidBody;
   private kintounPosition = new Vector3();
 
   constructor(terrainMaterial: TerrainMaterial) {
-    this.outerFloor = this.createOuterFloorVisual();
-    this.outerFloor.material = terrainMaterial;
+    this.outerTerrain = this.createOuterTerrainMesh();
+
+    this.outerTerrain.material = terrainMaterial;
+
     this.kintoun = this.createKintoun();
-    sceneManager.mainScene.add(this.outerFloor);
+
+    sceneManager.mainScene.add(this.outerTerrain);
 
     eventsManager.on("engine-render-update", this.onEngineUpdate);
   }
 
-  private createOuterFloorVisual() {
-    const mesh = assetManager.resources.worldModel.scene.getObjectByName(
-      "terrain-outer",
-    ) as Mesh;
-    mesh.geometry.computeBoundingSphere();
-    mesh.geometry.computeBoundingBox();
-    return mesh;
+  private createOuterTerrainMesh() {
+    const outerTerrain =
+      assetManager.resources.worldModel.scene.getObjectByName(
+        "terrain-outer",
+      ) as Mesh;
+
+    outerTerrain.geometry.computeBoundingSphere();
+    outerTerrain.geometry.computeBoundingBox();
+
+    return outerTerrain;
   }
 
   private createKintoun() {
     const rigidBodyDesc = RigidBodyDesc.kinematicPositionBased().setTranslation(
       0,
-      -20, // out of the physics world
+      -20,
       0,
     );
+
     const rigidBody = physicsManager.world.createRigidBody(rigidBodyDesc);
 
     const halfSize = 2;
@@ -399,48 +498,69 @@ class OuterTerrain {
     )
       .setFriction(1)
       .setRestitution(0.2);
+
     physicsManager.world.createCollider(colliderDesc, rigidBody).userData = {
       type: RevoColliderType.Terrain,
     };
+
     return rigidBody;
   }
 
-  private useKintoun(playerPosition: Vector3) {
+  private positionKintounUnderPlayer(playerPosition: Vector3) {
     this.kintounPosition
       .copy(playerPosition)
       .setY(-realmConfig.HALF_FLOOR_THICKNESS);
+
     this.kintoun.setTranslation(this.kintounPosition, true);
   }
 
   private onEngineUpdate = (state: State) => {
     const { player } = state;
+
     const isPlayerNearEdgeX =
       realmConfig.HALF_MAP_SIZE - Math.abs(player.position.x) <
       realmConfig.KINTOUN_ACTIVATION_THRESHOLD;
+
     const isPlayerNearEdgeZ =
       realmConfig.HALF_MAP_SIZE - Math.abs(player.position.z) <
       realmConfig.KINTOUN_ACTIVATION_THRESHOLD;
 
-    if (isPlayerNearEdgeX || isPlayerNearEdgeZ)
-      this.useKintoun(player.position);
+    if (isPlayerNearEdgeX || isPlayerNearEdgeZ) {
+      this.positionKintounUnderPlayer(player.position);
+    }
 
-    const outerFloorThresold = realmConfig.MAP_SIZE;
+    const outerTerrainThreshold = realmConfig.MAP_SIZE;
+
     const absPlayerX = Math.abs(player.position.x);
-    const dirX = Math.sign(player.position.x);
-    const absPlayerZ = Math.abs(player.position.z);
-    const dirZ = Math.sign(player.position.z);
 
-    const dx =
-      absPlayerX > outerFloorThresold ? absPlayerX - outerFloorThresold : 0;
-    const dz =
-      absPlayerZ > outerFloorThresold ? absPlayerZ - outerFloorThresold : 0;
-    this.outerFloor.position.set(dx * dirX, 0, dz * dirZ);
+    const directionX = Math.sign(player.position.x);
+
+    const absPlayerZ = Math.abs(player.position.z);
+
+    const directionZ = Math.sign(player.position.z);
+
+    const offsetX =
+      absPlayerX > outerTerrainThreshold
+        ? absPlayerX - outerTerrainThreshold
+        : 0;
+
+    const offsetZ =
+      absPlayerZ > outerTerrainThreshold
+        ? absPlayerZ - outerTerrainThreshold
+        : 0;
+
+    this.outerTerrain.position.set(
+      offsetX * directionX,
+      0,
+      offsetZ * directionZ,
+    );
   };
 }
 
 export default class Terrain {
   constructor() {
     const terrainMaterial = new TerrainMaterial();
+
     new InnerTerrain(terrainMaterial);
     new OuterTerrain(terrainMaterial);
   }

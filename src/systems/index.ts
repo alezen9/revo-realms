@@ -16,7 +16,6 @@ import { PrewarmManager } from "./PrewarmManager";
 import {
   createDebugManager,
   createMonitoringManager,
-  TOOLING_FLAGS,
 } from "@systems-tooling-runtime";
 
 const init = () => {

@@ -106,14 +106,14 @@ export default class Game {
       eventsManager.emit("engine-after-physics", this.physicsState);
       physicsManager.flush();
     }
-    monitoringManager?.samplePhysics();
+    monitoringManager.samplePhysics();
 
     frameScheduler.update();
     if (!frameScheduler.shouldRender) return;
 
     this.renderState.delta = timeManager.consumeRenderDelta();
 
-    monitoringManager?.sampleRender(timestamp);
+    monitoringManager.sampleRender(timestamp);
     eventsManager.emit("engine-render-update", this.renderState);
     rendererManager.render();
 

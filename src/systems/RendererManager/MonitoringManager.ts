@@ -1,4 +1,4 @@
-import { attach, type Agrimensor, type PassKind } from "agrimensor";
+import type { Agrimensor, PassKind } from "agrimensor";
 import type { FrameScheduler } from "../FrameScheduler";
 import type { PhysicsScheduler } from "../PhysicsScheduler";
 import type { TimeManager } from "../TimeManager";
@@ -12,6 +12,7 @@ import type {
 } from "../EventsManager";
 import { type RendererManager } from "./RendererManager";
 import { ThreeMonitoringAdapter } from "./ThreeMonitoringAdapter";
+import { TOOLING_FLAGS } from "../runtime/ToolingFlags";
 
 const SNAPSHOT_INTERVAL_MS = 1_000;
 const LARGEST_RESOURCE_COUNT = 5;
@@ -119,8 +120,9 @@ export class MonitoringManager {
   private grassProvider?: GrassProvider;
   private grassStats: GrassMonitoringStats | null = null;
   private isGrassPending = false;
-  private threeAdapter: ThreeMonitoringAdapter;
-  private readonly snapshotInterval: ReturnType<typeof window.setInterval>;
+  private threeAdapter?: ThreeMonitoringAdapter;
+  private snapshotInterval?: ReturnType<typeof window.setInterval>;
+  readonly isEnabled = TOOLING_FLAGS.monitoring;
 
   constructor(
     eventsManager: EventsManager,
@@ -134,12 +136,6 @@ export class MonitoringManager {
     this.frameScheduler = frameScheduler;
     this.physicsScheduler = physicsScheduler;
     this.timeManager = timeManager;
-    this.threeAdapter = new ThreeMonitoringAdapter(rendererManager.renderer);
-    this.snapshotInterval = window.setInterval(
-      this.onSnapshotInterval,
-      SNAPSHOT_INTERVAL_MS,
-    );
-    eventsManager.on("engine-renderer-ready", this.attachAgrimensor);
     import.meta.hot?.dispose(this.dispose);
   }
 
@@ -148,6 +144,8 @@ export class MonitoringManager {
   }
 
   samplePhysics() {
+    if (!this.isEnabled) return;
+
     const { pendingSteps, alpha, fixedDelta } = this.physicsScheduler;
     const { discardedDelta } = this.timeManager;
     const remainderDelta = alpha * fixedDelta;
@@ -161,8 +159,11 @@ export class MonitoringManager {
 
   // must run before assets and entities allocate, since agrimensor only tracks
   // resources created after it attaches
-  private attachAgrimensor = () => {
-    const { backend } = this.rendererManager.renderer;
+  async initAsync() {
+    if (!this.isEnabled) return;
+
+    const { renderer } = this.rendererManager;
+    const { backend } = renderer;
     const device = "device" in backend ? backend.device : undefined;
     if (!(device instanceof GPUDevice)) {
       console.warn(
@@ -170,15 +171,27 @@ export class MonitoringManager {
       );
       return;
     }
+
+    const { attach } = await import("agrimensor");
+    const threeAdapter = new ThreeMonitoringAdapter(renderer);
     const options = {
       trackPassTimings: true,
-      resolvePassLabel: this.threeAdapter.resolvePassLabel,
+      resolvePassLabel: threeAdapter.resolvePassLabel,
     };
+
+    this.threeAdapter = threeAdapter;
     this.agrimensor = attach(device, options);
-  };
+    this.snapshotInterval = window.setInterval(
+      this.onSnapshotInterval,
+      SNAPSHOT_INTERVAL_MS,
+    );
+  }
 
   sampleRender(renderTimestamp: DOMHighResTimeStamp) {
-    this.lastSceneTriangles = this.threeAdapter.consumePreviousFrameTriangles();
+    const { threeAdapter } = this;
+    if (!threeAdapter) return;
+
+    this.lastSceneTriangles = threeAdapter.consumePreviousFrameTriangles();
     this.agrimensor?.beginRenderFrame();
     this.frameCount++;
 
@@ -416,7 +429,7 @@ export class MonitoringManager {
 
   private dispose = () => {
     window.clearInterval(this.snapshotInterval);
-    this.threeAdapter.dispose();
+    this.threeAdapter?.dispose();
     const agrimensor = this.agrimensor;
     // dropped first: beginRenderFrame throws on a destroyed instance
     this.agrimensor = undefined;

@@ -137,8 +137,10 @@ export class LightingManager {
   };
 
   private debugLight(debugManager: DebugManager, sceneManager: SceneManager) {
-    const lightFolder = debugManager.panel.addFolder({ title: "💡 Light" });
-    lightFolder.expanded = false;
+    const lightFolder = debugManager.panel.addFolder({
+      title: "💡 Light",
+      expanded: false,
+    });
     lightFolder
       .addBinding(config.LIGHT_POSITION_OFFSET, "x", {
         label: "Sun position X",
