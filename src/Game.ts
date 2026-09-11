@@ -11,6 +11,7 @@ import {
   eventsManager,
   timeManager,
   frameScheduler,
+  shadowManager,
 } from "./systems";
 
 export type State = {
@@ -40,6 +41,7 @@ export default class Game {
     };
     this.renderState = { delta: 0, player: this.player };
     new RevoRealm();
+    shadowManager.prepareBake();
     this.onResize();
   }
 
@@ -115,7 +117,9 @@ export default class Game {
 
     monitoringManager.sampleRender(timestamp);
     eventsManager.emit("engine-render-update", this.renderState);
+    shadowManager.beforeRender();
     rendererManager.render();
+    shadowManager.afterRender();
 
     if (!this.hasRenderedFirstFrame) {
       this.hasRenderedFirstFrame = true;

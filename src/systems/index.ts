@@ -10,6 +10,7 @@ import { PhysicsManager } from "./PhysicsManager";
 import { PhysicsScheduler } from "./PhysicsScheduler";
 import { RendererManager } from "./RendererManager/RendererManager";
 import { SceneManager } from "./SceneManager";
+import { ShadowManager } from "./ShadowManager";
 import { TimeManager } from "./TimeManager";
 import { WindManager } from "./WindManager";
 import { PrewarmManager } from "./PrewarmManager";
@@ -59,11 +60,19 @@ const init = () => {
     eventsManager,
     assetManager,
   );
+  const shadowManager = new ShadowManager(
+    rendererManager.renderer,
+    lightingManager,
+    assetManager,
+    eventsManager,
+    debugManager,
+  );
   const windManager = new WindManager(eventsManager, sceneManager);
   return {
     eventsManager,
     frameScheduler,
     lightingManager,
+    shadowManager,
     sceneManager,
     cullingManager,
     rendererManager,
@@ -85,6 +94,7 @@ export const {
   eventsManager,
   frameScheduler,
   lightingManager,
+  shadowManager,
   sceneManager,
   cullingManager,
   rendererManager,

@@ -38,9 +38,9 @@ import {
   assetManager,
   debugManager,
   eventsManager,
-  lightingManager,
   physicsManager,
   sceneManager,
+  shadowManager,
 } from "../systems";
 import { gameTime } from "../utils/GameTime";
 import { srgbColorTarget } from "../utils/TweakpaneColor";
@@ -169,13 +169,13 @@ class TerrainMaterial extends MeshLambertNodeMaterial {
 
     const surfaceColor = mix(landColor, waterColor, waterMask);
 
-    const shadowedColor = mix(
-      surfaceColor.mul(lightingManager.uBakedShadowBrightness),
-      surfaceColor,
-      terrainMapSample.r,
+    const groundShadowFactor = texture(
+      shadowManager.groundTexture,
+      mapUv,
+    ).r;
+    this.colorNode = surfaceColor.mul(
+      shadowManager.getMultiplier(groundShadowFactor),
     );
-
-    this.colorNode = shadowedColor;
 
     // NORMAL
     const normalAoSample = texture(

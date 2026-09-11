@@ -36,6 +36,7 @@ import {
 import type { Node, StorageArrayElementNode } from "three/webgpu";
 import {
   assetManager,
+  shadowManager,
   rendererManager,
   sceneManager,
   eventsManager,
@@ -95,7 +96,7 @@ const uniforms = {
 class FlowersSsbo {
   // x -> offsetX (0 unused)
   // y -> offsetZ (0 unused)
-  // z -> 0/12 offsetY - 12/1 visibility - 13/6 grass scale (5 unused)
+  // z -> 0/12 offsetY - 12/1 visibility - 13/6 grass scale - 19/4 shadow
   // w -> noise (0 unused - also not used currently)
   private buffer = instancedArray(config.COUNT, "vec4");
   visibleFlowerIndices = instancedArray(config.COUNT, "uint");
@@ -127,6 +128,10 @@ class FlowersSsbo {
   getGrassScale = Fn<[data: Node<"vec4">], Node<"float">>(([data]) => {
     return TSLUtils.unpackUnit(data.z, 13, 6);
   });
+
+  getGroundShadowFactor = Fn<[data: Node<"vec4">], Node<"float">>(([data]) =>
+    TSLUtils.unpackUnit(data.z, 19, 4),
+  );
 
   getNoise = Fn<[data: Node<"vec4">], Node<"vec4">>(([data]) => {
     const x = TSLUtils.unpackUnit(data.w, 0, 6);
@@ -164,6 +169,14 @@ class FlowersSsbo {
     Node<"vec4">
   >(([data, value]) => {
     data.z = TSLUtils.packUnit(data.z, 13, 6, value);
+    return data;
+  });
+
+  private setGroundShadowFactor = Fn<
+    [data: Node<"vec4">, value: Node<"float">],
+    Node<"vec4">
+  >(([data, value]) => {
+    data.z = TSLUtils.packUnit(data.z, 19, 4, value);
     return data;
   });
 
@@ -262,6 +275,8 @@ class FlowersSsbo {
       const grassVisibility = step(0.05, grassScale);
       data.assign(this.setGrassScale(data, grassScale));
       data.assign(this.setVisibility(data, grassVisibility));
+      const groundShadowFactor = texture(shadowManager.groundTexture, mapUv).r;
+      data.assign(this.setGroundShadowFactor(data, groundShadowFactor));
 
       const drawIndex = atomicAdd(this.atomicCounter, 1);
 
@@ -480,6 +495,7 @@ class FlowerMaterial extends MeshBasicNodeMaterial {
 
     const data = this.ssbo.computeBuffer.element(flowerIndex);
     const grassScale = this.ssbo.getGrassScale(data);
+    const groundShadowFactor = this.ssbo.getGroundShadowFactor(data);
     const noise = this.ssbo.getNoise(data);
     const x = data.x;
     const y = this.ssbo.getYOffset(data);
@@ -545,7 +561,10 @@ class FlowerMaterial extends MeshBasicNodeMaterial {
     // Diffuse
     const flower = texture(assetManager.resources.edelweiss, uv());
     const tint = mix(uniforms.uColor1, uniforms.uColor2, rand2);
-    this.colorNode = tint.mul(flower.rgb).mul(uniforms.uBrightness);
+    this.colorNode = tint
+      .mul(flower.rgb)
+      .mul(uniforms.uBrightness)
+      .mul(shadowManager.getMultiplier(groundShadowFactor));
 
     // Opacity
     this.opacityNode = flower.a;

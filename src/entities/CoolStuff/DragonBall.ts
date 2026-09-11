@@ -2,6 +2,7 @@ import {
   assetManager,
   debugManager,
   landmarkManager,
+  shadowManager,
   windManager,
 } from "../../systems";
 import { Mesh } from "three";
@@ -9,7 +10,7 @@ import { MeshStandardNodeMaterial } from "three/webgpu";
 import { ColliderDesc } from "@dimforge/rapier3d";
 import { physicsManager, sceneManager } from "../../systems";
 import { RevoColliderType } from "../../types";
-import { mix, normalMap, texture, uniform, uv, vec3 } from "three/tsl";
+import { normalMap, texture, uniform, uv } from "three/tsl";
 
 const uniforms = {
   uDiffuseScale: uniform(1.15),
@@ -23,9 +24,7 @@ class GokuStatueMaterial extends MeshStandardNodeMaterial {
 
     const _uv = uv().mul(uniforms.uUvScale);
     const diffuse = texture(assetManager.resources.concreteDiffuse, _uv);
-    const shadow = texture(assetManager.resources.concreteDiffuse, uv());
-    const color = mix(vec3(0), diffuse.rgb, shadow.a);
-    this.colorNode = color.mul(uniforms.uDiffuseScale);
+    this.colorNode = diffuse.rgb.mul(uniforms.uDiffuseScale);
 
     const normal = texture(assetManager.resources.concreteNormal, _uv);
     this.normalNode = normalMap(normal.rgb, uniforms.uNormalScale);
@@ -39,6 +38,7 @@ export default class DragonBall {
       "goku_statue",
     ) as Mesh;
     gokuStatue.material = new GokuStatueMaterial();
+    shadowManager.register(gokuStatue, { cast: true, receive: true });
     sceneManager.mainScene.add(gokuStatue);
 
     // Physics

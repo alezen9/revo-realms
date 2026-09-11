@@ -15,6 +15,9 @@ const setNodeNames = (nodes: ComputeTaskNodes | undefined, name: string) => {
   for (const node of nodeList) {
     if (!node.name) node.name = name;
   }
+  if (!Array.isArray(nodes)) return;
+  const groupId = nodes.map((node) => node.id).join(",");
+  Object.defineProperty(nodes, "id", { value: groupId });
 };
 
 export class ComputeTask {

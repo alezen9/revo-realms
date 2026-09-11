@@ -1,9 +1,10 @@
-import type { Mesh } from "three";
+import { DoubleSide, type Mesh } from "three";
 import {
   assetManager,
   debugManager,
   physicsManager,
   sceneManager,
+  shadowManager,
 } from "../../systems";
 import { BatchedMesh, MeshLambertNodeMaterial } from "three/webgpu";
 import {
@@ -15,6 +16,7 @@ import {
   uniform,
   uv,
   vec3,
+  vec4,
 } from "three/tsl";
 import { ColliderDesc } from "@dimforge/rapier3d";
 import { RevoColliderType } from "../../types";
@@ -36,8 +38,11 @@ class PineTreeCanopyMaterial extends MeshLambertNodeMaterial {
     const windWeight = attribute<"float">("_windweight");
 
     const diffuse = texture(assetManager.resources.pineTreeDiffuse, uv());
-    this.colorNode = diffuse.rgb.mul(uniforms.uCanopyDiffuseScale);
-    this.opacityNode = diffuse.a;
+    this.colorNode = vec4(
+      diffuse.rgb.mul(uniforms.uCanopyDiffuseScale),
+      diffuse.a,
+    );
+    this.shadowSide = DoubleSide;
     this.alphaTest = 0.35;
 
     const random = uv().x.mul(uv().y).mul(4);
@@ -90,6 +95,8 @@ export default class PineTrees {
       pineTreeCanopy.geometry,
       canopyMaterial,
     );
+    shadowManager.register(barkBatch, { cast: true, receive: true });
+    shadowManager.register(canopyBatch, { cast: true, receive: true });
 
     const baseCollider = colliders[0];
     const boundingBox = baseCollider.geometry.boundingBox!;

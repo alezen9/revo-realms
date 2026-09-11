@@ -1,4 +1,4 @@
-import { type ComputeNode, WebGPURenderer } from "three/webgpu";
+import { type ComputeNode, VSMShadowMap, WebGPURenderer } from "three/webgpu";
 import { PostprocessingManager } from "./PostprocessingManager";
 import { type DebugManager } from "../DebugManager";
 import { type EventsManager } from "../EventsManager";
@@ -47,6 +47,8 @@ export class RendererManager {
       stencil: false,
       depth: false,
     });
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = VSMShadowMap;
     renderer.setClearColor(0x000000, 0);
 
     this.renderer = renderer;

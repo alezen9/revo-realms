@@ -115,13 +115,11 @@ export const setPreviousVisibility = Fn<
   return data;
 });
 
-export const getBakedShadowFactor = Fn<[data: Node<"vec4">], Node<"float">>(
-  ([data]) => {
-    return TSLUtils.unpackUnit(data.w, 16, 4);
-  },
+export const getGroundShadowFactor = Fn<[data: Node<"vec4">], Node<"float">>(
+  ([data]) => TSLUtils.unpackUnit(data.w, 16, 4),
 );
 
-export const setBakedShadowFactor = Fn<
+export const setGroundShadowFactor = Fn<
   [data: Node<"vec4">, value: Node<"float">],
   Node<"vec4">
 >(([data, value]) => {

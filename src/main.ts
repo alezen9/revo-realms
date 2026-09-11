@@ -2,7 +2,7 @@ import "./style.css";
 import Game from "./Game";
 import { mountUi } from "./ui/mountUi";
 import { setupAsync } from "./systems/setupAsync";
-import { eventsManager, prewarmManager } from "./systems";
+import { eventsManager, prewarmManager, shadowManager } from "./systems";
 
 const hasWebGpuSupportAsync = async () => {
   if (!navigator.gpu) return false;
@@ -48,6 +48,7 @@ const bootstrap = async () => {
       );
     else console.warn("[main] Prewarm exited early. Continuing startup.");
 
+    await shadowManager.bakeGroundAsync();
     await game.startLoopAsync();
   } catch (error) {
     console.error("[main] Startup failed.", error);

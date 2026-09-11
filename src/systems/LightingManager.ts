@@ -3,7 +3,6 @@ import {
   DirectionalLight,
   FogExp2,
   HemisphereLight,
-  Object3D,
   Vector2,
   Vector3,
 } from "three";
@@ -11,7 +10,6 @@ import { type SceneManager } from "./SceneManager";
 import { type DebugManager } from "./DebugManager";
 import { type EventsManager } from "./EventsManager";
 import type { AssetManager } from "./AssetManager/AssetManager";
-import { type State } from "../Game";
 import { uniform } from "three/tsl";
 import { srgbColorTarget } from "../utils/TweakpaneColor";
 
@@ -35,7 +33,7 @@ const config = {
 };
 
 export class LightingManager {
-  private directionalLight: DirectionalLight;
+  readonly sunLight: DirectionalLight;
   private hemisphereLight: HemisphereLight;
   private fog: FogExp2;
   private eventsManager: EventsManager;
@@ -57,7 +55,6 @@ export class LightingManager {
   uHemiGroundColor = uniform(config.hemiGroundColor.clone());
   uHemiIntensity = uniform(config.hemiIntensity);
   uPlayerShadowBrightness = uniform(0.7);
-  uBakedShadowBrightness = uniform(0.45);
 
   constructor(
     sceneManager: SceneManager,
@@ -67,8 +64,8 @@ export class LightingManager {
   ) {
     this.assetManager = assetManager;
     this.eventsManager = eventsManager;
-    this.directionalLight = this.setupDirectionalLighting();
-    sceneManager.mainScene.add(this.directionalLight);
+    this.sunLight = this.setupDirectionalLighting();
+    sceneManager.mainScene.add(this.sunLight);
 
     this.hemisphereLight = this.setupHemisphereLight();
     sceneManager.mainScene.add(this.hemisphereLight);
@@ -93,10 +90,12 @@ export class LightingManager {
   }
 
   private syncSunDirection() {
+    this.sunLight.position.copy(config.LIGHT_POSITION_OFFSET);
     this.sunDirection.copy(config.LIGHT_POSITION_OFFSET).normalize().negate();
     this.sunDirectionXZ
       .set(this.sunDirection.x, this.sunDirection.z)
       .normalize();
+    this.eventsManager.emit("engine-sun-change");
   }
 
   private syncSunRadiance() {
@@ -120,8 +119,6 @@ export class LightingManager {
     directionalLight.color.copy(this.uSunColor.value);
     directionalLight.position.copy(config.LIGHT_POSITION_OFFSET);
 
-    directionalLight.target = new Object3D();
-
     return directionalLight;
   }
 
@@ -129,12 +126,6 @@ export class LightingManager {
     const fog = new FogExp2(config.fogColor, config.fogDensity);
     return fog;
   }
-
-  private onEngineUpdate = ({ player }: State) => {
-    this.directionalLight.position
-      .copy(player.position)
-      .add(config.LIGHT_POSITION_OFFSET);
-  };
 
   private debugLight(debugManager: DebugManager, sceneManager: SceneManager) {
     const lightFolder = debugManager.panel.addFolder({
@@ -163,7 +154,7 @@ export class LightingManager {
         color: { type: "float" },
       })
       .on("change", () => {
-        this.directionalLight.color.copy(this.uSunColor.value);
+        this.sunLight.color.copy(this.uSunColor.value);
         this.syncSunRadiance();
       });
     lightFolder
@@ -173,20 +164,14 @@ export class LightingManager {
         label: "Directional intensity",
       })
       .on("change", ({ value }) => {
-        this.directionalLight.intensity = value;
+        this.sunLight.intensity = value;
         this.syncSunRadiance();
       });
     lightFolder.addBinding(this.uPlayerShadowBrightness, "value", {
+      min: 0,
+      max: 1,
+      step: 0.01,
       label: "Player shadow brightness",
-      min: 0,
-      max: 1,
-      step: 0.01,
-    });
-    lightFolder.addBinding(this.uBakedShadowBrightness, "value", {
-      label: "Baked shadow brightness",
-      min: 0,
-      max: 1,
-      step: 0.01,
     });
     lightFolder.addBinding(srgbColorTarget(this.fog.color), "value", {
       label: "Fog Color",
@@ -252,10 +237,5 @@ export class LightingManager {
       .on("change", ({ value }) => {
         this.hemisphereLight.intensity = value;
       });
-  }
-
-  setTarget(target: Object3D) {
-    this.directionalLight.target = target;
-    this.eventsManager.on("engine-render-update", this.onEngineUpdate);
   }
 }

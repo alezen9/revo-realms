@@ -1,11 +1,11 @@
 import { DoubleSide } from "three";
-import { mix, step, texture, uv, vec2, vertexIndex } from "three/tsl";
-import { MeshBasicNodeMaterial } from "three/webgpu";
+import { step, texture, uv, vec2, vertexIndex } from "three/tsl";
+import { MeshStandardNodeMaterial } from "three/webgpu";
 import { assetManager } from "../../../systems";
 import { uniforms } from "./config";
 import type { FlagSsbo } from "./FlagSsbo";
 
-export class FlagMaterial extends MeshBasicNodeMaterial {
+export class FlagMaterial extends MeshStandardNodeMaterial {
   constructor(ssbo: FlagSsbo) {
     super();
     this.side = DoubleSide;
@@ -19,8 +19,7 @@ export class FlagMaterial extends MeshBasicNodeMaterial {
     ).rgb;
     // anything clearly brighter than the black cloth is the gold design
     const isGold = step(0.25, design.r.max(design.g).max(design.b));
-    this.colorNode = design.mul(
-      mix(uniforms.uDiffuseScale, uniforms.uEmissive, isGold),
-    );
+    this.colorNode = design.mul(uniforms.uDiffuseScale);
+    this.emissiveNode = design.mul(isGold).mul(uniforms.uEmissive);
   }
 }

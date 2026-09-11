@@ -5,7 +5,6 @@ import {
   Fn,
   getViewPosition,
   If,
-  int,
   max,
   mix,
   pass,
@@ -13,7 +12,6 @@ import {
   screenUV,
   smoothstep,
   step,
-  textureLevel,
   toneMapping,
   toneMappingExposure,
   uniform,
@@ -24,9 +22,8 @@ import { bloom } from "three/addons/tsl/display/BloomNode.js";
 import type { DebugFolder, DebugManager } from "../DebugManager";
 import type { EventsManager } from "../EventsManager";
 import type { SceneManager } from "../SceneManager";
-import { assetManager, lightingManager } from "..";
+import { lightingManager } from "..";
 import { playerUniforms } from "../../entities/Player/PlayerMaterial";
-import { TSLUtils } from "../../utils/TSLUtils";
 
 const MAIN_SCENE_PASS_SAMPLES = 4;
 const LUMINANCE_WEIGHTS = vec3(0.2126, 0.7152, 0.0722);
@@ -138,7 +135,6 @@ export class PostprocessingManager extends RenderPipeline {
       sunRayOffsetSq,
     );
     const isBallBehindPixel = step(ballAlongSun, 0);
-
     const isSky = step(1, depth);
 
     const cameraToBall = playerUniforms.uPosition.sub(this.uCameraPosition);
@@ -157,23 +153,11 @@ export class PostprocessingManager extends RenderPipeline {
       ),
     );
 
-    const ballShadow = occlusion
+    return occlusion
       .max(isBallBehindPixel)
       .max(isSky)
       .max(isBallSurface)
-      .clamp()
-      .toVar();
-
-    If(ballShadow.lessThan(1), () => {
-      const bakedLit = textureLevel(
-        assetManager.resources.terrainMaps,
-        TSLUtils.computeMapUvByPosition(worldPosition.xz),
-        int(0),
-      ).r;
-      ballShadow.assign(mix(float(1), ballShadow, bakedLit));
-    });
-
-    return ballShadow;
+      .clamp();
   });
 
   get mainSceneColorNode() {
@@ -215,7 +199,6 @@ export class PostprocessingManager extends RenderPipeline {
       withBloomHDR,
       shadowFactor,
     );
-
     const toneMapped = toneMapping(
       ACESFilmicToneMapping,
       toneMappingExposure,

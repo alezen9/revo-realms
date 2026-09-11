@@ -15,10 +15,10 @@ import {
   assetManager,
   eventsManager,
   inputManager,
-  lightingManager,
   physicsManager,
   physicsScheduler,
   sceneManager,
+  shadowManager,
 } from "../../systems";
 import { playerConfig as config } from "./config";
 import { DOWN, FORWARD, UP } from "../../utils/axes";
@@ -78,8 +78,6 @@ export default class Player {
     eventsManager.on("engine-after-physics", this.onAfterPhysics);
     eventsManager.on("engine-render-update", this.onEngineUpdate);
     eventsManager.on("engine-render-update-throttle-64x", this.onGateUpdate);
-    // light tracking must run after visual interpolation
-    lightingManager.setTarget(this.visualRoot);
     debugPlayer(this.collider);
   }
 
@@ -88,6 +86,7 @@ export default class Player {
       "player",
     ) as Mesh;
     mesh.material = new PlayerMaterial();
+    shadowManager.register(mesh, { receive: true });
     mesh.position.set(0, 0, 0);
     return mesh;
   }

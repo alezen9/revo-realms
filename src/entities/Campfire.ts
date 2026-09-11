@@ -6,6 +6,7 @@ import {
   sceneManager,
   physicsManager,
   landmarkManager,
+  shadowManager,
   windManager,
 } from "../systems";
 import { ColliderDesc } from "@dimforge/rapier3d";
@@ -33,6 +34,7 @@ export class Campfire {
       "campfire",
     ) as Mesh;
     campfire.material = new CampfireMaterial();
+    shadowManager.register(campfire, { cast: true, receive: true });
 
     const fire = new ParticleSystem({
       preset: "fire",

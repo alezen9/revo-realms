@@ -5,6 +5,7 @@ import {
   physicsManager,
   windManager,
   sceneManager,
+  shadowManager,
 } from "../../systems";
 import { ColliderDesc } from "@dimforge/rapier3d";
 import { Mesh, Quaternion, Vector3 } from "three";
@@ -53,6 +54,7 @@ export default class GodOfWar {
       "leviathan_axe",
     ) as Mesh;
     axe.material = new LeviathanAxeMaterial();
+    shadowManager.register(axe, { cast: true, receive: true });
 
     sceneManager.mainScene.add(axe);
 

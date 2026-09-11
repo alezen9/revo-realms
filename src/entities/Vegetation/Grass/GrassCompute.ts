@@ -31,7 +31,12 @@ import {
   Loop,
 } from "three/tsl";
 import { IndirectStorageBufferAttribute, type Node } from "three/webgpu";
-import { assetManager, sceneManager, windManager } from "../../../systems";
+import {
+  assetManager,
+  sceneManager,
+  shadowManager,
+  windManager,
+} from "../../../systems";
 import { TSLUtils } from "../../../utils/TSLUtils";
 import { gameDeltaTime, gameTime } from "../../../utils/GameTime";
 import { config, uniforms } from "./config";
@@ -44,9 +49,9 @@ import {
   getTerrainCacheValidity,
   getVisibility,
   getYOffset,
-  setBakedShadowFactor,
   setBend,
   setClumpOrientation,
+  setGroundShadowFactor,
   setOriginalScale,
   setPositionNoise,
   setPreviousVisibility,
@@ -250,6 +255,13 @@ export class GrassCompute {
       Return();
     });
 
+    const groundShadowUv = TSLUtils.computeMapUvByPosition(clumpWorldPos.xz);
+    const groundShadowFactor = texture(
+      shadowManager.groundTexture,
+      groundShadowUv,
+    ).r;
+    clumpState.assign(setGroundShadowFactor(clumpState, groundShadowFactor));
+
     const needsTerrainRefresh = float(1).sub(terrainCacheValidity);
 
     If(needsTerrainRefresh, () => {
@@ -274,7 +286,6 @@ export class GrassCompute {
 
       clumpState.z = terrainGrassScale;
       clumpState.assign(setYOffset(clumpState, terrainYOffset));
-      clumpState.assign(setBakedShadowFactor(clumpState, terrainSample.r));
       clumpState.assign(setTerrainCacheValidity(clumpState, 1));
     });
 

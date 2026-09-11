@@ -16,6 +16,7 @@ import {
   physicsManager,
   rendererManager,
   sceneManager,
+  shadowManager,
   windManager,
 } from "../../../systems";
 import type { ComputeTask } from "../../../systems/RendererManager/ComputeTask";
@@ -91,6 +92,7 @@ export default class Expedition33 {
       roughness: 0.35,
     });
     const staff = new Mesh(geometry, material);
+    shadowManager.register(staff, { cast: true, receive: true });
     staff.position
       .copy(this.origin)
       .addScaledVector(this.staffAxis, config.STAFF_HEIGHT / 2);
@@ -114,6 +116,7 @@ export default class Expedition33 {
     );
     const flag = new Mesh(geometry, new FlagMaterial(this.ssbo));
     flag.position.copy(this.origin);
+    shadowManager.register(flag, { receive: true });
     return flag;
   }
 

@@ -15,14 +15,14 @@ import {
   vec4,
 } from "three/tsl";
 import { SpriteNodeMaterial } from "three/webgpu";
-import { lightingManager } from "../../../systems";
+import { lightingManager, shadowManager } from "../../../systems";
 import { config, uniforms } from "./config";
 import type { GrassCompute } from "./GrassCompute";
 import {
-  getBakedShadowFactor,
   getBladeLocalOffset,
   getBend,
   getClumpRotation,
+  getGroundShadowFactor,
   getPositionNoise,
   getScale,
   getYOffset,
@@ -57,7 +57,7 @@ export class GrassMaterial extends SpriteNodeMaterial {
     const bendXZ = getBend(bladeState);
     const scaleY = getScale(bladeState);
     const positionNoise = getPositionNoise(bladeState);
-    const bakedShadowFactor = getBakedShadowFactor(clumpState);
+    const groundShadowFactor = getGroundShadowFactor(clumpState);
 
     const bladeUv = uv();
     const bladeHeight = bladeUv.y;
@@ -172,12 +172,6 @@ export class GrassMaterial extends SpriteNodeMaterial {
       warmMask,
     );
 
-    const bakedShadow = mix(
-      lightingManager.uBakedShadowBrightness,
-      1,
-      bakedShadowFactor,
-    );
-
     // LIGHTING
     const lightingAngle = bladeHash.mul(53.3).fract().mul(TWO_PI);
 
@@ -217,23 +211,21 @@ export class GrassMaterial extends SpriteNodeMaterial {
       bladeHeight.mul(0.5),
     ).mul(lightingManager.uHemiIntensity);
 
-    const sceneLight = hemisphereLight
-      .add(sunDiffuse)
-      .mul(uniforms.uLightExposure);
-
     // PACK VARYINGS
-    const colorShadow = varying(vec4(variedColor, bakedShadow));
+    const colorShadow = varying(vec4(variedColor, groundShadowFactor));
 
-    const lightingGrazing = varying(vec4(sceneLight, grazing));
+    const lightingGrazing = varying(vec4(sunDiffuse, grazing));
 
     const viewLightingDetail = varying(
       vec3(backlight, viewSunAlignment, nearDetailOcclusionValue),
     );
 
     const bladeColor = colorShadow.rgb;
-    const shadow = colorShadow.a;
+    const shadowMultiplier = shadowManager.getMultiplier(colorShadow.a);
 
-    const sceneLighting = lightingGrazing.rgb;
+    const sceneLighting = hemisphereLight
+      .add(lightingGrazing.rgb.mul(shadowMultiplier))
+      .mul(uniforms.uLightExposure);
     const bladeGrazing = lightingGrazing.a;
 
     const bladeBacklight = viewLightingDetail.x;
@@ -273,19 +265,18 @@ export class GrassMaterial extends SpriteNodeMaterial {
       .mul(mix(0.35, 1, bladeBacklight))
       .mul(uniforms.uBacklightStrength);
 
-    const detailStrength = smoothstep(0.1, 0.9, bladeHeight).mul(shadow);
-
-    const diffuseColor = albedo
-      .mul(shadow)
-      .mul(detailOcclusion)
-      .mul(sceneLighting);
-
-    const sheenColor = lightingManager.uSunRadiance.mul(
-      grazingSheen.mul(detailStrength),
+    const detailStrength = smoothstep(0.1, 0.9, bladeHeight).mul(
+      shadowMultiplier,
     );
 
+    const diffuseColor = albedo.mul(detailOcclusion).mul(sceneLighting);
+
+    const sheenColor = lightingManager.uSunRadiance.rgb
+      .mul(detailStrength)
+      .mul(grazingSheen);
+
     const transmittedColor = mix(albedo, lightingManager.uSunColor, 0.55).mul(
-      transmission.mul(detailStrength),
+      detailStrength.mul(transmission),
     );
 
     const shadedColor = diffuseColor.add(sheenColor).add(transmittedColor);
