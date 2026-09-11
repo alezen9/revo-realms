@@ -169,10 +169,7 @@ class TerrainMaterial extends MeshLambertNodeMaterial {
 
     const surfaceColor = mix(landColor, waterColor, waterMask);
 
-    const groundShadowFactor = texture(
-      shadowManager.groundTexture,
-      mapUv,
-    ).r;
+    const groundShadowFactor = shadowManager.getGroundFactor(positionWorld.xz);
     this.colorNode = surfaceColor.mul(
       shadowManager.getMultiplier(groundShadowFactor),
     );

@@ -117,7 +117,7 @@ export default class Game {
 
     monitoringManager.sampleRender(timestamp);
     eventsManager.emit("engine-render-update", this.renderState);
-    shadowManager.beforeRender();
+    shadowManager.beforeRender(this.player.position);
     rendererManager.render();
     shadowManager.afterRender();
 

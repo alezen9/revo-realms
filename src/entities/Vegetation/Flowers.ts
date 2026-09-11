@@ -275,7 +275,7 @@ class FlowersSsbo {
       const grassVisibility = step(0.05, grassScale);
       data.assign(this.setGrassScale(data, grassScale));
       data.assign(this.setVisibility(data, grassVisibility));
-      const groundShadowFactor = texture(shadowManager.groundTexture, mapUv).r;
+      const groundShadowFactor = shadowManager.getGroundFactor(worldPos.xz);
       data.assign(this.setGroundShadowFactor(data, groundShadowFactor));
 
       const drawIndex = atomicAdd(this.atomicCounter, 1);

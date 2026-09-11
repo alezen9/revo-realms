@@ -255,11 +255,7 @@ export class GrassCompute {
       Return();
     });
 
-    const groundShadowUv = TSLUtils.computeMapUvByPosition(clumpWorldPos.xz);
-    const groundShadowFactor = texture(
-      shadowManager.groundTexture,
-      groundShadowUv,
-    ).r;
+    const groundShadowFactor = shadowManager.getGroundFactor(clumpWorldPos.xz);
     clumpState.assign(setGroundShadowFactor(clumpState, groundShadowFactor));
 
     const needsTerrainRefresh = float(1).sub(terrainCacheValidity);

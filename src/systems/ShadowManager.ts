@@ -9,6 +9,7 @@ import {
   type Object3D,
   RedFormat,
   UnsignedByteType,
+  Vector2,
   Vector3,
 } from "three";
 import {
@@ -23,6 +24,7 @@ import {
   Fn,
   instanceIndex,
   mix,
+  smoothstep,
   step,
   storageTexture,
   texture,
@@ -46,7 +48,7 @@ type Registration = {
 };
 
 const STATIC_SHADOW_LAYER = 1;
-const GROUND_TEXTURE_SIZE = 1024;
+const GROUND_TEXTURE_SIZE = 2048;
 const SHADOW_PADDING = 12;
 
 const config = {
@@ -55,6 +57,8 @@ const config = {
   blurSamples: 6,
   bias: -0.0001,
   normalBias: 0.04,
+  localSize: 64,
+  localCellSize: 8,
   refresh: false,
 };
 
@@ -78,18 +82,33 @@ export class ShadowManager {
     GROUND_TEXTURE_SIZE,
     GROUND_TEXTURE_SIZE,
   );
+  readonly localGroundTexture = new StorageTexture(
+    GROUND_TEXTURE_SIZE,
+    GROUND_TEXTURE_SIZE,
+  );
   readonly uStrength = uniform(0.6);
   readonly uTint = uniform(new Color(0.46, 0.52, 0.64).convertSRGBToLinear());
   private uBias = uniform(config.bias);
+  private uHasLocalGround = uniform(0);
+  private uLocalGroundMin = uniform(new Vector2());
+  private uLocalGroundSize = uniform(config.localSize);
+  private uLocalGroundBlend = uniform(4 / config.localSize);
 
   private assetManager: AssetManager;
   private casters = new Map<Object3D, Matrix4>();
   private renderer: WebGPURenderer;
   private lightingManager: LightingManager;
   private groundBakeCompute?: ComputeNode;
-  private hasDirtyShadowMap = true;
+  private localGroundBakeCompute?: ComputeNode;
+  private hasDirtyGlobalShadowMap = true;
+  private hasDirtyLocalShadowMap = true;
   private hasPendingGroundBake = true;
+  private hasPendingLocalGroundBake = true;
+  private isGlobalProjection = true;
+  private localCenterX = Number.NaN;
+  private localCenterZ = Number.NaN;
   private bounds = new Box3();
+  private localBounds = new Box3();
   private boundsSize = new Vector3();
   private boundsCenter = new Vector3();
   private viewCorner = new Vector3();
@@ -104,7 +123,8 @@ export class ShadowManager {
     this.renderer = renderer;
     this.lightingManager = lightingManager;
     this.assetManager = assetManager;
-    this.configureTexture();
+    this.configureTexture(this.groundTexture, "shadows.ground");
+    this.configureTexture(this.localGroundTexture, "shadows.ground.local");
     this.configureLight();
     this.debug(debugManager);
     eventsManager.on("engine-sun-change", this.invalidate);
@@ -114,6 +134,32 @@ export class ShadowManager {
     const amount = float(1).sub(factor).mul(this.uStrength);
     return mix(vec3(1), this.uTint, amount);
   });
+
+  getGroundFactor = Fn<[worldXZ: Node<"vec2">], Node<"float">>(
+    ([worldXZ]) => {
+      const globalUv = worldXZ
+        .add(realmConfig.HALF_MAP_SIZE)
+        .div(realmConfig.MAP_SIZE);
+      const globalFactor = texture(this.groundTexture, globalUv).r;
+      const localUv = worldXZ
+        .sub(this.uLocalGroundMin)
+        .div(this.uLocalGroundSize);
+      const one = float(1);
+      const isInside = step(0, localUv.x)
+        .mul(step(localUv.x, 1))
+        .mul(step(0, localUv.y))
+        .mul(step(localUv.y, 1));
+      const edgeDistance = localUv.x
+        .min(one.sub(localUv.x))
+        .min(localUv.y)
+        .min(one.sub(localUv.y));
+      const localBlend = smoothstep(0, this.uLocalGroundBlend, edgeDistance)
+        .mul(isInside)
+        .mul(this.uHasLocalGround);
+      const localFactor = texture(this.localGroundTexture, localUv).r;
+      return mix(globalFactor, localFactor, localBlend);
+    },
+  );
 
   register(object: Object3D, registration: Registration) {
     const { cast = false, receive = false } = registration;
@@ -140,48 +186,83 @@ export class ShadowManager {
   }
 
   prepareBake() {
-    this.fitShadowCamera();
+    this.fitGlobalShadowCamera();
     this.updateCasterMatrices();
-    this.invalidate();
+    this.lightingManager.sunLight.shadow.needsUpdate = true;
+    this.hasDirtyGlobalShadowMap = false;
+    this.hasDirtyLocalShadowMap = true;
+    this.hasPendingGroundBake = true;
+    this.hasPendingLocalGroundBake = true;
+    this.isGlobalProjection = true;
   }
 
-  beforeRender() {
+  beforeRender(playerPosition: Vector3) {
+    this.updateLocalCenter(playerPosition);
     if (this.haveCastersMoved()) this.invalidate();
-    if (!this.hasDirtyShadowMap) return;
-    this.fitShadowCamera();
+
+    if (this.hasDirtyGlobalShadowMap) {
+      this.fitGlobalShadowCamera();
+      this.lightingManager.sunLight.shadow.needsUpdate = true;
+      this.hasDirtyGlobalShadowMap = false;
+      this.hasPendingGroundBake = true;
+      this.isGlobalProjection = true;
+      return;
+    }
+
+    if (!this.hasDirtyLocalShadowMap) return;
+    this.fitLocalShadowCamera();
     this.lightingManager.sunLight.shadow.needsUpdate = true;
-    this.hasDirtyShadowMap = false;
-    this.hasPendingGroundBake = true;
+    this.hasDirtyLocalShadowMap = false;
+    this.hasPendingLocalGroundBake = true;
+    this.uHasLocalGround.value = 0;
+    this.isGlobalProjection = false;
   }
 
   afterRender() {
-    if (!this.hasPendingGroundBake) return;
-    const compute = this.getGroundBakeCompute();
+    if (this.isGlobalProjection) {
+      if (!this.hasPendingGroundBake) return;
+      const compute = this.getGroundBakeCompute(false);
+      if (!compute) return;
+      this.renderer.compute(compute);
+      this.hasPendingGroundBake = false;
+      return;
+    }
+
+    if (!this.hasPendingLocalGroundBake) return;
+    const compute = this.getGroundBakeCompute(true);
     if (!compute) return;
     this.renderer.compute(compute);
-    this.hasPendingGroundBake = false;
+    this.hasPendingLocalGroundBake = false;
+    this.uHasLocalGround.value = 1;
   }
 
   bakeGroundAsync() {
-    this.fitShadowCamera();
+    if (!this.isGlobalProjection) {
+      this.invalidate();
+      return Promise.resolve(false);
+    }
     this.updateCasterMatrices();
-    this.hasDirtyShadowMap = false;
-    const compute = this.getGroundBakeCompute();
-    if (!compute) return Promise.resolve(false);
+    const compute = this.getGroundBakeCompute(false);
+    if (!compute) {
+      this.invalidate();
+      return Promise.resolve(false);
+    }
     this.hasPendingGroundBake = false;
+    this.hasDirtyLocalShadowMap = true;
     return this.renderer.computeAsync(compute).then(() => true);
   }
 
   invalidate = () => {
-    this.hasDirtyShadowMap = true;
+    this.hasDirtyGlobalShadowMap = true;
+    this.hasDirtyLocalShadowMap = true;
   };
 
-  private configureTexture() {
-    this.groundTexture.name = "shadows.ground";
-    this.groundTexture.colorSpace = NoColorSpace;
-    this.groundTexture.format = RedFormat;
-    this.groundTexture.type = UnsignedByteType;
-    this.groundTexture.generateMipmaps = false;
+  private configureTexture(textureValue: StorageTexture, name: string) {
+    textureValue.name = name;
+    textureValue.colorSpace = NoColorSpace;
+    textureValue.format = RedFormat;
+    textureValue.type = UnsignedByteType;
+    textureValue.generateMipmaps = false;
   }
 
   private configureLight() {
@@ -224,7 +305,7 @@ export class ShadowManager {
     }
   }
 
-  private fitShadowCamera() {
+  private updateBounds() {
     const minHeight = this.assetManager.resources.heightmap.userData.min ?? -32;
     const maxHeight = this.assetManager.resources.heightmap.userData.max ?? 64;
     this.bounds.min.set(
@@ -239,8 +320,56 @@ export class ShadowManager {
     );
     for (const caster of this.casters.keys())
       this.bounds.expandByObject(caster, true);
+  }
 
+  private fitGlobalShadowCamera() {
+    this.updateBounds();
     this.bounds.getCenter(this.boundsCenter);
+    this.fitShadowCamera(this.bounds, this.bounds, SHADOW_PADDING, false);
+  }
+
+  private updateLocalCenter(playerPosition: Vector3) {
+    const isInsideCurrentCell =
+      Number.isFinite(this.localCenterX) &&
+      Math.abs(playerPosition.x - this.localCenterX) <= config.localCellSize &&
+      Math.abs(playerPosition.z - this.localCenterZ) <= config.localCellSize;
+    if (isInsideCurrentCell) return;
+    this.localCenterX =
+      Math.round(playerPosition.x / config.localCellSize) *
+      config.localCellSize;
+    this.localCenterZ =
+      Math.round(playerPosition.z / config.localCellSize) *
+      config.localCellSize;
+    this.hasDirtyLocalShadowMap = true;
+  }
+
+  private fitLocalShadowCamera() {
+    this.updateBounds();
+    const halfSize = config.localSize * 0.5;
+    this.uLocalGroundMin.value.set(
+      this.localCenterX - halfSize,
+      this.localCenterZ - halfSize,
+    );
+    this.localBounds.min.set(
+      this.localCenterX - halfSize,
+      this.bounds.min.y,
+      this.localCenterZ - halfSize,
+    );
+    this.localBounds.max.set(
+      this.localCenterX + halfSize,
+      this.bounds.max.y,
+      this.localCenterZ + halfSize,
+    );
+    this.localBounds.getCenter(this.boundsCenter);
+    this.fitShadowCamera(this.localBounds, this.bounds, 0, true);
+  }
+
+  private fitShadowCamera(
+    projectionBounds: Box3,
+    depthBounds: Box3,
+    projectionPadding: number,
+    isStabilized: boolean,
+  ) {
     this.bounds.getSize(this.boundsSize);
     const lightDistance = this.boundsSize.length() + SHADOW_PADDING * 2;
     const { sunLight } = this.lightingManager;
@@ -261,55 +390,84 @@ export class ShadowManager {
     let right = -Infinity;
     let bottom = Infinity;
     let top = -Infinity;
-    let near = Infinity;
-    let far = -Infinity;
-
     for (let index = 0; index < 8; index++) {
       this.viewCorner
         .set(
-          index & 1 ? this.bounds.max.x : this.bounds.min.x,
-          index & 2 ? this.bounds.max.y : this.bounds.min.y,
-          index & 4 ? this.bounds.max.z : this.bounds.min.z,
+          index & 1 ? projectionBounds.max.x : projectionBounds.min.x,
+          index & 2 ? projectionBounds.max.y : projectionBounds.min.y,
+          index & 4 ? projectionBounds.max.z : projectionBounds.min.z,
         )
         .applyMatrix4(camera.matrixWorldInverse);
       left = Math.min(left, this.viewCorner.x);
       right = Math.max(right, this.viewCorner.x);
       bottom = Math.min(bottom, this.viewCorner.y);
       top = Math.max(top, this.viewCorner.y);
+    }
+
+    let near = Infinity;
+    let far = -Infinity;
+    for (let index = 0; index < 8; index++) {
+      this.viewCorner
+        .set(
+          index & 1 ? depthBounds.max.x : depthBounds.min.x,
+          index & 2 ? depthBounds.max.y : depthBounds.min.y,
+          index & 4 ? depthBounds.max.z : depthBounds.min.z,
+        )
+        .applyMatrix4(camera.matrixWorldInverse);
       const depth = -this.viewCorner.z;
       near = Math.min(near, depth);
       far = Math.max(far, depth);
     }
 
-    camera.left = left - SHADOW_PADDING;
-    camera.right = right + SHADOW_PADDING;
-    camera.bottom = bottom - SHADOW_PADDING;
-    camera.top = top + SHADOW_PADDING;
+    const centerLightX = (left + right) * 0.5;
+    const centerLightY = (bottom + top) * 0.5;
+    const halfWidth = (right - left) * 0.5;
+    const halfHeight = (top - bottom) * 0.5;
+    let stableCenterX = centerLightX;
+    let stableCenterY = centerLightY;
+    if (isStabilized) {
+      const texelX = (halfWidth * 2) / config.resolution;
+      const texelY = (halfHeight * 2) / config.resolution;
+      stableCenterX = Math.round(centerLightX / texelX) * texelX;
+      stableCenterY = Math.round(centerLightY / texelY) * texelY;
+    }
+    camera.left = stableCenterX - halfWidth - projectionPadding;
+    camera.right = stableCenterX + halfWidth + projectionPadding;
+    camera.bottom = stableCenterY - halfHeight - projectionPadding;
+    camera.top = stableCenterY + halfHeight + projectionPadding;
     camera.near = Math.max(0.1, near - SHADOW_PADDING);
     camera.far = far + SHADOW_PADDING;
     camera.updateProjectionMatrix();
   }
 
-  private getGroundBakeCompute() {
-    if (this.groundBakeCompute) return this.groundBakeCompute;
+  private getGroundBakeCompute(isLocal: boolean) {
+    const cachedCompute = isLocal
+      ? this.localGroundBakeCompute
+      : this.groundBakeCompute;
+    if (cachedCompute) return cachedCompute;
     const depthTexture = this.getShadowDepthTexture();
     if (!depthTexture) return;
 
     const shadowMatrix = uniform(this.lightingManager.sunLight.shadow.matrix);
-    const output = storageTexture(this.groundTexture);
+    const output = storageTexture(
+      isLocal ? this.localGroundTexture : this.groundTexture,
+    );
     const texel = 1 / config.resolution;
     const isReversedDepth = this.renderer.reversedDepthBuffer;
 
-    this.groundBakeCompute = Fn(() => {
+    const compute = Fn(() => {
       const x = instanceIndex.mod(GROUND_TEXTURE_SIZE);
       const y = instanceIndex.div(GROUND_TEXTURE_SIZE);
       const outputCoord = uvec2(x, y);
       const mapUv = vec2(x, y).add(0.5).div(GROUND_TEXTURE_SIZE);
-      const heightUv = vec2(mapUv.x, float(1).sub(mapUv.y));
+      const worldXZ = isLocal
+        ? mapUv.mul(this.uLocalGroundSize).add(this.uLocalGroundMin)
+        : mapUv.mul(realmConfig.MAP_SIZE).sub(realmConfig.HALF_MAP_SIZE);
+      const heightMapUv = worldXZ
+        .add(realmConfig.HALF_MAP_SIZE)
+        .div(realmConfig.MAP_SIZE);
+      const heightUv = vec2(heightMapUv.x, float(1).sub(heightMapUv.y));
       const height = texture(this.assetManager.resources.heightmap, heightUv).r;
-      const worldXZ = mapUv
-        .mul(realmConfig.MAP_SIZE)
-        .sub(realmConfig.HALF_MAP_SIZE);
       const projected = shadowMatrix.mul(vec4(worldXZ.x, height, worldXZ.y, 1));
       const shadowCoord = projected.xyz.div(projected.w);
       const sampleUv = vec2(shadowCoord.x, float(1).sub(shadowCoord.y));
@@ -358,7 +516,14 @@ export class ShadowManager {
       const groundVisibility = mix(1, visibility, isInside);
       textureStore(output, outputCoord, vec4(groundVisibility)).toWriteOnly();
     })().compute(GROUND_TEXTURE_SIZE * GROUND_TEXTURE_SIZE, [8, 8, 1]);
-    this.groundBakeCompute.name = "Ground shadow bake";
+    const label = isLocal ? "Local ground shadow bake" : "Ground shadow bake";
+    if (isLocal) {
+      this.localGroundBakeCompute = compute;
+      this.localGroundBakeCompute.name = label;
+      return this.localGroundBakeCompute;
+    }
+    this.groundBakeCompute = compute;
+    this.groundBakeCompute.name = label;
     return this.groundBakeCompute;
   }
 
@@ -395,6 +560,7 @@ export class ShadowManager {
       .on("change", ({ value }) => {
         this.lightingManager.sunLight.shadow.mapSize.setScalar(value);
         this.groundBakeCompute = undefined;
+        this.localGroundBakeCompute = undefined;
         this.invalidate();
       });
     folder
@@ -430,6 +596,29 @@ export class ShadowManager {
       .on("change", ({ value }) => {
         this.lightingManager.sunLight.shadow.normalBias = value;
         this.invalidate();
+      });
+    folder
+      .addBinding(config, "localSize", {
+        label: "Local size",
+        min: 32,
+        max: 128,
+        step: 8,
+      })
+      .on("change", () => {
+        this.uLocalGroundSize.value = config.localSize;
+        this.uLocalGroundBlend.value = 4 / config.localSize;
+        this.hasDirtyLocalShadowMap = true;
+      });
+    folder
+      .addBinding(config, "localCellSize", {
+        label: "Recenter distance",
+        min: 2,
+        max: 16,
+        step: 2,
+      })
+      .on("change", () => {
+        this.localCenterX = Number.NaN;
+        this.localCenterZ = Number.NaN;
       });
     folder
       .addBinding(config, "refresh", { label: "Refresh now" })
