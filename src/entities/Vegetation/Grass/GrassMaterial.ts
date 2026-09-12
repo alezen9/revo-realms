@@ -74,7 +74,7 @@ export class GrassMaterial extends SpriteNodeMaterial {
       bladeOffsetZ.add(uniforms.uPlayerPosition.z),
     );
     const combinedShadowFactor = groundShadowFactor.mul(
-      shadowManager.getDynamicGroundFactor(worldPosition),
+      shadowManager.getDynamicGroundFactor(worldPosition, bladeHash),
     );
 
     // WIDTH

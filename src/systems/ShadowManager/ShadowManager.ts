@@ -23,6 +23,7 @@ import { ShadowProjection } from "./ShadowProjection";
 import {
   STATIC_SHADOW_LAYER,
   type ShadowRegistration,
+  dynamicShadowLevelSettings,
   dynamicShadowSettings,
   shadowSettings,
 } from "./ShadowSettings";
@@ -241,14 +242,25 @@ export class ShadowManager {
         step: 0.005,
       })
       .on("change", () => this.dynamicMap.applySettings());
-    dynamicFolder
-      .addBinding(dynamicShadowSettings, "radius", {
-        label: "Radius",
-        min: 16,
-        max: 64,
-        step: 2,
-      })
-      .on("change", () => this.dynamicMap.applySettings());
+    for (const level of dynamicShadowLevelSettings) {
+      const label = level.name[0].toUpperCase() + level.name.slice(1);
+      dynamicFolder
+        .addBinding(level, "radius", {
+          label: `${label} radius`,
+          min: level.name === "near" ? 16 : 50,
+          max: level.name === "near" ? 48 : 100,
+          step: 1,
+        })
+        .on("change", () => this.dynamicMap.applySettings());
+      dynamicFolder
+        .addBinding(level, "blendDistance", {
+          label: level.name === "far" ? "Far fade" : `${label} blend`,
+          min: 2,
+          max: level.name === "near" ? 12 : 24,
+          step: 1,
+        })
+        .on("change", () => this.dynamicMap.applySettings());
+    }
     folder
       .addBinding(shadowSettings, "resolution", {
         label: "Resolution",

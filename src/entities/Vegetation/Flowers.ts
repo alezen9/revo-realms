@@ -565,7 +565,7 @@ class FlowerMaterial extends MeshBasicNodeMaterial {
     );
     const combinedShadowFactor = varying(
       groundShadowFactor.mul(
-        shadowManager.getDynamicGroundFactor(worldPosition),
+        shadowManager.getDynamicGroundFactor(worldPosition, rand1),
       ),
     );
 
