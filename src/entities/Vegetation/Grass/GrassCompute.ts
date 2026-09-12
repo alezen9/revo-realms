@@ -51,7 +51,6 @@ import {
   getYOffset,
   setBend,
   setClumpOrientation,
-  setGroundShadowFactor,
   setOriginalScale,
   setPositionNoise,
   setPreviousVisibility,
@@ -105,7 +104,8 @@ export class GrassCompute {
 
   private clumpState = instancedArray(config.CLUMP_COUNT, "vec4");
   private clumpWind = instancedArray(config.CLUMP_COUNT, "vec2");
-  private bladeState = instancedArray(config.BLADE_COUNT, "vec2");
+  private bladeState = instancedArray(config.BLADE_COUNT, "vec3");
+  private shadowGeneration = instancedArray(config.CLUMP_COUNT, "float");
 
   // one draw list per LOD, packed as regions of a single buffer; a blade appends
   // to exactly one region, so no region can exceed BLADE_COUNT
@@ -119,6 +119,7 @@ export class GrassCompute {
     this.clumpState.value.name = "grass.clumpState";
     this.clumpWind.value.name = "grass.clumpWind";
     this.bladeState.value.name = "grass.bladeState";
+    this.shadowGeneration.value.name = "grass.shadowGeneration";
     this.visibleIndices.value.name = "grass.visibleIndices";
   }
 
@@ -136,6 +137,7 @@ export class GrassCompute {
 
   computeInit = Fn(() => {
     const clumpState = this.clumpState.element(instanceIndex);
+    this.shadowGeneration.element(instanceIndex).assign(-1);
     const row = floor(float(instanceIndex).div(config.CLUMPS_PER_SIDE));
     const col = float(instanceIndex).mod(config.CLUMPS_PER_SIDE);
     const randomX = hash(instanceIndex.add(4321));
@@ -185,7 +187,7 @@ export class GrassCompute {
           uniforms.uBladeMaxScale,
         );
 
-        bladeState.assign(vec2(0));
+        bladeState.assign(vec3(0, 0, 1));
         bladeState.assign(setScale(bladeState, randomScale));
         bladeState.assign(setOriginalScale(bladeState, randomScale));
         bladeState.assign(setVisibility(bladeState, 0));
@@ -254,9 +256,6 @@ export class GrassCompute {
     If(isInFrustum.equal(0), () => {
       Return();
     });
-
-    const groundShadowFactor = shadowManager.getGroundFactor(clumpWorldPos.xz);
-    clumpState.assign(setGroundShadowFactor(clumpState, groundShadowFactor));
 
     const needsTerrainRefresh = float(1).sub(terrainCacheValidity);
 
@@ -378,6 +377,32 @@ export class GrassCompute {
     });
 
     const clumpRotation = getClumpRotation(clumpState).toVar();
+    const shadowGeneration = this.shadowGeneration.element(instanceIndex);
+    const shouldRefreshShadow = shadowGeneration
+      .notEqual(shadowManager.uGroundGeneration)
+      .or(isWrapped.greaterThan(0));
+
+    If(shouldRefreshShadow, () => {
+      Loop(
+        { start: 0, end: config.BLADES_PER_CLUMP, type: "uint" },
+        ({ i: bladeSlot }) => {
+          const bladeLocalOffset = getBladeLocalOffset(
+            bladeSlot,
+            clumpRotation,
+          );
+          const bladeWorldXZ = wrappedCenter
+            .add(bladeLocalOffset)
+            .add(uniforms.uPlayerPosition.xz);
+          const groundShadowFactor =
+            shadowManager.getGroundFactor(bladeWorldXZ);
+          const bladeIndex = bladeSlot
+            .mul(config.CLUMP_COUNT)
+            .add(instanceIndex);
+          this.bladeState.element(bladeIndex).z.assign(groundShadowFactor);
+        },
+      );
+      shadowGeneration.assign(shadowManager.uGroundGeneration);
+    });
 
     const usesDistantWindOnly = step(
       uniforms.uDetailedWindOuterRadiusSquared,

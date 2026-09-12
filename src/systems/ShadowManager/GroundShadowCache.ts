@@ -41,6 +41,7 @@ const getDepthVisibility = (
     : step(receiverDepth, sampleDepth);
 
 export class GroundShadowCache {
+  readonly uGeneration = uniform(0);
   readonly globalTexture = new StorageTexture(
     GROUND_TEXTURE_SIZE,
     GROUND_TEXTURE_SIZE,
@@ -113,6 +114,15 @@ export class GroundShadowCache {
 
   markLocalAvailable() {
     this.uHasLocal.value = 1;
+    this.advanceGeneration();
+  }
+
+  markGlobalAvailable() {
+    this.advanceGeneration();
+  }
+
+  invalidateLocal() {
+    this.uHasLocal.value = 0;
   }
 
   resetComputes() {
@@ -139,6 +149,10 @@ export class GroundShadowCache {
     textureValue.format = RedFormat;
     textureValue.type = UnsignedByteType;
     textureValue.generateMipmaps = false;
+  }
+
+  private advanceGeneration() {
+    this.uGeneration.value = (this.uGeneration.value + 1) % 65536;
   }
 
   private getBakeCompute(isLocal: boolean) {

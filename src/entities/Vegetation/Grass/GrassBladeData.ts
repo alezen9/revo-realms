@@ -19,34 +19,34 @@ export const setYOffset = Fn<
   return data;
 });
 
-export const getBend = Fn<[data: Node<"vec2">], Node<"vec2">>(([data]) => {
+export const getBend = Fn<[data: Node<"vec3">], Node<"vec2">>(([data]) => {
   const bendX = TSLUtils.unpackUnits(data.x, 0, 12, -6, 6);
   const bendZ = TSLUtils.unpackUnits(data.x, 12, 12, -6, 6);
   return vec2(bendX, bendZ);
 });
 
 export const setBend = Fn<
-  [data: Node<"vec2">, value: Node<"vec2">],
-  Node<"vec2">
+  [data: Node<"vec3">, value: Node<"vec2">],
+  Node<"vec3">
 >(([data, value]) => {
   data.x = TSLUtils.packUnits(data.x, 0, 12, value.x, -6, 6);
   data.x = TSLUtils.packUnits(data.x, 12, 12, value.y, -6, 6);
   return data;
 });
 
-export const getScale = Fn<[data: Node<"vec2">], Node<"float">>(([data]) => {
+export const getScale = Fn<[data: Node<"vec3">], Node<"float">>(([data]) => {
   return TSLUtils.unpackUnits(data.y, 0, 8, 0, uniforms.uBladeMaxScale);
 });
 
 export const setScale = Fn<
-  [data: Node<"vec2">, value: Node<"float">],
-  Node<"vec2">
+  [data: Node<"vec3">, value: Node<"float">],
+  Node<"vec3">
 >(([data, value]) => {
   data.y = TSLUtils.packUnits(data.y, 0, 8, value, 0, uniforms.uBladeMaxScale);
   return data;
 });
 
-export const getOriginalScale = Fn<[data: Node<"vec2">], Node<"float">>(
+export const getOriginalScale = Fn<[data: Node<"vec3">], Node<"float">>(
   ([data]) => {
     return TSLUtils.unpackUnits(
       data.y,
@@ -59,8 +59,8 @@ export const getOriginalScale = Fn<[data: Node<"vec2">], Node<"float">>(
 );
 
 export const setOriginalScale = Fn<
-  [data: Node<"vec2">, value: Node<"float">],
-  Node<"vec2">
+  [data: Node<"vec3">, value: Node<"float">],
+  Node<"vec3">
 >(([data, value]) => {
   data.y = TSLUtils.packUnits(
     data.y,
@@ -87,43 +87,31 @@ export const setTerrainCacheValidity = Fn<
   return data;
 });
 
-export const getVisibility = Fn<[data: Node<"vec2">], Node<"float">>(
+export const getVisibility = Fn<[data: Node<"vec3">], Node<"float">>(
   ([data]) => {
     return TSLUtils.unpackFlag(data.y, 16);
   },
 );
 
 export const setVisibility = Fn<
-  [data: Node<"vec2">, value: Node<"float">],
-  Node<"vec2">
+  [data: Node<"vec3">, value: Node<"float">],
+  Node<"vec3">
 >(([data, value]) => {
   data.y = TSLUtils.packFlag(data.y, 16, value);
   return data;
 });
 
-export const getPreviousVisibility = Fn<[data: Node<"vec2">], Node<"float">>(
+export const getPreviousVisibility = Fn<[data: Node<"vec3">], Node<"float">>(
   ([data]) => {
     return TSLUtils.unpackFlag(data.y, 21);
   },
 );
 
 export const setPreviousVisibility = Fn<
-  [data: Node<"vec2">, value: Node<"float">],
-  Node<"vec2">
+  [data: Node<"vec3">, value: Node<"float">],
+  Node<"vec3">
 >(([data, value]) => {
   data.y = TSLUtils.packFlag(data.y, 21, value);
-  return data;
-});
-
-export const getGroundShadowFactor = Fn<[data: Node<"vec4">], Node<"float">>(
-  ([data]) => TSLUtils.unpackUnit(data.w, 16, 4),
-);
-
-export const setGroundShadowFactor = Fn<
-  [data: Node<"vec4">, value: Node<"float">],
-  Node<"vec4">
->(([data, value]) => {
-  data.w = TSLUtils.packUnit(data.w, 16, 4, value);
   return data;
 });
 
@@ -135,13 +123,13 @@ export const setClumpOrientation = Fn<
   return data;
 });
 
-export const getPositionNoise = Fn<[data: Node<"vec2">], Node<"float">>(
+export const getPositionNoise = Fn<[data: Node<"vec3">], Node<"float">>(
   ([data]) => TSLUtils.unpackUnit(data.y, 17, 4),
 );
 
 export const setPositionNoise = Fn<
-  [data: Node<"vec2">, value: Node<"float">],
-  Node<"vec2">
+  [data: Node<"vec3">, value: Node<"float">],
+  Node<"vec3">
 >(([data, value]) => {
   data.y = TSLUtils.packUnit(data.y, 17, 4, value);
   return data;

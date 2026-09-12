@@ -18,6 +18,7 @@ import {
 export class ShadowManager {
   readonly uStrength = uniform(0.6);
   readonly uTint = uniform(new Color(0.46, 0.52, 0.64).convertSRGBToLinear());
+  readonly uGroundGeneration: GroundShadowCache["uGeneration"];
   readonly getGroundFactor: GroundShadowCache["getGroundFactor"];
   private groundCache: GroundShadowCache;
   private lightingManager: LightingManager;
@@ -44,6 +45,7 @@ export class ShadowManager {
       lightingManager,
       assetManager,
     );
+    this.uGroundGeneration = this.groundCache.uGeneration;
     this.getGroundFactor = this.groundCache.getGroundFactor;
     this.registry = new ShadowCasterRegistry(this.applyReceiverShadow);
     this.projection = new ShadowProjection(
@@ -103,6 +105,7 @@ export class ShadowManager {
       if (!this.hasPendingGlobalBake) return;
       if (!this.groundCache.bake(false)) return;
       this.hasPendingGlobalBake = false;
+      this.groundCache.markGlobalAvailable();
       return;
     }
 
@@ -125,6 +128,7 @@ export class ShadowManager {
       }
       this.hasPendingGlobalBake = false;
       this.hasDirtyLocalMap = true;
+      this.groundCache.markGlobalAvailable();
       return true;
     });
   }
@@ -132,6 +136,7 @@ export class ShadowManager {
   invalidate = () => {
     this.hasDirtyGlobalMap = true;
     this.hasDirtyLocalMap = true;
+    this.groundCache.invalidateLocal();
   };
 
   private configureLight() {
