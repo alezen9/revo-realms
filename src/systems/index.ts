@@ -10,7 +10,7 @@ import { PhysicsManager } from "./PhysicsManager";
 import { PhysicsScheduler } from "./PhysicsScheduler";
 import { RendererManager } from "./RendererManager/RendererManager";
 import { SceneManager } from "./SceneManager";
-import { ShadowManager } from "./ShadowManager";
+import { ShadowManager } from "./ShadowManager/ShadowManager";
 import { TimeManager } from "./TimeManager";
 import { WindManager } from "./WindManager";
 import { PrewarmManager } from "./PrewarmManager";
