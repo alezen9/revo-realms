@@ -16,5 +16,6 @@ export const shadowSettings = {
   localSize: 64,
   localRecenterDistance: 16,
   localBlendDistance: 12,
+  localTransitionDuration: 0.2,
   refresh: false,
 };

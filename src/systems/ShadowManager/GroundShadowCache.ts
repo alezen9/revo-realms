@@ -16,6 +16,7 @@ import {
   float,
   floor,
   Fn,
+  If,
   instanceIndex,
   mix,
   smoothstep,
@@ -43,6 +44,25 @@ const getDepthVisibility = (
     ? step(sampleDepth, receiverDepth)
     : step(receiverDepth, sampleDepth);
 
+const getRegionBlend = Fn<
+  [Node<"vec2">, Node<"vec2">, Node<"float">, Node<"float">],
+  Node<"float">
+>(([worldXZ, regionMin, regionSize, blendDistance]) => {
+  const regionUv = worldXZ.sub(regionMin).div(regionSize);
+  const one = float(1);
+  const isInside = step(0, regionUv.x)
+    .mul(step(regionUv.x, 1))
+    .mul(step(0, regionUv.y))
+    .mul(step(regionUv.y, 1));
+  const edgeDistance = regionUv.x
+    .min(one.sub(regionUv.x))
+    .min(regionUv.y)
+    .min(one.sub(regionUv.y));
+  return smoothstep(0, blendDistance.div(regionSize), edgeDistance).mul(
+    isInside,
+  );
+});
+
 type LocalBakeRect = {
   height: number;
   minX: number;
@@ -62,15 +82,15 @@ export class GroundShadowCache {
   );
   private uBias = uniform(shadowSettings.bias);
   private uHasLocal = uniform(0);
+  private uPreviousLocalMin = uniform(new Vector2());
   private uLocalMin = uniform(new Vector2());
   private uLocalSize = uniform(shadowSettings.localSize);
+  private uLocalTransition = uniform(1);
   private uLocalBakeMin = uniform(new Vector2());
   private uLocalBakeSize = uniform(shadowSettings.localSize);
   private uLocalBakeRectMin = uniform(new Vector2());
   private uLocalBakeRectWidth = uniform(GROUND_TEXTURE_SIZE);
-  private uLocalBlend = uniform(
-    shadowSettings.localBlendDistance / shadowSettings.localSize,
-  );
+  private uLocalBlendDistance = uniform(shadowSettings.localBlendDistance);
   private assetManager: AssetManager;
   private lightingManager: LightingManager;
   private renderer: WebGPURenderer;
@@ -78,6 +98,7 @@ export class GroundShadowCache {
   private localBakeCompute?: ComputeNode;
   private localBakeRects: LocalBakeRect[] = [];
   private isLocalValid = false;
+  private canTransitionLocal = false;
 
   constructor(
     renderer: WebGPURenderer,
@@ -99,22 +120,28 @@ export class GroundShadowCache {
         .add(realmConfig.HALF_MAP_SIZE)
         .div(realmConfig.MAP_SIZE);
       const globalFactor = texture(this.globalTexture, globalUv).r;
-      const localUv = worldXZ.sub(this.uLocalMin).div(this.uLocalSize);
-      const one = float(1);
-      const isInside = step(0, localUv.x)
-        .mul(step(localUv.x, 1))
-        .mul(step(0, localUv.y))
-        .mul(step(localUv.y, 1));
-      const edgeDistance = localUv.x
-        .min(one.sub(localUv.x))
-        .min(localUv.y)
-        .min(one.sub(localUv.y));
-      const localBlend = smoothstep(0, this.uLocalBlend, edgeDistance)
-        .mul(isInside)
-        .mul(this.uHasLocal);
+      const currentBlend = getRegionBlend(
+        worldXZ,
+        this.uLocalMin,
+        this.uLocalSize,
+        this.uLocalBlendDistance,
+      );
+      const localBlend = currentBlend.toVar();
+      If(this.uLocalTransition.lessThan(1), () => {
+        const previousBlend = getRegionBlend(
+          worldXZ,
+          this.uPreviousLocalMin,
+          this.uLocalSize,
+          this.uLocalBlendDistance,
+        );
+        const sharedBlend = previousBlend.min(currentBlend);
+        localBlend.assign(
+          mix(sharedBlend, currentBlend, this.uLocalTransition),
+        );
+      });
       const localRingUv = worldXZ.div(this.uLocalSize).fract();
       const localFactor = texture(this.localTexture, localRingUv).r;
-      return mix(globalFactor, localFactor, localBlend);
+      return mix(globalFactor, localFactor, localBlend.mul(this.uHasLocal));
     },
   );
 
@@ -126,12 +153,21 @@ export class GroundShadowCache {
     const halfSize = shadowSettings.localSize * 0.5;
     this.uLocalBakeMin.value.set(centerX - halfSize, centerZ - halfSize);
     this.uLocalBakeSize.value = shadowSettings.localSize;
+    this.canTransitionLocal =
+      this.isLocalValid &&
+      this.uLocalSize.value === this.uLocalBakeSize.value;
     this.localBakeRects = this.getLocalBakeRects();
-    this.uLocalBlend.value =
-      shadowSettings.localBlendDistance / shadowSettings.localSize;
+    this.uLocalBlendDistance.value = shadowSettings.localBlendDistance;
   }
 
   markLocalAvailable() {
+    if (this.canTransitionLocal) {
+      this.uPreviousLocalMin.value.copy(this.uLocalMin.value);
+      this.uLocalTransition.value = 0;
+    } else {
+      this.uPreviousLocalMin.value.copy(this.uLocalBakeMin.value);
+      this.uLocalTransition.value = 1;
+    }
     this.uLocalMin.value.copy(this.uLocalBakeMin.value);
     this.uLocalSize.value = this.uLocalBakeSize.value;
     this.uHasLocal.value = 1;
@@ -146,6 +182,20 @@ export class GroundShadowCache {
   invalidateLocal() {
     this.uHasLocal.value = 0;
     this.isLocalValid = false;
+    this.uLocalTransition.value = 1;
+  }
+
+  update(delta: number) {
+    if (this.uLocalTransition.value === 1) return;
+    const duration = shadowSettings.localTransitionDuration;
+    if (duration === 0) {
+      this.uLocalTransition.value = 1;
+      return;
+    }
+    this.uLocalTransition.value = Math.min(
+      1,
+      this.uLocalTransition.value + delta / duration,
+    );
   }
 
   resetComputes() {

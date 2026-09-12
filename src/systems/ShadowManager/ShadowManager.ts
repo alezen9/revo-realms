@@ -78,7 +78,8 @@ export class ShadowManager {
     this.isGlobalProjection = true;
   }
 
-  beforeRender(playerPosition: Vector3) {
+  beforeRender(playerPosition: Vector3, delta: number) {
+    this.groundCache.update(delta);
     this.updateLocalCenter(playerPosition);
     if (this.registry.haveCastersMoved()) this.invalidate();
 
@@ -262,6 +263,12 @@ export class ShadowManager {
         this.localCenterX = Number.NaN;
         this.localCenterZ = Number.NaN;
       });
+    folder.addBinding(shadowSettings, "localTransitionDuration", {
+      label: "Transition time",
+      min: 0,
+      max: 0.5,
+      step: 0.025,
+    });
     folder
       .addBinding(shadowSettings, "refresh", { label: "Refresh now" })
       .on("change", this.invalidate);
