@@ -241,19 +241,23 @@ export class DynamicShadowMap {
     const compareDepth = this.renderer.reversedDepthBuffer
       ? shadowCoord.z.sub(this.uBias)
       : shadowCoord.z.add(this.uBias);
-    const atlasUv = this.getAtlasUv(level, sampleUv, 1.5);
+    const atlasUv = this.getAtlasUv(level, sampleUv, 2);
     const visibility = texture(this.depthTexture, atlasUv).compare(
       compareDepth,
     ).r;
     const filtered = visibility.toVar();
 
-    If(visibility.greaterThan(0).and(visibility.lessThan(1)), () => {
+    const hasPartialVisibility = visibility
+      .greaterThan(0)
+      .and(visibility.lessThan(1));
+    const isEdgeQuad = visibility.fwidth().greaterThan(0);
+    If(hasPartialVisibility.or(isEdgeQuad), () => {
       const near = this.levels[0];
       const nearWorldTexel = near.settings.radius / near.settings.resolution;
       const levelWorldTexel = level.settings.radius / level.settings.resolution;
       const filterScale = nearWorldTexel / levelWorldTexel;
       const texel = vec2(1 / ATLAS_WIDTH, 1 / ATLAS_HEIGHT).mul(filterScale);
-      const diagonalOffset = texel.mul(0.75);
+      const diagonalOffset = texel.mul(1.25);
       const diagonals = texture(this.depthTexture, atlasUv.add(diagonalOffset))
         .compare(compareDepth)
         .r.add(
