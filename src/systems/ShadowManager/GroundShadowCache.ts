@@ -33,7 +33,11 @@ import {
 import { realmConfig } from "../../realm/config";
 import type { AssetManager } from "../AssetManager/AssetManager";
 import type { LightingManager } from "../LightingManager";
-import { GROUND_TEXTURE_SIZE, shadowSettings } from "./ShadowSettings";
+import {
+  GLOBAL_GROUND_TEXTURE_SIZE,
+  LOCAL_GROUND_TEXTURE_SIZE,
+  shadowSettings,
+} from "./ShadowSettings";
 
 const getDepthVisibility = (
   sampleDepth: Node<"float">,
@@ -73,12 +77,12 @@ type LocalBakeRect = {
 export class GroundShadowCache {
   readonly uGeneration = uniform(0);
   readonly globalTexture = new StorageTexture(
-    GROUND_TEXTURE_SIZE,
-    GROUND_TEXTURE_SIZE,
+    GLOBAL_GROUND_TEXTURE_SIZE,
+    GLOBAL_GROUND_TEXTURE_SIZE,
   );
   readonly localTexture = new StorageTexture(
-    GROUND_TEXTURE_SIZE,
-    GROUND_TEXTURE_SIZE,
+    LOCAL_GROUND_TEXTURE_SIZE,
+    LOCAL_GROUND_TEXTURE_SIZE,
   );
   private uBias = uniform(shadowSettings.bias);
   private uHasLocal = uniform(0);
@@ -89,7 +93,7 @@ export class GroundShadowCache {
   private uLocalBakeMin = uniform(new Vector2());
   private uLocalBakeSize = uniform(shadowSettings.localSize);
   private uLocalBakeRectMin = uniform(new Vector2());
-  private uLocalBakeRectWidth = uniform(GROUND_TEXTURE_SIZE);
+  private uLocalBakeRectWidth = uniform(LOCAL_GROUND_TEXTURE_SIZE);
   private uLocalBlendDistance = uniform(shadowSettings.localBlendDistance);
   private assetManager: AssetManager;
   private lightingManager: LightingManager;
@@ -247,17 +251,22 @@ export class GroundShadowCache {
     const output = storageTexture(
       isLocal ? this.localTexture : this.globalTexture,
     );
+    const textureSize = isLocal
+      ? LOCAL_GROUND_TEXTURE_SIZE
+      : GLOBAL_GROUND_TEXTURE_SIZE;
     const texel = 1 / shadowSettings.resolution;
     const isReversedDepth = this.renderer.reversedDepthBuffer;
 
     const compute = Fn(() => {
       const rowWidth = isLocal
         ? uint(this.uLocalBakeRectWidth)
-        : uint(GROUND_TEXTURE_SIZE);
+        : uint(textureSize);
       const x = instanceIndex.mod(rowWidth);
       const y = instanceIndex.div(rowWidth);
-      const mapUv = vec2(x, y).add(0.5).div(GROUND_TEXTURE_SIZE);
-      const localTexelSize = this.uLocalBakeSize.div(GROUND_TEXTURE_SIZE);
+      const mapUv = vec2(x, y).add(0.5).div(textureSize);
+      const localTexelSize = this.uLocalBakeSize.div(
+        LOCAL_GROUND_TEXTURE_SIZE,
+      );
       const worldXZ = isLocal
         ? vec2(x, y)
             .add(0.5)
@@ -265,7 +274,7 @@ export class GroundShadowCache {
             .add(this.uLocalBakeRectMin)
         : mapUv.mul(realmConfig.MAP_SIZE).sub(realmConfig.HALF_MAP_SIZE);
       const localCell = floor(worldXZ.div(localTexelSize)).mod(
-        GROUND_TEXTURE_SIZE,
+        LOCAL_GROUND_TEXTURE_SIZE,
       );
       const outputCoord = isLocal ? uvec2(localCell) : uvec2(x, y);
       const heightMapUv = worldXZ
@@ -320,7 +329,7 @@ export class GroundShadowCache {
         .mul(step(shadowCoord.z, 1));
       const groundVisibility = mix(1, visibility, isInside);
       textureStore(output, outputCoord, vec4(groundVisibility)).toWriteOnly();
-    })().compute(GROUND_TEXTURE_SIZE * GROUND_TEXTURE_SIZE, [8, 8, 1]);
+    })().compute(textureSize * textureSize, [8, 8, 1]);
     compute.name = isLocal
       ? "Local ground shadow bake"
       : "Ground shadow bake";
@@ -334,7 +343,7 @@ export class GroundShadowCache {
   }
 
   private bakeLocalRects(compute: ComputeNode) {
-    const texelSize = this.uLocalBakeSize.value / GROUND_TEXTURE_SIZE;
+    const texelSize = this.uLocalBakeSize.value / LOCAL_GROUND_TEXTURE_SIZE;
     for (const rect of this.localBakeRects) {
       const width = Math.round(rect.width / texelSize);
       const height = Math.round(rect.height / texelSize);

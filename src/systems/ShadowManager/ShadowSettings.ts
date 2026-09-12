@@ -4,7 +4,8 @@ export type ShadowRegistration = {
 };
 
 export const STATIC_SHADOW_LAYER = 1;
-export const GROUND_TEXTURE_SIZE = 2048;
+export const GLOBAL_GROUND_TEXTURE_SIZE = 4096;
+export const LOCAL_GROUND_TEXTURE_SIZE = 2048;
 export const SHADOW_PADDING = 12;
 
 export const shadowSettings = {
@@ -16,6 +17,6 @@ export const shadowSettings = {
   localSize: 64,
   localRecenterDistance: 16,
   localBlendDistance: 12,
-  localTransitionDuration: 0.2,
+  localTransitionDuration: 0.5,
   refresh: false,
 };
