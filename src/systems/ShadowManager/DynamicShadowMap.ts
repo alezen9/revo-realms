@@ -241,7 +241,7 @@ export class DynamicShadowMap {
     const compareDepth = this.renderer.reversedDepthBuffer
       ? shadowCoord.z.sub(this.uBias)
       : shadowCoord.z.add(this.uBias);
-    const atlasUv = this.getAtlasUv(level, sampleUv);
+    const atlasUv = this.getAtlasUv(level, sampleUv, 1.5);
     const visibility = texture(this.depthTexture, atlasUv).compare(
       compareDepth,
     ).r;
@@ -253,24 +253,27 @@ export class DynamicShadowMap {
       const levelWorldTexel = level.settings.radius / level.settings.resolution;
       const filterScale = nearWorldTexel / levelWorldTexel;
       const texel = vec2(1 / ATLAS_WIDTH, 1 / ATLAS_HEIGHT).mul(filterScale);
-      const horizontal = texture(
-        this.depthTexture,
-        atlasUv.add(vec2(texel.x, 0)),
-      )
+      const diagonalOffset = texel.mul(0.75);
+      const diagonals = texture(this.depthTexture, atlasUv.add(diagonalOffset))
         .compare(compareDepth)
         .r.add(
-          texture(this.depthTexture, atlasUv.sub(vec2(texel.x, 0))).compare(
+          texture(
+            this.depthTexture,
+            atlasUv.add(vec2(diagonalOffset.x.negate(), diagonalOffset.y)),
+          ).compare(compareDepth).r,
+        )
+        .add(
+          texture(
+            this.depthTexture,
+            atlasUv.add(vec2(diagonalOffset.x, diagonalOffset.y.negate())),
+          ).compare(compareDepth).r,
+        )
+        .add(
+          texture(this.depthTexture, atlasUv.sub(diagonalOffset)).compare(
             compareDepth,
           ).r,
         );
-      const vertical = texture(this.depthTexture, atlasUv.add(vec2(0, texel.y)))
-        .compare(compareDepth)
-        .r.add(
-          texture(this.depthTexture, atlasUv.sub(vec2(0, texel.y))).compare(
-            compareDepth,
-          ).r,
-        );
-      filtered.assign(visibility.add(horizontal).add(vertical).mul(0.2));
+      filtered.assign(visibility.add(diagonals).mul(0.2));
     });
 
     return mix(1, filtered, this.getInsideFactor(shadowCoord));
@@ -318,11 +321,17 @@ export class DynamicShadowMap {
       .mul(step(shadowCoord.z, 1));
   }
 
-  private getAtlasUv(level: DynamicShadowLevel, sampleUv: Node<"vec2">) {
+  private getAtlasUv(
+    level: DynamicShadowLevel,
+    sampleUv: Node<"vec2">,
+    insetTexels = 0,
+  ) {
     const { size, x, y } = level.atlasRegion;
     const scale = vec2(size / ATLAS_WIDTH, size / ATLAS_HEIGHT);
     const offset = vec2(x / ATLAS_WIDTH, y / ATLAS_HEIGHT);
-    return sampleUv.mul(scale).add(offset);
+    const inset = insetTexels / size;
+    const safeUv = sampleUv.clamp(vec2(inset), vec2(1 - inset));
+    return safeUv.mul(scale).add(offset);
   }
 
   private createDepthTexture() {
