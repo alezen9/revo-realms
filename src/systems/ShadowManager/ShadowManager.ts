@@ -103,14 +103,14 @@ export class ShadowManager {
   afterRender() {
     if (this.isGlobalProjection) {
       if (!this.hasPendingGlobalBake) return;
-      if (!this.groundCache.bake(false)) return;
+      if (!this.groundCache.bakeGlobal()) return;
       this.hasPendingGlobalBake = false;
       this.groundCache.markGlobalAvailable();
       return;
     }
 
     if (!this.hasPendingLocalBake) return;
-    if (!this.groundCache.bake(true)) return;
+    if (!this.groundCache.bakeLocal()) return;
     this.hasPendingLocalBake = false;
     this.groundCache.markLocalAvailable();
   }
@@ -121,7 +121,7 @@ export class ShadowManager {
       return Promise.resolve(false);
     }
     this.registry.syncCasterMatrices();
-    return this.groundCache.bakeAsync(false).then((hasBaked) => {
+    return this.groundCache.bakeGlobalAsync().then((hasBaked) => {
       if (!hasBaked) {
         this.invalidate();
         return false;

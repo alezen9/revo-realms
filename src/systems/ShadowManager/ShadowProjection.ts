@@ -13,6 +13,7 @@ export class ShadowProjection {
   private localBounds = new Box3();
   private boundsSize = new Vector3();
   private boundsCenter = new Vector3();
+  private lightAnchor = new Vector3();
   private viewCorner = new Vector3();
 
   constructor(
@@ -76,19 +77,20 @@ export class ShadowProjection {
     isStabilized: boolean,
   ) {
     this.worldBounds.getSize(this.boundsSize);
+    this.worldBounds.getCenter(this.lightAnchor);
     const lightDistance = this.boundsSize.length() + SHADOW_PADDING * 2;
     const { sunLight } = this.lightingManager;
-    sunLight.target.position.copy(this.boundsCenter);
+    sunLight.target.position.copy(this.lightAnchor);
     sunLight.target.updateMatrixWorld();
     sunLight.position
       .copy(this.lightingManager.sunDirection)
       .multiplyScalar(-lightDistance)
-      .add(this.boundsCenter);
+      .add(this.lightAnchor);
     sunLight.updateMatrixWorld();
 
     const camera = sunLight.shadow.camera;
     camera.position.copy(sunLight.position);
-    camera.lookAt(this.boundsCenter);
+    camera.lookAt(this.lightAnchor);
     camera.updateMatrixWorld();
 
     let left = Infinity;
