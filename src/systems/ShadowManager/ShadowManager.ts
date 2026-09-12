@@ -242,6 +242,16 @@ export class ShadowManager {
         this.hasDirtyLocalMap = true;
       });
     folder
+      .addBinding(shadowSettings, "localBlendDistance", {
+        label: "Blend distance",
+        min: 2,
+        max: 24,
+        step: 1,
+      })
+      .on("change", () => {
+        this.hasDirtyLocalMap = true;
+      });
+    folder
       .addBinding(shadowSettings, "localRecenterDistance", {
         label: "Recenter distance",
         min: 2,

@@ -54,6 +54,8 @@ export class GroundShadowCache {
   private uHasLocal = uniform(0);
   private uLocalMin = uniform(new Vector2());
   private uLocalSize = uniform(shadowSettings.localSize);
+  private uLocalBakeMin = uniform(new Vector2());
+  private uLocalBakeSize = uniform(shadowSettings.localSize);
   private uLocalBlend = uniform(
     shadowSettings.localBlendDistance / shadowSettings.localSize,
   );
@@ -105,14 +107,15 @@ export class GroundShadowCache {
 
   setLocalRegion(centerX: number, centerZ: number) {
     const halfSize = shadowSettings.localSize * 0.5;
-    this.uLocalMin.value.set(centerX - halfSize, centerZ - halfSize);
-    this.uLocalSize.value = shadowSettings.localSize;
+    this.uLocalBakeMin.value.set(centerX - halfSize, centerZ - halfSize);
+    this.uLocalBakeSize.value = shadowSettings.localSize;
     this.uLocalBlend.value =
       shadowSettings.localBlendDistance / shadowSettings.localSize;
-    this.uHasLocal.value = 0;
   }
 
   markLocalAvailable() {
+    this.uLocalMin.value.copy(this.uLocalBakeMin.value);
+    this.uLocalSize.value = this.uLocalBakeSize.value;
     this.uHasLocal.value = 1;
     this.advanceGeneration();
   }
@@ -176,7 +179,7 @@ export class GroundShadowCache {
       const outputCoord = uvec2(x, y);
       const mapUv = vec2(x, y).add(0.5).div(GROUND_TEXTURE_SIZE);
       const worldXZ = isLocal
-        ? mapUv.mul(this.uLocalSize).add(this.uLocalMin)
+        ? mapUv.mul(this.uLocalBakeSize).add(this.uLocalBakeMin)
         : mapUv.mul(realmConfig.MAP_SIZE).sub(realmConfig.HALF_MAP_SIZE);
       const heightMapUv = worldXZ
         .add(realmConfig.HALF_MAP_SIZE)

@@ -51,6 +51,7 @@ import {
   getYOffset,
   setBend,
   setClumpOrientation,
+  setGroundShadowFactor,
   setOriginalScale,
   setPositionNoise,
   setPreviousVisibility,
@@ -104,7 +105,7 @@ export class GrassCompute {
 
   private clumpState = instancedArray(config.CLUMP_COUNT, "vec4");
   private clumpWind = instancedArray(config.CLUMP_COUNT, "vec2");
-  private bladeState = instancedArray(config.BLADE_COUNT, "vec3");
+  private bladeState = instancedArray(config.BLADE_COUNT, "vec2");
   private shadowGeneration = instancedArray(config.CLUMP_COUNT, "float");
 
   // one draw list per LOD, packed as regions of a single buffer; a blade appends
@@ -187,7 +188,7 @@ export class GrassCompute {
           uniforms.uBladeMaxScale,
         );
 
-        bladeState.assign(vec3(0, 0, 1));
+        bladeState.assign(vec2(0));
         bladeState.assign(setScale(bladeState, randomScale));
         bladeState.assign(setOriginalScale(bladeState, randomScale));
         bladeState.assign(setVisibility(bladeState, 0));
@@ -398,7 +399,10 @@ export class GrassCompute {
           const bladeIndex = bladeSlot
             .mul(config.CLUMP_COUNT)
             .add(instanceIndex);
-          this.bladeState.element(bladeIndex).z.assign(groundShadowFactor);
+          const bladeState = this.bladeState.element(bladeIndex);
+          bladeState.assign(
+            setGroundShadowFactor(bladeState, groundShadowFactor),
+          );
         },
       );
       shadowGeneration.assign(shadowManager.uGroundGeneration);

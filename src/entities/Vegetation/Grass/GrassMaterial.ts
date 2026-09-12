@@ -22,6 +22,7 @@ import {
   getBladeLocalOffset,
   getBend,
   getClumpRotation,
+  getGroundShadowFactor,
   getPositionNoise,
   getScale,
   getYOffset,
@@ -56,7 +57,7 @@ export class GrassMaterial extends SpriteNodeMaterial {
     const bendXZ = getBend(bladeState);
     const scaleY = getScale(bladeState);
     const positionNoise = getPositionNoise(bladeState);
-    const groundShadowFactor = bladeState.z;
+    const groundShadowFactor = getGroundShadowFactor(bladeState);
 
     const bladeUv = uv();
     const bladeHeight = bladeUv.y;

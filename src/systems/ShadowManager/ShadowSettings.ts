@@ -14,7 +14,7 @@ export const shadowSettings = {
   bias: -0.0001,
   normalBias: 0.04,
   localSize: 64,
-  localRecenterDistance: 8,
-  localBlendDistance: 4,
+  localRecenterDistance: 16,
+  localBlendDistance: 12,
   refresh: false,
 };
