@@ -29,17 +29,12 @@ export class ShadowProjection {
   fitGlobal() {
     this.updateWorldBounds();
     this.worldBounds.getCenter(this.boundsCenter);
-    this.fitCamera(
-      this.worldBounds,
-      this.worldBounds,
-      SHADOW_PADDING,
-      false,
-    );
+    this.fitCamera(this.worldBounds, this.worldBounds, SHADOW_PADDING, false);
   }
 
-  fitLocal(centerX: number, centerZ: number) {
+  fitRegion(centerX: number, centerZ: number, size: number) {
     this.updateWorldBounds();
-    const halfSize = shadowSettings.localSize * 0.5;
+    const halfSize = size * 0.5;
     this.localBounds.min.set(
       centerX - halfSize,
       this.worldBounds.min.y,

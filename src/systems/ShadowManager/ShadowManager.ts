@@ -7,6 +7,7 @@ import type { DebugManager } from "../DebugManager";
 import type { EventsManager } from "../EventsManager";
 import type { LightingManager } from "../LightingManager";
 import { GroundShadowCache } from "./GroundShadowCache";
+import type { GroundShadowLevel } from "./GroundShadowLevel";
 import { ShadowCasterRegistry } from "./ShadowCasterRegistry";
 import { ShadowProjection } from "./ShadowProjection";
 import {
@@ -25,12 +26,8 @@ export class ShadowManager {
   private projection: ShadowProjection;
   private registry: ShadowCasterRegistry;
   private hasDirtyGlobalMap = true;
-  private hasDirtyLocalMap = true;
-  private hasPendingGlobalBake = true;
-  private hasPendingLocalBake = true;
-  private isGlobalProjection = true;
-  private localCenterX = Number.NaN;
-  private localCenterZ = Number.NaN;
+  private dirtyLevels = new Set<GroundShadowLevel>();
+  private pendingBake: "global" | GroundShadowLevel | undefined = "global";
 
   constructor(
     renderer: WebGPURenderer,
@@ -45,6 +42,7 @@ export class ShadowManager {
       lightingManager,
       assetManager,
     );
+    for (const level of this.groundCache.levels) this.dirtyLevels.add(level);
     this.uGroundGeneration = this.groundCache.uGeneration;
     this.getGroundFactor = this.groundCache.getGroundFactor;
     this.registry = new ShadowCasterRegistry(this.applyReceiverShadow);
@@ -72,52 +70,50 @@ export class ShadowManager {
     this.registry.syncCasterMatrices();
     this.lightingManager.sunLight.shadow.needsUpdate = true;
     this.hasDirtyGlobalMap = false;
-    this.hasDirtyLocalMap = true;
-    this.hasPendingGlobalBake = true;
-    this.hasPendingLocalBake = true;
-    this.isGlobalProjection = true;
+    for (const level of this.groundCache.levels) this.dirtyLevels.add(level);
+    this.pendingBake = "global";
   }
 
   beforeRender(playerPosition: Vector3, delta: number) {
     this.groundCache.update(delta);
-    this.updateLocalCenter(playerPosition);
+    this.updateLevelCenters(playerPosition);
     if (this.registry.haveCastersMoved()) this.invalidate();
 
     if (this.hasDirtyGlobalMap) {
       this.projection.fitGlobal();
       this.lightingManager.sunLight.shadow.needsUpdate = true;
       this.hasDirtyGlobalMap = false;
-      this.hasPendingGlobalBake = true;
-      this.isGlobalProjection = true;
+      this.pendingBake = "global";
       return;
     }
 
-    if (!this.hasDirtyLocalMap) return;
-    this.projection.fitLocal(this.localCenterX, this.localCenterZ);
-    this.groundCache.setLocalRegion(this.localCenterX, this.localCenterZ);
+    if (this.pendingBake) return;
+    const level = this.getNextDirtyLevel();
+    if (!level) return;
+    const { size } = level.settings;
+    this.projection.fitRegion(level.centerX, level.centerZ, size);
+    this.groundCache.prepareLevel(level);
     this.lightingManager.sunLight.shadow.needsUpdate = true;
-    this.hasDirtyLocalMap = false;
-    this.hasPendingLocalBake = true;
-    this.isGlobalProjection = false;
+    this.dirtyLevels.delete(level);
+    this.pendingBake = level;
   }
 
   afterRender() {
-    if (this.isGlobalProjection) {
-      if (!this.hasPendingGlobalBake) return;
+    if (this.pendingBake === "global") {
       if (!this.groundCache.bakeGlobal()) return;
-      this.hasPendingGlobalBake = false;
       this.groundCache.markGlobalAvailable();
+      this.pendingBake = undefined;
       return;
     }
 
-    if (!this.hasPendingLocalBake) return;
-    if (!this.groundCache.bakeLocal()) return;
-    this.hasPendingLocalBake = false;
-    this.groundCache.markLocalAvailable();
+    if (!this.pendingBake) return;
+    if (!this.groundCache.bakeLevel(this.pendingBake)) return;
+    this.groundCache.markLevelAvailable(this.pendingBake);
+    this.pendingBake = undefined;
   }
 
   bakeGroundAsync() {
-    if (!this.isGlobalProjection) {
+    if (this.pendingBake !== "global") {
       this.invalidate();
       return Promise.resolve(false);
     }
@@ -127,8 +123,7 @@ export class ShadowManager {
         this.invalidate();
         return false;
       }
-      this.hasPendingGlobalBake = false;
-      this.hasDirtyLocalMap = true;
+      this.pendingBake = undefined;
       this.groundCache.markGlobalAvailable();
       return true;
     });
@@ -136,8 +131,8 @@ export class ShadowManager {
 
   invalidate = () => {
     this.hasDirtyGlobalMap = true;
-    this.hasDirtyLocalMap = true;
-    this.groundCache.invalidateLocal();
+    for (const level of this.groundCache.levels) this.dirtyLevels.add(level);
+    this.groundCache.invalidateLevels();
   };
 
   private configureLight() {
@@ -155,16 +150,19 @@ export class ShadowManager {
     shadow.camera.layers.set(STATIC_SHADOW_LAYER);
   }
 
-  private updateLocalCenter(playerPosition: Vector3) {
-    const distance = shadowSettings.localRecenterDistance;
-    const isInsideCurrentRegion =
-      Number.isFinite(this.localCenterX) &&
-      Math.abs(playerPosition.x - this.localCenterX) <= distance &&
-      Math.abs(playerPosition.z - this.localCenterZ) <= distance;
-    if (isInsideCurrentRegion) return;
-    this.localCenterX = Math.round(playerPosition.x / distance) * distance;
-    this.localCenterZ = Math.round(playerPosition.z / distance) * distance;
-    this.hasDirtyLocalMap = true;
+  private updateLevelCenters(playerPosition: Vector3) {
+    for (const level of this.groundCache.levels) {
+      if (!level.updateCenter(playerPosition.x, playerPosition.z)) continue;
+      this.dirtyLevels.add(level);
+    }
+  }
+
+  private getNextDirtyLevel() {
+    const { levels } = this.groundCache;
+    for (let index = levels.length - 1; index >= 0; index--) {
+      const level = levels[index];
+      if (this.dirtyLevels.has(level)) return level;
+    }
   }
 
   private applyReceiverShadow = (factor?: Node<"float">) => {
@@ -173,6 +171,8 @@ export class ShadowManager {
   };
 
   private debug(debugManager: DebugManager) {
+    const nearLevel = this.groundCache.levels[0];
+    const nearSettings = nearLevel.settings;
     const folder = debugManager.panel.addFolder({
       title: "🌘 Shadows",
       expanded: false,
@@ -233,40 +233,40 @@ export class ShadowManager {
         this.invalidate();
       });
     folder
-      .addBinding(shadowSettings, "localSize", {
-        label: "Local size",
+      .addBinding(nearSettings, "size", {
+        label: "Near size",
         min: 32,
         max: 128,
         step: 8,
       })
       .on("change", () => {
-        this.hasDirtyLocalMap = true;
+        this.dirtyLevels.add(nearLevel);
       });
     folder
-      .addBinding(shadowSettings, "localBlendDistance", {
-        label: "Blend distance",
+      .addBinding(nearSettings, "blendDistance", {
+        label: "Near blend",
         min: 2,
         max: 24,
         step: 1,
       })
       .on("change", () => {
-        this.hasDirtyLocalMap = true;
+        this.dirtyLevels.add(nearLevel);
       });
     folder
-      .addBinding(shadowSettings, "localRecenterDistance", {
-        label: "Recenter distance",
+      .addBinding(nearSettings, "recenterDistance", {
+        label: "Near recenter",
         min: 2,
         max: 16,
         step: 2,
       })
       .on("change", () => {
-        this.localCenterX = Number.NaN;
-        this.localCenterZ = Number.NaN;
+        nearLevel.centerX = Number.NaN;
+        nearLevel.centerZ = Number.NaN;
       });
-    folder.addBinding(shadowSettings, "localTransitionDuration", {
+    folder.addBinding(nearSettings, "transitionDuration", {
       label: "Transition time",
       min: 0,
-      max: 0.5,
+      max: 1,
       step: 0.025,
     });
     folder

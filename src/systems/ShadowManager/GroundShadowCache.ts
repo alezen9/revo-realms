@@ -2,9 +2,7 @@ import {
   type DepthTexture,
   NoColorSpace,
   RedFormat,
-  RepeatWrapping,
   UnsignedByteType,
-  Vector2,
 } from "three";
 import {
   type ComputeNode,
@@ -33,9 +31,10 @@ import {
 import { realmConfig } from "../../realm/config";
 import type { AssetManager } from "../AssetManager/AssetManager";
 import type { LightingManager } from "../LightingManager";
+import { GroundShadowLevel } from "./GroundShadowLevel";
 import {
   GLOBAL_GROUND_TEXTURE_SIZE,
-  LOCAL_GROUND_TEXTURE_SIZE,
+  groundShadowLevelSettings,
   shadowSettings,
 } from "./ShadowSettings";
 
@@ -67,11 +66,86 @@ const getRegionBlend = Fn<
   );
 });
 
-type LocalBakeRect = {
-  height: number;
-  minX: number;
-  minZ: number;
-  width: number;
+const getTransitionedRegionBlend = Fn<
+  [
+    Node<"vec2">,
+    Node<"vec2">,
+    Node<"vec2">,
+    Node<"float">,
+    Node<"float">,
+    Node<"float">,
+  ],
+  Node<"float">
+>(
+  ([
+    worldXZ,
+    previousMin,
+    currentMin,
+    regionSize,
+    blendDistance,
+    transition,
+  ]) => {
+    const currentBlend = getRegionBlend(
+      worldXZ,
+      currentMin,
+      regionSize,
+      blendDistance,
+    );
+    const regionBlend = currentBlend.toVar();
+    If(transition.lessThan(1), () => {
+      const previousBlend = getRegionBlend(
+        worldXZ,
+        previousMin,
+        regionSize,
+        blendDistance,
+      );
+      const sharedBlend = previousBlend.min(currentBlend);
+      regionBlend.assign(mix(sharedBlend, currentBlend, transition));
+    });
+    return regionBlend;
+  },
+);
+
+const getLevelFactor = (
+  worldXZ: Node<"vec2">,
+  globalTexture: StorageTexture,
+  levels: readonly GroundShadowLevel[],
+  index: number,
+): Node<"float"> => {
+  if (index >= levels.length) {
+    const globalUv = worldXZ
+      .add(realmConfig.HALF_MAP_SIZE)
+      .div(realmConfig.MAP_SIZE);
+    return texture(globalTexture, globalUv).r;
+  }
+
+  const level = levels[index];
+  const blend = getTransitionedRegionBlend(
+    worldXZ,
+    level.uPreviousMin,
+    level.uMin,
+    level.uSize,
+    level.uBlendDistance,
+    level.uTransition,
+  ).mul(level.uHas);
+  const ringUv = worldXZ.div(level.uSize).fract();
+  const factor = float(1).toVar();
+  If(blend.greaterThanEqual(1), () => {
+    factor.assign(texture(level.texture, ringUv).r);
+  }).Else(() => {
+    const parentFactor = getLevelFactor(
+      worldXZ,
+      globalTexture,
+      levels,
+      index + 1,
+    );
+    If(blend.greaterThan(0), () => {
+      factor.assign(mix(parentFactor, texture(level.texture, ringUv).r, blend));
+    }).Else(() => {
+      factor.assign(parentFactor);
+    });
+  });
+  return factor;
 };
 
 export class GroundShadowCache {
@@ -80,29 +154,14 @@ export class GroundShadowCache {
     GLOBAL_GROUND_TEXTURE_SIZE,
     GLOBAL_GROUND_TEXTURE_SIZE,
   );
-  readonly localTexture = new StorageTexture(
-    LOCAL_GROUND_TEXTURE_SIZE,
-    LOCAL_GROUND_TEXTURE_SIZE,
+  readonly levels = groundShadowLevelSettings.map(
+    (settings) => new GroundShadowLevel(settings),
   );
   private uBias = uniform(shadowSettings.bias);
-  private uHasLocal = uniform(0);
-  private uPreviousLocalMin = uniform(new Vector2());
-  private uLocalMin = uniform(new Vector2());
-  private uLocalSize = uniform(shadowSettings.localSize);
-  private uLocalTransition = uniform(1);
-  private uLocalBakeMin = uniform(new Vector2());
-  private uLocalBakeSize = uniform(shadowSettings.localSize);
-  private uLocalBakeRectMin = uniform(new Vector2());
-  private uLocalBakeRectWidth = uniform(LOCAL_GROUND_TEXTURE_SIZE);
-  private uLocalBlendDistance = uniform(shadowSettings.localBlendDistance);
   private assetManager: AssetManager;
   private lightingManager: LightingManager;
   private renderer: WebGPURenderer;
   private globalBakeCompute?: ComputeNode;
-  private localBakeCompute?: ComputeNode;
-  private localBakeRects: LocalBakeRect[] = [];
-  private isLocalValid = false;
-  private canTransitionLocal = false;
 
   constructor(
     renderer: WebGPURenderer,
@@ -113,69 +172,22 @@ export class GroundShadowCache {
     this.lightingManager = lightingManager;
     this.assetManager = assetManager;
     this.configureTexture(this.globalTexture, "shadows.ground");
-    this.configureTexture(this.localTexture, "shadows.ground.local");
-    this.localTexture.wrapS = RepeatWrapping;
-    this.localTexture.wrapT = RepeatWrapping;
   }
 
-  getGroundFactor = Fn<[worldXZ: Node<"vec2">], Node<"float">>(
-    ([worldXZ]) => {
-      const globalUv = worldXZ
-        .add(realmConfig.HALF_MAP_SIZE)
-        .div(realmConfig.MAP_SIZE);
-      const globalFactor = texture(this.globalTexture, globalUv).r;
-      const currentBlend = getRegionBlend(
-        worldXZ,
-        this.uLocalMin,
-        this.uLocalSize,
-        this.uLocalBlendDistance,
-      );
-      const localBlend = currentBlend.toVar();
-      If(this.uLocalTransition.lessThan(1), () => {
-        const previousBlend = getRegionBlend(
-          worldXZ,
-          this.uPreviousLocalMin,
-          this.uLocalSize,
-          this.uLocalBlendDistance,
-        );
-        const sharedBlend = previousBlend.min(currentBlend);
-        localBlend.assign(
-          mix(sharedBlend, currentBlend, this.uLocalTransition),
-        );
-      });
-      const localRingUv = worldXZ.div(this.uLocalSize).fract();
-      const localFactor = texture(this.localTexture, localRingUv).r;
-      return mix(globalFactor, localFactor, localBlend.mul(this.uHasLocal));
-    },
+  getGroundFactor = Fn<[worldXZ: Node<"vec2">], Node<"float">>(([worldXZ]) =>
+    getLevelFactor(worldXZ, this.globalTexture, this.levels, 0),
   );
 
   setBias(value: number) {
     this.uBias.value = value;
   }
 
-  setLocalRegion(centerX: number, centerZ: number) {
-    const halfSize = shadowSettings.localSize * 0.5;
-    this.uLocalBakeMin.value.set(centerX - halfSize, centerZ - halfSize);
-    this.uLocalBakeSize.value = shadowSettings.localSize;
-    this.canTransitionLocal =
-      this.isLocalValid &&
-      this.uLocalSize.value === this.uLocalBakeSize.value;
-    this.localBakeRects = this.getLocalBakeRects();
-    this.uLocalBlendDistance.value = shadowSettings.localBlendDistance;
+  prepareLevel(level: GroundShadowLevel) {
+    level.prepareBake();
   }
 
-  markLocalAvailable() {
-    if (this.canTransitionLocal) {
-      this.uPreviousLocalMin.value.copy(this.uLocalMin.value);
-      this.uLocalTransition.value = 0;
-    } else {
-      this.uPreviousLocalMin.value.copy(this.uLocalBakeMin.value);
-      this.uLocalTransition.value = 1;
-    }
-    this.uLocalMin.value.copy(this.uLocalBakeMin.value);
-    this.uLocalSize.value = this.uLocalBakeSize.value;
-    this.uHasLocal.value = 1;
-    this.isLocalValid = true;
+  markLevelAvailable(level: GroundShadowLevel) {
+    level.markAvailable();
     this.advanceGeneration();
   }
 
@@ -183,46 +195,35 @@ export class GroundShadowCache {
     this.advanceGeneration();
   }
 
-  invalidateLocal() {
-    this.uHasLocal.value = 0;
-    this.isLocalValid = false;
-    this.uLocalTransition.value = 1;
+  invalidateLevels() {
+    for (const level of this.levels) level.invalidate();
   }
 
   update(delta: number) {
-    if (this.uLocalTransition.value === 1) return;
-    const duration = shadowSettings.localTransitionDuration;
-    if (duration === 0) {
-      this.uLocalTransition.value = 1;
-      return;
-    }
-    this.uLocalTransition.value = Math.min(
-      1,
-      this.uLocalTransition.value + delta / duration,
-    );
+    for (const level of this.levels) level.update(delta);
   }
 
   resetComputes() {
     this.globalBakeCompute = undefined;
-    this.localBakeCompute = undefined;
+    for (const level of this.levels) level.bakeCompute = undefined;
   }
 
   bakeGlobal() {
-    const compute = this.getBakeCompute(false);
+    const compute = this.getBakeCompute();
     if (!compute) return false;
     this.renderer.compute(compute);
     return true;
   }
 
-  bakeLocal() {
-    const compute = this.getBakeCompute(true);
+  bakeLevel(level: GroundShadowLevel) {
+    const compute = this.getBakeCompute(level);
     if (!compute) return false;
-    this.bakeLocalRects(compute);
+    this.bakeLevelRects(level, compute);
     return true;
   }
 
   bakeGlobalAsync() {
-    const compute = this.getBakeCompute(false);
+    const compute = this.getBakeCompute();
     if (!compute) return Promise.resolve(false);
     return this.renderer.computeAsync(compute).then(() => true);
   }
@@ -239,44 +240,34 @@ export class GroundShadowCache {
     this.uGeneration.value = (this.uGeneration.value + 1) % 65536;
   }
 
-  private getBakeCompute(isLocal: boolean) {
-    const cachedCompute = isLocal
-      ? this.localBakeCompute
+  private getBakeCompute(level?: GroundShadowLevel) {
+    const cachedCompute = level
+      ? level.bakeCompute
       : this.globalBakeCompute;
     if (cachedCompute) return cachedCompute;
     const depthTexture = this.getShadowDepthTexture();
     if (!depthTexture) return;
 
     const shadowMatrix = uniform(this.lightingManager.sunLight.shadow.matrix);
-    const output = storageTexture(
-      isLocal ? this.localTexture : this.globalTexture,
-    );
-    const textureSize = isLocal
-      ? LOCAL_GROUND_TEXTURE_SIZE
-      : GLOBAL_GROUND_TEXTURE_SIZE;
+    const output = storageTexture(level?.texture ?? this.globalTexture);
+    const textureSize =
+      level?.settings.textureSize ?? GLOBAL_GROUND_TEXTURE_SIZE;
     const texel = 1 / shadowSettings.resolution;
     const isReversedDepth = this.renderer.reversedDepthBuffer;
 
     const compute = Fn(() => {
-      const rowWidth = isLocal
-        ? uint(this.uLocalBakeRectWidth)
-        : uint(textureSize);
+      const rowWidth = level ? uint(level.uBakeRectWidth) : uint(textureSize);
       const x = instanceIndex.mod(rowWidth);
       const y = instanceIndex.div(rowWidth);
       const mapUv = vec2(x, y).add(0.5).div(textureSize);
-      const localTexelSize = this.uLocalBakeSize.div(
-        LOCAL_GROUND_TEXTURE_SIZE,
-      );
-      const worldXZ = isLocal
-        ? vec2(x, y)
-            .add(0.5)
-            .mul(localTexelSize)
-            .add(this.uLocalBakeRectMin)
+      const levelTexelSize = level
+        ? level.uBakeSize.div(textureSize)
+        : float(1);
+      const worldXZ = level
+        ? vec2(x, y).add(0.5).mul(levelTexelSize).add(level.uBakeRectMin)
         : mapUv.mul(realmConfig.MAP_SIZE).sub(realmConfig.HALF_MAP_SIZE);
-      const localCell = floor(worldXZ.div(localTexelSize)).mod(
-        LOCAL_GROUND_TEXTURE_SIZE,
-      );
-      const outputCoord = isLocal ? uvec2(localCell) : uvec2(x, y);
+      const levelCell = floor(worldXZ.div(levelTexelSize)).mod(textureSize);
+      const outputCoord = level ? uvec2(levelCell) : uvec2(x, y);
       const heightMapUv = worldXZ
         .add(realmConfig.HALF_MAP_SIZE)
         .div(realmConfig.MAP_SIZE);
@@ -330,10 +321,10 @@ export class GroundShadowCache {
       const groundVisibility = mix(1, visibility, isInside);
       textureStore(output, outputCoord, vec4(groundVisibility)).toWriteOnly();
     })().compute(textureSize * textureSize, [8, 8, 1]);
-    compute.name = isLocal
-      ? "Local ground shadow bake"
+    compute.name = level
+      ? `${level.settings.name} ground shadow bake`
       : "Ground shadow bake";
-    if (isLocal) this.localBakeCompute = compute;
+    if (level) level.bakeCompute = compute;
     else this.globalBakeCompute = compute;
     return compute;
   }
@@ -342,72 +333,18 @@ export class GroundShadowCache {
     return this.lightingManager.sunLight.shadow.map?.depthTexture ?? undefined;
   }
 
-  private bakeLocalRects(compute: ComputeNode) {
-    const texelSize = this.uLocalBakeSize.value / LOCAL_GROUND_TEXTURE_SIZE;
-    for (const rect of this.localBakeRects) {
+  private bakeLevelRects(level: GroundShadowLevel, compute: ComputeNode) {
+    const { textureSize } = level.settings;
+    const texelSize = level.uBakeSize.value / textureSize;
+    for (const rect of level.bakeRects) {
       const width = Math.round(rect.width / texelSize);
       const height = Math.round(rect.height / texelSize);
       const count = width * height;
       if (count === 0) continue;
-      this.uLocalBakeRectMin.value.set(rect.minX, rect.minZ);
-      this.uLocalBakeRectWidth.value = width;
+      level.uBakeRectMin.value.set(rect.minX, rect.minZ);
+      level.uBakeRectWidth.value = width;
       compute.count = count;
       this.renderer.compute(compute, count);
     }
-  }
-
-  private getLocalBakeRects(): LocalBakeRect[] {
-    const minX = this.uLocalBakeMin.value.x;
-    const minZ = this.uLocalBakeMin.value.y;
-    const size = this.uLocalBakeSize.value;
-    const fullRect = { minX, minZ, width: size, height: size };
-    if (!this.isLocalValid || this.uLocalSize.value !== size) return [fullRect];
-
-    const oldMinX = this.uLocalMin.value.x;
-    const oldMinZ = this.uLocalMin.value.y;
-    const overlapMinX = Math.max(minX, oldMinX);
-    const overlapMinZ = Math.max(minZ, oldMinZ);
-    const overlapMaxX = Math.min(minX + size, oldMinX + size);
-    const overlapMaxZ = Math.min(minZ + size, oldMinZ + size);
-    if (overlapMinX >= overlapMaxX || overlapMinZ >= overlapMaxZ) {
-      return [fullRect];
-    }
-
-    const rects: LocalBakeRect[] = [];
-    if (minX < overlapMinX) {
-      rects.push({
-        minX,
-        minZ,
-        width: overlapMinX - minX,
-        height: size,
-      });
-    }
-    if (overlapMaxX < minX + size) {
-      rects.push({
-        minX: overlapMaxX,
-        minZ,
-        width: minX + size - overlapMaxX,
-        height: size,
-      });
-    }
-
-    const overlapWidth = overlapMaxX - overlapMinX;
-    if (minZ < overlapMinZ) {
-      rects.push({
-        minX: overlapMinX,
-        minZ,
-        width: overlapWidth,
-        height: overlapMinZ - minZ,
-      });
-    }
-    if (overlapMaxZ < minZ + size) {
-      rects.push({
-        minX: overlapMinX,
-        minZ: overlapMaxZ,
-        width: overlapWidth,
-        height: minZ + size - overlapMaxZ,
-      });
-    }
-    return rects;
   }
 }
