@@ -6,6 +6,7 @@ import {
   hash,
   instanceIndex,
   mix,
+  positionWorld,
   saturate,
   sin,
   smoothstep,
@@ -68,13 +69,13 @@ export class GrassMaterial extends SpriteNodeMaterial {
       .mul(bladeOffsetX)
       .add(bladeOffsetZ.mul(bladeOffsetZ));
 
-    const worldPosition = vec3(
+    const bladeBaseWorldPosition = vec3(
       bladeOffsetX.add(uniforms.uPlayerPosition.x),
       bladeOffsetY,
       bladeOffsetZ.add(uniforms.uPlayerPosition.z),
     );
-    const combinedShadowFactor = groundShadowFactor.mul(
-      shadowManager.getDynamicGroundFactor(worldPosition, bladeHash),
+    const combinedShadowFactor = groundShadowFactor.min(
+      shadowManager.getDynamicGroundFactor(positionWorld, bladeHash),
     );
 
     // WIDTH
@@ -182,7 +183,7 @@ export class GrassMaterial extends SpriteNodeMaterial {
 
     const lightDirection = lightingManager.uSunDir.negate();
 
-    const viewOffset = cameraPosition.sub(worldPosition);
+    const viewOffset = cameraPosition.sub(bladeBaseWorldPosition);
     const viewDirection = viewOffset.normalize();
     const viewDirectionXZ = viewOffset.xz.normalize();
 

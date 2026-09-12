@@ -9,6 +9,7 @@ import {
   RenderTarget,
   type Scene,
   UnsignedByteType,
+  UnsignedShortType,
   Vector2,
   Vector3,
 } from "three";
@@ -309,9 +310,12 @@ export class DynamicShadowMap {
   }
 
   private createDepthTexture() {
-    const depthTexture = new DepthTexture(ATLAS_WIDTH, ATLAS_HEIGHT);
+    const depthTexture = new DepthTexture(
+      ATLAS_WIDTH,
+      ATLAS_HEIGHT,
+      UnsignedShortType,
+    );
     depthTexture.name = "Dynamic shadow atlas depth";
-    depthTexture.colorSpace = NoColorSpace;
     depthTexture.minFilter = LinearFilter;
     depthTexture.magFilter = LinearFilter;
     depthTexture.compareFunction = this.renderer.reversedDepthBuffer

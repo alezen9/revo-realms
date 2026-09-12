@@ -32,12 +32,16 @@ class PassLabelInspector extends InspectorBase {
   beginRender(
     uid: string,
     scene: Scene,
-    _camera: Camera,
+    camera: Camera,
     renderTarget: RenderTarget | null,
   ) {
     const encoderLabel = getEncoderLabel(uid, "renderContext");
     if (!encoderLabel) return;
-    const passLabel = scene.name || renderTarget?.texture.name || "Render";
+    const targetName = renderTarget?.texture.name;
+    let passLabel = scene.name || targetName || "Render";
+    if (passLabel === "Render Pipeline") passLabel = "Final composite";
+    if (targetName === "Dynamic shadow atlas target" && camera.name)
+      passLabel = camera.name;
     this.passLabels.set(encoderLabel, passLabel);
   }
 

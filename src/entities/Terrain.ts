@@ -176,7 +176,7 @@ class TerrainMaterial extends MeshLambertNodeMaterial {
       normalWorld,
     );
     this.colorNode = surfaceColor.mul(
-      shadowManager.getMultiplier(groundShadowFactor.mul(dynamicShadowFactor)),
+      shadowManager.getMultiplier(groundShadowFactor.min(dynamicShadowFactor)),
     );
 
     // NORMAL

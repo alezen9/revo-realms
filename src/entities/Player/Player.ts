@@ -86,7 +86,11 @@ export default class Player {
       "player",
     ) as Mesh;
     mesh.material = new PlayerMaterial();
-    shadowManager.register(mesh, { receive: true });
+    shadowManager.register(mesh, {
+      cast: true,
+      mobility: "dynamic",
+      receive: true,
+    });
     mesh.position.set(0, 0, 0);
     return mesh;
   }
@@ -163,7 +167,6 @@ export default class Player {
       blurStart,
       blurFull,
     );
-    playerUniforms.uPosition.value.copy(this.visualRoot.position);
   };
 
   private onGateUpdate = () => {

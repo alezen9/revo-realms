@@ -197,7 +197,7 @@ export class ShadowManager {
 
   private applyReceiverShadow = (factor?: Node<"float">) => {
     const dynamicFactor = this.dynamicMap.getFactor(positionWorld, normalWorld);
-    const combinedFactor = factor ? factor.mul(dynamicFactor) : dynamicFactor;
+    const combinedFactor = factor ? factor.min(dynamicFactor) : dynamicFactor;
     return this.getMultiplier(combinedFactor);
   };
 

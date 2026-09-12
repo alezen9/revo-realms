@@ -8,7 +8,7 @@ import {
   uv,
   vec3,
 } from "three/tsl";
-import { MeshLambertNodeMaterial, Vector3 } from "three/webgpu";
+import { MeshLambertNodeMaterial } from "three/webgpu";
 import { assetManager, lightingManager } from "../../systems";
 import { playerConfig as config } from "./config";
 
@@ -16,8 +16,6 @@ export const playerUniforms = {
   uDiffuseScale: uniform(config.DIFFUSE_BOOST),
   uSpinFactor: uniform(0),
   uSpinBlurMax: uniform(config.SPIN_BLUR_MAX),
-  uPosition: uniform(new Vector3()),
-  uRadius: uniform(config.RADIUS_IN_METERS),
   uSunTintStrength: uniform(0.22),
 };
 

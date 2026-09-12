@@ -107,6 +107,7 @@ export class DynamicShadowLevel {
 
   private configureCamera() {
     const camera = this.light.shadow.camera;
+    camera.name = `Dynamic shadows ${this.settings.name}`;
     camera.coordinateSystem = WebGPUCoordinateSystem;
     camera.layers.set(DYNAMIC_SHADOW_LAYER);
     camera.near = 32;

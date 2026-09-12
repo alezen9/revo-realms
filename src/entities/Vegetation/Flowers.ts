@@ -564,7 +564,7 @@ class FlowerMaterial extends MeshBasicNodeMaterial {
       z.add(uniforms.uPlayerPosition.z).add(swayOffset.z),
     );
     const combinedShadowFactor = varying(
-      groundShadowFactor.mul(
+      groundShadowFactor.min(
         shadowManager.getDynamicGroundFactor(worldPosition, rand1),
       ),
     );
