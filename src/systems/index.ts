@@ -62,7 +62,6 @@ const init = () => {
   );
   const shadowManager = new ShadowManager(
     rendererManager.renderer,
-    sceneManager,
     lightingManager,
     assetManager,
     eventsManager,

@@ -22,7 +22,6 @@ export type DynamicShadowLevelSettings = {
 };
 
 export const STATIC_SHADOW_LAYER = 1;
-export const DYNAMIC_SHADOW_LAYER = 2;
 export const GLOBAL_GROUND_TEXTURE_SIZE = 4096;
 export const SHADOW_PADDING = 12;
 
@@ -39,7 +38,7 @@ export const dynamicShadowLevelSettings: [
   {
     name: "near",
     radius: 24,
-    blendDistance: 6,
+    blendDistance: 8,
     recenterTexels: 2,
     resolution: 1024,
   },
@@ -48,7 +47,7 @@ export const dynamicShadowLevelSettings: [
     radius: 75,
     blendDistance: 15,
     recenterTexels: 1,
-    resolution: 512,
+    resolution: 640,
   },
 ];
 

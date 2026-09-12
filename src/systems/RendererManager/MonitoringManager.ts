@@ -27,6 +27,7 @@ type PassDurationAccumulator = {
 };
 
 type DeviceAccumulator = {
+  passCountPeak: number;
   renderPassCount: number;
   computePassCount: number;
   computeDispatchCount: number;
@@ -46,6 +47,7 @@ type DeviceAccumulator = {
 };
 
 const createAccumulator = (): DeviceAccumulator => ({
+  passCountPeak: 0,
   renderPassCount: 0,
   computePassCount: 0,
   computeDispatchCount: 0,
@@ -222,6 +224,10 @@ export class MonitoringManager {
 
     if (frame.renderedFrameCount > this.lastDeviceFrameNumber) {
       this.lastDeviceFrameNumber = frame.renderedFrameCount;
+      device.passCountPeak = Math.max(
+        device.passCountPeak,
+        frame.renderPassCount + frame.computePassCount,
+      );
       device.renderPassCount = Math.max(
         device.renderPassCount,
         frame.renderPassCount,
@@ -349,6 +355,7 @@ export class MonitoringManager {
 
     return {
       drawCallCount: accumulator?.drawCallCount ?? 0,
+      passCountPeak: accumulator?.passCountPeak ?? 0,
       renderPassCount: accumulator?.renderPassCount ?? 0,
       computePassCount: accumulator?.computePassCount ?? 0,
       computeDispatchCount: accumulator?.computeDispatchCount ?? 0,

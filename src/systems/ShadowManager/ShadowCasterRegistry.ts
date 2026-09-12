@@ -6,11 +6,7 @@ import {
   type Object3D,
 } from "three";
 import { type Node, NodeMaterial } from "three/webgpu";
-import {
-  DYNAMIC_SHADOW_LAYER,
-  STATIC_SHADOW_LAYER,
-  type ShadowRegistration,
-} from "./ShadowSettings";
+import { STATIC_SHADOW_LAYER, type ShadowRegistration } from "./ShadowSettings";
 
 type ReceiverShadowNode = (factor?: Node<"float">) => Node<"vec3">;
 
@@ -30,6 +26,7 @@ export class ShadowCasterRegistry {
 
   register(object: Object3D, registration: ShadowRegistration) {
     const { cast = false, mobility = "static", receive = false } = registration;
+    const dynamicCasters: Mesh[] = [];
     object.updateWorldMatrix(true, true);
 
     object.traverse((child) => {
@@ -38,7 +35,7 @@ export class ShadowCasterRegistry {
       if (cast) {
         child.castShadow = true;
         if (mobility === "dynamic") {
-          child.layers.enable(DYNAMIC_SHADOW_LAYER);
+          dynamicCasters.push(child);
         } else {
           child.layers.enable(STATIC_SHADOW_LAYER);
           this.casters.set(child, child.matrixWorld.clone());
@@ -52,6 +49,7 @@ export class ShadowCasterRegistry {
         : [child.material];
       for (const material of materials) this.configureReceiver(material);
     });
+    return dynamicCasters;
   }
 
   expandBounds(bounds: Box3) {

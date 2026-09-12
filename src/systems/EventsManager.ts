@@ -30,6 +30,7 @@ export type DeviceGpuPassMetrics = {
 
 export type DeviceMetrics = {
   drawCallCount: number;
+  passCountPeak: number;
   renderPassCount: number;
   computePassCount: number;
   computeDispatchCount: number;

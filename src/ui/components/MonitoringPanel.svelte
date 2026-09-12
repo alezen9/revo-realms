@@ -225,9 +225,9 @@
 					<span class="value">{device ? integerFormat.format(device.drawCallCount) : "-"}</span>
 				</span>
 				<span class="cell">
-					<span class="label">Passes</span>
+					<span class="label">Pass peak</span>
 					<span class="value">
-						{device ? integerFormat.format(device.renderPassCount + device.computePassCount) : "-"}
+						{device ? integerFormat.format(device.passCountPeak) : "-"}
 					</span>
 				</span>
 			</div>

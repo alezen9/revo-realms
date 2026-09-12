@@ -7,7 +7,7 @@ import {
   NoColorSpace,
   RedFormat,
   RenderTarget,
-  type Scene,
+  type Mesh,
   UnsignedByteType,
   UnsignedShortType,
   Vector2,
@@ -31,16 +31,19 @@ import {
 } from "three/tsl";
 import type { LightingManager } from "../LightingManager";
 import { DynamicShadowLevel } from "./DynamicShadowLevel";
+import { DynamicShadowCasterBatch } from "./DynamicShadowCasterBatch";
 import {
   dynamicShadowLevelSettings,
   dynamicShadowSettings,
 } from "./ShadowSettings";
 
-const ATLAS_WIDTH = 1536;
-const ATLAS_HEIGHT = 1024;
+const NEAR_RESOLUTION = dynamicShadowLevelSettings[0].resolution;
+const FAR_RESOLUTION = dynamicShadowLevelSettings[1].resolution;
+const ATLAS_WIDTH = NEAR_RESOLUTION + FAR_RESOLUTION;
+const ATLAS_HEIGHT = Math.max(NEAR_RESOLUTION, FAR_RESOLUTION);
 const ATLAS_REGIONS = [
-  { x: 0, y: 0, size: 1024 },
-  { x: 1024, y: 0, size: 512 },
+  { x: 0, y: 0, size: NEAR_RESOLUTION },
+  { x: NEAR_RESOLUTION, y: 0, size: FAR_RESOLUTION },
 ] as const;
 
 type DynamicSurfaceArguments = [
@@ -64,7 +67,7 @@ export class DynamicShadowMap {
   ) => Node<"float">;
   readonly levels: DynamicShadowLevel[];
   private renderer: WebGPURenderer;
-  private scene: Scene;
+  private casterBatch: DynamicShadowCasterBatch;
   private lightingManager: LightingManager;
   private depthTexture: DepthTexture;
   private renderTarget: RenderTarget;
@@ -76,16 +79,10 @@ export class DynamicShadowMap {
   private rendererState: RendererUtils.RendererState;
   private sceneState: RendererUtils.SceneState;
 
-  constructor(
-    renderer: WebGPURenderer,
-    scene: Scene,
-    lightingManager: LightingManager,
-  ) {
+  constructor(renderer: WebGPURenderer, lightingManager: LightingManager) {
     this.renderer = renderer;
-    this.scene = scene;
     this.lightingManager = lightingManager;
     this.rendererState = RendererUtils.saveRendererState(renderer);
-    this.sceneState = RendererUtils.saveSceneState(scene);
     this.depthTexture = this.createDepthTexture();
     this.renderTarget = this.createRenderTarget();
     this.levels = [];
@@ -93,6 +90,12 @@ export class DynamicShadowMap {
       const settings = dynamicShadowLevelSettings[index];
       this.levels.push(new DynamicShadowLevel(settings, ATLAS_REGIONS[index]));
     }
+    this.casterBatch = new DynamicShadowCasterBatch(
+      this.levels,
+      ATLAS_WIDTH,
+      ATLAS_HEIGHT,
+    );
+    this.sceneState = RendererUtils.saveSceneState(this.casterBatch.scene);
 
     this.getFactor = Fn<DynamicSurfaceArguments, Node<"float">>(
       ([worldPosition, worldNormal]) => {
@@ -119,7 +122,9 @@ export class DynamicShadowMap {
     );
   }
 
-  enable() {
+  register(casters: Mesh[]) {
+    if (casters.length === 0) return;
+    this.casterBatch.register(casters);
     this.hasCasters = true;
     this.applySettings();
   }
@@ -137,9 +142,19 @@ export class DynamicShadowMap {
     this.uPlayerXZ.value.set(playerPosition.x, playerPosition.z);
     if (this.uEnabled.value === 0) return;
 
+    let hasProjectionChanged = false;
     for (const level of this.levels) {
-      level.updateProjection(playerPosition, this.lightingManager.sunDirection);
+      if (
+        level.updateProjection(
+          playerPosition,
+          this.lightingManager.sunDirection,
+        )
+      )
+        hasProjectionChanged = true;
     }
+    const haveCastersChanged = this.casterBatch.prepare();
+    if (!this.casterBatch.isReady) return;
+    if (!hasProjectionChanged && !haveCastersChanged) return;
 
     try {
       this.rendererState = RendererUtils.resetRendererState(
@@ -147,21 +162,18 @@ export class DynamicShadowMap {
         this.rendererState,
       );
       this.sceneState = RendererUtils.resetSceneState(
-        this.scene,
+        this.casterBatch.scene,
         this.sceneState,
       );
       this.renderer.setClearColor(0x000000, 0);
-      for (let index = 0; index < this.levels.length; index++) {
-        const level = this.levels[index];
-        this.scene.overrideMaterial = level.depthMaterial;
-        level.applyRenderRegion(this.renderTarget);
-        this.renderer.setRenderTarget(this.renderTarget);
-        this.renderer.autoClear = index === 0;
-        this.renderer.render(this.scene, level.light.shadow.camera);
-      }
+      this.renderTarget.viewport.set(0, 0, ATLAS_WIDTH, ATLAS_HEIGHT);
+      this.renderTarget.scissorTest = false;
+      this.renderer.setRenderTarget(this.renderTarget);
+      this.renderer.autoClear = true;
+      this.renderer.render(this.casterBatch.scene, this.casterBatch.camera);
     } finally {
       RendererUtils.restoreRendererState(this.renderer, this.rendererState);
-      RendererUtils.restoreSceneState(this.scene, this.sceneState);
+      RendererUtils.restoreSceneState(this.casterBatch.scene, this.sceneState);
     }
   }
 
@@ -236,7 +248,11 @@ export class DynamicShadowMap {
     const filtered = visibility.toVar();
 
     If(visibility.greaterThan(0).and(visibility.lessThan(1)), () => {
-      const texel = vec2(1 / ATLAS_WIDTH, 1 / ATLAS_HEIGHT);
+      const near = this.levels[0];
+      const nearWorldTexel = near.settings.radius / near.settings.resolution;
+      const levelWorldTexel = level.settings.radius / level.settings.resolution;
+      const filterScale = nearWorldTexel / levelWorldTexel;
+      const texel = vec2(1 / ATLAS_WIDTH, 1 / ATLAS_HEIGHT).mul(filterScale);
       const horizontal = texture(
         this.depthTexture,
         atlasUv.add(vec2(texel.x, 0)),

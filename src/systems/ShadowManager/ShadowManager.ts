@@ -14,7 +14,6 @@ import type { AssetManager } from "../AssetManager/AssetManager";
 import type { DebugManager } from "../DebugManager";
 import type { EventsManager } from "../EventsManager";
 import type { LightingManager } from "../LightingManager";
-import type { SceneManager } from "../SceneManager";
 import { DynamicShadowMap } from "./DynamicShadowMap";
 import { GroundShadowCache } from "./GroundShadowCache";
 import type { GroundShadowLevel } from "./GroundShadowLevel";
@@ -46,18 +45,13 @@ export class ShadowManager {
 
   constructor(
     renderer: WebGPURenderer,
-    sceneManager: SceneManager,
     lightingManager: LightingManager,
     assetManager: AssetManager,
     eventsManager: EventsManager,
     debugManager: DebugManager,
   ) {
     this.lightingManager = lightingManager;
-    this.dynamicMap = new DynamicShadowMap(
-      renderer,
-      sceneManager.mainScene,
-      lightingManager,
-    );
+    this.dynamicMap = new DynamicShadowMap(renderer, lightingManager);
     this.getDynamicGroundFactor = this.dynamicMap.getGroundFactor;
     this.getDynamicSurfaceFactor = this.dynamicMap.getFactor;
     this.groundCache = new GroundShadowCache(
@@ -85,10 +79,10 @@ export class ShadowManager {
   });
 
   register(object: Object3D, registration: ShadowRegistration) {
-    this.registry.register(object, registration);
+    const dynamicCasters = this.registry.register(object, registration);
     if (!registration.cast) return;
     if (registration.mobility === "dynamic") {
-      this.dynamicMap.enable();
+      this.dynamicMap.register(dynamicCasters);
       return;
     }
     this.invalidate();

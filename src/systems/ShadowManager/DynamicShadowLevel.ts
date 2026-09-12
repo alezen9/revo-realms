@@ -1,17 +1,11 @@
 import {
   DirectionalLight,
   Matrix4,
-  NoBlending,
-  type RenderTarget,
   Vector3,
   WebGPUCoordinateSystem,
 } from "three";
 import { uniform } from "three/tsl";
-import { MeshBasicNodeMaterial } from "three/webgpu";
-import {
-  DYNAMIC_SHADOW_LAYER,
-  type DynamicShadowLevelSettings,
-} from "./ShadowSettings";
+import { type DynamicShadowLevelSettings } from "./ShadowSettings";
 
 type AtlasRegion = {
   size: number;
@@ -21,20 +15,16 @@ type AtlasRegion = {
 
 export class DynamicShadowLevel {
   readonly atlasRegion: AtlasRegion;
-  readonly depthMaterial = new MeshBasicNodeMaterial({
-    blending: NoBlending,
-    colorWrite: false,
-    depthTest: true,
-    depthWrite: true,
-  });
   readonly light = new DirectionalLight();
   readonly settings: DynamicShadowLevelSettings;
   readonly uMatrix = uniform(new Matrix4());
+  readonly viewProjectionMatrix = new Matrix4();
   private center = new Vector3();
   private lightForward = new Vector3();
   private lightPosition = new Vector3();
   private lightRight = new Vector3();
   private lightUp = new Vector3();
+  private nextViewProjectionMatrix = new Matrix4();
   private isCentered = false;
   private snappedRight = 0;
   private snappedUp = 0;
@@ -43,13 +33,6 @@ export class DynamicShadowLevel {
     this.settings = settings;
     this.atlasRegion = atlasRegion;
     this.configureCamera();
-  }
-
-  applyRenderRegion(renderTarget: RenderTarget) {
-    const { size, x, y } = this.atlasRegion;
-    renderTarget.viewport.set(x, y, size, size);
-    renderTarget.scissor.set(x, y, size, size);
-    renderTarget.scissorTest = true;
   }
 
   applySettings() {
@@ -103,13 +86,21 @@ export class DynamicShadowLevel {
     this.light.updateMatrixWorld();
     this.light.shadow.updateMatrices(this.light);
     this.uMatrix.value.copy(this.light.shadow.matrix);
+    this.nextViewProjectionMatrix.multiplyMatrices(
+      this.light.shadow.camera.projectionMatrix,
+      this.light.shadow.camera.matrixWorldInverse,
+    );
+    const hasChanged = !this.viewProjectionMatrix.equals(
+      this.nextViewProjectionMatrix,
+    );
+    this.viewProjectionMatrix.copy(this.nextViewProjectionMatrix);
+    return hasChanged;
   }
 
   private configureCamera() {
     const camera = this.light.shadow.camera;
     camera.name = `Dynamic shadows ${this.settings.name}`;
     camera.coordinateSystem = WebGPUCoordinateSystem;
-    camera.layers.set(DYNAMIC_SHADOW_LAYER);
     camera.near = 32;
     camera.far = 224;
     this.applySettings();

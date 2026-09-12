@@ -132,10 +132,7 @@ export class GrassMaterial extends SpriteNodeMaterial {
     const bladeWorldPosition = bladeBaseWorldPosition.add(
       vec3(
         bendOffset.x,
-        bladeHeight
-          .mul(config.BLADE_HEIGHT)
-          .mul(scaleY)
-          .add(bendOffset.y),
+        bladeHeight.mul(config.BLADE_HEIGHT).mul(scaleY).add(bendOffset.y),
         bendOffset.z,
       ),
     );
