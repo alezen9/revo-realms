@@ -73,6 +73,9 @@ export class GrassMaterial extends SpriteNodeMaterial {
       bladeOffsetY,
       bladeOffsetZ.add(uniforms.uPlayerPosition.z),
     );
+    const combinedShadowFactor = groundShadowFactor.mul(
+      shadowManager.getDynamicGroundFactor(worldPosition),
+    );
 
     // WIDTH
     const widthDistanceFactor = smoothstep(
@@ -212,7 +215,7 @@ export class GrassMaterial extends SpriteNodeMaterial {
     ).mul(lightingManager.uHemiIntensity);
 
     // PACK VARYINGS
-    const colorShadow = varying(vec4(variedColor, groundShadowFactor));
+    const colorShadow = varying(vec4(variedColor, combinedShadowFactor));
 
     const lightingGrazing = varying(vec4(sunDiffuse, grazing));
 

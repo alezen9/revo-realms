@@ -1,11 +1,21 @@
 import { Color, type Object3D, Vector3 } from "three";
 import { type Node, type WebGPURenderer } from "three/webgpu";
-import { float, Fn, mix, uniform, vec3 } from "three/tsl";
+import {
+  float,
+  Fn,
+  mix,
+  normalWorld,
+  positionWorld,
+  uniform,
+  vec3,
+} from "three/tsl";
 import { srgbColorTarget } from "../../utils/TweakpaneColor";
 import type { AssetManager } from "../AssetManager/AssetManager";
 import type { DebugManager } from "../DebugManager";
 import type { EventsManager } from "../EventsManager";
 import type { LightingManager } from "../LightingManager";
+import type { SceneManager } from "../SceneManager";
+import { DynamicShadowMap } from "./DynamicShadowMap";
 import { GroundShadowCache } from "./GroundShadowCache";
 import type { GroundShadowLevel } from "./GroundShadowLevel";
 import { ShadowCasterRegistry } from "./ShadowCasterRegistry";
@@ -13,6 +23,7 @@ import { ShadowProjection } from "./ShadowProjection";
 import {
   STATIC_SHADOW_LAYER,
   type ShadowRegistration,
+  dynamicShadowSettings,
   shadowSettings,
 } from "./ShadowSettings";
 
@@ -21,6 +32,9 @@ export class ShadowManager {
   readonly uTint = uniform(new Color(0.46, 0.52, 0.64).convertSRGBToLinear());
   readonly uGroundGeneration: GroundShadowCache["uGeneration"];
   readonly getGroundFactor: GroundShadowCache["getGroundFactor"];
+  readonly getDynamicGroundFactor: DynamicShadowMap["getGroundFactor"];
+  readonly getDynamicSurfaceFactor: DynamicShadowMap["getFactor"];
+  private dynamicMap: DynamicShadowMap;
   private groundCache: GroundShadowCache;
   private lightingManager: LightingManager;
   private projection: ShadowProjection;
@@ -31,12 +45,20 @@ export class ShadowManager {
 
   constructor(
     renderer: WebGPURenderer,
+    sceneManager: SceneManager,
     lightingManager: LightingManager,
     assetManager: AssetManager,
     eventsManager: EventsManager,
     debugManager: DebugManager,
   ) {
     this.lightingManager = lightingManager;
+    this.dynamicMap = new DynamicShadowMap(
+      renderer,
+      sceneManager.mainScene,
+      lightingManager,
+    );
+    this.getDynamicGroundFactor = this.dynamicMap.getGroundFactor;
+    this.getDynamicSurfaceFactor = this.dynamicMap.getFactor;
     this.groundCache = new GroundShadowCache(
       renderer,
       lightingManager,
@@ -62,7 +84,13 @@ export class ShadowManager {
   });
 
   register(object: Object3D, registration: ShadowRegistration) {
-    if (this.registry.register(object, registration)) this.invalidate();
+    this.registry.register(object, registration);
+    if (!registration.cast) return;
+    if (registration.mobility === "dynamic") {
+      this.dynamicMap.enable();
+      return;
+    }
+    this.invalidate();
   }
 
   prepareBake() {
@@ -75,6 +103,7 @@ export class ShadowManager {
   }
 
   beforeRender(playerPosition: Vector3, delta: number) {
+    this.dynamicMap.render(playerPosition);
     this.groundCache.update(delta);
     this.updateLevelCenters(playerPosition);
     if (this.registry.haveCastersMoved()) this.invalidate();
@@ -166,8 +195,9 @@ export class ShadowManager {
   }
 
   private applyReceiverShadow = (factor?: Node<"float">) => {
-    if (!factor) return vec3(1);
-    return this.getMultiplier(factor);
+    const dynamicFactor = this.dynamicMap.getFactor(positionWorld, normalWorld);
+    const combinedFactor = factor ? factor.mul(dynamicFactor) : dynamicFactor;
+    return this.getMultiplier(combinedFactor);
   };
 
   private debug(debugManager: DebugManager) {
@@ -188,6 +218,37 @@ export class ShadowManager {
       view: "color",
       color: { type: "float" },
     });
+    const dynamicFolder = folder.addFolder({
+      title: "Moving objects",
+      expanded: false,
+    });
+    dynamicFolder
+      .addBinding(dynamicShadowSettings, "isEnabled", { label: "Enabled" })
+      .on("change", () => this.dynamicMap.applySettings());
+    dynamicFolder
+      .addBinding(dynamicShadowSettings, "bias", {
+        label: "Depth bias",
+        min: -0.002,
+        max: 0.002,
+        step: 0.00001,
+      })
+      .on("change", () => this.dynamicMap.applySettings());
+    dynamicFolder
+      .addBinding(dynamicShadowSettings, "normalBias", {
+        label: "Normal bias",
+        min: 0,
+        max: 0.2,
+        step: 0.005,
+      })
+      .on("change", () => this.dynamicMap.applySettings());
+    dynamicFolder
+      .addBinding(dynamicShadowSettings, "radius", {
+        label: "Radius",
+        min: 16,
+        max: 64,
+        step: 2,
+      })
+      .on("change", () => this.dynamicMap.applySettings());
     folder
       .addBinding(shadowSettings, "resolution", {
         label: "Resolution",

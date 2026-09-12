@@ -4,6 +4,7 @@ import {
   If,
   mix,
   normalMap,
+  normalWorld,
   positionWorld,
   smoothstep,
   texture,
@@ -170,8 +171,12 @@ class TerrainMaterial extends MeshLambertNodeMaterial {
     const surfaceColor = mix(landColor, waterColor, waterMask);
 
     const groundShadowFactor = shadowManager.getGroundFactor(positionWorld.xz);
+    const dynamicShadowFactor = shadowManager.getDynamicSurfaceFactor(
+      positionWorld,
+      normalWorld,
+    );
     this.colorNode = surfaceColor.mul(
-      shadowManager.getMultiplier(groundShadowFactor),
+      shadowManager.getMultiplier(groundShadowFactor.mul(dynamicShadowFactor)),
     );
 
     // NORMAL

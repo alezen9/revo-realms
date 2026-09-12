@@ -6,6 +6,8 @@ import WindAmbianceStreaks from "../entities/WindAmbiance/WindAmbianceStreaks";
 import { LakeSurface } from "../entities/LakeSurface";
 import { Campfire } from "../entities/Campfire";
 import { FootballPitch } from "../entities/FootballPitch";
+import { DynamicShadowTestRig } from "../entities/DynamicShadowTestRig";
+import { TOOLING_FLAGS } from "@systems-tooling-runtime";
 export { realmConfig } from "./config";
 
 export default class PortfolioRealm {
@@ -18,5 +20,6 @@ export default class PortfolioRealm {
     new LakeSurface();
     new Campfire();
     new FootballPitch();
+    if (TOOLING_FLAGS.debug) new DynamicShadowTestRig();
   }
 }

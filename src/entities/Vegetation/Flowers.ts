@@ -19,6 +19,7 @@ import {
   texture,
   uniform,
   uv,
+  varying,
   vec2,
   vec3,
   vec4,
@@ -557,6 +558,16 @@ class FlowerMaterial extends MeshBasicNodeMaterial {
       .mul(scale)
       .add(basePosition)
       .add(swayOffset);
+    const worldPosition = vec3(
+      x.add(uniforms.uPlayerPosition.x).add(swayOffset.x),
+      offsetY.add(swayOffset.y),
+      z.add(uniforms.uPlayerPosition.z).add(swayOffset.z),
+    );
+    const combinedShadowFactor = varying(
+      groundShadowFactor.mul(
+        shadowManager.getDynamicGroundFactor(worldPosition),
+      ),
+    );
 
     // Diffuse
     const flower = texture(assetManager.resources.edelweiss, uv());
@@ -564,7 +575,7 @@ class FlowerMaterial extends MeshBasicNodeMaterial {
     this.colorNode = tint
       .mul(flower.rgb)
       .mul(uniforms.uBrightness)
-      .mul(shadowManager.getMultiplier(groundShadowFactor));
+      .mul(shadowManager.getMultiplier(combinedShadowFactor));
 
     // Opacity
     this.opacityNode = flower.a;
