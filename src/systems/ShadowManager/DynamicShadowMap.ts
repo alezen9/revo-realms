@@ -12,6 +12,7 @@ import {
   UnsignedShortType,
   Vector2,
   Vector3,
+  Vector4,
 } from "three";
 import { RendererUtils, type Node, type WebGPURenderer } from "three/webgpu";
 import {
@@ -22,11 +23,8 @@ import {
   smoothstep,
   step,
   texture,
-  textureLoad,
   uniform,
-  uvec2,
   vec2,
-  vec3,
   vec4,
 } from "three/tsl";
 import type { LightingManager } from "../LightingManager";
@@ -51,19 +49,10 @@ type DynamicSurfaceArguments = [
   worldNormal: Node<"vec3">,
 ];
 
-type DynamicGroundArguments = [
-  worldPosition: Node<"vec3">,
-  sampleHash: Node<"float">,
-];
-
 export class DynamicShadowMap {
   readonly getFactor: (
     worldPosition: Node<"vec3">,
     worldNormal: Node<"vec3">,
-  ) => Node<"float">;
-  readonly getGroundFactor: (
-    worldPosition: Node<"vec3">,
-    sampleHash: Node<"float">,
   ) => Node<"float">;
   readonly levels: DynamicShadowLevel[];
   private renderer: WebGPURenderer;
@@ -74,10 +63,25 @@ export class DynamicShadowMap {
   private uBias = uniform(dynamicShadowSettings.bias);
   private uNormalBias = uniform(dynamicShadowSettings.normalBias);
   private uEnabled = uniform(0);
+  private uHasActiveCasters = uniform(0);
   private uPlayerXZ = uniform(new Vector2());
   private hasCasters = false;
   private rendererState: RendererUtils.RendererState;
   private sceneState: RendererUtils.SceneState;
+  private savedScissor = new Vector4();
+  private savedViewport = new Vector4();
+
+  get casterCount() {
+    return this.casterBatch.casterCount;
+  }
+
+  get registeredCasterCount() {
+    return this.casterBatch.registeredCasterCount;
+  }
+
+  get triangleCount() {
+    return this.casterBatch.triangleCount;
+  }
 
   constructor(renderer: WebGPURenderer, lightingManager: LightingManager) {
     this.renderer = renderer;
@@ -99,25 +103,13 @@ export class DynamicShadowMap {
 
     this.getFactor = Fn<DynamicSurfaceArguments, Node<"float">>(
       ([worldPosition, worldNormal]) => {
-        const distance = worldPosition.xz.sub(this.uPlayerXZ).length();
-        const factor = this.getBlendedSurfaceFactor(
-          distance,
+        const playerDelta = worldPosition.xz.sub(this.uPlayerXZ);
+        const distanceSquared = playerDelta.dot(playerDelta);
+        return this.getBlendedSurfaceFactor(
+          distanceSquared,
           worldPosition,
           worldNormal,
         );
-        return mix(1, factor, this.uEnabled);
-      },
-    );
-
-    this.getGroundFactor = Fn<DynamicGroundArguments, Node<"float">>(
-      ([worldPosition, sampleHash]) => {
-        const distance = worldPosition.xz.sub(this.uPlayerXZ).length();
-        const factor = this.getBlendedGroundFactor(
-          distance,
-          worldPosition,
-          sampleHash,
-        );
-        return mix(1, factor, this.uEnabled);
       },
     );
   }
@@ -152,10 +144,13 @@ export class DynamicShadowMap {
       )
         hasProjectionChanged = true;
     }
-    const haveCastersChanged = this.casterBatch.prepare();
+    const haveCastersChanged = this.casterBatch.prepare(playerPosition);
+    this.uHasActiveCasters.value = Number(this.casterBatch.isReady);
     if (!this.casterBatch.isReady) return;
     if (!hasProjectionChanged && !haveCastersChanged) return;
 
+    this.renderer.getViewport(this.savedViewport);
+    this.renderer.getScissor(this.savedScissor);
     try {
       this.rendererState = RendererUtils.resetRendererState(
         this.renderer,
@@ -173,12 +168,14 @@ export class DynamicShadowMap {
       this.renderer.render(this.casterBatch.scene, this.casterBatch.camera);
     } finally {
       RendererUtils.restoreRendererState(this.renderer, this.rendererState);
+      this.renderer.setViewport(this.savedViewport);
+      this.renderer.setScissor(this.savedScissor);
       RendererUtils.restoreSceneState(this.casterBatch.scene, this.sceneState);
     }
   }
 
   private getBlendedSurfaceFactor(
-    distance: Node<"float">,
+    distanceSquared: Node<"float">,
     worldPosition: Node<"vec3">,
     worldNormal: Node<"vec3">,
   ) {
@@ -186,47 +183,55 @@ export class DynamicShadowMap {
     const far = this.levels[1];
     const nearBlendStart = near.settings.radius - near.settings.blendDistance;
     const farBlendStart = far.settings.radius - far.settings.blendDistance;
-    const nearFactor = this.getSurfaceLevelFactor(
-      near,
-      worldPosition,
-      worldNormal,
-    );
-    const farFactor = this.getSurfaceLevelFactor(
-      far,
-      worldPosition,
-      worldNormal,
-    );
-    const levelBlend = smoothstep(
-      nearBlendStart,
-      near.settings.radius,
-      distance,
-    );
-    const farFade = smoothstep(farBlendStart, far.settings.radius, distance);
-    return mix(mix(nearFactor, farFactor, levelBlend), 1, farFade);
-  }
-
-  private getBlendedGroundFactor(
-    distance: Node<"float">,
-    worldPosition: Node<"vec3">,
-    sampleHash: Node<"float">,
-  ) {
-    const near = this.levels[0];
-    const far = this.levels[1];
-    const nearBlendStart = near.settings.radius - near.settings.blendDistance;
-    const farBlendStart = far.settings.radius - far.settings.blendDistance;
-    const nearFactor = this.getGroundLevelFactor(
-      near,
-      worldPosition,
-      sampleHash,
-    );
-    const farFactor = this.getGroundLevelFactor(far, worldPosition, sampleHash);
-    const levelBlend = smoothstep(
-      nearBlendStart,
-      near.settings.radius,
-      distance,
-    );
-    const farFade = smoothstep(farBlendStart, far.settings.radius, distance);
-    return mix(mix(nearFactor, farFactor, levelBlend), 1, farFade);
+    const factor = float(1).toVar();
+    If(this.uEnabled.mul(this.uHasActiveCasters).lessThanEqual(0.5), () => {
+      factor.assign(1);
+    })
+      .ElseIf(distanceSquared.lessThan(nearBlendStart ** 2), () => {
+        factor.assign(
+          this.getSurfaceLevelFactor(near, worldPosition, worldNormal),
+        );
+      })
+      .ElseIf(distanceSquared.lessThan(near.settings.radius ** 2), () => {
+        const nearFactor = this.getSurfaceLevelFactor(
+          near,
+          worldPosition,
+          worldNormal,
+        );
+        const farFactor = this.getSurfaceLevelFactor(
+          far,
+          worldPosition,
+          worldNormal,
+        );
+        const levelBlend = smoothstep(
+          nearBlendStart,
+          near.settings.radius,
+          distanceSquared.sqrt(),
+        );
+        factor.assign(mix(nearFactor, farFactor, levelBlend));
+      })
+      .ElseIf(distanceSquared.lessThan(farBlendStart ** 2), () => {
+        factor.assign(
+          this.getSurfaceLevelFactor(far, worldPosition, worldNormal),
+        );
+      })
+      .ElseIf(distanceSquared.lessThan(far.settings.radius ** 2), () => {
+        const farFactor = this.getSurfaceLevelFactor(
+          far,
+          worldPosition,
+          worldNormal,
+        );
+        const farFade = smoothstep(
+          farBlendStart,
+          far.settings.radius,
+          distanceSquared.sqrt(),
+        );
+        factor.assign(mix(farFactor, 1, farFade));
+      })
+      .Else(() => {
+        factor.assign(1);
+      });
+    return factor.clamp(0, 1);
   }
 
   private getSurfaceLevelFactor(
@@ -245,74 +250,6 @@ export class DynamicShadowMap {
     const visibility = texture(this.depthTexture, atlasUv).compare(
       compareDepth,
     ).r;
-    const filtered = visibility.toVar();
-
-    const hasPartialVisibility = visibility
-      .greaterThan(0)
-      .and(visibility.lessThan(1));
-    const isEdgeQuad = visibility.fwidth().greaterThan(0);
-    If(hasPartialVisibility.or(isEdgeQuad), () => {
-      const near = this.levels[0];
-      const nearWorldTexel = near.settings.radius / near.settings.resolution;
-      const levelWorldTexel = level.settings.radius / level.settings.resolution;
-      const filterScale = nearWorldTexel / levelWorldTexel;
-      const texel = vec2(1 / ATLAS_WIDTH, 1 / ATLAS_HEIGHT).mul(filterScale);
-      const diagonalOffset = texel.mul(1.25);
-      const diagonals = texture(this.depthTexture, atlasUv.add(diagonalOffset))
-        .compare(compareDepth)
-        .r.add(
-          texture(
-            this.depthTexture,
-            atlasUv.add(vec2(diagonalOffset.x.negate(), diagonalOffset.y)),
-          ).compare(compareDepth).r,
-        )
-        .add(
-          texture(
-            this.depthTexture,
-            atlasUv.add(vec2(diagonalOffset.x, diagonalOffset.y.negate())),
-          ).compare(compareDepth).r,
-        )
-        .add(
-          texture(this.depthTexture, atlasUv.sub(diagonalOffset)).compare(
-            compareDepth,
-          ).r,
-        );
-      filtered.assign(visibility.add(diagonals).mul(0.2));
-    });
-
-    return mix(1, filtered, this.getInsideFactor(shadowCoord));
-  }
-
-  private getGroundLevelFactor(
-    level: DynamicShadowLevel,
-    worldPosition: Node<"vec3">,
-    sampleHash: Node<"float">,
-  ) {
-    const biasedPosition = worldPosition.add(
-      vec3(0, 1, 0).mul(this.uNormalBias),
-    );
-    const projected = level.uMatrix.mul(vec4(biasedPosition, 1));
-    const shadowCoord = projected.xyz.div(projected.w);
-    const sampleUv = vec2(shadowCoord.x, float(1).sub(shadowCoord.y));
-    const atlasUv = this.getAtlasUv(level, sampleUv);
-    const { size, x, y } = level.atlasRegion;
-    const jitter = vec2(
-      sampleHash.mul(17.17).fract().sub(0.5),
-      sampleHash.mul(71.53).fract().sub(0.5),
-    );
-    const texelCoord = uvec2(
-      atlasUv
-        .mul(vec2(ATLAS_WIDTH, ATLAS_HEIGHT))
-        .add(jitter)
-        .clamp(vec2(x, y), vec2(x + size - 1, y + size - 1)),
-    );
-    const sampleDepth = textureLoad(this.depthTexture, texelCoord).r;
-    const compareDepth = this.renderer.reversedDepthBuffer
-      ? shadowCoord.z.sub(this.uBias)
-      : shadowCoord.z.add(this.uBias);
-    const visibility = this.renderer.reversedDepthBuffer
-      ? step(sampleDepth, compareDepth)
-      : step(compareDepth, sampleDepth);
     return mix(1, visibility, this.getInsideFactor(shadowCoord));
   }
 

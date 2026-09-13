@@ -10,7 +10,7 @@ import type {
   GrassMonitoringStats,
   MonitoringSnapshot,
 } from "../EventsManager";
-import { type RendererManager } from "./RendererManager";
+import { rendererConfig, type RendererManager } from "./RendererManager";
 import { ThreeMonitoringAdapter } from "./ThreeMonitoringAdapter";
 import { TOOLING_FLAGS } from "../runtime/ToolingFlags";
 
@@ -338,12 +338,18 @@ export class MonitoringManager {
     let gpu: DeviceGpuMetrics | null = null;
     if (accumulator && accumulator.gpuExecutionCount > 0) {
       const grassPass = accumulator.passDurations.get("compute:Grass");
+      const dynamicShadowPass = accumulator.passDurations.get(
+        "render:Dynamic shadows",
+      );
       gpu = {
         averageMs: accumulator.gpuExecutionSum / accumulator.gpuExecutionCount,
         renderAverageMs:
           accumulator.gpuRenderSum / accumulator.gpuExecutionCount,
         computeAverageMs:
           accumulator.gpuComputeSum / accumulator.gpuExecutionCount,
+        dynamicShadowAverageMs: dynamicShadowPass
+          ? dynamicShadowPass.sumMs / dynamicShadowPass.count
+          : null,
         grassComputeAverageMs: grassPass
           ? grassPass.sumMs / grassPass.count
           : null,
@@ -410,6 +416,9 @@ export class MonitoringManager {
         width: canvas.width,
         height: canvas.height,
         pixelRatio: renderer.getPixelRatio(),
+        resolutionScale: rendererConfig.resolutionScale,
+        viewportHeight: canvas.clientHeight,
+        viewportWidth: canvas.clientWidth,
       },
       frameBudgetMs: 1000 / effectiveFps,
       sampleRateMs: SNAPSHOT_INTERVAL_MS,

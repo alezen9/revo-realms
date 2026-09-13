@@ -129,14 +129,6 @@ export class GrassMaterial extends SpriteNodeMaterial {
       bendShape,
     );
 
-    const bladeWorldPosition = bladeBaseWorldPosition.add(
-      vec3(
-        bendOffset.x,
-        bladeHeight.mul(config.BLADE_HEIGHT).mul(scaleY).add(bendOffset.y),
-        bendOffset.z,
-      ),
-    );
-
     this.positionNode = vec3(bladeOffsetX, bladeOffsetY, bladeOffsetZ).add(
       bendOffset,
     );
@@ -220,10 +212,7 @@ export class GrassMaterial extends SpriteNodeMaterial {
     ).mul(lightingManager.uHemiIntensity);
 
     // PACK VARYINGS
-    const combinedShadowFactor = groundShadowFactor.min(
-      shadowManager.getDynamicGroundFactor(bladeWorldPosition, bladeHash),
-    );
-    const colorShadow = varying(vec4(variedColor, combinedShadowFactor));
+    const colorShadow = varying(vec4(variedColor, groundShadowFactor));
 
     const lightingGrazing = varying(vec4(sunDiffuse, grazing));
 

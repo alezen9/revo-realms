@@ -4,7 +4,7 @@ import {
   float,
   Fn,
   mix,
-  normalWorld,
+  normalWorldGeometry,
   positionWorld,
   uniform,
   vec3,
@@ -32,7 +32,6 @@ export class ShadowManager {
   readonly uTint = uniform(new Color(0.46, 0.52, 0.64).convertSRGBToLinear());
   readonly uGroundGeneration: GroundShadowCache["uGeneration"];
   readonly getGroundFactor: GroundShadowCache["getGroundFactor"];
-  readonly getDynamicGroundFactor: DynamicShadowMap["getGroundFactor"];
   readonly getDynamicSurfaceFactor: DynamicShadowMap["getFactor"];
   private dynamicMap: DynamicShadowMap;
   private groundCache: GroundShadowCache;
@@ -52,7 +51,6 @@ export class ShadowManager {
   ) {
     this.lightingManager = lightingManager;
     this.dynamicMap = new DynamicShadowMap(renderer, lightingManager);
-    this.getDynamicGroundFactor = this.dynamicMap.getGroundFactor;
     this.getDynamicSurfaceFactor = this.dynamicMap.getFactor;
     this.groundCache = new GroundShadowCache(
       renderer,
@@ -190,7 +188,10 @@ export class ShadowManager {
   }
 
   private applyReceiverShadow = (factor?: Node<"float">) => {
-    const dynamicFactor = this.dynamicMap.getFactor(positionWorld, normalWorld);
+    const dynamicFactor = this.dynamicMap.getFactor(
+      positionWorld,
+      normalWorldGeometry,
+    );
     const combinedFactor = factor ? factor.min(dynamicFactor) : dynamicFactor;
     return this.getMultiplier(combinedFactor);
   };
@@ -216,6 +217,19 @@ export class ShadowManager {
     const dynamicFolder = folder.addFolder({
       title: "Moving objects",
       expanded: false,
+    });
+    dynamicFolder.addBinding(this.dynamicMap, "casterCount", {
+      label: "Active casters",
+      readonly: true,
+    });
+    dynamicFolder.addBinding(this.dynamicMap, "registeredCasterCount", {
+      label: "Registered",
+      readonly: true,
+    });
+    dynamicFolder.addBinding(this.dynamicMap, "triangleCount", {
+      label: "Triangles",
+      readonly: true,
+      format: (value) => Math.round(value).toLocaleString(),
     });
     dynamicFolder
       .addBinding(dynamicShadowSettings, "isEnabled", { label: "Enabled" })

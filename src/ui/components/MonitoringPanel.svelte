@@ -150,6 +150,12 @@
 					<span class="label">Compute</span>
 					<span class="value">{gpu ? formatMs(gpu.computeAverageMs) : "-"}</span>
 				</span>
+				<span class="cell">
+					<span class="label">Dynamic shadow</span>
+					<span class="value">
+						{gpu?.dynamicShadowAverageMs != null ? formatMs(gpu.dynamicShadowAverageMs) : "-"}
+					</span>
+				</span>
 			</div>
 		</section>
 
@@ -214,11 +220,20 @@
 			<span class="category">Output</span>
 			<div class="metrics">
 				<span class="cell wide">
-					<span class="label">Resolution</span>
-					<span class="value">
-						{output.width}x{output.height}
-						<span class="aside">@{ratioFormat.format(output.pixelRatio)}</span>
-					</span>
+					<span class="label">Buffer</span>
+					<span class="value">{output.width}x{output.height}</span>
+				</span>
+				<span class="cell wide">
+					<span class="label">Viewport</span>
+					<span class="value">{output.viewportWidth}x{output.viewportHeight}</span>
+				</span>
+				<span class="cell">
+					<span class="label">Effective DPR</span>
+					<span class="value">{ratioFormat.format(output.pixelRatio)}</span>
+				</span>
+				<span class="cell">
+					<span class="label">Scale</span>
+					<span class="value">{ratioFormat.format(output.resolutionScale)}</span>
 				</span>
 				<span class="cell">
 					<span class="label">Draws</span>

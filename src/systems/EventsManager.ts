@@ -16,6 +16,7 @@ export type DeviceGpuMetrics = {
   averageMs: number;
   renderAverageMs: number;
   computeAverageMs: number;
+  dynamicShadowAverageMs: number | null;
   grassComputeAverageMs: number | null;
   gapAverageMs: number;
   uninstrumentedPassMax: number;
@@ -71,6 +72,9 @@ export type MonitoringSnapshot = {
     width: number;
     height: number;
     pixelRatio: number;
+    resolutionScale: number;
+    viewportHeight: number;
+    viewportWidth: number;
   };
   frameBudgetMs: number;
   sampleRateMs: number;

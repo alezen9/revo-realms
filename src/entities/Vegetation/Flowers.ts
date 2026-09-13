@@ -558,16 +558,7 @@ class FlowerMaterial extends MeshBasicNodeMaterial {
       .mul(scale)
       .add(basePosition)
       .add(swayOffset);
-    const worldPosition = vec3(
-      x.add(uniforms.uPlayerPosition.x).add(swayOffset.x),
-      offsetY.add(swayOffset.y),
-      z.add(uniforms.uPlayerPosition.z).add(swayOffset.z),
-    );
-    const combinedShadowFactor = varying(
-      groundShadowFactor.min(
-        shadowManager.getDynamicGroundFactor(worldPosition, rand1),
-      ),
-    );
+    const combinedShadowFactor = varying(groundShadowFactor);
 
     // Diffuse
     const flower = texture(assetManager.resources.edelweiss, uv());

@@ -40,14 +40,14 @@ export const dynamicShadowLevelSettings: [
     radius: 24,
     blendDistance: 8,
     recenterTexels: 2,
-    resolution: 1024,
+    resolution: 1536,
   },
   {
     name: "far",
     radius: 75,
     blendDistance: 15,
     recenterTexels: 1,
-    resolution: 640,
+    resolution: 768,
   },
 ];
 
