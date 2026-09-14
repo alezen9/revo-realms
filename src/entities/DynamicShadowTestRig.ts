@@ -1,19 +1,27 @@
 import {
   BoxGeometry,
   Color,
-  DynamicDrawUsage,
   Group,
-  InstancedMesh,
-  Object3D,
+  Mesh,
   SphereGeometry,
   TorusGeometry,
+  Vector3,
 } from "three";
 import { MeshStandardNodeMaterial } from "three/webgpu";
 import type { State } from "../Game";
-import { eventsManager, sceneManager, shadowManager } from "../systems";
+import { realmConfig } from "../realm/config";
+import {
+  assetManager,
+  eventsManager,
+  sceneManager,
+  shadowManager,
+} from "../systems";
 
 const DEFAULT_CASTER_COUNT = 3;
-const MAX_CASTER_COUNT = 20;
+const MAX_CASTER_COUNT = 100;
+const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5));
+const TEST_CENTER_X = 150;
+const TEST_CENTER_Z = 80;
 
 const getCasterCount = () => {
   const value = new URLSearchParams(window.location.search).get(
@@ -26,44 +34,71 @@ const getCasterCount = () => {
   return count;
 };
 
+const getTerrainHeight = (x: number, z: number) => {
+  const { data, height, width } = assetManager.resources.heightmap.image;
+  if (!data) throw new Error("Terrain heightmap is unavailable");
+  const u = (x + realmConfig.HALF_MAP_SIZE) / realmConfig.MAP_SIZE;
+  const v = 1 - (z + realmConfig.HALF_MAP_SIZE) / realmConfig.MAP_SIZE;
+  const pixelX = Math.round(Math.max(0, Math.min(1, u)) * (width - 1));
+  const pixelY = Math.round(Math.max(0, Math.min(1, v)) * (height - 1));
+  return data[pixelX + pixelY * width];
+};
+
+const getBasePosition = (index: number, count: number) => {
+  if (index < 3) {
+    const x = TEST_CENTER_X + (index - 1) * 7;
+    const z = TEST_CENTER_Z + (index === 2 ? 4 : -4);
+    return new Vector3(x, getTerrainHeight(x, z) + 3.5, z);
+  }
+
+  const normalizedIndex = (index - 2) / Math.max(1, count - 2);
+  const radius = 45 + Math.sqrt(normalizedIndex) * 250;
+  const angle = index * GOLDEN_ANGLE;
+  const x = Math.max(
+    -realmConfig.HALF_MAP_SIZE + 12,
+    Math.min(
+      realmConfig.HALF_MAP_SIZE - 12,
+      TEST_CENTER_X + Math.cos(angle) * radius,
+    ),
+  );
+  const z = Math.max(
+    -realmConfig.HALF_MAP_SIZE + 12,
+    Math.min(
+      realmConfig.HALF_MAP_SIZE - 12,
+      TEST_CENTER_Z + Math.sin(angle) * radius,
+    ),
+  );
+  return new Vector3(x, getTerrainHeight(x, z) + 3.5, z);
+};
+
 export class DynamicShadowTestRig {
-  private casters: InstancedMesh[];
-  private instanceIndices: number[];
-  private transform = new Object3D();
+  private basePositions: Vector3[] = [];
+  private casters: Mesh[] = [];
   private elapsed = 0;
 
   constructor() {
     const root = new Group();
     const casterCount = getCasterCount();
-    const instanceCounts = [0, 0, 0];
-    for (let index = 0; index < casterCount; index++) {
-      instanceCounts[index % instanceCounts.length]++;
-    }
-
-    this.casters = [
-      new InstancedMesh(
-        new SphereGeometry(1.25, 32, 16),
-        new MeshStandardNodeMaterial({ color: new Color(0.95, 0.24, 0.12) }),
-        instanceCounts[0],
-      ),
-      new InstancedMesh(
-        new BoxGeometry(2, 2, 2),
-        new MeshStandardNodeMaterial({ color: new Color(0.12, 0.48, 0.95) }),
-        instanceCounts[1],
-      ),
-      new InstancedMesh(
-        new TorusGeometry(1.5, 0.42, 16, 48),
-        new MeshStandardNodeMaterial({ color: new Color(0.95, 0.68, 0.12) }),
-        instanceCounts[2],
-      ),
+    const geometries = [
+      new SphereGeometry(1.25, 32, 16),
+      new BoxGeometry(2, 2, 2),
+      new TorusGeometry(1.5, 0.42, 16, 48),
     ];
-    this.instanceIndices = [0, 0, 0];
-    for (const caster of this.casters) {
-      caster.frustumCulled = false;
-      caster.instanceMatrix.setUsage(DynamicDrawUsage);
+    const materials = [
+      new MeshStandardNodeMaterial({ color: new Color(0.95, 0.24, 0.12) }),
+      new MeshStandardNodeMaterial({ color: new Color(0.12, 0.48, 0.95) }),
+      new MeshStandardNodeMaterial({ color: new Color(0.95, 0.68, 0.12) }),
+    ];
+
+    for (let index = 0; index < casterCount; index++) {
+      const type = index % geometries.length;
+      const caster = new Mesh(geometries[type], materials[type]);
+      caster.name = `Dynamic shadow test ${index + 1}`;
+      this.casters.push(caster);
+      this.basePositions.push(getBasePosition(index, casterCount));
+      root.add(caster);
     }
 
-    root.add(...this.casters);
     this.updateTransforms();
     sceneManager.mainScene.add(root);
     shadowManager.register(root, {
@@ -81,49 +116,17 @@ export class DynamicShadowTestRig {
 
   private updateTransforms() {
     const time = this.elapsed;
-    this.instanceIndices.fill(0);
-    let casterIndex = 0;
-    for (let type = 0; type < this.casters.length; type++) {
-      casterIndex += this.casters[type].count;
-    }
-    for (let index = 0; index < casterIndex; index++) {
-      const type = index % this.casters.length;
-      const caster = this.casters[type];
-      const instanceIndex = this.instanceIndices[type]++;
-
-      if (index === 0) {
-        this.transform.position.set(
-          144 + Math.sin(time * 0.8) * 3.5,
-          3.5 + Math.sin(time * 1.4) * 1.5,
-          76,
-        );
-        this.transform.rotation.set(0, time, 0);
-      } else if (index === 1) {
-        this.transform.position.set(151, 3.5, 76 + Math.sin(time * 0.65) * 4);
-        this.transform.rotation.set(time * 0.7, time * 1.1, time * 0.45);
-      } else if (index === 2) {
-        this.transform.position.set(
-          156 + Math.cos(time * 0.55) * 3,
-          4.5 + Math.sin(time * 0.9),
-          84 + Math.sin(time * 0.55) * 3,
-        );
-        this.transform.rotation.set(Math.PI * 0.5 + time * 0.4, time * 0.8, 0);
-      } else {
-        const lane = index - 3;
-        const angle = time * (0.35 + (lane % 4) * 0.08) + lane * 1.7;
-        const radius = 4 + (lane % 5) * 1.4;
-        this.transform.position.set(
-          151 + Math.cos(angle) * radius,
-          2.5 + Math.sin(time * 0.8 + lane) * 1.5,
-          82 + Math.sin(angle) * radius,
-        );
-        this.transform.rotation.set(angle * 0.7, angle, angle * 0.45);
-      }
-      this.transform.updateMatrix();
-      caster.setMatrixAt(instanceIndex, this.transform.matrix);
-    }
-    for (const caster of this.casters) {
-      caster.instanceMatrix.needsUpdate = true;
+    for (let index = 0; index < this.casters.length; index++) {
+      const caster = this.casters[index];
+      const base = this.basePositions[index];
+      const phase = time * (0.35 + (index % 4) * 0.08) + index * 1.7;
+      const movementRadius = index < 3 ? 3 : 1.5;
+      caster.position.set(
+        base.x + Math.cos(phase) * movementRadius,
+        base.y + Math.sin(time * 0.8 + index) * 1.5,
+        base.z + Math.sin(phase) * movementRadius,
+      );
+      caster.rotation.set(phase * 0.7, phase, phase * 0.45);
     }
   }
 }

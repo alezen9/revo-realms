@@ -1,4 +1,5 @@
 import {
+  Box3,
   DepthTexture,
   GreaterEqualCompare,
   LessEqualCompare,
@@ -8,6 +9,7 @@ import {
   RedFormat,
   RenderTarget,
   type Mesh,
+  type Object3D,
   UnsignedByteType,
   UnsignedShortType,
   Vector2,
@@ -28,6 +30,7 @@ import {
   vec4,
 } from "three/tsl";
 import type { LightingManager } from "../LightingManager";
+import type { AssetManager } from "../AssetManager/AssetManager";
 import { DynamicShadowLevel } from "./DynamicShadowLevel";
 import { DynamicShadowCasterBatch } from "./DynamicShadowCasterBatch";
 import {
@@ -68,6 +71,7 @@ export class DynamicShadowMap {
   private hasCasters = false;
   private rendererState: RendererUtils.RendererState;
   private sceneState: RendererUtils.SceneState;
+  private receiverBounds = new Box3();
   private savedScissor = new Vector4();
   private savedViewport = new Vector4();
 
@@ -79,20 +83,41 @@ export class DynamicShadowMap {
     return this.casterBatch.registeredCasterCount;
   }
 
+  get eligibleCasterCount() {
+    return this.casterBatch.eligibleCasterCount;
+  }
+
+  get droppedCasterCount() {
+    return this.casterBatch.droppedCasterCount;
+  }
+
   get triangleCount() {
     return this.casterBatch.triangleCount;
   }
 
-  constructor(renderer: WebGPURenderer, lightingManager: LightingManager) {
+  constructor(
+    renderer: WebGPURenderer,
+    lightingManager: LightingManager,
+    assetManager: AssetManager,
+  ) {
     this.renderer = renderer;
     this.lightingManager = lightingManager;
     this.rendererState = RendererUtils.saveRendererState(renderer);
     this.depthTexture = this.createDepthTexture();
     this.renderTarget = this.createRenderTarget();
     this.levels = [];
+    const receiverMinY = assetManager.resources.heightmap.userData.min ?? -32;
+    const receiverMaxY = assetManager.resources.heightmap.userData.max ?? 64;
     for (let index = 0; index < dynamicShadowLevelSettings.length; index++) {
       const settings = dynamicShadowLevelSettings[index];
-      this.levels.push(new DynamicShadowLevel(settings, ATLAS_REGIONS[index]));
+      this.levels.push(
+        new DynamicShadowLevel(
+          settings,
+          ATLAS_REGIONS[index],
+          receiverMinY,
+          receiverMaxY,
+        ),
+      );
     }
     this.casterBatch = new DynamicShadowCasterBatch(
       this.levels,
@@ -121,6 +146,14 @@ export class DynamicShadowMap {
     this.applySettings();
   }
 
+  registerReceiver(object: Object3D) {
+    object.updateWorldMatrix(true, true);
+    this.receiverBounds.setFromObject(object, true);
+    if (this.receiverBounds.isEmpty()) return;
+    for (const level of this.levels)
+      level.includeReceiverBounds(this.receiverBounds);
+  }
+
   applySettings() {
     this.uEnabled.value = Number(
       this.hasCasters && dynamicShadowSettings.isEnabled,
@@ -134,17 +167,22 @@ export class DynamicShadowMap {
     this.uPlayerXZ.value.set(playerPosition.x, playerPosition.z);
     if (this.uEnabled.value === 0) return;
 
-    let hasProjectionChanged = false;
     for (const level of this.levels) {
+      level.prepareProjection(
+        playerPosition,
+        this.lightingManager.sunDirection,
+      );
+    }
+    const haveCastersChanged = this.casterBatch.prepare();
+    let hasProjectionChanged = false;
+    for (let index = 0; index < this.levels.length; index++) {
       if (
-        level.updateProjection(
-          playerPosition,
-          this.lightingManager.sunDirection,
+        this.levels[index].finishProjection(
+          this.casterBatch.getCasterBounds(index),
         )
       )
         hasProjectionChanged = true;
     }
-    const haveCastersChanged = this.casterBatch.prepare(playerPosition);
     this.uHasActiveCasters.value = Number(this.casterBatch.isReady);
     if (!this.casterBatch.isReady) return;
     if (!hasProjectionChanged && !haveCastersChanged) return;

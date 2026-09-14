@@ -50,7 +50,11 @@ export class ShadowManager {
     debugManager: DebugManager,
   ) {
     this.lightingManager = lightingManager;
-    this.dynamicMap = new DynamicShadowMap(renderer, lightingManager);
+    this.dynamicMap = new DynamicShadowMap(
+      renderer,
+      lightingManager,
+      assetManager,
+    );
     this.getDynamicSurfaceFactor = this.dynamicMap.getFactor;
     this.groundCache = new GroundShadowCache(
       renderer,
@@ -77,6 +81,7 @@ export class ShadowManager {
   });
 
   register(object: Object3D, registration: ShadowRegistration) {
+    if (registration.receive) this.dynamicMap.registerReceiver(object);
     const dynamicCasters = this.registry.register(object, registration);
     if (!registration.cast) return;
     if (registration.mobility === "dynamic") {
@@ -224,6 +229,14 @@ export class ShadowManager {
     });
     dynamicFolder.addBinding(this.dynamicMap, "registeredCasterCount", {
       label: "Registered",
+      readonly: true,
+    });
+    dynamicFolder.addBinding(this.dynamicMap, "eligibleCasterCount", {
+      label: "Relevant",
+      readonly: true,
+    });
+    dynamicFolder.addBinding(this.dynamicMap, "droppedCasterCount", {
+      label: "Dropped",
       readonly: true,
     });
     dynamicFolder.addBinding(this.dynamicMap, "triangleCount", {
