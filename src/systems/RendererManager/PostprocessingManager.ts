@@ -1,5 +1,13 @@
-import { ACESFilmicToneMapping, Matrix4, NoToneMapping, Vector3 } from "three";
 import {
+  ACESFilmicToneMapping,
+  ColorManagement,
+  Matrix4,
+  NoToneMapping,
+  Vector3,
+} from "three";
+import {
+  NodeFrame,
+  type Node,
   RenderPipeline,
   RGBFormat,
   UnsignedInt101111Type,
@@ -20,6 +28,7 @@ import {
   screenUV,
   smoothstep,
   step,
+  texture,
   textureLevel,
   toneMapping,
   toneMappingExposure,
@@ -35,16 +44,20 @@ import { assetManager, lightingManager } from "..";
 import { playerUniforms } from "../../entities/Player/PlayerMaterial";
 import { TSLUtils } from "../../utils/TSLUtils";
 import { shadowConfig } from "../ShadowManager/config";
+import { ShadowSchedulingProof } from "../ShadowManager/ShadowSchedulingProof";
 
 const MAIN_SCENE_PASS_SAMPLES = 4;
 const LUMINANCE_WEIGHTS = vec3(0.2126, 0.7152, 0.0722);
 const BALL_SHADOW_PENUMBRA = 0.08;
 const BALL_DEPTH_MATCH_EPSILON = 0.05;
-type PassTextureNode = ReturnType<ReturnType<typeof pass>["getTextureNode"]>;
+type ColorNode = Node<"vec4">;
 
 export class PostprocessingManager extends RenderPipeline {
   private mainScenePass: ReturnType<typeof pass>;
   private waterPass: ReturnType<typeof pass>;
+  private schedulingProof?: ShadowSchedulingProof;
+  private schedulingProofPass?: ReturnType<typeof pass>;
+  private mainSceneFrame = new NodeFrame();
   private uSaturation = uniform(1);
   private uProjectionMatrixInverse = uniform(new Matrix4());
   private uCameraWorldMatrix = uniform(new Matrix4());
@@ -56,6 +69,7 @@ export class PostprocessingManager extends RenderPipeline {
   private eventsManager: EventsManager;
   private debugManager: DebugManager;
   private debugFolder: DebugFolder;
+  private webgpuRenderer: WebGPURenderer;
 
   constructor(
     renderer: WebGPURenderer,
@@ -64,6 +78,7 @@ export class PostprocessingManager extends RenderPipeline {
     debugManager: DebugManager,
   ) {
     super(renderer);
+    this.webgpuRenderer = renderer;
     renderer.toneMappingExposure = 2;
     this.sceneManager = sceneManager;
     this.eventsManager = eventsManager;
@@ -78,7 +93,10 @@ export class PostprocessingManager extends RenderPipeline {
       this.sceneManager.renderCamera,
       { samples: MAIN_SCENE_PASS_SAMPLES },
     );
-    if (shadowConfig.isPagedEnabled) this.setupDirectSunTarget();
+    if (shadowConfig.isPagedEnabled) {
+      this.setupDirectSunTarget();
+      this.setupSchedulingProof();
+    }
     this.waterPass = pass(
       this.sceneManager.waterScene,
       this.sceneManager.renderCamera,
@@ -141,6 +159,36 @@ export class PostprocessingManager extends RenderPipeline {
     const directSunTexture = this.mainScenePass.getTexture("directSun");
     directSunTexture.format = RGBFormat;
     directSunTexture.type = UnsignedInt101111Type;
+  }
+
+  private setupSchedulingProof() {
+    const depthTexture = this.mainScenePass.renderTarget.depthTexture;
+    if (!depthTexture) throw new Error("Main scene depth texture is required");
+    this.mainScenePass.renderTarget.samples = MAIN_SCENE_PASS_SAMPLES;
+    this.schedulingProof = new ShadowSchedulingProof(
+      this.webgpuRenderer,
+      depthTexture,
+    );
+    this.schedulingProofPass = pass(
+      this.schedulingProof.scene,
+      this.schedulingProof.camera,
+      { samples: 0 },
+    );
+    this.schedulingProofPass.name = "Shadow scheduling proof";
+    this.schedulingProofPass.setResolutionScale(1 / 64);
+  }
+
+  private getMainSceneTextureNode(name = "output") {
+    if (!shadowConfig.isPagedEnabled)
+      return this.mainScenePass.getTextureNode(name);
+
+    if (name === "depth") {
+      const depthTexture = this.mainScenePass.renderTarget.depthTexture;
+      if (!depthTexture) throw new Error("Main scene depth texture is required");
+      return texture(depthTexture);
+    }
+
+    return texture(this.mainScenePass.getTexture(name));
   }
 
   private computeBallShadowFactor = Fn(() => {
@@ -209,18 +257,18 @@ export class PostprocessingManager extends RenderPipeline {
   });
 
   get mainSceneColorNode() {
-    return this.mainScenePass.getTextureNode();
+    return this.getMainSceneTextureNode();
   }
 
   get mainSceneDepthNode() {
-    return this.mainScenePass.getTextureNode("depth");
+    return this.getMainSceneTextureNode("depth");
   }
 
-  private resolvePagedShadow(mainSceneColor: PassTextureNode) {
-    const directSun = this.mainScenePass
-      .getTextureNode("directSun")
-      .sample(screenUV).rgb;
-    const depth = this.mainScenePass.getTextureNode("depth").sample(screenUV).r;
+  private resolvePagedShadow(mainSceneColor: ColorNode) {
+    const directSun = this.getMainSceneTextureNode("directSun").sample(
+      screenUV,
+    ).rgb;
+    const depth = this.getMainSceneTextureNode("depth").sample(screenUV).r;
     const viewPosition = getViewPosition(
       screenUV,
       depth,
@@ -238,12 +286,25 @@ export class PostprocessingManager extends RenderPipeline {
     return vec4(mainSceneColor.rgb.sub(removedDirectSun), mainSceneColor.a);
   }
 
+  private applySchedulingProof(mainSceneColor: ColorNode) {
+    if (!this.schedulingProofPass) return mainSceneColor;
+
+    const proofDepth = this.schedulingProofPass
+      .getTextureNode("depth")
+      .sample(screenUV).r;
+    const hasProof = step(proofDepth, 0.999);
+    return vec4(mix(vec3(1, 0, 1), mainSceneColor.rgb, hasProof), 1);
+  }
+
   private makeGraph() {
     this.outputColorTransform = false;
-    const mainSceneColor = this.mainScenePass.getTextureNode();
-    const resolvedMainSceneColor = shadowConfig.isPagedEnabled
+    const mainSceneColor = this.getMainSceneTextureNode();
+    const shadowResolvedMainSceneColor = shadowConfig.isPagedEnabled
       ? this.resolvePagedShadow(mainSceneColor)
       : mainSceneColor;
+    const resolvedMainSceneColor = shadowConfig.isPagedEnabled
+      ? this.applySchedulingProof(shadowResolvedMainSceneColor)
+      : shadowResolvedMainSceneColor;
     const water = this.waterPass.getTextureNode();
     const colorHDR = resolvedMainSceneColor
       .mul(water.a.oneMinus())
@@ -285,5 +346,27 @@ export class PostprocessingManager extends RenderPipeline {
     const desaturated = mix(vec3(luminance), toneMapped, this.uSaturation);
 
     return renderOutput(desaturated, NoToneMapping);
+  }
+
+  render() {
+    if (!shadowConfig.isPagedEnabled) {
+      super.render();
+      return;
+    }
+
+    const toneMapping = this.renderer.toneMapping;
+    const outputColorSpace = this.renderer.outputColorSpace;
+    this.renderer.toneMapping = NoToneMapping;
+    this.renderer.outputColorSpace = ColorManagement.workingColorSpace;
+
+    try {
+      this.mainSceneFrame.renderer = this.renderer;
+      this.mainScenePass.updateBefore(this.mainSceneFrame);
+      this.schedulingProof?.run();
+      super.render();
+    } finally {
+      this.renderer.toneMapping = toneMapping;
+      this.renderer.outputColorSpace = outputColorSpace;
+    }
   }
 }
