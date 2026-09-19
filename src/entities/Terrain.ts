@@ -19,7 +19,6 @@ import {
   Group,
   LinearFilter,
   Mesh,
-  MeshLambertNodeMaterial,
   NoColorSpace,
   RedFormat,
   type Node,
@@ -34,6 +33,7 @@ import {
 import { type State } from "../Game";
 import { realmConfig } from "../realm/config";
 import { shadowConfig } from "../systems/ShadowManager/config";
+import { DirectSunLambertNodeMaterial } from "../systems/ShadowManager/DirectSunMaterials";
 import { RevoColliderType } from "../types";
 import {
   assetManager,
@@ -114,7 +114,7 @@ const computeCausticsColor = Fn<CausticsArgs, Node<"vec3">>(
   },
 );
 
-class TerrainMaterial extends MeshLambertNodeMaterial {
+class TerrainMaterial extends DirectSunLambertNodeMaterial {
   constructor() {
     super();
 

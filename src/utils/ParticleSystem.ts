@@ -26,6 +26,7 @@ import {
   PlaneGeometry,
   SpriteNodeMaterial,
 } from "three/webgpu";
+import { preserveDirectSunForTransparentMaterial } from "../systems/ShadowManager/DirectSunMaterials";
 import {
   assetManager,
   cullingManager,
@@ -264,6 +265,7 @@ const getFirePresetConfig = (
 
   // Opacity
   material.opacityNode = data.w.mul(sample.r).mul(alphaScale);
+  preserveDirectSunForTransparentMaterial(material);
 
   return {
     material,

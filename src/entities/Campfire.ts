@@ -9,10 +9,10 @@ import {
   windManager,
 } from "../systems";
 import { ColliderDesc } from "@dimforge/rapier3d";
-import { MeshStandardNodeMaterial } from "three/webgpu";
 import { normalMap, texture, uv } from "three/tsl";
+import { DirectSunStandardNodeMaterial } from "../systems/ShadowManager/DirectSunMaterials";
 
-class CampfireMaterial extends MeshStandardNodeMaterial {
+class CampfireMaterial extends DirectSunStandardNodeMaterial {
   constructor() {
     super();
     const diffuse = texture(assetManager.resources.campfireDiffuse, uv());

@@ -9,9 +9,10 @@ import {
   uv,
   vec3,
 } from "three/tsl";
-import { MeshLambertNodeMaterial, Vector3 } from "three/webgpu";
+import { Vector3 } from "three/webgpu";
 import { assetManager, lightingManager } from "../../systems";
 import { shadowConfig } from "../../systems/ShadowManager/config";
+import { DirectSunLambertNodeMaterial } from "../../systems/ShadowManager/DirectSunMaterials";
 import { TSLUtils } from "../../utils/TSLUtils";
 import { playerConfig as config } from "./config";
 
@@ -24,7 +25,7 @@ export const playerUniforms = {
   uSunTintStrength: uniform(0.22),
 };
 
-export class PlayerMaterial extends MeshLambertNodeMaterial {
+export class PlayerMaterial extends DirectSunLambertNodeMaterial {
   constructor() {
     super();
     this.createMaterial();

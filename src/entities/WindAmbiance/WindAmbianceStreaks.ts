@@ -29,6 +29,7 @@ import {
 } from "three/webgpu";
 import type { Node } from "three/webgpu";
 import { type State } from "../../Game";
+import { preserveDirectSunForTransparentMaterial } from "../../systems/ShadowManager/DirectSunMaterials";
 import type { ComputeTask } from "../../systems/RendererManager/ComputeTask";
 import {
   assetManager,
@@ -396,5 +397,6 @@ class WindStreakMaterial extends MeshBasicNodeMaterial {
       float(1).sub(smoothstep(0.1, 1, trailProgress)),
     );
     this.opacityNode = point.w.mul(0.09).mul(edgeFade).mul(headFade);
+    preserveDirectSunForTransparentMaterial(this);
   }
 }

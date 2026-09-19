@@ -56,6 +56,7 @@ export class LightingManager {
   uHemiSkyColor = uniform(config.hemiSkyColor.clone());
   uHemiGroundColor = uniform(config.hemiGroundColor.clone());
   uHemiIntensity = uniform(config.hemiIntensity);
+  uFogDensity = uniform(config.fogDensity);
   uPlayerShadowBrightness = uniform(0.7);
   uBakedShadowBrightness = uniform(0.45);
 
@@ -88,8 +89,9 @@ export class LightingManager {
   private syncFog(sceneManager: SceneManager) {
     const isPlayerCamera =
       sceneManager.renderCamera === sceneManager.playerCamera;
-    sceneManager.mainScene.fog =
-      config.fogEnabled && isPlayerCamera ? this.fog : null;
+    const isFogEnabled = config.fogEnabled && isPlayerCamera;
+    sceneManager.mainScene.fog = isFogEnabled ? this.fog : null;
+    this.uFogDensity.value = isFogEnabled ? this.fog.density : 0;
   }
 
   private syncSunDirection() {
@@ -193,12 +195,14 @@ export class LightingManager {
       view: "color",
       color: { type: "float" },
     });
-    lightFolder.addBinding(this.fog, "density", {
-      label: "Fog Density",
-      min: 0,
-      max: 0.025,
-      step: 0.0001,
-    });
+    lightFolder
+      .addBinding(this.fog, "density", {
+        label: "Fog Density",
+        min: 0,
+        max: 0.025,
+        step: 0.0001,
+      })
+      .on("change", () => this.syncFog(sceneManager));
     lightFolder
       .addBinding(config, "fogEnabled", {
         label: "Fog enabled",

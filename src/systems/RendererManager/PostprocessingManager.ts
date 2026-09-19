@@ -1,5 +1,10 @@
 import { ACESFilmicToneMapping, Matrix4, NoToneMapping, Vector3 } from "three";
-import { RenderPipeline, WebGPURenderer } from "three/webgpu";
+import {
+  RenderPipeline,
+  RGBFormat,
+  UnsignedInt101111Type,
+  WebGPURenderer,
+} from "three/webgpu";
 import {
   float,
   Fn,
@@ -8,6 +13,8 @@ import {
   int,
   max,
   mix,
+  mrt,
+  output,
   pass,
   renderOutput,
   screenUV,
@@ -33,6 +40,7 @@ const MAIN_SCENE_PASS_SAMPLES = 4;
 const LUMINANCE_WEIGHTS = vec3(0.2126, 0.7152, 0.0722);
 const BALL_SHADOW_PENUMBRA = 0.08;
 const BALL_DEPTH_MATCH_EPSILON = 0.05;
+type PassTextureNode = ReturnType<ReturnType<typeof pass>["getTextureNode"]>;
 
 export class PostprocessingManager extends RenderPipeline {
   private mainScenePass: ReturnType<typeof pass>;
@@ -41,6 +49,7 @@ export class PostprocessingManager extends RenderPipeline {
   private uProjectionMatrixInverse = uniform(new Matrix4());
   private uCameraWorldMatrix = uniform(new Matrix4());
   private uCameraPosition = uniform(new Vector3());
+  private uPagedShadowVisibility = uniform(shadowConfig.initialVisibility);
   private saturationTarget = 1;
   private saturationLerpSpeed = 14;
   private sceneManager: SceneManager;
@@ -69,6 +78,7 @@ export class PostprocessingManager extends RenderPipeline {
       this.sceneManager.renderCamera,
       { samples: MAIN_SCENE_PASS_SAMPLES },
     );
+    if (shadowConfig.isPagedEnabled) this.setupDirectSunTarget();
     this.waterPass = pass(
       this.sceneManager.waterScene,
       this.sceneManager.renderCamera,
@@ -79,6 +89,15 @@ export class PostprocessingManager extends RenderPipeline {
     const mainScenePassDepth = this.mainScenePass.renderTarget.depthTexture;
     if (mainScenePassDepth)
       mainScenePassDepth.renderTarget = this.mainScenePass.renderTarget;
+
+    if (shadowConfig.isPagedEnabled) {
+      this.debugFolder.addBinding(this.uPagedShadowVisibility, "value", {
+        label: "Paged shadow visibility",
+        min: 0,
+        max: 1,
+        step: 0.01,
+      });
+    }
 
     this.syncCameraUniforms();
 
@@ -110,6 +129,18 @@ export class PostprocessingManager extends RenderPipeline {
     this.uProjectionMatrixInverse.value = camera.projectionMatrixInverse;
     this.uCameraWorldMatrix.value = camera.matrixWorld;
     this.uCameraPosition.value = camera.position;
+  }
+
+  private setupDirectSunTarget() {
+    const directSunMrt = mrt({
+      output,
+      directSun: vec4(0),
+    });
+    this.mainScenePass.setMRT(directSunMrt);
+
+    const directSunTexture = this.mainScenePass.getTexture("directSun");
+    directSunTexture.format = RGBFormat;
+    directSunTexture.type = UnsignedInt101111Type;
   }
 
   private computeBallShadowFactor = Fn(() => {
@@ -185,11 +216,38 @@ export class PostprocessingManager extends RenderPipeline {
     return this.mainScenePass.getTextureNode("depth");
   }
 
+  private resolvePagedShadow(mainSceneColor: PassTextureNode) {
+    const directSun = this.mainScenePass
+      .getTextureNode("directSun")
+      .sample(screenUV).rgb;
+    const depth = this.mainScenePass.getTextureNode("depth").sample(screenUV).r;
+    const viewPosition = getViewPosition(
+      screenUV,
+      depth,
+      this.uProjectionMatrixInverse,
+    );
+    const viewDepth = viewPosition.z.negate();
+    const fogTransmittance = lightingManager.uFogDensity
+      .mul(lightingManager.uFogDensity, viewDepth, viewDepth)
+      .negate()
+      .exp();
+    const removedDirectSun = directSun
+      .mul(fogTransmittance)
+      .mul(this.uPagedShadowVisibility.oneMinus());
+
+    return vec4(mainSceneColor.rgb.sub(removedDirectSun), mainSceneColor.a);
+  }
+
   private makeGraph() {
     this.outputColorTransform = false;
     const mainSceneColor = this.mainScenePass.getTextureNode();
+    const resolvedMainSceneColor = shadowConfig.isPagedEnabled
+      ? this.resolvePagedShadow(mainSceneColor)
+      : mainSceneColor;
     const water = this.waterPass.getTextureNode();
-    const colorHDR = mainSceneColor.mul(water.a.oneMinus()).add(water.rgb);
+    const colorHDR = resolvedMainSceneColor
+      .mul(water.a.oneMinus())
+      .add(water.rgb);
 
     const bloomPass = bloom(colorHDR, 0.25, 0.15, 1);
     bloomPass.smoothWidth.value = 0.04;

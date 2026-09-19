@@ -6,6 +6,7 @@ import {
   hash,
   instanceIndex,
   mix,
+  mrt,
   saturate,
   sin,
   smoothstep,
@@ -289,11 +290,23 @@ export class GrassMaterial extends SpriteNodeMaterial {
 
     const shadedColor = diffuseColor.add(sheenColor).add(transmittedColor);
 
+    const directSunDiffuse = albedo
+      .mul(shadow)
+      .mul(detailOcclusion)
+      .mul(sunDiffuse)
+      .mul(uniforms.uLightExposure);
+    const directSun = directSunDiffuse
+      .add(sheenColor)
+      .add(transmittedColor)
+      .mul(uniforms.uLodDebugEnabled.oneMinus());
+
     // LOD DEBUG
     const lodIndex = instanceIndex.div(config.BLADE_COUNT);
 
     const lodDebugColor = uniforms.uLodDebugColors.element(lodIndex);
 
     this.colorNode = mix(shadedColor, lodDebugColor, uniforms.uLodDebugEnabled);
+    if (shadowConfig.isPagedEnabled)
+      this.mrtNode = mrt({ directSun: vec4(directSun, 1) });
   }
 }
