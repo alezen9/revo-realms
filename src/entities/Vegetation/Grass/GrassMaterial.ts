@@ -6,6 +6,7 @@ import {
   hash,
   instanceIndex,
   mix,
+  positionWorld,
   saturate,
   sin,
   smoothstep,
@@ -221,7 +222,13 @@ export class GrassMaterial extends SpriteNodeMaterial {
     );
 
     const bladeColor = colorShadow.rgb;
-    const shadowMultiplier = shadowManager.getMultiplier(colorShadow.a);
+    const dynamicShadowFactor = shadowManager.getDynamicSurfaceFactor(
+      positionWorld,
+      vec3(0, 1, 0),
+    );
+    const shadowMultiplier = shadowManager.getMultiplier(
+      colorShadow.a.min(dynamicShadowFactor),
+    );
 
     const sceneLighting = hemisphereLight
       .add(lightingGrazing.rgb.mul(shadowMultiplier))
