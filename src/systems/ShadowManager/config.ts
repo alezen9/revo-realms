@@ -17,6 +17,7 @@ const visibilityParam = params.get("shadowVisibility");
 const debugViewParam = params.get("shadowDebug");
 const requestCapacityParam = params.get("shadowRequestCapacity");
 const requestStrideParam = params.get("shadowRequestStride");
+const pageRequestsParam = params.get("shadowRequests");
 const requestedVisibility = visibilityParam ? Number(visibilityParam) : 1;
 const requestedCapacity = requestCapacityParam
   ? Number(requestCapacityParam)
@@ -38,4 +39,5 @@ export const shadowConfig = {
     ? Math.min(4096, Math.max(1, Math.floor(requestedCapacity)))
     : 512,
   requestStride: requestedStride === 1 ? 1 : 2,
+  arePageRequestsEnabled: pageRequestsParam !== "false",
 };

@@ -133,7 +133,7 @@ export class PostprocessingManager extends RenderPipeline {
     if (shadowConfig.isPagedEnabled) {
       this.setupDirectSunTarget();
       this.setupSchedulingProof();
-      this.setupShadowPageRequests();
+      if (shadowConfig.arePageRequestsEnabled) this.setupShadowPageRequests();
     }
     this.waterPass = pass(
       this.sceneManager.waterScene,
