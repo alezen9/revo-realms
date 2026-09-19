@@ -11,6 +11,7 @@ import {
 } from "three/tsl";
 import { MeshLambertNodeMaterial, Vector3 } from "three/webgpu";
 import { assetManager, lightingManager } from "../../systems";
+import { shadowConfig } from "../../systems/ShadowManager/config";
 import { TSLUtils } from "../../utils/TSLUtils";
 import { playerConfig as config } from "./config";
 
@@ -57,7 +58,8 @@ export class PlayerMaterial extends MeshLambertNodeMaterial {
       lightingManager.uSunColor,
       sunFacing.mul(uSunTintStrength),
     );
-    this.colorNode = shadowedColor.mul(sunTint);
+    const color = shadowConfig.isPagedEnabled ? baseColor : shadowedColor;
+    this.colorNode = color.mul(sunTint);
 
     const normal = texture(assetManager.resources.playerNormal, uv()).blur(
       blurAmount,

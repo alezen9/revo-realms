@@ -13,6 +13,7 @@ import type {
 import { type RendererManager } from "./RendererManager";
 import { ThreeMonitoringAdapter } from "./ThreeMonitoringAdapter";
 import { TOOLING_FLAGS } from "../runtime/ToolingFlags";
+import { shadowConfig } from "../ShadowManager/config";
 
 const SNAPSHOT_INTERVAL_MS = 1_000;
 const LARGEST_RESOURCE_COUNT = 5;
@@ -412,6 +413,17 @@ export class MonitoringManager {
           grass.renderedTriangles
         : this.lastSceneTriangles,
       grass,
+      shadow: {
+        mode: shadowConfig.mode,
+        requestedPages: 0,
+        residentPages: 0,
+        allocatedPages: 0,
+        evictedPages: 0,
+        renderedPages: 0,
+        missingPages: 0,
+        stalePages: 0,
+        overflowPages: 0,
+      },
       device: this.buildDeviceMetrics(),
     };
 

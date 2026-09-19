@@ -16,6 +16,7 @@ import {
 } from "three/tsl";
 import { SpriteNodeMaterial } from "three/webgpu";
 import { lightingManager } from "../../../systems";
+import { shadowConfig } from "../../../systems/ShadowManager/config";
 import { config, uniforms } from "./config";
 import type { GrassCompute } from "./GrassCompute";
 import {
@@ -172,11 +173,9 @@ export class GrassMaterial extends SpriteNodeMaterial {
       warmMask,
     );
 
-    const bakedShadow = mix(
-      lightingManager.uBakedShadowBrightness,
-      1,
-      bakedShadowFactor,
-    );
+    const bakedShadow = shadowConfig.isPagedEnabled
+      ? float(1)
+      : mix(lightingManager.uBakedShadowBrightness, 1, bakedShadowFactor);
 
     // LIGHTING
     const lightingAngle = bladeHash.mul(53.3).fract().mul(TWO_PI);

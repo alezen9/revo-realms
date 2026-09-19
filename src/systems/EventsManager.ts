@@ -1,5 +1,6 @@
 import { EventEmitter } from "tseep/lib/ee-safe";
 import type { ResourceEntry } from "agrimensor";
+import type { ShadowMode } from "./ShadowManager/config";
 
 export type { ResourceEntry };
 import { type Sizes, type State } from "../Game";
@@ -75,7 +76,20 @@ export type MonitoringSnapshot = {
   sampleRateMs: number;
   sceneTriangles: number;
   grass: GrassMonitoringStats | null;
+  shadow: ShadowMonitoringStats;
   device: DeviceMetrics | null;
+};
+
+export type ShadowMonitoringStats = {
+  mode: ShadowMode;
+  requestedPages: number;
+  residentPages: number;
+  allocatedPages: number;
+  evictedPages: number;
+  renderedPages: number;
+  missingPages: number;
+  stalePages: number;
+  overflowPages: number;
 };
 
 export type GrassMonitoringStats = {

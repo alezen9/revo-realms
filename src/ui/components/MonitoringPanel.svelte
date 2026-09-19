@@ -87,6 +87,7 @@
 	{@const device = snapshot.device}
 	{@const gpu = device?.gpu}
 	{@const grass = snapshot.grass}
+	{@const shadow = snapshot.shadow}
 	{@const budgetMs = snapshot.frameBudgetMs}
 	{@const frame = snapshot.frame}
 	{@const physics = snapshot.physics}
@@ -180,6 +181,54 @@
 				</div>
 			</section>
 		{/if}
+
+		<section>
+			<span class="category">Shadow</span>
+			<div class="metrics">
+				<span class="cell">
+					<span class="label">Mode</span>
+					<span class="value">{shadow.mode}</span>
+				</span>
+				<span class="cell">
+					<span class="label">Requested</span>
+					<span class="value">{integerFormat.format(shadow.requestedPages)}</span>
+				</span>
+				<span class="cell">
+					<span class="label">Resident</span>
+					<span class="value">{integerFormat.format(shadow.residentPages)}</span>
+				</span>
+				<span class="cell">
+					<span class="label">Rendered</span>
+					<span class="value">{integerFormat.format(shadow.renderedPages)}</span>
+				</span>
+				<span class="cell">
+					<span class="label">Allocated</span>
+					<span class="value">{integerFormat.format(shadow.allocatedPages)}</span>
+				</span>
+				<span class="cell">
+					<span class="label">Evicted</span>
+					<span class="value">{integerFormat.format(shadow.evictedPages)}</span>
+				</span>
+				<span class="cell">
+					<span class="label">Missing</span>
+					<span class={["value", shadow.missingPages > 0 && "warn"]}>
+						{integerFormat.format(shadow.missingPages)}
+					</span>
+				</span>
+				<span class="cell">
+					<span class="label">Stale</span>
+					<span class={["value", shadow.stalePages > 0 && "warn"]}>
+						{integerFormat.format(shadow.stalePages)}
+					</span>
+				</span>
+				<span class="cell">
+					<span class="label">Overflow</span>
+					<span class={["value", shadow.overflowPages > 0 && "bad"]}>
+						{integerFormat.format(shadow.overflowPages)}
+					</span>
+				</span>
+			</div>
+		</section>
 
 		<section>
 			<span class="category">Physics</span>

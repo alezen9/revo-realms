@@ -27,6 +27,7 @@ import type { SceneManager } from "../SceneManager";
 import { assetManager, lightingManager } from "..";
 import { playerUniforms } from "../../entities/Player/PlayerMaterial";
 import { TSLUtils } from "../../utils/TSLUtils";
+import { shadowConfig } from "../ShadowManager/config";
 
 const MAIN_SCENE_PASS_SAMPLES = 4;
 const LUMINANCE_WEIGHTS = vec3(0.2126, 0.7152, 0.0722);
@@ -209,12 +210,13 @@ export class PostprocessingManager extends RenderPipeline {
     });
 
     const withBloomHDR = colorHDR.add(bloomPass);
-    const shadowFactor = this.computeBallShadowFactor();
-    const shadowedHDR = mix(
-      withBloomHDR.mul(lightingManager.uPlayerShadowBrightness),
-      withBloomHDR,
-      shadowFactor,
-    );
+    const shadowedHDR = shadowConfig.isPagedEnabled
+      ? withBloomHDR
+      : mix(
+          withBloomHDR.mul(lightingManager.uPlayerShadowBrightness),
+          withBloomHDR,
+          this.computeBallShadowFactor(),
+        );
 
     const toneMapped = toneMapping(
       ACESFilmicToneMapping,

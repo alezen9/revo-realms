@@ -33,6 +33,7 @@ import {
 } from "@dimforge/rapier3d";
 import { type State } from "../Game";
 import { realmConfig } from "../realm/config";
+import { shadowConfig } from "../systems/ShadowManager/config";
 import { RevoColliderType } from "../types";
 import {
   assetManager,
@@ -175,7 +176,7 @@ class TerrainMaterial extends MeshLambertNodeMaterial {
       terrainMapSample.r,
     );
 
-    this.colorNode = shadowedColor;
+    this.colorNode = shadowConfig.isPagedEnabled ? surfaceColor : shadowedColor;
 
     // NORMAL
     const normalAoSample = texture(
