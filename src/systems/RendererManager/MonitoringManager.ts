@@ -13,7 +13,7 @@ import type {
 import { type RendererManager } from "./RendererManager";
 import { ThreeMonitoringAdapter } from "./ThreeMonitoringAdapter";
 import { TOOLING_FLAGS } from "../runtime/ToolingFlags";
-import { shadowConfig } from "../ShadowManager/config";
+import { getShadowMonitoringStats } from "../ShadowManager/telemetry";
 
 const SNAPSHOT_INTERVAL_MS = 1_000;
 const LARGEST_RESOURCE_COUNT = 5;
@@ -379,6 +379,13 @@ export class MonitoringManager {
     const grass = this.grassStats;
     const frameIntervals = summarizeTimings(this.frameIntervals);
     const { canvas, renderer } = this.rendererManager;
+    const shadow = getShadowMonitoringStats();
+    const shadowRequestPass = this.device?.passDurations.get(
+      "compute:Shadow page requests",
+    );
+    shadow.requestAverageMs = shadowRequestPass
+      ? shadowRequestPass.sumMs / shadowRequestPass.count
+      : null;
 
     const snapshot: MonitoringSnapshot = {
       fps: {
@@ -413,17 +420,7 @@ export class MonitoringManager {
           grass.renderedTriangles
         : this.lastSceneTriangles,
       grass,
-      shadow: {
-        mode: shadowConfig.mode,
-        requestedPages: 0,
-        residentPages: 0,
-        allocatedPages: 0,
-        evictedPages: 0,
-        renderedPages: 0,
-        missingPages: 0,
-        stalePages: 0,
-        overflowPages: 0,
-      },
+      shadow,
       device: this.buildDeviceMetrics(),
     };
 

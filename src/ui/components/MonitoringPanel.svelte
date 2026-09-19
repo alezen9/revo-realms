@@ -42,6 +42,10 @@
 		maximumFractionDigits: 2,
 	})
 	const integerFormat = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 })
+	const percentFormat = new Intl.NumberFormat("en-US", {
+		style: "percent",
+		maximumFractionDigits: 1,
+	})
 
 	const formatMs = (value: number) => msFormat.format(value)
 
@@ -192,6 +196,22 @@
 				<span class="cell">
 					<span class="label">Requested</span>
 					<span class="value">{integerFormat.format(shadow.requestedPages)}</span>
+				</span>
+				<span class="cell">
+					<span class="label">Density</span>
+					<span class="value">{percentFormat.format(shadow.requestDensity)}</span>
+				</span>
+				<span class="cell">
+					<span class="label">Request GPU</span>
+					<span class="value">
+						{shadow.requestAverageMs === null ? "-" : formatMs(shadow.requestAverageMs)}
+					</span>
+				</span>
+				<span class="cell">
+					<span class="label">CPU/GPU mismatch</span>
+					<span class={["value", shadow.diagnosticMismatches > 0 && "bad"]}>
+						{integerFormat.format(shadow.diagnosticMismatches)}
+					</span>
 				</span>
 				<span class="cell">
 					<span class="label">Resident</span>

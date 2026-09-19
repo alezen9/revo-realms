@@ -83,6 +83,9 @@ export type MonitoringSnapshot = {
 export type ShadowMonitoringStats = {
   mode: ShadowMode;
   requestedPages: number;
+  requestDensity: number;
+  requestAverageMs: number | null;
+  diagnosticMismatches: number;
   residentPages: number;
   allocatedPages: number;
   evictedPages: number;

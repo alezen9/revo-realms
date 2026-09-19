@@ -55,6 +55,7 @@ import {
   ShadowPageCoordinates,
 } from "../ShadowManager/ShadowPageCoordinates";
 import { ShadowSchedulingProof } from "../ShadowManager/ShadowSchedulingProof";
+import { ShadowPageRequests } from "../ShadowManager/ShadowPageRequests";
 
 const MAIN_SCENE_PASS_SAMPLES = 4;
 const LUMINANCE_WEIGHTS = vec3(0.2126, 0.7152, 0.0722);
@@ -76,6 +77,7 @@ export class PostprocessingManager extends RenderPipeline {
   private mainScenePass: ReturnType<typeof pass>;
   private waterPass: ReturnType<typeof pass>;
   private schedulingProof?: ShadowSchedulingProof;
+  private shadowPageRequests?: ShadowPageRequests;
   private schedulingProofPass?: ReturnType<typeof pass>;
   private mainSceneFrame = new NodeFrame();
   private shadowPageCoordinates = new ShadowPageCoordinates();
@@ -131,6 +133,7 @@ export class PostprocessingManager extends RenderPipeline {
     if (shadowConfig.isPagedEnabled) {
       this.setupDirectSunTarget();
       this.setupSchedulingProof();
+      this.setupShadowPageRequests();
     }
     this.waterPass = pass(
       this.sceneManager.waterScene,
@@ -212,6 +215,20 @@ export class PostprocessingManager extends RenderPipeline {
     );
     this.schedulingProofPass.name = "Shadow scheduling proof";
     this.schedulingProofPass.setResolutionScale(1 / 64);
+  }
+
+  private setupShadowPageRequests() {
+    const depthTexture = this.mainScenePass.renderTarget.depthTexture;
+    if (!depthTexture) throw new Error("Main scene depth texture is required");
+    this.shadowPageRequests = new ShadowPageRequests({
+      renderer: this.webgpuRenderer,
+      depthTexture,
+      projectionMatrixInverse: this.uProjectionMatrixInverse,
+      cameraWorldMatrix: this.uCameraWorldMatrix,
+      sunDirectionNode: lightingManager.uSunDir,
+      sunDirection: lightingManager.sunDirection,
+      coordinates: this.shadowPageCoordinates,
+    });
   }
 
   private setupShadowDebugBindings() {
@@ -546,6 +563,7 @@ export class PostprocessingManager extends RenderPipeline {
       this.syncShadowPageDebugState();
       this.mainSceneFrame.renderer = this.renderer;
       this.mainScenePass.updateBefore(this.mainSceneFrame);
+      this.shadowPageRequests?.run();
       this.schedulingProof?.run();
       super.render();
     } finally {
