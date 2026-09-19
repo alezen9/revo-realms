@@ -1,7 +1,10 @@
 import {
   ACESFilmicToneMapping,
+  Box3,
   ColorManagement,
+  MathUtils,
   Matrix4,
+  Mesh,
   NoToneMapping,
   Vector3,
 } from "three";
@@ -26,6 +29,7 @@ import {
   pass,
   renderOutput,
   screenUV,
+  select,
   smoothstep,
   step,
   texture,
@@ -33,6 +37,7 @@ import {
   toneMapping,
   toneMappingExposure,
   uniform,
+  vec2,
   vec3,
   vec4,
 } from "three/tsl";
@@ -44,6 +49,11 @@ import { assetManager, lightingManager } from "..";
 import { playerUniforms } from "../../entities/Player/PlayerMaterial";
 import { TSLUtils } from "../../utils/TSLUtils";
 import { shadowConfig } from "../ShadowManager/config";
+import type { ShadowDebugView } from "../ShadowManager/config";
+import {
+  computeGpuShadowPageAddress,
+  ShadowPageCoordinates,
+} from "../ShadowManager/ShadowPageCoordinates";
 import { ShadowSchedulingProof } from "../ShadowManager/ShadowSchedulingProof";
 
 const MAIN_SCENE_PASS_SAMPLES = 4;
@@ -51,6 +61,16 @@ const LUMINANCE_WEIGHTS = vec3(0.2126, 0.7152, 0.0722);
 const BALL_SHADOW_PENUMBRA = 0.08;
 const BALL_DEPTH_MATCH_EPSILON = 0.05;
 type ColorNode = Node<"vec4">;
+type Color3Node = Node<"vec3">;
+
+const SHADOW_DEBUG_VIEW_INDEX: Record<ShadowDebugView, number> = {
+  final: 0,
+  mainDepth: 1,
+  pageIds: 2,
+  pageEdges: 3,
+  shadowDepth: 4,
+  range: 5,
+};
 
 export class PostprocessingManager extends RenderPipeline {
   private mainScenePass: ReturnType<typeof pass>;
@@ -58,6 +78,21 @@ export class PostprocessingManager extends RenderPipeline {
   private schedulingProof?: ShadowSchedulingProof;
   private schedulingProofPass?: ReturnType<typeof pass>;
   private mainSceneFrame = new NodeFrame();
+  private shadowPageCoordinates = new ShadowPageCoordinates();
+  private initialSceneBounds = new Box3();
+  private hasRegisteredInitialSceneBounds = false;
+  private uShadowDebugView = uniform(
+    SHADOW_DEBUG_VIEW_INDEX[shadowConfig.initialDebugView],
+  );
+  private shadowDebugState = {
+    view: shadowConfig.initialDebugView,
+    cameraPageX: 0,
+    cameraPageY: 0,
+    minimumWorldY: 0,
+    maximumWorldY: 0,
+    sunElevationDegrees: 0,
+    rayDepthSpan: 0,
+  };
   private uSaturation = uniform(1);
   private uProjectionMatrixInverse = uniform(new Matrix4());
   private uCameraWorldMatrix = uniform(new Matrix4());
@@ -115,6 +150,7 @@ export class PostprocessingManager extends RenderPipeline {
         max: 1,
         step: 0.01,
       });
+      this.setupShadowDebugBindings();
     }
 
     this.syncCameraUniforms();
@@ -176,6 +212,48 @@ export class PostprocessingManager extends RenderPipeline {
     );
     this.schedulingProofPass.name = "Shadow scheduling proof";
     this.schedulingProofPass.setResolutionScale(1 / 64);
+  }
+
+  private setupShadowDebugBindings() {
+    this.debugFolder
+      .addBinding(this.shadowDebugState, "view", {
+        label: "Shadow debug view",
+        options: {
+          Final: "final",
+          "Main depth": "mainDepth",
+          "Page IDs": "pageIds",
+          "Page edges": "pageEdges",
+          "Shadow depth": "shadowDepth",
+          Range: "range",
+        },
+      })
+      .on("change", ({ value }) => {
+        this.uShadowDebugView.value = SHADOW_DEBUG_VIEW_INDEX[value];
+      });
+    this.debugFolder.addBinding(this.shadowDebugState, "cameraPageX", {
+      label: "Camera page X",
+      readonly: true,
+    });
+    this.debugFolder.addBinding(this.shadowDebugState, "cameraPageY", {
+      label: "Camera page Y",
+      readonly: true,
+    });
+    this.debugFolder.addBinding(this.shadowDebugState, "minimumWorldY", {
+      label: "Minimum world Y",
+      readonly: true,
+    });
+    this.debugFolder.addBinding(this.shadowDebugState, "maximumWorldY", {
+      label: "Maximum world Y",
+      readonly: true,
+    });
+    this.debugFolder.addBinding(this.shadowDebugState, "sunElevationDegrees", {
+      label: "Sun elevation",
+      readonly: true,
+    });
+    this.debugFolder.addBinding(this.shadowDebugState, "rayDepthSpan", {
+      label: "Ray depth span",
+      readonly: true,
+    });
   }
 
   private getMainSceneTextureNode(name = "output") {
@@ -286,14 +364,78 @@ export class PostprocessingManager extends RenderPipeline {
     return vec4(mainSceneColor.rgb.sub(removedDirectSun), mainSceneColor.a);
   }
 
-  private applySchedulingProof(mainSceneColor: ColorNode) {
-    if (!this.schedulingProofPass) return mainSceneColor;
+  private applyShadowDebug(finalColor: Color3Node) {
+    const depth = this.getMainSceneTextureNode("depth").sample(screenUV).r;
+    const viewPosition = getViewPosition(
+      screenUV,
+      depth,
+      this.uProjectionMatrixInverse,
+    );
+    const worldPosition = this.uCameraWorldMatrix.mul(
+      vec4(viewPosition, 1),
+    ).xyz;
+    const address = computeGpuShadowPageAddress({
+      worldPosition,
+      sunDirection: lightingManager.uSunDir,
+      minimumWorldY: this.shadowPageCoordinates.minimumWorldY,
+      maximumWorldY: this.shadowPageCoordinates.maximumWorldY,
+    });
+    const pageHash = address.pageId
+      .dot(vec2(12.9898, 78.233))
+      .sin()
+      .mul(43758.5453)
+      .fract();
+    const pageColor = vec3(
+      pageHash,
+      pageHash.add(0.37).fract(),
+      pageHash.add(0.73).fract(),
+    );
+    const edgeDistance = address.pageUv.x
+      .min(address.pageUv.y)
+      .min(address.pageUv.x.oneMinus())
+      .min(address.pageUv.y.oneMinus());
+    const pageInterior = smoothstep(0, 0.025, edgeDistance);
+    const isSky = step(1, depth);
+    const visiblePageColor = select(
+      address.isOutOfRange,
+      vec3(1, 0, 1),
+      pageColor,
+    ).mul(isSky.oneMinus());
+    const shadowDepth = select(
+      address.isOutOfRange,
+      vec3(1, 0, 1),
+      vec3(address.normalizedDepth.clamp()),
+    ).mul(isSky.oneMinus());
+    const rangeColor = select(
+      address.isOutOfRange,
+      vec3(1, 0, 1),
+      vec3(0.1, 0.8, 0.2),
+    ).mul(isSky.oneMinus());
+    const debugColor = select(
+      this.uShadowDebugView.equal(1),
+      vec3(depth),
+      select(
+        this.uShadowDebugView.equal(2),
+        visiblePageColor,
+        select(
+          this.uShadowDebugView.equal(3),
+          visiblePageColor.mul(pageInterior),
+          select(
+            this.uShadowDebugView.equal(4),
+            shadowDepth,
+            select(this.uShadowDebugView.equal(5), rangeColor, finalColor),
+          ),
+        ),
+      ),
+    );
+
+    if (!this.schedulingProofPass) return debugColor;
 
     const proofDepth = this.schedulingProofPass
       .getTextureNode("depth")
       .sample(screenUV).r;
     const hasProof = step(proofDepth, 0.999);
-    return vec4(mix(vec3(1, 0, 1), mainSceneColor.rgb, hasProof), 1);
+    return mix(vec3(1, 0, 1), debugColor, hasProof);
   }
 
   private makeGraph() {
@@ -302,9 +444,7 @@ export class PostprocessingManager extends RenderPipeline {
     const shadowResolvedMainSceneColor = shadowConfig.isPagedEnabled
       ? this.resolvePagedShadow(mainSceneColor)
       : mainSceneColor;
-    const resolvedMainSceneColor = shadowConfig.isPagedEnabled
-      ? this.applySchedulingProof(shadowResolvedMainSceneColor)
-      : shadowResolvedMainSceneColor;
+    const resolvedMainSceneColor = shadowResolvedMainSceneColor;
     const water = this.waterPass.getTextureNode();
     const colorHDR = resolvedMainSceneColor
       .mul(water.a.oneMinus())
@@ -345,7 +485,50 @@ export class PostprocessingManager extends RenderPipeline {
     const luminance = toneMapped.dot(LUMINANCE_WEIGHTS);
     const desaturated = mix(vec3(luminance), toneMapped, this.uSaturation);
 
-    return renderOutput(desaturated, NoToneMapping);
+    const finalColor = shadowConfig.isPagedEnabled
+      ? this.applyShadowDebug(desaturated)
+      : desaturated;
+
+    return renderOutput(finalColor, NoToneMapping);
+  }
+
+  private syncShadowPageDebugState() {
+    this.shadowPageCoordinates.syncTerrainBounds(
+      assetManager.resources.heightmap,
+    );
+    if (!this.hasRegisteredInitialSceneBounds) {
+      this.initialSceneBounds.makeEmpty();
+      this.sceneManager.mainScene.traverse((object) => {
+        if (object instanceof Mesh)
+          this.initialSceneBounds.expandByObject(object, true);
+      });
+      if (!this.initialSceneBounds.isEmpty()) {
+        this.shadowPageCoordinates.registerCasterVerticalBounds(
+          this.initialSceneBounds.min.y,
+          this.initialSceneBounds.max.y,
+        );
+        this.hasRegisteredInitialSceneBounds = true;
+      }
+    }
+    const cameraAddress = this.shadowPageCoordinates.computeAddress(
+      this.sceneManager.renderCamera.position,
+      lightingManager.sunDirection,
+    );
+    const absoluteSunY = Math.max(
+      Math.abs(lightingManager.sunDirection.y),
+      0.0001,
+    );
+    const minimumWorldY = this.shadowPageCoordinates.minimumWorldY.value;
+    const maximumWorldY = this.shadowPageCoordinates.maximumWorldY.value;
+
+    this.shadowDebugState.cameraPageX = cameraAddress.pageX;
+    this.shadowDebugState.cameraPageY = cameraAddress.pageY;
+    this.shadowDebugState.minimumWorldY = minimumWorldY;
+    this.shadowDebugState.maximumWorldY = maximumWorldY;
+    this.shadowDebugState.sunElevationDegrees =
+      Math.asin(absoluteSunY) * MathUtils.RAD2DEG;
+    this.shadowDebugState.rayDepthSpan =
+      (maximumWorldY - minimumWorldY) / absoluteSunY;
   }
 
   render() {
@@ -360,6 +543,7 @@ export class PostprocessingManager extends RenderPipeline {
     this.renderer.outputColorSpace = ColorManagement.workingColorSpace;
 
     try {
+      this.syncShadowPageDebugState();
       this.mainSceneFrame.renderer = this.renderer;
       this.mainScenePass.updateBefore(this.mainSceneFrame);
       this.schedulingProof?.run();
