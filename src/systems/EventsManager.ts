@@ -99,6 +99,8 @@ export type ShadowMonitoringStats = {
   staticCacheMisses: number;
   staticResidentPages: number;
   staticRenderedPages: number;
+  staticCasterPageJobs: number;
+  staticCasterDraws: number;
   staticGeneration: number;
 };
 

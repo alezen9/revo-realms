@@ -12,6 +12,7 @@ import {
   RedFormat,
   Scene,
   UnsignedByteType,
+  Vector3,
 } from "three";
 import {
   MeshBasicNodeMaterial,
@@ -39,6 +40,7 @@ import {
   type ShadowPageCoordinates,
 } from "./ShadowPageCoordinates";
 import type { ShadowResidency } from "./ShadowResidency";
+import { RigidShadowCasterBucket } from "./RigidShadowCasterBucket";
 
 const PAGE_GRID_SIZE = 128;
 const MINIMUM_PAGE_COORDINATE = -PAGE_GRID_SIZE / 2;
@@ -51,40 +53,6 @@ type ConstructorArgs = {
   sunDirection: Node<"vec3">;
   pageTexelSize?: number;
   name?: string;
-};
-
-const createWorldSpaceCasterGeometry = (sources: Mesh[]) => {
-  const chunks: Float32Array[] = [];
-  let valueCount = 0;
-
-  for (const source of sources) {
-    source.updateWorldMatrix(true, false);
-    const geometry = source.geometry.index
-      ? source.geometry.toNonIndexed()
-      : source.geometry.clone();
-    geometry.applyMatrix4(source.matrixWorld);
-    const position = geometry.getAttribute("position");
-    if (!position) throw new Error("Shadow caster requires positions");
-    const chunk = new Float32Array(position.array.length);
-    chunk.set(position.array);
-    chunks.push(chunk);
-    valueCount += chunk.length;
-    geometry.dispose();
-  }
-
-  const positions = new Float32Array(valueCount);
-  let offset = 0;
-  for (const chunk of chunks) {
-    positions.set(chunk, offset);
-    offset += chunk.length;
-  }
-
-  const geometry = new BufferGeometry();
-  geometry.setAttribute(
-    "position",
-    new Float32BufferAttribute(positions, 3),
-  );
-  return geometry;
 };
 
 export class ShadowAtlas {
@@ -104,6 +72,7 @@ export class ShadowAtlas {
   private isReady = uniform(0);
   private casterSource?: Mesh;
   private casterMesh?: Mesh;
+  private rigidCasterBucket?: RigidShadowCasterBucket;
   private isRenderTargetInitialized = false;
 
   constructor(args: ConstructorArgs) {
@@ -161,10 +130,22 @@ export class ShadowAtlas {
     this.casterSource = source;
   }
 
-  updateStaticCasters(sources: Mesh[]) {
-    this.casterSource = undefined;
-    this.casterWorldMatrix.value.identity();
-    this.setCasterGeometry(createWorldSpaceCasterGeometry(sources));
+  updateStaticCasters(sources: Mesh[], sunDirection: Vector3) {
+    if (!this.rigidCasterBucket) {
+      this.rigidCasterBucket = new RigidShadowCasterBucket(
+        this.renderer,
+        this.residency,
+        sources,
+      );
+      this.casterMesh = new Mesh(
+        this.rigidCasterBucket.geometry,
+        this.createRigidCasterMaterial(this.rigidCasterBucket),
+      );
+      this.casterMesh.frustumCulled = false;
+      this.casterMesh.renderOrder = 1;
+      this.scene.add(this.casterMesh);
+    }
+    this.rigidCasterBucket.update(sources, this.coordinates, sunDirection);
   }
 
   render() {
@@ -174,6 +155,7 @@ export class ShadowAtlas {
       this.casterSource.updateWorldMatrix(true, false);
       this.casterWorldMatrix.value.copy(this.casterSource.matrixWorld);
     }
+    this.rigidCasterBucket?.run();
 
     const previousRenderTarget = this.renderer.getRenderTarget();
     const wasAutoClearEnabled = this.renderer.autoClear;
@@ -333,6 +315,90 @@ export class ShadowAtlas {
     })();
     material.fragmentNode = Fn(() => {
       const pageUv = varyingProperty("vec2", "shadowAtlasPageUv");
+      pageUv.x
+        .lessThan(0)
+        .or(pageUv.y.lessThan(0))
+        .or(pageUv.x.greaterThan(1))
+        .or(pageUv.y.greaterThan(1))
+        .discard();
+      return vec4(0);
+    })();
+    return material;
+  }
+
+  private createRigidCasterMaterial(bucket: RigidShadowCasterBucket) {
+    const pageJobsNode = storage(
+      bucket.pageJobsAttribute,
+      "uvec2",
+      bucket.pageJobsAttribute.count,
+    );
+    const matrixColumnsNode = storage(
+      bucket.matrixColumnsAttribute,
+      "vec4",
+      bucket.matrixColumnsAttribute.count,
+    );
+    const material = new MeshBasicNodeMaterial();
+    material.colorWrite = false;
+    material.depthTest = true;
+    material.depthWrite = true;
+    material.side = DoubleSide;
+    material.vertexNode = Fn(() => {
+      const casterIndex = instanceIndex.div(this.residency.capacity);
+      const matrixOffset = casterIndex.mul(4);
+      const matrixColumn0 = matrixColumnsNode.element(matrixOffset);
+      const matrixColumn1 = matrixColumnsNode.element(matrixOffset.add(1));
+      const matrixColumn2 = matrixColumnsNode.element(matrixOffset.add(2));
+      const matrixColumn3 = matrixColumnsNode.element(matrixOffset.add(3));
+      const worldPosition = matrixColumn0
+        .mul(positionGeometry.x)
+        .add(matrixColumn1.mul(positionGeometry.y))
+        .add(matrixColumn2.mul(positionGeometry.z))
+        .add(matrixColumn3).xyz;
+      const pageJob = pageJobsNode.element(instanceIndex);
+      const pageKey = pageJob.x;
+      const slot = pageJob.y;
+      const pageId = vec2(
+        float(pageKey.mod(PAGE_GRID_SIZE)),
+        float(pageKey.div(PAGE_GRID_SIZE)),
+      ).add(MINIMUM_PAGE_COORDINATE);
+      const absoluteSunY = this.sunDirection.y.abs().max(0.0001);
+      const horizontalSunLength = this.sunDirection.xz.length().max(0.0001);
+      const lightXAxis = vec3(
+        this.sunDirection.z,
+        0,
+        this.sunDirection.x.negate(),
+      ).div(horizontalSunLength);
+      const lightYAxis = this.sunDirection.cross(lightXAxis).normalize();
+      const lightPosition = vec2(
+        worldPosition.dot(lightXAxis),
+        worldPosition.dot(lightYAxis),
+      );
+      const pageUv = lightPosition
+        .div(shadowPageCoordinateConfig.pageWorldSize)
+        .sub(pageId);
+      varyingProperty("vec2", "rigidShadowAtlasPageUv").assign(pageUv);
+
+      const relativeDepth = worldPosition.y.negate().div(absoluteSunY);
+      const minimumDepth = this.coordinates.maximumWorldY
+        .negate()
+        .div(absoluteSunY);
+      const maximumDepth = this.coordinates.minimumWorldY
+        .negate()
+        .div(absoluteSunY);
+      const normalizedDepth = relativeDepth
+        .sub(minimumDepth)
+        .div(maximumDepth.sub(minimumDepth));
+      const atlasUv = this.computeAtlasUv(slot, pageUv);
+
+      return vec4(
+        atlasUv.x.mul(2).sub(1),
+        atlasUv.y.mul(-2).add(1),
+        normalizedDepth,
+        1,
+      );
+    })();
+    material.fragmentNode = Fn(() => {
+      const pageUv = varyingProperty("vec2", "rigidShadowAtlasPageUv");
       pageUv.x
         .lessThan(0)
         .or(pageUv.y.lessThan(0))

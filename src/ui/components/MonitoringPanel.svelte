@@ -246,6 +246,14 @@
 					<span class="value">{integerFormat.format(shadow.staticRenderedPages)}</span>
 				</span>
 				<span class="cell">
+					<span class="label">Static caster jobs</span>
+					<span class="value">{integerFormat.format(shadow.staticCasterPageJobs)}</span>
+				</span>
+				<span class="cell">
+					<span class="label">Static caster draws</span>
+					<span class="value">{integerFormat.format(shadow.staticCasterDraws)}</span>
+				</span>
+				<span class="cell">
 					<span class="label">Static generation</span>
 					<span class="value">{integerFormat.format(shadow.staticGeneration)}</span>
 				</span>

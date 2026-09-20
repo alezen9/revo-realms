@@ -20,6 +20,8 @@ const stats: ShadowMonitoringStats = {
   staticCacheMisses: 0,
   staticResidentPages: 0,
   staticRenderedPages: 0,
+  staticCasterPageJobs: 0,
+  staticCasterDraws: 0,
   staticGeneration: 0,
 };
 
@@ -70,4 +72,12 @@ export const updateStaticShadowResidencyTelemetry = (
   stats.staticResidentPages = telemetry.residentPages;
   stats.staticRenderedPages = telemetry.renderedPages;
   stats.staticGeneration = telemetry.generation;
+};
+
+export const updateStaticShadowCasterTelemetry = (
+  pageJobs: number,
+  drawCount: number,
+) => {
+  stats.staticCasterPageJobs = pageJobs;
+  stats.staticCasterDraws = drawCount;
 };

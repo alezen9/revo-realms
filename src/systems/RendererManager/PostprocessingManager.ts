@@ -73,6 +73,7 @@ const STATIC_SHADOW_CASTER_NAMES = [
   "goku_statue",
   "leviathan_axe",
   "dragon_slayer",
+  "campfire",
 ] as const;
 type ColorNode = Node<"vec4">;
 type Color3Node = Node<"vec3">;
@@ -644,7 +645,10 @@ export class PostprocessingManager extends RenderPipeline {
       this.staticShadowCasterMatrices = [];
       for (const caster of casters)
         this.staticShadowCasterMatrices.push(caster.matrixWorld.clone());
-      this.staticShadowAtlas?.updateStaticCasters(casters);
+      this.staticShadowAtlas?.updateStaticCasters(
+        casters,
+        lightingManager.sunDirection,
+      );
       this.staticShadowSunDirection.copy(lightingManager.sunDirection);
       this.staticShadowResidency?.invalidate();
       return;
@@ -666,7 +670,10 @@ export class PostprocessingManager extends RenderPipeline {
     );
     if (!hasCasterChanged && !hasSunChanged) return;
 
-    if (hasCasterChanged) this.staticShadowAtlas?.updateStaticCasters(casters);
+    this.staticShadowAtlas?.updateStaticCasters(
+      casters,
+      lightingManager.sunDirection,
+    );
     this.staticShadowSunDirection.copy(lightingManager.sunDirection);
     this.staticShadowResidency?.invalidate();
   }

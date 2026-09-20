@@ -37,12 +37,12 @@ const MISSING_COUNTER = 3;
 const STALE_COUNTER = 4;
 const HIT_COUNTER = 5;
 const MISS_COUNTER = 6;
-const RENDERED_COUNTER = 7;
+export const SHADOW_RENDERED_PAGE_COUNTER = 7;
 const FRAME_COUNTER = 8;
 const CLOCK_COUNTER = 9;
 const COUNTER_COUNT = 10;
 const FIRST_FRAME_COUNTER = ALLOCATED_COUNTER;
-const LAST_FRAME_COUNTER = RENDERED_COUNTER;
+const LAST_FRAME_COUNTER = SHADOW_RENDERED_PAGE_COUNTER;
 const READBACK_INTERVAL_MS = 1_000;
 
 const createSlotMetadata = (capacity: number) => {
@@ -181,6 +181,10 @@ export class ShadowResidency {
     return this.pageJobs;
   }
 
+  get counterAttribute() {
+    return this.counters;
+  }
+
   get clearIndirectAttribute() {
     return this.clearIndirect;
   }
@@ -301,7 +305,7 @@ export class ShadowResidency {
               atomicAdd(this.atomicCounters.element(HIT_COUNTER), 1);
               if (this.refreshMode === "everyFrame") {
                 const renderIndex = atomicAdd(
-                  this.atomicCounters.element(RENDERED_COUNTER),
+                  this.atomicCounters.element(SHADOW_RENDERED_PAGE_COUNTER),
                   1,
                 );
                 this.pageJobsNode
@@ -387,7 +391,7 @@ export class ShadowResidency {
               );
               atomicAdd(this.atomicCounters.element(ALLOCATED_COUNTER), 1);
               const renderIndex = atomicAdd(
-                this.atomicCounters.element(RENDERED_COUNTER),
+                this.atomicCounters.element(SHADOW_RENDERED_PAGE_COUNTER),
                 1,
               );
               this.pageJobsNode
@@ -398,7 +402,7 @@ export class ShadowResidency {
         },
       );
       const renderedCount = atomicLoad(
-        this.atomicCounters.element(RENDERED_COUNTER),
+        this.atomicCounters.element(SHADOW_RENDERED_PAGE_COUNTER),
       );
       atomicStore(this.atomicClearIndirect.element(1), renderedCount);
       atomicStore(this.atomicCasterIndirect.element(1), renderedCount);
@@ -439,7 +443,7 @@ export class ShadowResidency {
         stalePages: counters[STALE_COUNTER],
         cacheHits: counters[HIT_COUNTER],
         cacheMisses: counters[MISS_COUNTER],
-        renderedPages: counters[RENDERED_COUNTER],
+        renderedPages: counters[SHADOW_RENDERED_PAGE_COUNTER],
         generation: this.validityGeneration.value,
       });
     } catch (error) {
