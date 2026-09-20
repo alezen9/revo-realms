@@ -8,9 +8,9 @@ import {
 } from "../../systems";
 import { ColliderDesc } from "@dimforge/rapier3d";
 import { Mesh, Vector3 } from "three";
-import { MeshStandardNodeMaterial } from "three/webgpu";
 import { normalMap, texture, uniform, uv } from "three/tsl";
 import { RevoColliderType } from "../../types";
+import { DirectSunStandardNodeMaterial } from "../../systems/ShadowManager/DirectSunMaterials";
 
 const uniforms = {
   uDiffuseScale: uniform(3.75),
@@ -19,7 +19,7 @@ const uniforms = {
   uMetalnessScale: uniform(1),
   uRoughnessScale: uniform(1.5),
 };
-class DragonSlayerMaterial extends MeshStandardNodeMaterial {
+class DragonSlayerMaterial extends DirectSunStandardNodeMaterial {
   constructor() {
     super();
     const diffuse = texture(

@@ -5,11 +5,12 @@ import {
   windManager,
 } from "../../systems";
 import { Mesh } from "three";
-import { MeshStandardNodeMaterial } from "three/webgpu";
 import { ColliderDesc } from "@dimforge/rapier3d";
 import { physicsManager, sceneManager } from "../../systems";
 import { RevoColliderType } from "../../types";
 import { mix, normalMap, texture, uniform, uv, vec3 } from "three/tsl";
+import { DirectSunStandardNodeMaterial } from "../../systems/ShadowManager/DirectSunMaterials";
+import { shadowConfig } from "../../systems/ShadowManager/config";
 
 const uniforms = {
   uDiffuseScale: uniform(1.15),
@@ -17,14 +18,16 @@ const uniforms = {
   uUvScale: uniform(4.75),
 };
 
-class GokuStatueMaterial extends MeshStandardNodeMaterial {
+class GokuStatueMaterial extends DirectSunStandardNodeMaterial {
   constructor() {
     super();
 
     const _uv = uv().mul(uniforms.uUvScale);
     const diffuse = texture(assetManager.resources.concreteDiffuse, _uv);
     const shadow = texture(assetManager.resources.concreteDiffuse, uv());
-    const color = mix(vec3(0), diffuse.rgb, shadow.a);
+    const color = shadowConfig.isPagedEnabled
+      ? diffuse.rgb
+      : mix(vec3(0), diffuse.rgb, shadow.a);
     this.colorNode = color.mul(uniforms.uDiffuseScale);
 
     const normal = texture(assetManager.resources.concreteNormal, _uv);

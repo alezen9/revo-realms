@@ -8,9 +8,9 @@ import {
 } from "../../systems";
 import { ColliderDesc } from "@dimforge/rapier3d";
 import { Mesh, Quaternion, Vector3 } from "three";
-import { MeshStandardNodeMaterial } from "three/webgpu";
 import { color, normalMap, texture, uniform, uv } from "three/tsl";
 import { RevoColliderType } from "../../types";
+import { DirectSunStandardNodeMaterial } from "../../systems/ShadowManager/DirectSunMaterials";
 
 const uniforms = {
   uDiffuseScale: uniform(4),
@@ -21,7 +21,7 @@ const uniforms = {
   uEmissionScale: uniform(42),
 };
 
-class LeviathanAxeMaterial extends MeshStandardNodeMaterial {
+class LeviathanAxeMaterial extends DirectSunStandardNodeMaterial {
   constructor() {
     super();
 
