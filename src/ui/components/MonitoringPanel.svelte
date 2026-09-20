@@ -188,7 +188,7 @@
 
 		<section>
 			<span class="category">Shadow</span>
-			<div class="metrics">
+			<div class="metrics shadow-metrics">
 				<span class="cell">
 					<span class="label">Mode</span>
 					<span class="value">{shadow.mode}</span>
@@ -456,6 +456,10 @@
 		grid-template-columns: repeat(4, minmax(0, 1fr));
 		gap: 0.35rem 0.4rem;
 		min-width: 0;
+	}
+
+	.shadow-metrics {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
 	}
 
 	.cell {
