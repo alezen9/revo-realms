@@ -86,6 +86,8 @@ export type ShadowMonitoringStats = {
   requestDensity: number;
   requestAverageMs: number | null;
   diagnosticMismatches: number;
+  cacheHits: number;
+  cacheMisses: number;
   residentPages: number;
   allocatedPages: number;
   evictedPages: number;

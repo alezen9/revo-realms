@@ -218,6 +218,14 @@
 					<span class="value">{integerFormat.format(shadow.residentPages)}</span>
 				</span>
 				<span class="cell">
+					<span class="label">Cache hits</span>
+					<span class="value">{integerFormat.format(shadow.cacheHits)}</span>
+				</span>
+				<span class="cell">
+					<span class="label">Cache misses</span>
+					<span class="value">{integerFormat.format(shadow.cacheMisses)}</span>
+				</span>
+				<span class="cell">
 					<span class="label">Rendered</span>
 					<span class="value">{integerFormat.format(shadow.renderedPages)}</span>
 				</span>

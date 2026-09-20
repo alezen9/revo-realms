@@ -33,10 +33,11 @@ import { updateShadowRequestTelemetry } from "./telemetry";
 
 const PAGE_GRID_SIZE = 128;
 const MINIMUM_PAGE_COORDINATE = -PAGE_GRID_SIZE / 2;
-const PAGE_COUNT = PAGE_GRID_SIZE * PAGE_GRID_SIZE;
+export const SHADOW_VIRTUAL_PAGE_COUNT = PAGE_GRID_SIZE * PAGE_GRID_SIZE;
+export const SHADOW_REQUESTED_PAGE_COUNTER = 0;
+const PAGE_COUNT = SHADOW_VIRTUAL_PAGE_COUNT;
 const REQUEST_WORD_COUNT = PAGE_COUNT / 32;
 const COUNTER_COUNT = 4;
-const REQUESTED_PAGE_COUNTER = 0;
 const OVERFLOW_PAGE_COUNTER = 1;
 const RECEIVER_PIXEL_COUNTER = 2;
 const OUTSIDE_GRID_COUNTER = 3;
@@ -134,6 +135,14 @@ export class ShadowPageRequests {
     this.resetNode = nodes.reset;
     this.requestNode = nodes.request;
     this.diagnosticNode = nodes.diagnostic;
+  }
+
+  get requestListAttribute() {
+    return this.requestList;
+  }
+
+  get counterAttribute() {
+    return this.counters;
   }
 
   run() {
@@ -304,7 +313,7 @@ export class ShadowPageRequests {
                               () => {
                                 const requestIndex = atomicAdd(
                                   this.atomicCounters.element(
-                                    REQUESTED_PAGE_COUNTER,
+                                    SHADOW_REQUESTED_PAGE_COUNTER,
                                   ),
                                   1,
                                 );
@@ -426,7 +435,7 @@ export class ShadowPageRequests {
       );
       const counters = new Uint32Array(counterBuffer);
       const requestedPages = Math.min(
-        counters[REQUESTED_PAGE_COUNTER],
+        counters[SHADOW_REQUESTED_PAGE_COUNTER],
         shadowConfig.requestCapacity,
       );
       const requestDensity =

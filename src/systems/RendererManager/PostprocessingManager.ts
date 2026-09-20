@@ -56,6 +56,7 @@ import {
 } from "../ShadowManager/ShadowPageCoordinates";
 import { ShadowSchedulingProof } from "../ShadowManager/ShadowSchedulingProof";
 import { ShadowPageRequests } from "../ShadowManager/ShadowPageRequests";
+import { ShadowResidency } from "../ShadowManager/ShadowResidency";
 
 const MAIN_SCENE_PASS_SAMPLES = 4;
 const LUMINANCE_WEIGHTS = vec3(0.2126, 0.7152, 0.0722);
@@ -78,6 +79,7 @@ export class PostprocessingManager extends RenderPipeline {
   private waterPass: ReturnType<typeof pass>;
   private schedulingProof?: ShadowSchedulingProof;
   private shadowPageRequests?: ShadowPageRequests;
+  private shadowResidency?: ShadowResidency;
   private schedulingProofPass?: ReturnType<typeof pass>;
   private mainSceneFrame = new NodeFrame();
   private shadowPageCoordinates = new ShadowPageCoordinates();
@@ -229,6 +231,11 @@ export class PostprocessingManager extends RenderPipeline {
       sunDirection: lightingManager.sunDirection,
       coordinates: this.shadowPageCoordinates,
     });
+    this.shadowResidency = new ShadowResidency(
+      this.webgpuRenderer,
+      this.shadowPageRequests.requestListAttribute,
+      this.shadowPageRequests.counterAttribute,
+    );
   }
 
   private setupShadowDebugBindings() {
@@ -564,6 +571,7 @@ export class PostprocessingManager extends RenderPipeline {
       this.mainSceneFrame.renderer = this.renderer;
       this.mainScenePass.updateBefore(this.mainSceneFrame);
       this.shadowPageRequests?.run();
+      this.shadowResidency?.run();
       this.schedulingProof?.run();
       super.render();
     } finally {

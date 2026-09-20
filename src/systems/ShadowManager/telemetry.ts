@@ -7,6 +7,8 @@ const stats: ShadowMonitoringStats = {
   requestDensity: 0,
   requestAverageMs: null,
   diagnosticMismatches: 0,
+  cacheHits: 0,
+  cacheMisses: 0,
   residentPages: 0,
   allocatedPages: 0,
   evictedPages: 0,
@@ -28,4 +30,21 @@ export const updateShadowRequestTelemetry = (
   stats.requestDensity = requestDensity;
   stats.overflowPages = overflowPages;
   stats.diagnosticMismatches = diagnosticMismatches;
+};
+
+type ResidencyTelemetry = Pick<
+  ShadowMonitoringStats,
+  | "residentPages"
+  | "allocatedPages"
+  | "evictedPages"
+  | "missingPages"
+  | "stalePages"
+  | "cacheHits"
+  | "cacheMisses"
+>;
+
+export const updateShadowResidencyTelemetry = (
+  telemetry: ResidencyTelemetry,
+) => {
+  Object.assign(stats, telemetry);
 };

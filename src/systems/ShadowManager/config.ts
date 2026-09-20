@@ -18,11 +18,16 @@ const debugViewParam = params.get("shadowDebug");
 const requestCapacityParam = params.get("shadowRequestCapacity");
 const requestStrideParam = params.get("shadowRequestStride");
 const pageRequestsParam = params.get("shadowRequests");
+const poolCapacityParam = params.get("shadowPoolCapacity");
+const residencyChurnParam = params.get("shadowResidencyChurn");
 const requestedVisibility = visibilityParam ? Number(visibilityParam) : 1;
 const requestedCapacity = requestCapacityParam
   ? Number(requestCapacityParam)
   : 512;
 const requestedStride = requestStrideParam ? Number(requestStrideParam) : 2;
+const requestedPoolCapacity = poolCapacityParam
+  ? Number(poolCapacityParam)
+  : 64;
 const mode: ShadowMode = requestedMode === "paged" ? "paged" : "legacy";
 const initialVisibility = Number.isFinite(requestedVisibility)
   ? Math.min(1, Math.max(0, requestedVisibility))
@@ -40,4 +45,8 @@ export const shadowConfig = {
     : 512,
   requestStride: requestedStride === 1 ? 1 : 2,
   arePageRequestsEnabled: pageRequestsParam !== "false",
+  poolCapacity: Number.isFinite(requestedPoolCapacity)
+    ? Math.min(256, Math.max(1, Math.floor(requestedPoolCapacity)))
+    : 64,
+  isResidencyChurnEnabled: residencyChurnParam === "true",
 };
