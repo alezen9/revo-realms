@@ -441,6 +441,12 @@ export class PostprocessingManager extends RenderPipeline {
       .min(address.pageUv.y.oneMinus());
     const pageInterior = smoothstep(0, 0.025, edgeDistance);
     const isSky = step(1, depth);
+    const viewDepth = viewPosition.z.negate();
+    const depthPreview = viewDepth
+      .mul(-0.02)
+      .exp()
+      .oneMinus()
+      .mix(float(1), isSky);
     const visiblePageColor = select(
       address.isOutOfRange,
       vec3(1, 0, 1),
@@ -454,7 +460,7 @@ export class PostprocessingManager extends RenderPipeline {
     ).mul(isSky.oneMinus());
     const debugColor = select(
       this.uShadowDebugView.equal(1),
-      vec3(depth),
+      vec3(depthPreview),
       select(
         this.uShadowDebugView.equal(2),
         visiblePageColor,
@@ -597,6 +603,8 @@ export class PostprocessingManager extends RenderPipeline {
       this.shadowResidency?.run();
       this.shadowAtlas?.render();
       this.schedulingProof?.run();
+      this.renderer.toneMapping = toneMapping;
+      this.renderer.outputColorSpace = outputColorSpace;
       super.render();
     } finally {
       this.renderer.toneMapping = toneMapping;

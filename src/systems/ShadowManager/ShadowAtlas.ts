@@ -4,9 +4,10 @@ import {
   DoubleSide,
   Float32BufferAttribute,
   FloatType,
+  LessEqualCompare,
+  LinearFilter,
   Matrix4,
   Mesh,
-  NearestFilter,
   OrthographicCamera,
   RedFormat,
   Scene,
@@ -22,12 +23,9 @@ import {
   float,
   Fn,
   instanceIndex,
-  int,
-  ivec2,
   positionGeometry,
   storage,
   texture,
-  textureLoad,
   uint,
   uniform,
   varyingProperty,
@@ -95,8 +93,9 @@ export class ShadowAtlas {
       this.atlasSize,
       FloatType,
     );
-    depthTexture.magFilter = NearestFilter;
-    depthTexture.minFilter = NearestFilter;
+    depthTexture.compareFunction = LessEqualCompare;
+    depthTexture.magFilter = LinearFilter;
+    depthTexture.minFilter = LinearFilter;
     depthTexture.name = "Paged shadow atlas depth";
     this.renderTarget.depthTexture = depthTexture;
     this.renderTarget.texture.name = "Paged shadow atlas color";
@@ -165,15 +164,15 @@ export class ShadowAtlas {
       .mul(PAGE_GRID_SIZE)
       .add(uint(safeLocalPage.x));
     const mapping = this.residency.resolvePage(pageKey);
-    const atlasUv = this.computeAtlasUv(mapping.slot, address.pageUv);
-    const atlasPixel = ivec2(
-      int(atlasUv.x.mul(this.atlasSize).floor().clamp(0, this.atlasSize - 1)),
-      int(atlasUv.y.mul(this.atlasSize).floor().clamp(0, this.atlasSize - 1)),
+    const halfPageTexel = 0.5 / PAGE_TEXEL_SIZE;
+    const pageUv = address.pageUv.clamp(
+      halfPageTexel,
+      1 - halfPageTexel,
     );
-    const storedDepth = textureLoad(this.depthTextureNode, atlasPixel).r;
-    const visibility = address.normalizedDepth
-      .greaterThan(storedDepth.add(SHADOW_DEPTH_BIAS))
-      .select(float(0), float(1));
+    const atlasUv = this.computeAtlasUv(mapping.slot, pageUv);
+    const visibility = this.depthTextureNode
+      .sample(atlasUv)
+      .compare(address.normalizedDepth.sub(SHADOW_DEPTH_BIAS));
     const hasValidShadow = this.isReady
       .greaterThan(0)
       .and(sceneDepth.lessThan(1))
