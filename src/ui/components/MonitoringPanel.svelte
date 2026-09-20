@@ -230,6 +230,26 @@
 					<span class="value">{integerFormat.format(shadow.renderedPages)}</span>
 				</span>
 				<span class="cell">
+					<span class="label">Static resident</span>
+					<span class="value">{integerFormat.format(shadow.staticResidentPages)}</span>
+				</span>
+				<span class="cell">
+					<span class="label">Static hits</span>
+					<span class="value">{integerFormat.format(shadow.staticCacheHits)}</span>
+				</span>
+				<span class="cell">
+					<span class="label">Static misses</span>
+					<span class="value">{integerFormat.format(shadow.staticCacheMisses)}</span>
+				</span>
+				<span class="cell">
+					<span class="label">Static rendered</span>
+					<span class="value">{integerFormat.format(shadow.staticRenderedPages)}</span>
+				</span>
+				<span class="cell">
+					<span class="label">Static generation</span>
+					<span class="value">{integerFormat.format(shadow.staticGeneration)}</span>
+				</span>
+				<span class="cell">
 					<span class="label">Allocated</span>
 					<span class="value">{integerFormat.format(shadow.allocatedPages)}</span>
 				</span>

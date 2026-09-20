@@ -23,7 +23,10 @@ import {
   SHADOW_REQUESTED_PAGE_COUNTER,
   SHADOW_VIRTUAL_PAGE_COUNT,
 } from "./ShadowPageRequests";
-import { updateShadowResidencyTelemetry } from "./telemetry";
+import {
+  type ResidencyTelemetry,
+  updateShadowResidencyTelemetry,
+} from "./telemetry";
 
 const INVALID_PAGE_KEY = 0xffffffff;
 const INVALID_SLOT = 0xffffffff;
@@ -42,11 +45,19 @@ const FIRST_FRAME_COUNTER = ALLOCATED_COUNTER;
 const LAST_FRAME_COUNTER = RENDERED_COUNTER;
 const READBACK_INTERVAL_MS = 1_000;
 
-const createSlotMetadata = () => {
-  const metadata = new Uint32Array(shadowConfig.poolCapacity * 4);
-  for (let slot = 0; slot < shadowConfig.poolCapacity; slot++)
+const createSlotMetadata = (capacity: number) => {
+  const metadata = new Uint32Array(capacity * 4);
+  for (let slot = 0; slot < capacity; slot++)
     metadata[slot * 4] = INVALID_PAGE_KEY;
   return metadata;
+};
+
+type RefreshMode = "everyFrame" | "onInvalidation";
+
+type ResidencyOptions = {
+  capacity?: number;
+  refreshMode?: RefreshMode;
+  onTelemetry?: (telemetry: ResidencyTelemetry) => void;
 };
 
 export class ShadowResidency {
@@ -57,15 +68,12 @@ export class ShadowResidency {
     new Uint32Array(SHADOW_VIRTUAL_PAGE_COUNT * 4),
     4,
   );
-  private slotMetadata = new StorageBufferAttribute(createSlotMetadata(), 4);
+  private slotMetadata: StorageBufferAttribute;
   private counters = new StorageBufferAttribute(
     new Uint32Array(COUNTER_COUNT),
     1,
   );
-  private pageJobs = new StorageBufferAttribute(
-    new Uint32Array(shadowConfig.poolCapacity * 2),
-    2,
-  );
+  private pageJobs: StorageBufferAttribute;
   private clearIndirect = new IndirectStorageBufferAttribute(
     new Uint32Array([6, 0, 0, 0]),
     1,
@@ -79,18 +87,14 @@ export class ShadowResidency {
     "uvec4",
     this.pageTable.count,
   );
-  private currentFrame = uniform(0, "uint");
-  private slotMetadataNode = storage(
-    this.slotMetadata,
-    "uvec4",
-    this.slotMetadata.count,
-  );
+  private validityGeneration = uniform(0, "uint");
+  private slotMetadataNode;
   private atomicCounters = storage(
     this.counters,
     "uint",
     this.counters.count,
   ).toAtomic();
-  private pageJobsNode = storage(this.pageJobs, "uvec2", this.pageJobs.count);
+  private pageJobsNode;
   private atomicClearIndirect = storage(
     this.clearIndirect,
     "uint",
@@ -106,13 +110,38 @@ export class ShadowResidency {
   private validateNode;
   private isReadbackPending = false;
   private nextReadbackTime = 0;
+  private refreshMode: RefreshMode;
+  private onTelemetry: (telemetry: ResidencyTelemetry) => void;
+  readonly capacity: number;
 
   constructor(
     renderer: WebGPURenderer,
     requestList: StorageBufferAttribute,
     requestCounters: StorageBufferAttribute,
+    options: ResidencyOptions = {},
   ) {
     this.renderer = renderer;
+    this.capacity = options.capacity ?? shadowConfig.poolCapacity;
+    this.refreshMode = options.refreshMode ?? "everyFrame";
+    this.onTelemetry = options.onTelemetry ?? updateShadowResidencyTelemetry;
+    this.slotMetadata = new StorageBufferAttribute(
+      createSlotMetadata(this.capacity),
+      4,
+    );
+    this.pageJobs = new StorageBufferAttribute(
+      new Uint32Array(this.capacity * 2),
+      2,
+    );
+    this.slotMetadataNode = storage(
+      this.slotMetadata,
+      "uvec4",
+      this.slotMetadata.count,
+    );
+    this.pageJobsNode = storage(
+      this.pageJobs,
+      "uvec2",
+      this.pageJobs.count,
+    );
     this.requestListNode = storage(requestList, "uint", requestList.count);
     this.requestCountersNode = storage(
       requestCounters,
@@ -126,7 +155,9 @@ export class ShadowResidency {
   }
 
   run() {
-    this.currentFrame.value = (this.currentFrame.value + 1) >>> 0;
+    if (this.refreshMode === "everyFrame")
+      this.validityGeneration.value =
+        (this.validityGeneration.value + 1) >>> 0;
     this.renderer.compute(this.resetNode);
     this.renderer.compute(this.allocateNode);
     this.renderer.compute(this.validateNode);
@@ -136,6 +167,14 @@ export class ShadowResidency {
     this.nextReadbackTime = now + READBACK_INTERVAL_MS;
     this.isReadbackPending = true;
     void this.refreshTelemetryAsync();
+  }
+
+  invalidate() {
+    if (this.refreshMode !== "onInvalidation") return;
+    this.validityGeneration.value =
+      (this.validityGeneration.value + 1) >>> 0;
+    if (this.validityGeneration.value === 0)
+      this.validityGeneration.value = 1;
   }
 
   get pageJobsAttribute() {
@@ -156,7 +195,7 @@ export class ShadowResidency {
   }
 
   resolvePage(pageKey) {
-    const poolCapacity = uint(shadowConfig.poolCapacity);
+    const poolCapacity = uint(this.capacity);
     const pageEntry = this.pageTableNode.element(pageKey);
     const slotPlusOne = pageEntry.x;
     const boundedSlotPlusOne = slotPlusOne
@@ -172,7 +211,7 @@ export class ShadowResidency {
       .and(slotPlusOne.lessThanEqual(poolCapacity))
       .and(slotMetadata.x.equal(pageKey))
       .and(slotMetadata.y.equal(pageEntry.y))
-      .and(pageEntry.z.equal(this.currentFrame));
+      .and(pageEntry.z.equal(this.validityGeneration));
     return { isResident, slot };
   }
 
@@ -242,6 +281,8 @@ export class ShadowResidency {
             const isValid = slotMetadata.x
               .equal(pageKey)
               .and(slotMetadata.y.equal(pageEntry.y));
+            if (this.refreshMode === "onInvalidation")
+              isValid.andAssign(pageEntry.z.equal(this.validityGeneration));
             If(isValid, () => {
               isHit.assign(1);
               this.slotMetadataNode
@@ -249,15 +290,24 @@ export class ShadowResidency {
                 .assign(uvec4(slotMetadata.x, slotMetadata.y, frame, frame));
               this.pageTableNode
                 .element(pageKey)
-                .assign(uvec4(slotPlusOne, pageEntry.y, frame, 0));
+                .assign(
+                  uvec4(
+                    slotPlusOne,
+                    pageEntry.y,
+                    this.validityGeneration,
+                    uint(0),
+                  ),
+                );
               atomicAdd(this.atomicCounters.element(HIT_COUNTER), 1);
-              const renderIndex = atomicAdd(
-                this.atomicCounters.element(RENDERED_COUNTER),
-                1,
-              );
-              this.pageJobsNode
-                .element(renderIndex)
-                .assign(uvec2(pageKey, slot));
+              if (this.refreshMode === "everyFrame") {
+                const renderIndex = atomicAdd(
+                  this.atomicCounters.element(RENDERED_COUNTER),
+                  1,
+                );
+                this.pageJobsNode
+                  .element(renderIndex)
+                  .assign(uvec2(pageKey, slot));
+              }
             }).Else(() => {
               this.pageTableNode.element(pageKey).assign(uvec4(0));
               atomicAdd(this.atomicCounters.element(STALE_COUNTER), 1);
@@ -269,7 +319,7 @@ export class ShadowResidency {
             const selectedSlot = uint(INVALID_SLOT).toVar();
 
             Loop(
-              { start: 0, end: shadowConfig.poolCapacity, type: "uint" },
+              { start: 0, end: this.capacity, type: "uint" },
               ({ i: slot }) => {
                 If(
                   this.slotMetadataNode.element(slot).x.equal(INVALID_PAGE_KEY),
@@ -286,9 +336,9 @@ export class ShadowResidency {
                 this.atomicCounters.element(CLOCK_COUNTER),
               );
               Loop(
-                { start: 0, end: shadowConfig.poolCapacity, type: "uint" },
+                { start: 0, end: this.capacity, type: "uint" },
                 ({ i: offset }) => {
-                  const slot = clock.add(offset).mod(shadowConfig.poolCapacity);
+                  const slot = clock.add(offset).mod(this.capacity);
                   If(
                     this.slotMetadataNode.element(slot).w.notEqual(frame),
                     () => {
@@ -324,11 +374,16 @@ export class ShadowResidency {
               this.pageTableNode
                 .element(pageKey)
                 .assign(
-                  uvec4(selectedSlot.add(1), generation, frame, uint(0)),
+                  uvec4(
+                    selectedSlot.add(1),
+                    generation,
+                    this.validityGeneration,
+                    uint(0),
+                  ),
                 );
               atomicStore(
                 this.atomicCounters.element(CLOCK_COUNTER),
-                selectedSlot.add(1).mod(shadowConfig.poolCapacity),
+                selectedSlot.add(1).mod(this.capacity),
               );
               atomicAdd(this.atomicCounters.element(ALLOCATED_COUNTER), 1);
               const renderIndex = atomicAdd(
@@ -376,7 +431,7 @@ export class ShadowResidency {
     try {
       const buffer = await this.renderer.getArrayBufferAsync(this.counters);
       const counters = new Uint32Array(buffer);
-      updateShadowResidencyTelemetry({
+      this.onTelemetry({
         residentPages: counters[RESIDENT_COUNTER],
         allocatedPages: counters[ALLOCATED_COUNTER],
         evictedPages: counters[EVICTED_COUNTER],
@@ -385,6 +440,7 @@ export class ShadowResidency {
         cacheHits: counters[HIT_COUNTER],
         cacheMisses: counters[MISS_COUNTER],
         renderedPages: counters[RENDERED_COUNTER],
+        generation: this.validityGeneration.value,
       });
     } catch (error) {
       console.error("[Shadow residency] telemetry readback failed:", error);

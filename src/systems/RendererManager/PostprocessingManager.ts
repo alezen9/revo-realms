@@ -58,11 +58,18 @@ import { ShadowSchedulingProof } from "../ShadowManager/ShadowSchedulingProof";
 import { ShadowPageRequests } from "../ShadowManager/ShadowPageRequests";
 import { ShadowResidency } from "../ShadowManager/ShadowResidency";
 import { ShadowAtlas } from "../ShadowManager/ShadowAtlas";
+import { updateStaticShadowResidencyTelemetry } from "../ShadowManager/telemetry";
 
 const MAIN_SCENE_PASS_SAMPLES = 4;
 const LUMINANCE_WEIGHTS = vec3(0.2126, 0.7152, 0.0722);
 const BALL_SHADOW_PENUMBRA = 0.08;
 const BALL_DEPTH_MATCH_EPSILON = 0.05;
+const STATIC_SHADOW_PAGE_TEXEL_SIZE = 256;
+const STATIC_SHADOW_CASTER_NAMES = [
+  "goku_statue",
+  "leviathan_axe",
+  "dragon_slayer",
+] as const;
 type ColorNode = Node<"vec4">;
 type Color3Node = Node<"vec3">;
 
@@ -82,6 +89,11 @@ export class PostprocessingManager extends RenderPipeline {
   private shadowPageRequests?: ShadowPageRequests;
   private shadowResidency?: ShadowResidency;
   private shadowAtlas?: ShadowAtlas;
+  private staticShadowResidency?: ShadowResidency;
+  private staticShadowAtlas?: ShadowAtlas;
+  private staticShadowCasters: Mesh[] = [];
+  private staticShadowCasterMatrices: Matrix4[] = [];
+  private staticShadowSunDirection = new Vector3();
   private schedulingProofPass?: ReturnType<typeof pass>;
   private mainSceneFrame = new NodeFrame();
   private shadowPageCoordinates = new ShadowPageCoordinates();
@@ -243,6 +255,24 @@ export class PostprocessingManager extends RenderPipeline {
       residency: this.shadowResidency,
       coordinates: this.shadowPageCoordinates,
       sunDirection: lightingManager.uSunDir,
+      name: "Dynamic paged shadow atlas",
+    });
+    this.staticShadowResidency = new ShadowResidency(
+      this.webgpuRenderer,
+      this.shadowPageRequests.requestListAttribute,
+      this.shadowPageRequests.counterAttribute,
+      {
+        refreshMode: "onInvalidation",
+        onTelemetry: updateStaticShadowResidencyTelemetry,
+      },
+    );
+    this.staticShadowAtlas = new ShadowAtlas({
+      renderer: this.webgpuRenderer,
+      residency: this.staticShadowResidency,
+      coordinates: this.shadowPageCoordinates,
+      sunDirection: lightingManager.uSunDir,
+      pageTexelSize: STATIC_SHADOW_PAGE_TEXEL_SIZE,
+      name: "Static paged shadow atlas",
     });
   }
 
@@ -392,9 +422,13 @@ export class PostprocessingManager extends RenderPipeline {
       .mul(lightingManager.uFogDensity, viewDepth, viewDepth)
       .negate()
       .exp();
-    const visibility = this.shadowAtlas
+    const dynamicVisibility = this.shadowAtlas
       ? this.shadowAtlas.computeVisibility(worldPosition, depth)
       : float(1);
+    const staticVisibility = this.staticShadowAtlas
+      ? this.staticShadowAtlas.computeVisibility(worldPosition, depth)
+      : float(1);
+    const visibility = dynamicVisibility.min(staticVisibility);
     const removedDirectSun = directSun
       .mul(fogTransmittance)
       .mul(visibility.oneMinus())
@@ -581,6 +615,47 @@ export class PostprocessingManager extends RenderPipeline {
       (maximumWorldY - minimumWorldY) / absoluteSunY;
   }
 
+  private syncStaticShadowCasters() {
+    const casters: Mesh[] = [];
+    for (const name of STATIC_SHADOW_CASTER_NAMES) {
+      const caster = this.sceneManager.mainScene.getObjectByName(name);
+      if (!(caster instanceof Mesh)) return;
+      caster.updateWorldMatrix(true, false);
+      casters.push(caster);
+    }
+
+    if (this.staticShadowCasters.length === 0) {
+      this.staticShadowCasters = casters;
+      this.staticShadowCasterMatrices = [];
+      for (const caster of casters)
+        this.staticShadowCasterMatrices.push(caster.matrixWorld.clone());
+      this.staticShadowAtlas?.updateStaticCasters(casters);
+      this.staticShadowSunDirection.copy(lightingManager.sunDirection);
+      this.staticShadowResidency?.invalidate();
+      return;
+    }
+
+    let hasCasterChanged = false;
+    for (let index = 0; index < casters.length; index++) {
+      if (
+        this.staticShadowCasterMatrices[index].equals(
+          casters[index].matrixWorld,
+        )
+      )
+        continue;
+      this.staticShadowCasterMatrices[index].copy(casters[index].matrixWorld);
+      hasCasterChanged = true;
+    }
+    const hasSunChanged = !this.staticShadowSunDirection.equals(
+      lightingManager.sunDirection,
+    );
+    if (!hasCasterChanged && !hasSunChanged) return;
+
+    if (hasCasterChanged) this.staticShadowAtlas?.updateStaticCasters(casters);
+    this.staticShadowSunDirection.copy(lightingManager.sunDirection);
+    this.staticShadowResidency?.invalidate();
+  }
+
   render() {
     if (!shadowConfig.isPagedEnabled) {
       super.render();
@@ -599,9 +674,12 @@ export class PostprocessingManager extends RenderPipeline {
       const playerCaster = this.sceneManager.mainScene.getObjectByName("player");
       if (playerCaster instanceof Mesh)
         this.shadowAtlas?.attachCaster(playerCaster);
+      this.syncStaticShadowCasters();
       this.shadowPageRequests?.run();
       this.shadowResidency?.run();
+      this.staticShadowResidency?.run();
       this.shadowAtlas?.render();
+      this.staticShadowAtlas?.render();
       this.schedulingProof?.run();
       this.renderer.toneMapping = toneMapping;
       this.renderer.outputColorSpace = outputColorSpace;

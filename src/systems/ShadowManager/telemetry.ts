@@ -16,6 +16,11 @@ const stats: ShadowMonitoringStats = {
   missingPages: 0,
   stalePages: 0,
   overflowPages: 0,
+  staticCacheHits: 0,
+  staticCacheMisses: 0,
+  staticResidentPages: 0,
+  staticRenderedPages: 0,
+  staticGeneration: 0,
 };
 
 export const getShadowMonitoringStats = () => ({ ...stats });
@@ -32,7 +37,7 @@ export const updateShadowRequestTelemetry = (
   stats.diagnosticMismatches = diagnosticMismatches;
 };
 
-type ResidencyTelemetry = Pick<
+export type ResidencyTelemetry = Pick<
   ShadowMonitoringStats,
   | "residentPages"
   | "allocatedPages"
@@ -42,10 +47,27 @@ type ResidencyTelemetry = Pick<
   | "cacheHits"
   | "cacheMisses"
   | "renderedPages"
->;
+> & { generation: number };
 
 export const updateShadowResidencyTelemetry = (
   telemetry: ResidencyTelemetry,
 ) => {
-  Object.assign(stats, telemetry);
+  stats.residentPages = telemetry.residentPages;
+  stats.allocatedPages = telemetry.allocatedPages;
+  stats.evictedPages = telemetry.evictedPages;
+  stats.missingPages = telemetry.missingPages;
+  stats.stalePages = telemetry.stalePages;
+  stats.cacheHits = telemetry.cacheHits;
+  stats.cacheMisses = telemetry.cacheMisses;
+  stats.renderedPages = telemetry.renderedPages;
+};
+
+export const updateStaticShadowResidencyTelemetry = (
+  telemetry: ResidencyTelemetry,
+) => {
+  stats.staticCacheHits = telemetry.cacheHits;
+  stats.staticCacheMisses = telemetry.cacheMisses;
+  stats.staticResidentPages = telemetry.residentPages;
+  stats.staticRenderedPages = telemetry.renderedPages;
+  stats.staticGeneration = telemetry.generation;
 };

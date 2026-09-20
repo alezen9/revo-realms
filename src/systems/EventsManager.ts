@@ -95,6 +95,11 @@ export type ShadowMonitoringStats = {
   missingPages: number;
   stalePages: number;
   overflowPages: number;
+  staticCacheHits: number;
+  staticCacheMisses: number;
+  staticResidentPages: number;
+  staticRenderedPages: number;
+  staticGeneration: number;
 };
 
 export type GrassMonitoringStats = {

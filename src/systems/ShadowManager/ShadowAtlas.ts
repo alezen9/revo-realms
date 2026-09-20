@@ -33,7 +33,6 @@ import {
   vec3,
   vec4,
 } from "three/tsl";
-import { shadowConfig } from "./config";
 import {
   computeGpuShadowPageAddress,
   shadowPageCoordinateConfig,
@@ -43,7 +42,6 @@ import type { ShadowResidency } from "./ShadowResidency";
 
 const PAGE_GRID_SIZE = 128;
 const MINIMUM_PAGE_COORDINATE = -PAGE_GRID_SIZE / 2;
-const PAGE_TEXEL_SIZE = 512;
 const SHADOW_DEPTH_BIAS = 0.0015;
 
 type ConstructorArgs = {
@@ -51,6 +49,42 @@ type ConstructorArgs = {
   residency: ShadowResidency;
   coordinates: ShadowPageCoordinates;
   sunDirection: Node<"vec3">;
+  pageTexelSize?: number;
+  name?: string;
+};
+
+const createWorldSpaceCasterGeometry = (sources: Mesh[]) => {
+  const chunks: Float32Array[] = [];
+  let valueCount = 0;
+
+  for (const source of sources) {
+    source.updateWorldMatrix(true, false);
+    const geometry = source.geometry.index
+      ? source.geometry.toNonIndexed()
+      : source.geometry.clone();
+    geometry.applyMatrix4(source.matrixWorld);
+    const position = geometry.getAttribute("position");
+    if (!position) throw new Error("Shadow caster requires positions");
+    const chunk = new Float32Array(position.array.length);
+    chunk.set(position.array);
+    chunks.push(chunk);
+    valueCount += chunk.length;
+    geometry.dispose();
+  }
+
+  const positions = new Float32Array(valueCount);
+  let offset = 0;
+  for (const chunk of chunks) {
+    positions.set(chunk, offset);
+    offset += chunk.length;
+  }
+
+  const geometry = new BufferGeometry();
+  geometry.setAttribute(
+    "position",
+    new Float32BufferAttribute(positions, 3),
+  );
+  return geometry;
 };
 
 export class ShadowAtlas {
@@ -58,30 +92,43 @@ export class ShadowAtlas {
   private residency: ShadowResidency;
   private coordinates: ShadowPageCoordinates;
   private sunDirection: Node<"vec3">;
+  private pageTexelSize: number;
   private scene = new Scene();
   private camera = new OrthographicCamera(-1, 1, 1, -1, 0, 1);
-  private atlasGridSize = Math.ceil(Math.sqrt(shadowConfig.poolCapacity));
-  private atlasSize = this.atlasGridSize * PAGE_TEXEL_SIZE;
-  private renderTarget = new RenderTarget(this.atlasSize, this.atlasSize, {
-    depthBuffer: true,
-    format: RedFormat,
-    samples: 0,
-    stencilBuffer: false,
-    type: UnsignedByteType,
-  });
+  private atlasGridSize: number;
+  private atlasSize: number;
+  private renderTarget: RenderTarget;
   private pageJobsNode;
   private depthTextureNode;
   private casterWorldMatrix = uniform(new Matrix4());
   private isReady = uniform(0);
   private casterSource?: Mesh;
+  private casterMesh?: Mesh;
   private isRenderTargetInitialized = false;
 
   constructor(args: ConstructorArgs) {
-    const { renderer, residency, coordinates, sunDirection } = args;
+    const {
+      renderer,
+      residency,
+      coordinates,
+      sunDirection,
+      pageTexelSize = 512,
+      name = "Paged shadow atlas",
+    } = args;
     this.renderer = renderer;
     this.residency = residency;
     this.coordinates = coordinates;
     this.sunDirection = sunDirection;
+    this.pageTexelSize = pageTexelSize;
+    this.atlasGridSize = Math.ceil(Math.sqrt(residency.capacity));
+    this.atlasSize = this.atlasGridSize * this.pageTexelSize;
+    this.renderTarget = new RenderTarget(this.atlasSize, this.atlasSize, {
+      depthBuffer: true,
+      format: RedFormat,
+      samples: 0,
+      stencilBuffer: false,
+      type: UnsignedByteType,
+    });
     this.pageJobsNode = storage(
       residency.pageJobsAttribute,
       "uvec2",
@@ -96,38 +143,37 @@ export class ShadowAtlas {
     depthTexture.compareFunction = LessEqualCompare;
     depthTexture.magFilter = LinearFilter;
     depthTexture.minFilter = LinearFilter;
-    depthTexture.name = "Paged shadow atlas depth";
+    depthTexture.name = `${name} depth`;
     this.renderTarget.depthTexture = depthTexture;
-    this.renderTarget.texture.name = "Paged shadow atlas color";
+    this.renderTarget.texture.name = `${name} color`;
     this.depthTextureNode = texture(depthTexture);
 
     this.scene.add(this.createClearMesh());
   }
 
   attachCaster(source: Mesh) {
-    if (this.casterSource) return;
+    if (this.casterMesh) return;
 
     const geometry = source.geometry.index
       ? source.geometry.toNonIndexed()
       : source.geometry.clone();
-    const position = geometry.getAttribute("position");
-    if (!position) throw new Error("Shadow caster requires positions");
-
-    this.residency.setCasterVertexCount(position.count);
-    geometry.setIndirect(this.residency.casterIndirectAttribute);
-
-    const caster = new Mesh(geometry, this.createCasterMaterial());
-    caster.frustumCulled = false;
-    caster.renderOrder = 1;
-    this.scene.add(caster);
+    this.setCasterGeometry(geometry);
     this.casterSource = source;
   }
 
-  render() {
-    if (!this.casterSource) return;
+  updateStaticCasters(sources: Mesh[]) {
+    this.casterSource = undefined;
+    this.casterWorldMatrix.value.identity();
+    this.setCasterGeometry(createWorldSpaceCasterGeometry(sources));
+  }
 
-    this.casterSource.updateWorldMatrix(true, false);
-    this.casterWorldMatrix.value.copy(this.casterSource.matrixWorld);
+  render() {
+    if (!this.casterMesh) return;
+
+    if (this.casterSource) {
+      this.casterSource.updateWorldMatrix(true, false);
+      this.casterWorldMatrix.value.copy(this.casterSource.matrixWorld);
+    }
 
     const previousRenderTarget = this.renderer.getRenderTarget();
     const wasAutoClearEnabled = this.renderer.autoClear;
@@ -164,7 +210,7 @@ export class ShadowAtlas {
       .mul(PAGE_GRID_SIZE)
       .add(uint(safeLocalPage.x));
     const mapping = this.residency.resolvePage(pageKey);
-    const halfPageTexel = 0.5 / PAGE_TEXEL_SIZE;
+    const halfPageTexel = 0.5 / this.pageTexelSize;
     const pageUv = address.pageUv.clamp(
       halfPageTexel,
       1 - halfPageTexel,
@@ -211,6 +257,25 @@ export class ShadowAtlas {
     mesh.frustumCulled = false;
     mesh.renderOrder = 0;
     return mesh;
+  }
+
+  private setCasterGeometry(geometry: BufferGeometry) {
+    const position = geometry.getAttribute("position");
+    if (!position) throw new Error("Shadow caster requires positions");
+
+    this.residency.setCasterVertexCount(position.count);
+    geometry.setIndirect(this.residency.casterIndirectAttribute);
+
+    if (this.casterMesh) {
+      this.casterMesh.geometry.dispose();
+      this.casterMesh.geometry = geometry;
+      return;
+    }
+
+    this.casterMesh = new Mesh(geometry, this.createCasterMaterial());
+    this.casterMesh.frustumCulled = false;
+    this.casterMesh.renderOrder = 1;
+    this.scene.add(this.casterMesh);
   }
 
   private createCasterMaterial() {
