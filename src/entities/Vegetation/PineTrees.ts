@@ -6,23 +6,16 @@ import {
   sceneManager,
 } from "../../systems";
 import { BatchedMesh, MeshLambertNodeMaterial } from "three/webgpu";
-import {
-  attribute,
-  normalMap,
-  oscSine,
-  positionLocal,
-  texture,
-  uniform,
-  uv,
-  vec3,
-} from "three/tsl";
+import { normalMap, texture, uniform, uv } from "three/tsl";
 import { ColliderDesc } from "@dimforge/rapier3d";
 import { RevoColliderType } from "../../types";
-import { gameTime } from "../../utils/GameTime";
+import {
+  getPineCanopyPosition,
+  PINE_CANOPY_ALPHA_TEST,
+  pineCanopyUniforms,
+} from "./PineTreeCanopy";
 
 const uniforms = {
-  uCanopyDiffuseScale: uniform(0.6),
-  uCanopySwaySpeed: uniform(0.75),
   uBarkDiffuseScale: uniform(3.5),
   uBarkNormalScale: uniform(3),
   uBarkUvScale: uniform(3),
@@ -33,18 +26,11 @@ class PineTreeCanopyMaterial extends MeshLambertNodeMaterial {
     super();
     this.forceSinglePass = true;
 
-    const windWeight = attribute<"float">("_windweight");
-
     const diffuse = texture(assetManager.resources.pineTreeDiffuse, uv());
-    this.colorNode = diffuse.rgb.mul(uniforms.uCanopyDiffuseScale);
+    this.colorNode = diffuse.rgb.mul(pineCanopyUniforms.uDiffuseScale);
     this.opacityNode = diffuse.a;
-    this.alphaTest = 0.35;
-
-    const random = uv().x.mul(uv().y).mul(4);
-    const profile = windWeight.mul(windWeight);
-    const t = gameTime.mul(uniforms.uCanopySwaySpeed).add(random);
-    const swayOffset = oscSine(t).mul(profile).mul(0.1);
-    this.positionNode = positionLocal.add(vec3(0, swayOffset, 0));
+    this.alphaTest = PINE_CANOPY_ALPHA_TEST;
+    this.positionNode = getPineCanopyPosition();
   }
 }
 
@@ -90,6 +76,7 @@ export default class PineTrees {
       pineTreeCanopy.geometry,
       canopyMaterial,
     );
+    canopyBatch.name = "pine_tree_canopy_batch";
 
     const baseCollider = colliders[0];
     const boundingBox = baseCollider.geometry.boundingBox!;
@@ -149,11 +136,11 @@ export default class PineTrees {
     const canopy = folder.addFolder({
       title: "Canopy",
     });
-    canopy.addBinding(uniforms.uCanopyDiffuseScale, "value", {
+    canopy.addBinding(pineCanopyUniforms.uDiffuseScale, "value", {
       label: "Diffuse scale",
       min: 0,
     });
-    canopy.addBinding(uniforms.uCanopySwaySpeed, "value", {
+    canopy.addBinding(pineCanopyUniforms.uSwaySpeed, "value", {
       label: "Sway speed",
       min: 0,
     });

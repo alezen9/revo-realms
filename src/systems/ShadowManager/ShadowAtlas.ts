@@ -11,10 +11,12 @@ import {
   OrthographicCamera,
   RedFormat,
   Scene,
+  type Texture,
   UnsignedByteType,
   Vector3,
 } from "three";
 import {
+  BatchedMesh,
   MeshBasicNodeMaterial,
   RenderTarget,
   type Node,
@@ -29,6 +31,7 @@ import {
   texture,
   uint,
   uniform,
+  uv,
   varyingProperty,
   vec2,
   vec3,
@@ -41,6 +44,12 @@ import {
 } from "./ShadowPageCoordinates";
 import type { ShadowResidency } from "./ShadowResidency";
 import { RigidShadowCasterBucket } from "./RigidShadowCasterBucket";
+import type { PineShadowPages } from "./PineShadowPages";
+import { PineShadowCasterBucket } from "./PineShadowCasterBucket";
+import {
+  getPineCanopyPosition,
+  PINE_CANOPY_ALPHA_TEST,
+} from "../../entities/Vegetation/PineTreeCanopy";
 
 const PAGE_GRID_SIZE = 128;
 const MINIMUM_PAGE_COORDINATE = -PAGE_GRID_SIZE / 2;
@@ -73,6 +82,7 @@ export class ShadowAtlas {
   private casterSource?: Mesh;
   private casterMesh?: Mesh;
   private rigidCasterBucket?: RigidShadowCasterBucket;
+  private pineCasterBucket?: PineShadowCasterBucket;
   private isRenderTargetInitialized = false;
 
   constructor(args: ConstructorArgs) {
@@ -148,6 +158,28 @@ export class ShadowAtlas {
     this.rigidCasterBucket.update(sources, this.coordinates, sunDirection);
   }
 
+  attachPineCanopy(
+    source: BatchedMesh,
+    pages: PineShadowPages,
+    opacityTexture: Texture,
+  ) {
+    if (this.pineCasterBucket) return;
+
+    this.pineCasterBucket = new PineShadowCasterBucket(
+      this.renderer,
+      this.residency,
+      pages,
+      source,
+    );
+    this.casterMesh = new Mesh(
+      this.pineCasterBucket.geometry,
+      this.createPineCasterMaterial(this.pineCasterBucket, opacityTexture),
+    );
+    this.casterMesh.frustumCulled = false;
+    this.casterMesh.renderOrder = 1;
+    this.scene.add(this.casterMesh);
+  }
+
   render() {
     if (!this.casterMesh) return;
 
@@ -156,6 +188,7 @@ export class ShadowAtlas {
       this.casterWorldMatrix.value.copy(this.casterSource.matrixWorld);
     }
     this.rigidCasterBucket?.run();
+    this.pineCasterBucket?.run();
 
     const previousRenderTarget = this.renderer.getRenderTarget();
     const wasAutoClearEnabled = this.renderer.autoClear;
@@ -193,10 +226,7 @@ export class ShadowAtlas {
       .add(uint(safeLocalPage.x));
     const mapping = this.residency.resolvePage(pageKey);
     const halfPageTexel = 0.5 / this.pageTexelSize;
-    const pageUv = address.pageUv.clamp(
-      halfPageTexel,
-      1 - halfPageTexel,
-    );
+    const pageUv = address.pageUv.clamp(halfPageTexel, 1 - halfPageTexel);
     const atlasUv = this.computeAtlasUv(mapping.slot, pageUv);
     const visibility = this.depthTextureNode
       .sample(atlasUv)
@@ -405,6 +435,95 @@ export class ShadowAtlas {
         .or(pageUv.x.greaterThan(1))
         .or(pageUv.y.greaterThan(1))
         .discard();
+      return vec4(0);
+    })();
+    return material;
+  }
+
+  private createPineCasterMaterial(
+    bucket: PineShadowCasterBucket,
+    opacityTexture: Texture,
+  ) {
+    const workItemsNode = storage(
+      bucket.workItemsAttribute,
+      "uvec4",
+      bucket.workItemsAttribute.count,
+    );
+    const matrixColumnsNode = storage(
+      bucket.matrixColumnsAttribute,
+      "vec4",
+      bucket.matrixColumnsAttribute.count,
+    );
+    const opacityTextureNode = texture(opacityTexture, uv());
+    const material = new MeshBasicNodeMaterial();
+    material.colorWrite = false;
+    material.depthTest = true;
+    material.depthWrite = true;
+    material.side = DoubleSide;
+    material.vertexNode = Fn(() => {
+      const workItem = workItemsNode.element(instanceIndex);
+      const pageKey = workItem.x;
+      const slot = workItem.y;
+      const matrixOffset = workItem.z.mul(4);
+      const matrixColumn0 = matrixColumnsNode.element(matrixOffset);
+      const matrixColumn1 = matrixColumnsNode.element(matrixOffset.add(1));
+      const matrixColumn2 = matrixColumnsNode.element(matrixOffset.add(2));
+      const matrixColumn3 = matrixColumnsNode.element(matrixOffset.add(3));
+      const localPosition = getPineCanopyPosition();
+      const worldPosition = matrixColumn0
+        .mul(localPosition.x)
+        .add(matrixColumn1.mul(localPosition.y))
+        .add(matrixColumn2.mul(localPosition.z))
+        .add(matrixColumn3).xyz;
+      const pageId = vec2(
+        float(pageKey.mod(PAGE_GRID_SIZE)),
+        float(pageKey.div(PAGE_GRID_SIZE)),
+      ).add(MINIMUM_PAGE_COORDINATE);
+      const absoluteSunY = this.sunDirection.y.abs().max(0.0001);
+      const horizontalSunLength = this.sunDirection.xz.length().max(0.0001);
+      const lightXAxis = vec3(
+        this.sunDirection.z,
+        0,
+        this.sunDirection.x.negate(),
+      ).div(horizontalSunLength);
+      const lightYAxis = this.sunDirection.cross(lightXAxis).normalize();
+      const lightPosition = vec2(
+        worldPosition.dot(lightXAxis),
+        worldPosition.dot(lightYAxis),
+      );
+      const pageUv = lightPosition
+        .div(shadowPageCoordinateConfig.pageWorldSize)
+        .sub(pageId);
+      varyingProperty("vec2", "pineShadowAtlasPageUv").assign(pageUv);
+
+      const relativeDepth = worldPosition.y.negate().div(absoluteSunY);
+      const minimumDepth = this.coordinates.maximumWorldY
+        .negate()
+        .div(absoluteSunY);
+      const maximumDepth = this.coordinates.minimumWorldY
+        .negate()
+        .div(absoluteSunY);
+      const normalizedDepth = relativeDepth
+        .sub(minimumDepth)
+        .div(maximumDepth.sub(minimumDepth));
+      const atlasUv = this.computeAtlasUv(slot, pageUv);
+
+      return vec4(
+        atlasUv.x.mul(2).sub(1),
+        atlasUv.y.mul(-2).add(1),
+        normalizedDepth,
+        1,
+      );
+    })();
+    material.fragmentNode = Fn(() => {
+      const pageUv = varyingProperty("vec2", "pineShadowAtlasPageUv");
+      pageUv.x
+        .lessThan(0)
+        .or(pageUv.y.lessThan(0))
+        .or(pageUv.x.greaterThan(1))
+        .or(pageUv.y.greaterThan(1))
+        .discard();
+      opacityTextureNode.a.lessThan(PINE_CANOPY_ALPHA_TEST).discard();
       return vec4(0);
     })();
     return material;

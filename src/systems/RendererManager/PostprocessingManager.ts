@@ -9,6 +9,7 @@ import {
   Vector3,
 } from "three";
 import {
+  BatchedMesh,
   NodeFrame,
   type Node,
   RenderPipeline,
@@ -63,6 +64,10 @@ import {
   DYNAMIC_SHADOW_PAGE_CAPACITY,
   DynamicShadowPages,
 } from "../ShadowManager/DynamicShadowPages";
+import {
+  PINE_SHADOW_PAGE_CAPACITY,
+  PineShadowPages,
+} from "../ShadowManager/PineShadowPages";
 
 const MAIN_SCENE_PASS_SAMPLES = 4;
 const LUMINANCE_WEIGHTS = vec3(0.2126, 0.7152, 0.0722);
@@ -75,6 +80,7 @@ const STATIC_SHADOW_CASTER_NAMES = [
   "dragon_slayer",
   "campfire",
 ] as const;
+const ignoreShadowResidencyTelemetry = () => {};
 type ColorNode = Node<"vec4">;
 type Color3Node = Node<"vec3">;
 
@@ -97,6 +103,11 @@ export class PostprocessingManager extends RenderPipeline {
   private dynamicShadowPages?: DynamicShadowPages;
   private staticShadowResidency?: ShadowResidency;
   private staticShadowAtlas?: ShadowAtlas;
+  private pineShadowPages?: PineShadowPages;
+  private pineShadowResidency?: ShadowResidency;
+  private pineShadowAtlas?: ShadowAtlas;
+  private pineShadowCaster?: BatchedMesh;
+  private pineShadowSunDirection = new Vector3();
   private staticShadowCasters: Mesh[] = [];
   private staticShadowCasterMatrices: Matrix4[] = [];
   private staticShadowSunDirection = new Vector3();
@@ -340,7 +351,8 @@ export class PostprocessingManager extends RenderPipeline {
 
     if (name === "depth") {
       const depthTexture = this.mainScenePass.renderTarget.depthTexture;
-      if (!depthTexture) throw new Error("Main scene depth texture is required");
+      if (!depthTexture)
+        throw new Error("Main scene depth texture is required");
       return texture(depthTexture);
     }
 
@@ -421,9 +433,8 @@ export class PostprocessingManager extends RenderPipeline {
   }
 
   private resolvePagedShadow(mainSceneColor: ColorNode) {
-    const directSun = this.getMainSceneTextureNode("directSun").sample(
-      screenUV,
-    ).rgb;
+    const directSun =
+      this.getMainSceneTextureNode("directSun").sample(screenUV).rgb;
     const depth = this.getMainSceneTextureNode("depth").sample(screenUV).r;
     const viewPosition = getViewPosition(
       screenUV,
@@ -444,7 +455,12 @@ export class PostprocessingManager extends RenderPipeline {
     const staticVisibility = this.staticShadowAtlas
       ? this.staticShadowAtlas.computeVisibility(worldPosition, depth)
       : float(1);
-    const visibility = dynamicVisibility.min(staticVisibility);
+    const pineVisibility = this.pineShadowAtlas
+      ? this.pineShadowAtlas.computeVisibility(worldPosition, depth)
+      : float(1);
+    const visibility = dynamicVisibility
+      .min(staticVisibility)
+      .min(pineVisibility);
     const removedDirectSun = directSun
       .mul(fogTransmittance)
       .mul(visibility.oneMinus())
@@ -583,10 +599,7 @@ export class PostprocessingManager extends RenderPipeline {
     const desaturated = mix(vec3(luminance), toneMapped, this.uSaturation);
 
     const finalColor = shadowConfig.isPagedEnabled
-      ? this.applyShadowDebug(
-          desaturated,
-          pagedShadow?.visibility ?? float(1),
-        )
+      ? this.applyShadowDebug(desaturated, pagedShadow?.visibility ?? float(1))
       : desaturated;
 
     return renderOutput(finalColor, NoToneMapping);
@@ -678,6 +691,55 @@ export class PostprocessingManager extends RenderPipeline {
     this.staticShadowResidency?.invalidate();
   }
 
+  private syncPineShadowCaster() {
+    const source = this.sceneManager.mainScene.getObjectByName(
+      "pine_tree_canopy_batch",
+    );
+    if (!(source instanceof BatchedMesh) || !this.shadowPageRequests) return;
+
+    if (!this.pineShadowCaster) {
+      this.pineShadowCaster = source;
+      this.pineShadowPages = new PineShadowPages(
+        this.webgpuRenderer,
+        this.shadowPageRequests.requestListAttribute,
+        this.shadowPageRequests.counterAttribute,
+        source.instanceCount,
+      );
+      this.pineShadowResidency = new ShadowResidency(
+        this.webgpuRenderer,
+        this.pineShadowPages.requestListAttribute,
+        this.pineShadowPages.counterAttribute,
+        {
+          capacity: PINE_SHADOW_PAGE_CAPACITY,
+          onTelemetry: ignoreShadowResidencyTelemetry,
+        },
+      );
+      this.pineShadowAtlas = new ShadowAtlas({
+        renderer: this.webgpuRenderer,
+        residency: this.pineShadowResidency,
+        coordinates: this.shadowPageCoordinates,
+        sunDirection: lightingManager.uSunDir,
+        pageTexelSize: STATIC_SHADOW_PAGE_TEXEL_SIZE,
+        name: "Pine paged shadow atlas",
+      });
+      this.pineShadowAtlas.attachPineCanopy(
+        source,
+        this.pineShadowPages,
+        assetManager.resources.pineTreeDiffuse,
+      );
+      this.outputNode = this.makeGraph();
+    }
+
+    if (this.pineShadowSunDirection.equals(lightingManager.sunDirection))
+      return;
+    this.pineShadowPages?.update(
+      source,
+      this.shadowPageCoordinates,
+      lightingManager.sunDirection,
+    );
+    this.pineShadowSunDirection.copy(lightingManager.sunDirection);
+  }
+
   render() {
     if (!shadowConfig.isPagedEnabled) {
       super.render();
@@ -693,7 +755,8 @@ export class PostprocessingManager extends RenderPipeline {
       this.syncShadowPageDebugState();
       this.mainSceneFrame.renderer = this.renderer;
       this.mainScenePass.updateBefore(this.mainSceneFrame);
-      const playerCaster = this.sceneManager.mainScene.getObjectByName("player");
+      const playerCaster =
+        this.sceneManager.mainScene.getObjectByName("player");
       if (
         playerCaster instanceof Mesh &&
         this.shadowDebugState.isDynamicCasterEnabled
@@ -704,14 +767,21 @@ export class PostprocessingManager extends RenderPipeline {
           lightingManager.sunDirection,
         );
       } else {
-        this.dynamicShadowPages?.update(undefined, lightingManager.sunDirection);
+        this.dynamicShadowPages?.update(
+          undefined,
+          lightingManager.sunDirection,
+        );
       }
       this.syncStaticShadowCasters();
+      this.syncPineShadowCaster();
       this.shadowPageRequests?.run();
+      this.pineShadowPages?.run();
       this.shadowResidency?.run();
       this.staticShadowResidency?.run();
+      this.pineShadowResidency?.run();
       this.shadowAtlas?.render();
       this.staticShadowAtlas?.render();
+      this.pineShadowAtlas?.render();
       this.schedulingProof?.run();
       this.renderer.toneMapping = toneMapping;
       this.renderer.outputColorSpace = outputColorSpace;
