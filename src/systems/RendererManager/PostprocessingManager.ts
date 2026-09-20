@@ -59,6 +59,10 @@ import { ShadowPageRequests } from "../ShadowManager/ShadowPageRequests";
 import { ShadowResidency } from "../ShadowManager/ShadowResidency";
 import { ShadowAtlas } from "../ShadowManager/ShadowAtlas";
 import { updateStaticShadowResidencyTelemetry } from "../ShadowManager/telemetry";
+import {
+  DYNAMIC_SHADOW_PAGE_CAPACITY,
+  DynamicShadowPages,
+} from "../ShadowManager/DynamicShadowPages";
 
 const MAIN_SCENE_PASS_SAMPLES = 4;
 const LUMINANCE_WEIGHTS = vec3(0.2126, 0.7152, 0.0722);
@@ -89,6 +93,7 @@ export class PostprocessingManager extends RenderPipeline {
   private shadowPageRequests?: ShadowPageRequests;
   private shadowResidency?: ShadowResidency;
   private shadowAtlas?: ShadowAtlas;
+  private dynamicShadowPages?: DynamicShadowPages;
   private staticShadowResidency?: ShadowResidency;
   private staticShadowAtlas?: ShadowAtlas;
   private staticShadowCasters: Mesh[] = [];
@@ -110,6 +115,7 @@ export class PostprocessingManager extends RenderPipeline {
     maximumWorldY: 0,
     sunElevationDegrees: 0,
     rayDepthSpan: 0,
+    isDynamicCasterEnabled: true,
   };
   private uSaturation = uniform(1);
   private uProjectionMatrixInverse = uniform(new Matrix4());
@@ -245,10 +251,14 @@ export class PostprocessingManager extends RenderPipeline {
       sunDirection: lightingManager.sunDirection,
       coordinates: this.shadowPageCoordinates,
     });
+    this.dynamicShadowPages = new DynamicShadowPages(
+      this.shadowPageCoordinates,
+    );
     this.shadowResidency = new ShadowResidency(
       this.webgpuRenderer,
-      this.shadowPageRequests.requestListAttribute,
-      this.shadowPageRequests.counterAttribute,
+      this.dynamicShadowPages.requestListAttribute,
+      this.dynamicShadowPages.counterAttribute,
+      { capacity: DYNAMIC_SHADOW_PAGE_CAPACITY },
     );
     this.shadowAtlas = new ShadowAtlas({
       renderer: this.webgpuRenderer,
@@ -316,6 +326,11 @@ export class PostprocessingManager extends RenderPipeline {
       label: "Ray depth span",
       readonly: true,
     });
+    this.debugFolder.addBinding(
+      this.shadowDebugState,
+      "isDynamicCasterEnabled",
+      { label: "Dynamic player caster" },
+    );
   }
 
   private getMainSceneTextureNode(name = "output") {
@@ -672,8 +687,18 @@ export class PostprocessingManager extends RenderPipeline {
       this.mainSceneFrame.renderer = this.renderer;
       this.mainScenePass.updateBefore(this.mainSceneFrame);
       const playerCaster = this.sceneManager.mainScene.getObjectByName("player");
-      if (playerCaster instanceof Mesh)
+      if (
+        playerCaster instanceof Mesh &&
+        this.shadowDebugState.isDynamicCasterEnabled
+      ) {
         this.shadowAtlas?.attachCaster(playerCaster);
+        this.dynamicShadowPages?.update(
+          playerCaster,
+          lightingManager.sunDirection,
+        );
+      } else {
+        this.dynamicShadowPages?.update(undefined, lightingManager.sunDirection);
+      }
       this.syncStaticShadowCasters();
       this.shadowPageRequests?.run();
       this.shadowResidency?.run();
