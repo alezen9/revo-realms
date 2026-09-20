@@ -41,6 +41,7 @@ type ResidencyTelemetry = Pick<
   | "stalePages"
   | "cacheHits"
   | "cacheMisses"
+  | "renderedPages"
 >;
 
 export const updateShadowResidencyTelemetry = (

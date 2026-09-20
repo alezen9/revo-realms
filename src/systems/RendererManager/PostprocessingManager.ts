@@ -57,6 +57,7 @@ import {
 import { ShadowSchedulingProof } from "../ShadowManager/ShadowSchedulingProof";
 import { ShadowPageRequests } from "../ShadowManager/ShadowPageRequests";
 import { ShadowResidency } from "../ShadowManager/ShadowResidency";
+import { ShadowAtlas } from "../ShadowManager/ShadowAtlas";
 
 const MAIN_SCENE_PASS_SAMPLES = 4;
 const LUMINANCE_WEIGHTS = vec3(0.2126, 0.7152, 0.0722);
@@ -80,6 +81,7 @@ export class PostprocessingManager extends RenderPipeline {
   private schedulingProof?: ShadowSchedulingProof;
   private shadowPageRequests?: ShadowPageRequests;
   private shadowResidency?: ShadowResidency;
+  private shadowAtlas?: ShadowAtlas;
   private schedulingProofPass?: ReturnType<typeof pass>;
   private mainSceneFrame = new NodeFrame();
   private shadowPageCoordinates = new ShadowPageCoordinates();
@@ -236,6 +238,12 @@ export class PostprocessingManager extends RenderPipeline {
       this.shadowPageRequests.requestListAttribute,
       this.shadowPageRequests.counterAttribute,
     );
+    this.shadowAtlas = new ShadowAtlas({
+      renderer: this.webgpuRenderer,
+      residency: this.shadowResidency,
+      coordinates: this.shadowPageCoordinates,
+      sunDirection: lightingManager.uSunDir,
+    });
   }
 
   private setupShadowDebugBindings() {
@@ -247,7 +255,7 @@ export class PostprocessingManager extends RenderPipeline {
           "Main depth": "mainDepth",
           "Page IDs": "pageIds",
           "Page edges": "pageEdges",
-          "Shadow depth": "shadowDepth",
+          "Shadow visibility": "shadowDepth",
           Range: "range",
         },
       })
@@ -376,19 +384,32 @@ export class PostprocessingManager extends RenderPipeline {
       depth,
       this.uProjectionMatrixInverse,
     );
+    const worldPosition = this.uCameraWorldMatrix.mul(
+      vec4(viewPosition, 1),
+    ).xyz;
     const viewDepth = viewPosition.z.negate();
     const fogTransmittance = lightingManager.uFogDensity
       .mul(lightingManager.uFogDensity, viewDepth, viewDepth)
       .negate()
       .exp();
+    const visibility = this.shadowAtlas
+      ? this.shadowAtlas.computeVisibility(worldPosition, depth)
+      : float(1);
     const removedDirectSun = directSun
       .mul(fogTransmittance)
-      .mul(this.uPagedShadowVisibility.oneMinus());
+      .mul(visibility.oneMinus())
+      .mul(this.uPagedShadowVisibility);
 
-    return vec4(mainSceneColor.rgb.sub(removedDirectSun), mainSceneColor.a);
+    return {
+      color: vec4(mainSceneColor.rgb.sub(removedDirectSun), mainSceneColor.a),
+      visibility,
+    };
   }
 
-  private applyShadowDebug(finalColor: Color3Node) {
+  private applyShadowDebug(
+    finalColor: Color3Node,
+    shadowVisibility: Node<"float">,
+  ) {
     const depth = this.getMainSceneTextureNode("depth").sample(screenUV).r;
     const viewPosition = getViewPosition(
       screenUV,
@@ -425,11 +446,7 @@ export class PostprocessingManager extends RenderPipeline {
       vec3(1, 0, 1),
       pageColor,
     ).mul(isSky.oneMinus());
-    const shadowDepth = select(
-      address.isOutOfRange,
-      vec3(1, 0, 1),
-      vec3(address.normalizedDepth.clamp()),
-    ).mul(isSky.oneMinus());
+    const shadowDepth = vec3(shadowVisibility);
     const rangeColor = select(
       address.isOutOfRange,
       vec3(1, 0, 1),
@@ -465,10 +482,10 @@ export class PostprocessingManager extends RenderPipeline {
   private makeGraph() {
     this.outputColorTransform = false;
     const mainSceneColor = this.getMainSceneTextureNode();
-    const shadowResolvedMainSceneColor = shadowConfig.isPagedEnabled
+    const pagedShadow = shadowConfig.isPagedEnabled
       ? this.resolvePagedShadow(mainSceneColor)
-      : mainSceneColor;
-    const resolvedMainSceneColor = shadowResolvedMainSceneColor;
+      : undefined;
+    const resolvedMainSceneColor = pagedShadow?.color ?? mainSceneColor;
     const water = this.waterPass.getTextureNode();
     const colorHDR = resolvedMainSceneColor
       .mul(water.a.oneMinus())
@@ -510,7 +527,10 @@ export class PostprocessingManager extends RenderPipeline {
     const desaturated = mix(vec3(luminance), toneMapped, this.uSaturation);
 
     const finalColor = shadowConfig.isPagedEnabled
-      ? this.applyShadowDebug(desaturated)
+      ? this.applyShadowDebug(
+          desaturated,
+          pagedShadow?.visibility ?? float(1),
+        )
       : desaturated;
 
     return renderOutput(finalColor, NoToneMapping);
@@ -570,8 +590,12 @@ export class PostprocessingManager extends RenderPipeline {
       this.syncShadowPageDebugState();
       this.mainSceneFrame.renderer = this.renderer;
       this.mainScenePass.updateBefore(this.mainSceneFrame);
+      const playerCaster = this.sceneManager.mainScene.getObjectByName("player");
+      if (playerCaster instanceof Mesh)
+        this.shadowAtlas?.attachCaster(playerCaster);
       this.shadowPageRequests?.run();
       this.shadowResidency?.run();
+      this.shadowAtlas?.render();
       this.schedulingProof?.run();
       super.render();
     } finally {

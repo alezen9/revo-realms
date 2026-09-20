@@ -1,4 +1,8 @@
-import { StorageBufferAttribute, type WebGPURenderer } from "three/webgpu";
+import {
+  IndirectStorageBufferAttribute,
+  StorageBufferAttribute,
+  type WebGPURenderer,
+} from "three/webgpu";
 import {
   atomicAdd,
   atomicLoad,
@@ -10,6 +14,7 @@ import {
   Loop,
   storage,
   uint,
+  uniform,
   uvec2,
   uvec4,
 } from "three/tsl";
@@ -29,11 +34,12 @@ const MISSING_COUNTER = 3;
 const STALE_COUNTER = 4;
 const HIT_COUNTER = 5;
 const MISS_COUNTER = 6;
-const FRAME_COUNTER = 7;
-const CLOCK_COUNTER = 8;
-const COUNTER_COUNT = 9;
+const RENDERED_COUNTER = 7;
+const FRAME_COUNTER = 8;
+const CLOCK_COUNTER = 9;
+const COUNTER_COUNT = 10;
 const FIRST_FRAME_COUNTER = ALLOCATED_COUNTER;
-const LAST_FRAME_COUNTER = MISS_COUNTER;
+const LAST_FRAME_COUNTER = RENDERED_COUNTER;
 const READBACK_INTERVAL_MS = 1_000;
 
 const createSlotMetadata = () => {
@@ -48,19 +54,32 @@ export class ShadowResidency {
   private requestListNode;
   private requestCountersNode;
   private pageTable = new StorageBufferAttribute(
-    new Uint32Array(SHADOW_VIRTUAL_PAGE_COUNT * 2),
-    2,
+    new Uint32Array(SHADOW_VIRTUAL_PAGE_COUNT * 4),
+    4,
   );
   private slotMetadata = new StorageBufferAttribute(createSlotMetadata(), 4);
   private counters = new StorageBufferAttribute(
     new Uint32Array(COUNTER_COUNT),
     1,
   );
+  private pageJobs = new StorageBufferAttribute(
+    new Uint32Array(shadowConfig.poolCapacity * 2),
+    2,
+  );
+  private clearIndirect = new IndirectStorageBufferAttribute(
+    new Uint32Array([6, 0, 0, 0]),
+    1,
+  );
+  private casterIndirect = new IndirectStorageBufferAttribute(
+    new Uint32Array([0, 0, 0, 0]),
+    1,
+  );
   private pageTableNode = storage(
     this.pageTable,
-    "uvec2",
+    "uvec4",
     this.pageTable.count,
   );
+  private currentFrame = uniform(0, "uint");
   private slotMetadataNode = storage(
     this.slotMetadata,
     "uvec4",
@@ -70,6 +89,17 @@ export class ShadowResidency {
     this.counters,
     "uint",
     this.counters.count,
+  ).toAtomic();
+  private pageJobsNode = storage(this.pageJobs, "uvec2", this.pageJobs.count);
+  private atomicClearIndirect = storage(
+    this.clearIndirect,
+    "uint",
+    this.clearIndirect.count,
+  ).toAtomic();
+  private atomicCasterIndirect = storage(
+    this.casterIndirect,
+    "uint",
+    this.casterIndirect.count,
   ).toAtomic();
   private resetNode;
   private allocateNode;
@@ -96,6 +126,7 @@ export class ShadowResidency {
   }
 
   run() {
+    this.currentFrame.value = (this.currentFrame.value + 1) >>> 0;
     this.renderer.compute(this.resetNode);
     this.renderer.compute(this.allocateNode);
     this.renderer.compute(this.validateNode);
@@ -107,11 +138,53 @@ export class ShadowResidency {
     void this.refreshTelemetryAsync();
   }
 
+  get pageJobsAttribute() {
+    return this.pageJobs;
+  }
+
+  get clearIndirectAttribute() {
+    return this.clearIndirect;
+  }
+
+  get casterIndirectAttribute() {
+    return this.casterIndirect;
+  }
+
+  setCasterVertexCount(vertexCount: number) {
+    this.casterIndirect.array[0] = vertexCount;
+    this.casterIndirect.needsUpdate = true;
+  }
+
+  resolvePage(pageKey) {
+    const poolCapacity = uint(shadowConfig.poolCapacity);
+    const pageEntry = this.pageTableNode.element(pageKey);
+    const slotPlusOne = pageEntry.x;
+    const boundedSlotPlusOne = slotPlusOne
+      .greaterThan(poolCapacity)
+      .select(poolCapacity, slotPlusOne);
+    const slot = slotPlusOne
+      .equal(0)
+      .select(uint(1), boundedSlotPlusOne)
+      .sub(1);
+    const slotMetadata = this.slotMetadataNode.element(slot);
+    const isResident = slotPlusOne
+      .greaterThan(0)
+      .and(slotPlusOne.lessThanEqual(poolCapacity))
+      .and(slotMetadata.x.equal(pageKey))
+      .and(slotMetadata.y.equal(pageEntry.y))
+      .and(pageEntry.z.equal(this.currentFrame));
+    return { isResident, slot };
+  }
+
   private createComputeNodes(requestCapacity: number) {
     const reset = Fn(() => {
       const counterIndex = instanceIndex.add(FIRST_FRAME_COUNTER);
       If(counterIndex.lessThanEqual(LAST_FRAME_COUNTER), () => {
         atomicStore(this.atomicCounters.element(counterIndex), 0);
+      });
+      If(instanceIndex.equal(0), () => {
+        atomicStore(this.atomicClearIndirect.element(1), 0);
+        atomicStore(this.atomicCasterIndirect.element(1), 0);
       });
     })().compute(LAST_FRAME_COUNTER - FIRST_FRAME_COUNTER + 1, [
       LAST_FRAME_COUNTER - FIRST_FRAME_COUNTER + 1,
@@ -174,9 +247,19 @@ export class ShadowResidency {
               this.slotMetadataNode
                 .element(slot)
                 .assign(uvec4(slotMetadata.x, slotMetadata.y, frame, frame));
+              this.pageTableNode
+                .element(pageKey)
+                .assign(uvec4(slotPlusOne, pageEntry.y, frame, 0));
               atomicAdd(this.atomicCounters.element(HIT_COUNTER), 1);
+              const renderIndex = atomicAdd(
+                this.atomicCounters.element(RENDERED_COUNTER),
+                1,
+              );
+              this.pageJobsNode
+                .element(renderIndex)
+                .assign(uvec2(pageKey, slot));
             }).Else(() => {
-              this.pageTableNode.element(pageKey).assign(uvec2(0));
+              this.pageTableNode.element(pageKey).assign(uvec4(0));
               atomicAdd(this.atomicCounters.element(STALE_COUNTER), 1);
             });
           });
@@ -227,7 +310,7 @@ export class ShadowResidency {
               If(oldPageKey.equal(INVALID_PAGE_KEY), () => {
                 atomicAdd(this.atomicCounters.element(RESIDENT_COUNTER), 1);
               }).Else(() => {
-                this.pageTableNode.element(oldPageKey).assign(uvec2(0));
+                this.pageTableNode.element(oldPageKey).assign(uvec4(0));
                 atomicAdd(this.atomicCounters.element(EVICTED_COUNTER), 1);
               });
 
@@ -240,16 +323,30 @@ export class ShadowResidency {
                 .assign(uvec4(pageKey, generation, frame, frame));
               this.pageTableNode
                 .element(pageKey)
-                .assign(uvec2(selectedSlot.add(1), generation));
+                .assign(
+                  uvec4(selectedSlot.add(1), generation, frame, uint(0)),
+                );
               atomicStore(
                 this.atomicCounters.element(CLOCK_COUNTER),
                 selectedSlot.add(1).mod(shadowConfig.poolCapacity),
               );
               atomicAdd(this.atomicCounters.element(ALLOCATED_COUNTER), 1);
+              const renderIndex = atomicAdd(
+                this.atomicCounters.element(RENDERED_COUNTER),
+                1,
+              );
+              this.pageJobsNode
+                .element(renderIndex)
+                .assign(uvec2(pageKey, selectedSlot));
             });
           });
         },
       );
+      const renderedCount = atomicLoad(
+        this.atomicCounters.element(RENDERED_COUNTER),
+      );
+      atomicStore(this.atomicClearIndirect.element(1), renderedCount);
+      atomicStore(this.atomicCasterIndirect.element(1), renderedCount);
     })().compute(1, [1]);
 
     const validate = Fn(() => {
@@ -263,7 +360,7 @@ export class ShadowResidency {
           .equal(pageKey)
           .and(slotMetadata.y.equal(pageEntry.y));
         If(isValid.not(), () => {
-          this.pageTableNode.element(pageKey).assign(uvec2(0));
+          this.pageTableNode.element(pageKey).assign(uvec4(0));
           atomicAdd(this.atomicCounters.element(STALE_COUNTER), 1);
         });
       });
@@ -287,6 +384,7 @@ export class ShadowResidency {
         stalePages: counters[STALE_COUNTER],
         cacheHits: counters[HIT_COUNTER],
         cacheMisses: counters[MISS_COUNTER],
+        renderedPages: counters[RENDERED_COUNTER],
       });
     } catch (error) {
       console.error("[Shadow residency] telemetry readback failed:", error);
