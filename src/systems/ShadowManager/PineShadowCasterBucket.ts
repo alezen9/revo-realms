@@ -17,7 +17,10 @@ import {
   uvec4,
 } from "three/tsl";
 import type { PineShadowPages } from "./PineShadowPages";
-import { SHADOW_PAGE_GRID_SIZE } from "./ShadowPageRequests";
+import {
+  decodeGpuShadowPageKey,
+  SHADOW_PAGE_LEVEL_COUNT,
+} from "./ShadowPageCoordinates";
 import {
   SHADOW_RENDERED_PAGE_COUNTER,
   type ShadowResidency,
@@ -106,7 +109,6 @@ export class PineShadowCasterBucket {
 
     const build = Fn(() => {
       const pineIndex = instanceIndex;
-      const range = pageRanges.element(pineIndex);
       const renderedPageCount = residencyCounters
         .element(SHADOW_RENDERED_PAGE_COUNTER)
         .toVar();
@@ -118,8 +120,14 @@ export class PineShadowCasterBucket {
         ({ i: pageIndex }) => {
           const pageJob = sourcePageJobs.element(pageIndex);
           const pageKey = pageJob.x;
-          const pageX = pageKey.mod(SHADOW_PAGE_GRID_SIZE);
-          const pageY = pageKey.div(SHADOW_PAGE_GRID_SIZE);
+          const {
+            level,
+            localPageX: pageX,
+            localPageY: pageY,
+          } = decodeGpuShadowPageKey(pageKey);
+          const range = pageRanges.element(
+            pineIndex.mul(SHADOW_PAGE_LEVEL_COUNT).add(level),
+          );
           const overlaps = pageX
             .greaterThanEqual(range.x)
             .and(pageY.greaterThanEqual(range.y))

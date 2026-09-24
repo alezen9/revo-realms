@@ -83,6 +83,7 @@ export type MonitoringSnapshot = {
 export type ShadowMonitoringStats = {
   mode: ShadowMode;
   requestedPages: number;
+  requestedPagesByLevel: [number, number];
   requestDensity: number;
   requestAverageMs: number | null;
   diagnosticMismatches: number;
@@ -95,10 +96,14 @@ export type ShadowMonitoringStats = {
   missingPages: number;
   stalePages: number;
   overflowPages: number;
+  overflowPagesByLevel: [number, number];
   staticCacheHits: number;
   staticCacheMisses: number;
   staticResidentPages: number;
+  staticResidentPagesByLevel: [number, number];
   staticRenderedPages: number;
+  staticRenderedPagesByLevel: [number, number];
+  staticMissingPagesByLevel: [number, number];
   staticCasterPageJobs: number;
   staticCasterDraws: number;
   staticGeneration: number;

@@ -450,13 +450,17 @@ export class PostprocessingManager extends RenderPipeline {
       .negate()
       .exp();
     const dynamicVisibility = this.shadowAtlas
-      ? this.shadowAtlas.computeVisibility(worldPosition, depth)
+      ? this.shadowAtlas.computeVisibility(worldPosition, depth, viewDepth)
       : float(1);
     const staticVisibility = this.staticShadowAtlas
-      ? this.staticShadowAtlas.computeVisibility(worldPosition, depth)
+      ? this.staticShadowAtlas.computeVisibility(
+          worldPosition,
+          depth,
+          viewDepth,
+        )
       : float(1);
     const pineVisibility = this.pineShadowAtlas
-      ? this.pineShadowAtlas.computeVisibility(worldPosition, depth)
+      ? this.pineShadowAtlas.computeVisibility(worldPosition, depth, viewDepth)
       : float(1);
     const visibility = dynamicVisibility
       .min(staticVisibility)

@@ -25,6 +25,7 @@ import {
 import {
   float,
   Fn,
+  If,
   instanceIndex,
   positionGeometry,
   storage,
@@ -39,6 +40,11 @@ import {
 } from "three/tsl";
 import {
   computeGpuShadowPageAddress,
+  decodeGpuShadowPageKey,
+  encodeGpuShadowPageKey,
+  getGpuShadowPageWorldSize,
+  SHADOW_MINIMUM_PAGE_COORDINATE,
+  SHADOW_PAGE_GRID_SIZE,
   shadowPageCoordinateConfig,
   type ShadowPageCoordinates,
 } from "./ShadowPageCoordinates";
@@ -51,8 +57,8 @@ import {
   PINE_CANOPY_ALPHA_TEST,
 } from "../../entities/Vegetation/PineTreeCanopy";
 
-const PAGE_GRID_SIZE = 128;
-const MINIMUM_PAGE_COORDINATE = -PAGE_GRID_SIZE / 2;
+const PAGE_GRID_SIZE = SHADOW_PAGE_GRID_SIZE;
+const MINIMUM_PAGE_COORDINATE = SHADOW_MINIMUM_PAGE_COORDINATE;
 const SHADOW_DEPTH_BIAS = 0.0015;
 
 type ConstructorArgs = {
@@ -207,12 +213,61 @@ export class ShadowAtlas {
     }
   }
 
-  computeVisibility(worldPosition: Node<"vec3">, sceneDepth: Node<"float">) {
+  computeVisibility(
+    worldPosition: Node<"vec3">,
+    sceneDepth: Node<"float">,
+    viewDepth: Node<"float">,
+  ) {
+    return Fn(() => {
+      const visibility = float(1).toVar();
+      const nearVisibility = float(1).toVar();
+      const hasNearPage = uint(0).toVar();
+      If(viewDepth.lessThan(shadowPageCoordinateConfig.transitionEnd), () => {
+        const nearPage = this.lookupPage(worldPosition, sceneDepth, 0);
+        If(nearPage.isValid, () => {
+          nearVisibility.assign(nearPage.visibility);
+          visibility.assign(nearPage.visibility);
+          hasNearPage.assign(1);
+        });
+      });
+      If(
+        viewDepth.greaterThanEqual(shadowPageCoordinateConfig.transitionStart),
+        () => {
+          const farPage = this.lookupPage(worldPosition, sceneDepth, 1);
+          If(farPage.isValid, () => {
+            const blend = viewDepth
+              .sub(shadowPageCoordinateConfig.transitionStart)
+              .div(
+                shadowPageCoordinateConfig.transitionEnd -
+                  shadowPageCoordinateConfig.transitionStart,
+              )
+              .clamp(0, 1);
+            visibility.assign(
+              hasNearPage
+                .greaterThan(0)
+                .select(
+                  nearVisibility.mix(farPage.visibility, blend),
+                  farPage.visibility,
+                ),
+            );
+          });
+        },
+      );
+      return visibility;
+    })();
+  }
+
+  private lookupPage(
+    worldPosition: Node<"vec3">,
+    sceneDepth: Node<"float">,
+    level: number,
+  ) {
     const address = computeGpuShadowPageAddress({
       worldPosition,
       sunDirection: this.sunDirection,
       minimumWorldY: this.coordinates.minimumWorldY,
       maximumWorldY: this.coordinates.maximumWorldY,
+      level: uint(level),
     });
     const localPage = address.pageId.sub(MINIMUM_PAGE_COORDINATE);
     const isInsideVirtualGrid = localPage.x
@@ -221,9 +276,10 @@ export class ShadowAtlas {
       .and(localPage.x.lessThan(PAGE_GRID_SIZE))
       .and(localPage.y.lessThan(PAGE_GRID_SIZE));
     const safeLocalPage = localPage.clamp(0, PAGE_GRID_SIZE - 1);
-    const pageKey = uint(safeLocalPage.y)
-      .mul(PAGE_GRID_SIZE)
-      .add(uint(safeLocalPage.x));
+    const pageKey = encodeGpuShadowPageKey(
+      uint(level),
+      safeLocalPage.add(MINIMUM_PAGE_COORDINATE),
+    );
     const mapping = this.residency.resolvePage(pageKey);
     const halfPageTexel = 0.5 / this.pageTexelSize;
     const pageUv = address.pageUv.clamp(halfPageTexel, 1 - halfPageTexel);
@@ -231,14 +287,14 @@ export class ShadowAtlas {
     const visibility = this.depthTextureNode
       .sample(atlasUv)
       .compare(address.normalizedDepth.sub(SHADOW_DEPTH_BIAS));
-    const hasValidShadow = this.isReady
+    const isValid = this.isReady
       .greaterThan(0)
       .and(sceneDepth.lessThan(1))
       .and(address.isOutOfRange.not())
       .and(isInsideVirtualGrid)
       .and(mapping.isResident);
 
-    return hasValidShadow.select(visibility, float(1));
+    return { isValid, visibility };
   }
 
   private createClearMesh() {
@@ -300,10 +356,7 @@ export class ShadowAtlas {
       const pageJob = this.pageJobsNode.element(instanceIndex);
       const pageKey = pageJob.x;
       const slot = pageJob.y;
-      const pageId = vec2(
-        float(pageKey.mod(PAGE_GRID_SIZE)),
-        float(pageKey.div(PAGE_GRID_SIZE)),
-      ).add(MINIMUM_PAGE_COORDINATE);
+      const { level, pageId } = decodeGpuShadowPageKey(pageKey);
       const worldPosition = this.casterWorldMatrix.mul(
         vec4(positionGeometry, 1),
       ).xyz;
@@ -320,7 +373,7 @@ export class ShadowAtlas {
         worldPosition.dot(lightYAxis),
       );
       const pageUv = lightPosition
-        .div(shadowPageCoordinateConfig.pageWorldSize)
+        .div(getGpuShadowPageWorldSize(level))
         .sub(pageId);
       varyingProperty("vec2", "shadowAtlasPageUv").assign(pageUv);
 
@@ -387,10 +440,7 @@ export class ShadowAtlas {
       const pageJob = pageJobsNode.element(instanceIndex);
       const pageKey = pageJob.x;
       const slot = pageJob.y;
-      const pageId = vec2(
-        float(pageKey.mod(PAGE_GRID_SIZE)),
-        float(pageKey.div(PAGE_GRID_SIZE)),
-      ).add(MINIMUM_PAGE_COORDINATE);
+      const { level, pageId } = decodeGpuShadowPageKey(pageKey);
       const absoluteSunY = this.sunDirection.y.abs().max(0.0001);
       const horizontalSunLength = this.sunDirection.xz.length().max(0.0001);
       const lightXAxis = vec3(
@@ -404,7 +454,7 @@ export class ShadowAtlas {
         worldPosition.dot(lightYAxis),
       );
       const pageUv = lightPosition
-        .div(shadowPageCoordinateConfig.pageWorldSize)
+        .div(getGpuShadowPageWorldSize(level))
         .sub(pageId);
       varyingProperty("vec2", "rigidShadowAtlasPageUv").assign(pageUv);
 
@@ -475,10 +525,7 @@ export class ShadowAtlas {
         .add(matrixColumn1.mul(localPosition.y))
         .add(matrixColumn2.mul(localPosition.z))
         .add(matrixColumn3).xyz;
-      const pageId = vec2(
-        float(pageKey.mod(PAGE_GRID_SIZE)),
-        float(pageKey.div(PAGE_GRID_SIZE)),
-      ).add(MINIMUM_PAGE_COORDINATE);
+      const { level, pageId } = decodeGpuShadowPageKey(pageKey);
       const absoluteSunY = this.sunDirection.y.abs().max(0.0001);
       const horizontalSunLength = this.sunDirection.xz.length().max(0.0001);
       const lightXAxis = vec3(
@@ -492,7 +539,7 @@ export class ShadowAtlas {
         worldPosition.dot(lightYAxis),
       );
       const pageUv = lightPosition
-        .div(shadowPageCoordinateConfig.pageWorldSize)
+        .div(getGpuShadowPageWorldSize(level))
         .sub(pageId);
       varyingProperty("vec2", "pineShadowAtlasPageUv").assign(pageUv);
 

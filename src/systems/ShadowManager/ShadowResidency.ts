@@ -24,6 +24,10 @@ import {
   SHADOW_VIRTUAL_PAGE_COUNT,
 } from "./ShadowPageRequests";
 import {
+  decodeGpuShadowPageKey,
+  decodeShadowPageKey,
+} from "./ShadowPageCoordinates";
+import {
   type ResidencyTelemetry,
   updateShadowResidencyTelemetry,
 } from "./telemetry";
@@ -40,7 +44,9 @@ const MISS_COUNTER = 6;
 export const SHADOW_RENDERED_PAGE_COUNTER = 7;
 const FRAME_COUNTER = 8;
 const CLOCK_COUNTER = 9;
-const COUNTER_COUNT = 10;
+const RENDERED_LEVEL_COUNTER = 10;
+const MISSING_LEVEL_COUNTER = 12;
+const COUNTER_COUNT = 14;
 const FIRST_FRAME_COUNTER = ALLOCATED_COUNTER;
 const LAST_FRAME_COUNTER = SHADOW_RENDERED_PAGE_COUNTER;
 const READBACK_INTERVAL_MS = 1_000;
@@ -137,11 +143,7 @@ export class ShadowResidency {
       "uvec4",
       this.slotMetadata.count,
     );
-    this.pageJobsNode = storage(
-      this.pageJobs,
-      "uvec2",
-      this.pageJobs.count,
-    );
+    this.pageJobsNode = storage(this.pageJobs, "uvec2", this.pageJobs.count);
     this.requestListNode = storage(requestList, "uint", requestList.count);
     this.requestCountersNode = storage(
       requestCounters,
@@ -156,8 +158,7 @@ export class ShadowResidency {
 
   run() {
     if (this.refreshMode === "everyFrame")
-      this.validityGeneration.value =
-        (this.validityGeneration.value + 1) >>> 0;
+      this.validityGeneration.value = (this.validityGeneration.value + 1) >>> 0;
     this.renderer.compute(this.resetNode);
     this.renderer.compute(this.allocateNode);
     this.renderer.compute(this.validateNode);
@@ -171,10 +172,8 @@ export class ShadowResidency {
 
   invalidate() {
     if (this.refreshMode !== "onInvalidation") return;
-    this.validityGeneration.value =
-      (this.validityGeneration.value + 1) >>> 0;
-    if (this.validityGeneration.value === 0)
-      this.validityGeneration.value = 1;
+    this.validityGeneration.value = (this.validityGeneration.value + 1) >>> 0;
+    if (this.validityGeneration.value === 0) this.validityGeneration.value = 1;
   }
 
   get pageJobsAttribute() {
@@ -222,15 +221,20 @@ export class ShadowResidency {
   private createComputeNodes(requestCapacity: number) {
     const reset = Fn(() => {
       const counterIndex = instanceIndex.add(FIRST_FRAME_COUNTER);
-      If(counterIndex.lessThanEqual(LAST_FRAME_COUNTER), () => {
-        atomicStore(this.atomicCounters.element(counterIndex), 0);
-      });
+      If(
+        counterIndex
+          .lessThanEqual(LAST_FRAME_COUNTER)
+          .or(counterIndex.greaterThanEqual(RENDERED_LEVEL_COUNTER)),
+        () => {
+          atomicStore(this.atomicCounters.element(counterIndex), 0);
+        },
+      );
       If(instanceIndex.equal(0), () => {
         atomicStore(this.atomicClearIndirect.element(1), 0);
         atomicStore(this.atomicCasterIndirect.element(1), 0);
       });
-    })().compute(LAST_FRAME_COUNTER - FIRST_FRAME_COUNTER + 1, [
-      LAST_FRAME_COUNTER - FIRST_FRAME_COUNTER + 1,
+    })().compute(COUNTER_COUNT - FIRST_FRAME_COUNTER, [
+      COUNTER_COUNT - FIRST_FRAME_COUNTER,
     ]);
 
     const allocate = Fn(() => {
@@ -308,6 +312,14 @@ export class ShadowResidency {
                   this.atomicCounters.element(SHADOW_RENDERED_PAGE_COUNTER),
                   1,
                 );
+                atomicAdd(
+                  this.atomicCounters.element(
+                    decodeGpuShadowPageKey(pageKey).level.add(
+                      RENDERED_LEVEL_COUNTER,
+                    ),
+                  ),
+                  1,
+                );
                 this.pageJobsNode
                   .element(renderIndex)
                   .assign(uvec2(pageKey, slot));
@@ -356,6 +368,14 @@ export class ShadowResidency {
 
             If(selectedSlot.equal(INVALID_SLOT), () => {
               atomicAdd(this.atomicCounters.element(MISSING_COUNTER), 1);
+              atomicAdd(
+                this.atomicCounters.element(
+                  decodeGpuShadowPageKey(pageKey).level.add(
+                    MISSING_LEVEL_COUNTER,
+                  ),
+                ),
+                1,
+              );
             }).Else(() => {
               const oldMetadata = this.slotMetadataNode
                 .element(selectedSlot)
@@ -392,6 +412,14 @@ export class ShadowResidency {
               atomicAdd(this.atomicCounters.element(ALLOCATED_COUNTER), 1);
               const renderIndex = atomicAdd(
                 this.atomicCounters.element(SHADOW_RENDERED_PAGE_COUNTER),
+                1,
+              );
+              atomicAdd(
+                this.atomicCounters.element(
+                  decodeGpuShadowPageKey(pageKey).level.add(
+                    RENDERED_LEVEL_COUNTER,
+                  ),
+                ),
                 1,
               );
               this.pageJobsNode
@@ -435,6 +463,17 @@ export class ShadowResidency {
     try {
       const buffer = await this.renderer.getArrayBufferAsync(this.counters);
       const counters = new Uint32Array(buffer);
+      const metadataBuffer = await this.renderer.getArrayBufferAsync(
+        this.slotMetadata,
+      );
+      const metadata = new Uint32Array(metadataBuffer);
+      const residentPagesByLevel: [number, number] = [0, 0];
+      for (let slot = 0; slot < this.capacity; slot++) {
+        const pageKey = metadata[slot * 4];
+        if (pageKey === INVALID_PAGE_KEY) continue;
+        const { level } = decodeShadowPageKey(pageKey);
+        if (level < residentPagesByLevel.length) residentPagesByLevel[level]++;
+      }
       this.onTelemetry({
         residentPages: counters[RESIDENT_COUNTER],
         allocatedPages: counters[ALLOCATED_COUNTER],
@@ -445,6 +484,15 @@ export class ShadowResidency {
         cacheMisses: counters[MISS_COUNTER],
         renderedPages: counters[SHADOW_RENDERED_PAGE_COUNTER],
         generation: this.validityGeneration.value,
+        residentPagesByLevel,
+        renderedPagesByLevel: [
+          counters[RENDERED_LEVEL_COUNTER],
+          counters[RENDERED_LEVEL_COUNTER + 1],
+        ],
+        missingPagesByLevel: [
+          counters[MISSING_LEVEL_COUNTER],
+          counters[MISSING_LEVEL_COUNTER + 1],
+        ],
       });
     } catch (error) {
       console.error("[Shadow residency] telemetry readback failed:", error);

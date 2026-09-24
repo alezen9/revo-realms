@@ -19,7 +19,11 @@ import {
   storage,
   uint,
 } from "three/tsl";
-import type { ShadowPageCoordinates } from "./ShadowPageCoordinates";
+import {
+  decodeGpuShadowPageKey,
+  SHADOW_PAGE_LEVEL_COUNT,
+  type ShadowPageCoordinates,
+} from "./ShadowPageCoordinates";
 import {
   SHADOW_MINIMUM_PAGE_COORDINATE,
   SHADOW_PAGE_GRID_SIZE,
@@ -116,7 +120,9 @@ export class RigidShadowCasterBucket {
       this.matrixValues,
       4,
     );
-    this.rangeValues = new Uint32Array(this.casterCount * 4);
+    this.rangeValues = new Uint32Array(
+      this.casterCount * SHADOW_PAGE_LEVEL_COUNT * 4,
+    );
     this.pageRanges = new StorageBufferAttribute(this.rangeValues, 4);
 
     const indirectValues = new Uint32Array(
@@ -151,13 +157,15 @@ export class RigidShadowCasterBucket {
       const source = sources[casterIndex];
       source.updateWorldMatrix(true, false);
       this.matrixValues.set(source.matrixWorld.elements, casterIndex * 16);
-      this.writePageRange(
-        casterIndex,
-        source,
-        coordinates,
-        sunDirection,
-        this.rangeValues,
-      );
+      for (let level = 0; level < SHADOW_PAGE_LEVEL_COUNT; level++)
+        this.writePageRange(
+          casterIndex,
+          level,
+          source,
+          coordinates,
+          sunDirection,
+          this.rangeValues,
+        );
     }
     this.matrixColumnsAttribute.needsUpdate = true;
     this.pageRanges.needsUpdate = true;
@@ -175,6 +183,7 @@ export class RigidShadowCasterBucket {
 
   private writePageRange(
     casterIndex: number,
+    level: number,
     source: Mesh,
     coordinates: ShadowPageCoordinates,
     sunDirection: Vector3,
@@ -194,7 +203,11 @@ export class RigidShadowCasterBucket {
             y === 0 ? this.bounds.min.y : this.bounds.max.y,
             z === 0 ? this.bounds.min.z : this.bounds.max.z,
           );
-          const address = coordinates.computeAddress(this.corner, sunDirection);
+          const address = coordinates.computeAddress(
+            this.corner,
+            sunDirection,
+            level,
+          );
           minimumPageX = Math.min(minimumPageX, address.pageX);
           minimumPageY = Math.min(minimumPageY, address.pageY);
           maximumPageX = Math.max(maximumPageX, address.pageX);
@@ -205,7 +218,7 @@ export class RigidShadowCasterBucket {
 
     const maximumGridPage =
       SHADOW_MINIMUM_PAGE_COORDINATE + SHADOW_PAGE_GRID_SIZE - 1;
-    const offset = casterIndex * 4;
+    const offset = (casterIndex * SHADOW_PAGE_LEVEL_COUNT + level) * 4;
     if (
       maximumPageX < SHADOW_MINIMUM_PAGE_COORDINATE ||
       maximumPageY < SHADOW_MINIMUM_PAGE_COORDINATE ||
@@ -253,7 +266,6 @@ export class RigidShadowCasterBucket {
 
     const buildWorklists = Fn(() => {
       const casterIndex = instanceIndex;
-      const pageRange = pageRanges.element(casterIndex);
       const worklistOffset = casterIndex.mul(this.residency.capacity);
       const workCount = uint(0).toVar();
       const renderedPageCount = residencyCounters
@@ -268,8 +280,14 @@ export class RigidShadowCasterBucket {
         ({ i: pageIndex }) => {
           const pageJob = sourcePageJobs.element(pageIndex);
           const pageKey = pageJob.x;
-          const pageX = pageKey.mod(SHADOW_PAGE_GRID_SIZE);
-          const pageY = pageKey.div(SHADOW_PAGE_GRID_SIZE);
+          const {
+            level,
+            localPageX: pageX,
+            localPageY: pageY,
+          } = decodeGpuShadowPageKey(pageKey);
+          const pageRange = pageRanges.element(
+            casterIndex.mul(SHADOW_PAGE_LEVEL_COUNT).add(level),
+          );
           const overlaps = pageX
             .greaterThanEqual(pageRange.x)
             .and(pageY.greaterThanEqual(pageRange.y))

@@ -198,6 +198,10 @@
 					<span class="value">{integerFormat.format(shadow.requestedPages)}</span>
 				</span>
 				<span class="cell">
+					<span class="label">Request L0/L1</span>
+					<span class="value">{shadow.requestedPagesByLevel.join(" / ")}</span>
+				</span>
+				<span class="cell">
 					<span class="label">Density</span>
 					<span class="value">{percentFormat.format(shadow.requestDensity)}</span>
 				</span>
@@ -234,6 +238,10 @@
 					<span class="value">{integerFormat.format(shadow.staticResidentPages)}</span>
 				</span>
 				<span class="cell">
+					<span class="label">Static resident L0/L1</span>
+					<span class="value">{shadow.staticResidentPagesByLevel.join(" / ")}</span>
+				</span>
+				<span class="cell">
 					<span class="label">Static hits</span>
 					<span class="value">{integerFormat.format(shadow.staticCacheHits)}</span>
 				</span>
@@ -244,6 +252,14 @@
 				<span class="cell">
 					<span class="label">Static rendered</span>
 					<span class="value">{integerFormat.format(shadow.staticRenderedPages)}</span>
+				</span>
+				<span class="cell">
+					<span class="label">Static render L0/L1</span>
+					<span class="value">{shadow.staticRenderedPagesByLevel.join(" / ")}</span>
+				</span>
+				<span class="cell">
+					<span class="label">Static miss L0/L1</span>
+					<span class="value">{shadow.staticMissingPagesByLevel.join(" / ")}</span>
 				</span>
 				<span class="cell">
 					<span class="label">Static caster jobs</span>
@@ -281,6 +297,12 @@
 					<span class="label">Overflow</span>
 					<span class={["value", shadow.overflowPages > 0 && "bad"]}>
 						{integerFormat.format(shadow.overflowPages)}
+					</span>
+				</span>
+				<span class="cell">
+					<span class="label">Overflow L0/L1</span>
+					<span class={["value", shadow.overflowPagesByLevel.some(count => count > 0) && "bad"]}>
+						{shadow.overflowPagesByLevel.join(" / ")}
 					</span>
 				</span>
 			</div>

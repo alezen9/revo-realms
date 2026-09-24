@@ -11,7 +11,6 @@ import {
   globalId,
   If,
   instanceIndex,
-  int,
   ivec2,
   Loop,
   storage,
@@ -27,22 +26,34 @@ import type { Node } from "three/webgpu";
 import { shadowConfig } from "./config";
 import {
   computeGpuShadowPageAddress,
+  decodeShadowPageKey,
+  encodeGpuShadowPageKey,
+  encodeShadowPageKey,
+  SHADOW_MINIMUM_PAGE_COORDINATE,
+  SHADOW_PAGE_GRID_SIZE,
+  SHADOW_PAGE_LEVEL_COUNT,
+  SHADOW_VIRTUAL_PAGE_COUNT,
+  shadowPageCoordinateConfig,
   ShadowPageCoordinates,
 } from "./ShadowPageCoordinates";
 import { updateShadowRequestTelemetry } from "./telemetry";
 
-export const SHADOW_PAGE_GRID_SIZE = 128;
-export const SHADOW_MINIMUM_PAGE_COORDINATE = -SHADOW_PAGE_GRID_SIZE / 2;
+export {
+  SHADOW_MINIMUM_PAGE_COORDINATE,
+  SHADOW_PAGE_GRID_SIZE,
+  SHADOW_VIRTUAL_PAGE_COUNT,
+} from "./ShadowPageCoordinates";
 const PAGE_GRID_SIZE = SHADOW_PAGE_GRID_SIZE;
 const MINIMUM_PAGE_COORDINATE = SHADOW_MINIMUM_PAGE_COORDINATE;
-export const SHADOW_VIRTUAL_PAGE_COUNT = PAGE_GRID_SIZE * PAGE_GRID_SIZE;
 export const SHADOW_REQUESTED_PAGE_COUNTER = 0;
 const PAGE_COUNT = SHADOW_VIRTUAL_PAGE_COUNT;
 const REQUEST_WORD_COUNT = PAGE_COUNT / 32;
-const COUNTER_COUNT = 4;
+const COUNTER_COUNT = 8;
 const OVERFLOW_PAGE_COUNTER = 1;
 const RECEIVER_PIXEL_COUNTER = 2;
 const OUTSIDE_GRID_COUNTER = 3;
+const REQUESTED_LEVEL_COUNTER = 4;
+const OVERFLOW_LEVEL_COUNTER = 6;
 const DIAGNOSTIC_SAMPLE_COUNT = 8;
 const DENSITY_GRID_SIZE = 64;
 const DENSITY_SAMPLE_COUNT = DENSITY_GRID_SIZE * DENSITY_GRID_SIZE;
@@ -229,133 +240,175 @@ export class ShadowPageRequests {
             const worldPosition = cameraWorldMatrix.mul(
               vec4(viewPosition, 1),
             ).xyz;
-            const address = computeGpuShadowPageAddress({
-              worldPosition,
-              sunDirection,
-              minimumWorldY: this.coordinates.minimumWorldY,
-              maximumWorldY: this.coordinates.maximumWorldY,
-            });
-            const pageId = ivec2(address.pageId);
-            const maximumPageCoordinate =
-              MINIMUM_PAGE_COORDINATE + PAGE_GRID_SIZE;
-            const isInsideGrid = pageId.x
-              .greaterThanEqual(MINIMUM_PAGE_COORDINATE)
-              .and(pageId.x.lessThan(maximumPageCoordinate))
-              .and(pageId.y.greaterThanEqual(MINIMUM_PAGE_COORDINATE))
-              .and(pageId.y.lessThan(maximumPageCoordinate));
+            const viewDepth = viewPosition.z.negate();
+            Loop(
+              { start: 0, end: SHADOW_PAGE_LEVEL_COUNT, type: "int" },
+              ({ i: levelIndex }) => {
+                const level = uint(levelIndex);
+                const shouldRequest = level
+                  .equal(uint(0))
+                  .and(
+                    viewDepth.lessThan(
+                      shadowPageCoordinateConfig.transitionEnd,
+                    ),
+                  )
+                  .or(
+                    level
+                      .equal(uint(1))
+                      .and(
+                        viewDepth.greaterThanEqual(
+                          shadowPageCoordinateConfig.transitionStart,
+                        ),
+                      ),
+                  );
+                If(shouldRequest, () => {
+                  const address = computeGpuShadowPageAddress({
+                    worldPosition,
+                    sunDirection,
+                    minimumWorldY: this.coordinates.minimumWorldY,
+                    maximumWorldY: this.coordinates.maximumWorldY,
+                    level,
+                  });
+                  const pageId = ivec2(address.pageId);
+                  const maximumPageCoordinate =
+                    MINIMUM_PAGE_COORDINATE + PAGE_GRID_SIZE;
+                  const isInsideGrid = pageId.x
+                    .greaterThanEqual(MINIMUM_PAGE_COORDINATE)
+                    .and(pageId.x.lessThan(maximumPageCoordinate))
+                    .and(pageId.y.greaterThanEqual(MINIMUM_PAGE_COORDINATE))
+                    .and(pageId.y.lessThan(maximumPageCoordinate));
 
-            If(address.isOutOfRange.not(), () => {
-              If(isInsideGrid, () => {
-                const localPage = pageId.sub(MINIMUM_PAGE_COORDINATE);
-                const pageIndex = uint(localPage.y)
-                  .mul(PAGE_GRID_SIZE)
-                  .add(uint(localPage.x));
-                const wordIndex = pageIndex.div(32);
-                const bitIndex = pageIndex.mod(32);
-                const bit = uint(1).shiftLeft(bitIndex);
-                const previous = atomicOr(
-                  this.atomicReceiverBits.element(wordIndex),
-                  bit,
-                ).toVar();
+                  If(address.isOutOfRange.not(), () => {
+                    If(isInsideGrid, () => {
+                      const pageIndex = encodeGpuShadowPageKey(
+                        level,
+                        address.pageId,
+                      );
+                      const wordIndex = pageIndex.div(32);
+                      const bitIndex = pageIndex.mod(32);
+                      const bit = uint(1).shiftLeft(bitIndex);
+                      const previous = atomicOr(
+                        this.atomicReceiverBits.element(wordIndex),
+                        bit,
+                      ).toVar();
 
-                If(previous.bitAnd(bit).equal(0), () => {
-                  const dilationRadius = shadowConfig.requestStride - 1;
-                  Loop(
-                    {
-                      start: -dilationRadius,
-                      end: dilationRadius + 1,
-                      type: "int",
-                    },
-                    ({ i: offsetY }) => {
-                      Loop(
-                        {
-                          start: -dilationRadius,
-                          end: dilationRadius + 1,
-                          type: "int",
-                        },
-                        ({ i: offsetX }) => {
-                          const requestedPage = pageId.add(
-                            ivec2(offsetX, offsetY),
-                          );
-                          const isRequestedPageInsideGrid = requestedPage.x
-                            .greaterThanEqual(MINIMUM_PAGE_COORDINATE)
-                            .and(
-                              requestedPage.x.lessThan(maximumPageCoordinate),
-                            )
-                            .and(
-                              requestedPage.y.greaterThanEqual(
-                                MINIMUM_PAGE_COORDINATE,
-                              ),
-                            )
-                            .and(
-                              requestedPage.y.lessThan(maximumPageCoordinate),
-                            );
-                          If(isRequestedPageInsideGrid, () => {
-                            const requestedLocalPage = requestedPage.sub(
-                              MINIMUM_PAGE_COORDINATE,
-                            );
-                            const requestedPageIndex = uint(
-                              requestedLocalPage.y,
-                            )
-                              .mul(PAGE_GRID_SIZE)
-                              .add(uint(requestedLocalPage.x));
-                            const requestedWordIndex =
-                              requestedPageIndex.div(32);
-                            const requestedBit = uint(1).shiftLeft(
-                              requestedPageIndex.mod(32),
-                            );
-                            const wasRequested = atomicOr(
-                              this.atomicRequestBits.element(
-                                requestedWordIndex,
-                              ),
-                              requestedBit,
-                            ).toVar();
-                            If(
-                              wasRequested.bitAnd(requestedBit).equal(0),
-                              () => {
-                                const requestIndex = atomicAdd(
-                                  this.atomicCounters.element(
-                                    SHADOW_REQUESTED_PAGE_COUNTER,
-                                  ),
-                                  1,
+                      If(previous.bitAnd(bit).equal(0), () => {
+                        const dilationRadius = shadowConfig.requestStride - 1;
+                        Loop(
+                          {
+                            start: -dilationRadius,
+                            end: dilationRadius + 1,
+                            type: "int",
+                          },
+                          ({ i: offsetY }) => {
+                            Loop(
+                              {
+                                start: -dilationRadius,
+                                end: dilationRadius + 1,
+                                type: "int",
+                              },
+                              ({ i: offsetX }) => {
+                                const requestedPage = pageId.add(
+                                  ivec2(offsetX, offsetY),
                                 );
-                                If(
-                                  requestIndex.lessThan(
-                                    shadowConfig.requestCapacity,
-                                  ),
-                                  () => {
-                                    this.requestListNode
-                                      .element(requestIndex)
-                                      .assign(requestedPageIndex);
-                                  },
-                                ).Else(() => {
-                                  atomicAdd(
-                                    this.atomicCounters.element(
-                                      OVERFLOW_PAGE_COUNTER,
+                                const isRequestedPageInsideGrid =
+                                  requestedPage.x
+                                    .greaterThanEqual(MINIMUM_PAGE_COORDINATE)
+                                    .and(
+                                      requestedPage.x.lessThan(
+                                        maximumPageCoordinate,
+                                      ),
+                                    )
+                                    .and(
+                                      requestedPage.y.greaterThanEqual(
+                                        MINIMUM_PAGE_COORDINATE,
+                                      ),
+                                    )
+                                    .and(
+                                      requestedPage.y.lessThan(
+                                        maximumPageCoordinate,
+                                      ),
+                                    );
+                                If(isRequestedPageInsideGrid, () => {
+                                  const requestedPageIndex =
+                                    encodeGpuShadowPageKey(
+                                      level,
+                                      vec2(requestedPage),
+                                    );
+                                  const requestedWordIndex =
+                                    requestedPageIndex.div(32);
+                                  const requestedBit = uint(1).shiftLeft(
+                                    requestedPageIndex.mod(32),
+                                  );
+                                  const wasRequested = atomicOr(
+                                    this.atomicRequestBits.element(
+                                      requestedWordIndex,
                                     ),
-                                    1,
+                                    requestedBit,
+                                  ).toVar();
+                                  If(
+                                    wasRequested.bitAnd(requestedBit).equal(0),
+                                    () => {
+                                      atomicAdd(
+                                        this.atomicCounters.element(
+                                          level.add(REQUESTED_LEVEL_COUNTER),
+                                        ),
+                                        1,
+                                      );
+                                      const requestIndex = atomicAdd(
+                                        this.atomicCounters.element(
+                                          SHADOW_REQUESTED_PAGE_COUNTER,
+                                        ),
+                                        1,
+                                      );
+                                      If(
+                                        requestIndex.lessThan(
+                                          shadowConfig.requestCapacity,
+                                        ),
+                                        () => {
+                                          this.requestListNode
+                                            .element(requestIndex)
+                                            .assign(requestedPageIndex);
+                                        },
+                                      ).Else(() => {
+                                        atomicAdd(
+                                          this.atomicCounters.element(
+                                            OVERFLOW_PAGE_COUNTER,
+                                          ),
+                                          1,
+                                        );
+                                        atomicAdd(
+                                          this.atomicCounters.element(
+                                            level.add(OVERFLOW_LEVEL_COUNTER),
+                                          ),
+                                          1,
+                                        );
+                                      });
+                                    },
+                                  );
+                                }).Else(() => {
+                                  atomicOr(
+                                    this.atomicCounters.element(
+                                      OUTSIDE_GRID_COUNTER,
+                                    ),
+                                    uint(1),
                                   );
                                 });
                               },
                             );
-                          }).Else(() => {
-                            atomicOr(
-                              this.atomicCounters.element(OUTSIDE_GRID_COUNTER),
-                              uint(1),
-                            );
-                          });
-                        },
+                          },
+                        );
+                      });
+                    }).Else(() => {
+                      atomicOr(
+                        this.atomicCounters.element(OUTSIDE_GRID_COUNTER),
+                        uint(1),
                       );
-                    },
-                  );
+                    });
+                  });
                 });
-              }).Else(() => {
-                atomicOr(
-                  this.atomicCounters.element(OUTSIDE_GRID_COUNTER),
-                  uint(1),
-                );
-              });
-            });
+              },
+            );
           });
         });
       });
@@ -402,17 +455,18 @@ export class ShadowPageRequests {
           const worldPosition = cameraWorldMatrix.mul(
             vec4(viewPosition, 1),
           ).xyz;
+          const level = viewPosition.z
+            .negate()
+            .greaterThanEqual(shadowPageCoordinateConfig.transitionStart)
+            .select(uint(1), uint(0));
           const address = computeGpuShadowPageAddress({
             worldPosition,
             sunDirection,
             minimumWorldY: this.coordinates.minimumWorldY,
             maximumWorldY: this.coordinates.maximumWorldY,
+            level,
           });
-          const pageId = ivec2(address.pageId);
-          const localPage = pageId.sub(MINIMUM_PAGE_COORDINATE);
-          const pageIndex = int(localPage.y)
-            .mul(PAGE_GRID_SIZE)
-            .add(int(localPage.x));
+          const pageIndex = encodeGpuShadowPageKey(level, address.pageId);
           this.diagnosticSamplesNode
             .element(instanceIndex)
             .assign(vec4(worldPosition, float(pageIndex)));
@@ -451,6 +505,14 @@ export class ShadowPageRequests {
         requestDensity,
         counters[OVERFLOW_PAGE_COUNTER] + counters[OUTSIDE_GRID_COUNTER],
         diagnosticMismatches,
+        [
+          counters[REQUESTED_LEVEL_COUNTER],
+          counters[REQUESTED_LEVEL_COUNTER + 1],
+        ],
+        [
+          counters[OVERFLOW_LEVEL_COUNTER],
+          counters[OVERFLOW_LEVEL_COUNTER + 1],
+        ],
       );
     } catch (error) {
       console.error("[Shadow requests] telemetry readback failed:", error);
@@ -478,14 +540,17 @@ export class ShadowPageRequests {
         samples[offset + 1],
         samples[offset + 2],
       );
+      const { level } = decodeShadowPageKey(gpuPageIndex);
       const address = this.coordinates.computeAddress(
         worldPosition,
         sunDirection,
+        level,
       );
-      const cpuPageIndex =
-        (address.pageY - MINIMUM_PAGE_COORDINATE) * PAGE_GRID_SIZE +
-        address.pageX -
-        MINIMUM_PAGE_COORDINATE;
+      const cpuPageIndex = encodeShadowPageKey(
+        level,
+        address.pageX,
+        address.pageY,
+      );
       if (cpuPageIndex !== gpuPageIndex) mismatches++;
     }
     return mismatches;

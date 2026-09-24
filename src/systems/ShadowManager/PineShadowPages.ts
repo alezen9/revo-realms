@@ -16,7 +16,11 @@ import {
   uint,
 } from "three/tsl";
 import { PINE_CANOPY_MAXIMUM_SWAY } from "../../entities/Vegetation/PineTreeCanopy";
-import type { ShadowPageCoordinates } from "./ShadowPageCoordinates";
+import {
+  decodeGpuShadowPageKey,
+  SHADOW_PAGE_LEVEL_COUNT,
+  type ShadowPageCoordinates,
+} from "./ShadowPageCoordinates";
 import {
   SHADOW_MINIMUM_PAGE_COORDINATE,
   SHADOW_PAGE_GRID_SIZE,
@@ -55,7 +59,9 @@ export class PineShadowPages {
     this.renderer = renderer;
     this.instanceCount = instanceCount;
     this.matrixValues = new Float32Array(instanceCount * 16);
-    this.rangeValues = new Uint32Array(instanceCount * 4);
+    this.rangeValues = new Uint32Array(
+      instanceCount * SHADOW_PAGE_LEVEL_COUNT * 4,
+    );
     this.matrixColumnsAttribute = new StorageBufferAttribute(
       this.matrixValues,
       4,
@@ -95,12 +101,14 @@ export class PineShadowPages {
       );
       this.matrixValues.set(this.worldMatrix.elements, instanceIndex * 16);
       this.worldBounds.copy(this.localBounds).applyMatrix4(this.worldMatrix);
-      this.writePageRange(
-        instanceIndex,
-        coordinates,
-        sunDirection,
-        this.rangeValues,
-      );
+      for (let level = 0; level < SHADOW_PAGE_LEVEL_COUNT; level++)
+        this.writePageRange(
+          instanceIndex,
+          level,
+          coordinates,
+          sunDirection,
+          this.rangeValues,
+        );
     }
     this.matrixColumnsAttribute.needsUpdate = true;
     this.pageRangesAttribute.needsUpdate = true;
@@ -113,6 +121,7 @@ export class PineShadowPages {
 
   private writePageRange(
     instanceIndex: number,
+    level: number,
     coordinates: ShadowPageCoordinates,
     sunDirection: Vector3,
     values: Uint32Array,
@@ -130,7 +139,11 @@ export class PineShadowPages {
             y === 0 ? this.worldBounds.min.y : this.worldBounds.max.y,
             z === 0 ? this.worldBounds.min.z : this.worldBounds.max.z,
           );
-          const address = coordinates.computeAddress(this.corner, sunDirection);
+          const address = coordinates.computeAddress(
+            this.corner,
+            sunDirection,
+            level,
+          );
           minimumPageX = Math.min(minimumPageX, address.pageX);
           minimumPageY = Math.min(minimumPageY, address.pageY);
           maximumPageX = Math.max(maximumPageX, address.pageX);
@@ -141,7 +154,7 @@ export class PineShadowPages {
 
     const maximumGridPage =
       SHADOW_MINIMUM_PAGE_COORDINATE + SHADOW_PAGE_GRID_SIZE - 1;
-    const offset = instanceIndex * 4;
+    const offset = (instanceIndex * SHADOW_PAGE_LEVEL_COUNT + level) * 4;
     if (
       maximumPageX < SHADOW_MINIMUM_PAGE_COORDINATE ||
       maximumPageY < SHADOW_MINIMUM_PAGE_COORDINATE ||
@@ -209,13 +222,18 @@ export class PineShadowPages {
       });
       If(requestIndex.lessThan(requestedCount), () => {
         const pageKey = receiverRequestList.element(requestIndex);
-        const pageX = pageKey.mod(SHADOW_PAGE_GRID_SIZE);
-        const pageY = pageKey.div(SHADOW_PAGE_GRID_SIZE);
+        const {
+          level,
+          localPageX: pageX,
+          localPageY: pageY,
+        } = decodeGpuShadowPageKey(pageKey);
         const hasOverlap = uint(0).toVar();
         Loop(
           { start: 0, end: this.instanceCount, type: "uint" },
           ({ i: pineIndex }) => {
-            const range = pageRanges.element(pineIndex);
+            const range = pageRanges.element(
+              pineIndex.mul(SHADOW_PAGE_LEVEL_COUNT).add(level),
+            );
             const overlaps = pageX
               .greaterThanEqual(range.x)
               .and(pageY.greaterThanEqual(range.y))
