@@ -246,10 +246,6 @@ export class GrassCompute {
       setTerrainCacheValidity(clumpState, terrainCacheValidity),
     );
 
-    If(isInFrustum.equal(0), () => {
-      Return();
-    });
-
     const needsTerrainRefresh = float(1).sub(terrainCacheValidity);
 
     If(needsTerrainRefresh, () => {
@@ -276,6 +272,10 @@ export class GrassCompute {
       clumpState.assign(setYOffset(clumpState, terrainYOffset));
       clumpState.assign(setBakedShadowFactor(clumpState, terrainSample.r));
       clumpState.assign(setTerrainCacheValidity(clumpState, 1));
+    });
+
+    If(isInFrustum.equal(0), () => {
+      Return();
     });
 
     const hasGrass = step(

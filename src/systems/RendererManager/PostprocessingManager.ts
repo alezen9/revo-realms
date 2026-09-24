@@ -49,6 +49,7 @@ import type { SceneManager } from "../SceneManager";
 import { assetManager, lightingManager } from "..";
 import { playerUniforms } from "../../entities/Player/PlayerMaterial";
 import { FlowerMaterial } from "../../entities/Vegetation/Flowers";
+import { GrassMaterial } from "../../entities/Vegetation/Grass/GrassMaterial";
 import { TSLUtils } from "../../utils/TSLUtils";
 import { shadowConfig } from "../ShadowManager/config";
 import type { ShadowDebugView } from "../ShadowManager/config";
@@ -769,6 +770,14 @@ export class PostprocessingManager extends RenderPipeline {
     );
   }
 
+  private syncGrassShadowCaster() {
+    if (!this.pineShadowAtlas) return;
+    const source = this.sceneManager.mainScene.getObjectByName("grass_lod_2");
+    if (!(source instanceof Mesh) || !(source.material instanceof GrassMaterial))
+      return;
+    this.pineShadowAtlas.attachGrass(source, source.material.compute);
+  }
+
   render() {
     if (!shadowConfig.isPagedEnabled) {
       super.render();
@@ -804,6 +813,7 @@ export class PostprocessingManager extends RenderPipeline {
       this.syncStaticShadowCasters();
       this.syncPineShadowCaster();
       this.syncFlowerShadowCaster();
+      this.syncGrassShadowCaster();
       this.shadowPageRequests?.run();
       this.pineShadowPages?.run();
       this.shadowResidency?.run();

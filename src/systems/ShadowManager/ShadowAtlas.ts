@@ -23,13 +23,17 @@ import {
   type WebGPURenderer,
 } from "three/webgpu";
 import {
+  attribute,
   float,
   Fn,
+  hash,
   If,
   instanceIndex,
   mix,
   positionGeometry,
+  smoothstep,
   storage,
+  step,
   texture,
   uint,
   uniform,
@@ -39,6 +43,21 @@ import {
   vec3,
   vec4,
 } from "three/tsl";
+import {
+  getBend,
+  getBladeLocalOffset,
+  getClumpRotation,
+  getOriginalScale,
+  getPositionNoise,
+  getScale,
+  getVisibility,
+  getYOffset,
+} from "../../entities/Vegetation/Grass/GrassBladeData";
+import type { GrassCompute } from "../../entities/Vegetation/Grass/GrassCompute";
+import {
+  config as grassConfig,
+  uniforms as grassUniforms,
+} from "../../entities/Vegetation/Grass/config";
 import {
   computeGpuShadowPageAddress,
   decodeGpuShadowPageKey,
@@ -63,6 +82,7 @@ import {
   PINE_CANOPY_ALPHA_TEST,
 } from "../../entities/Vegetation/PineTreeCanopy";
 import { FlowerShadowCasterBucket } from "./FlowerShadowCasterBucket";
+import { GrassShadowCasterBucket } from "./GrassShadowCasterBucket";
 
 const PAGE_GRID_SIZE = SHADOW_PAGE_GRID_SIZE;
 const MINIMUM_PAGE_COORDINATE = SHADOW_MINIMUM_PAGE_COORDINATE;
@@ -98,6 +118,8 @@ export class ShadowAtlas {
   private pineCasterBucket?: PineShadowCasterBucket;
   private flowerCasterBucket?: FlowerShadowCasterBucket;
   private flowerCasterMesh?: Mesh;
+  private grassCasterBucket?: GrassShadowCasterBucket;
+  private grassCasterMesh?: Mesh;
   private isRenderTargetInitialized = false;
 
   constructor(args: ConstructorArgs) {
@@ -224,8 +246,30 @@ export class ShadowAtlas {
     this.scene.add(this.flowerCasterMesh);
   }
 
+  attachGrass(source: Mesh, compute: GrassCompute) {
+    if (this.grassCasterBucket) return;
+
+    this.grassCasterBucket = new GrassShadowCasterBucket(
+      this.renderer,
+      this.residency,
+      source,
+      compute,
+      this.coordinates.minimumWorldY,
+      this.coordinates.maximumWorldY,
+      this.sunDirection,
+    );
+    this.grassCasterMesh = new Mesh(
+      this.grassCasterBucket.geometry,
+      this.createGrassCasterMaterial(this.grassCasterBucket, compute),
+    );
+    this.grassCasterMesh.frustumCulled = false;
+    this.grassCasterMesh.renderOrder = 1;
+    this.scene.add(this.grassCasterMesh);
+  }
+
   render() {
-    if (!this.casterMesh && !this.flowerCasterMesh) return;
+    if (!this.casterMesh && !this.flowerCasterMesh && !this.grassCasterMesh)
+      return;
 
     if (this.casterSource) {
       this.casterSource.updateWorldMatrix(true, false);
@@ -234,6 +278,7 @@ export class ShadowAtlas {
     this.rigidCasterBucket?.run();
     this.pineCasterBucket?.run();
     this.flowerCasterBucket?.run();
+    this.grassCasterBucket?.run();
 
     const previousRenderTarget = this.renderer.getRenderTarget();
     const wasAutoClearEnabled = this.renderer.autoClear;
@@ -714,6 +759,153 @@ export class ShadowAtlas {
         .or(pageUv.y.greaterThan(1))
         .discard();
       opacityTextureNode.a.lessThan(FLOWER_ALPHA_TEST).discard();
+      return vec4(0);
+    })();
+    return material;
+  }
+
+  private createGrassCasterMaterial(
+    bucket: GrassShadowCasterBucket,
+    compute: GrassCompute,
+  ) {
+    const workItemsNode = storage(
+      bucket.workItemsAttribute,
+      "uvec4",
+      bucket.workItemsAttribute.count,
+    );
+    const material = new MeshBasicNodeMaterial();
+    material.colorWrite = false;
+    material.depthTest = true;
+    material.depthWrite = true;
+    material.side = DoubleSide;
+    material.vertexNode = Fn(() => {
+      const workItem = workItemsNode.element(instanceIndex);
+      const pageKey = workItem.x;
+      const slot = workItem.y;
+      const clumpIndex = workItem.z;
+      const bladeSlot = uint(attribute<"float">("grassBladeSlot"));
+      const bladeIndex = bladeSlot
+        .mul(grassConfig.CLUMP_COUNT)
+        .add(clumpIndex);
+      const clumpState = compute.clumpStateBuffer.element(clumpIndex);
+      const bladeState = compute.bladeStateBuffer.element(bladeIndex);
+      const clumpRotation = getClumpRotation(clumpState);
+      const bladeLocalOffset = getBladeLocalOffset(
+        bladeSlot,
+        clumpRotation,
+      );
+      const bladeOffsetX = clumpState.x.add(bladeLocalOffset.x);
+      const bladeOffsetZ = clumpState.y.add(bladeLocalOffset.y);
+      const playerDistanceSquared = bladeOffsetX
+        .mul(bladeOffsetX)
+        .add(bladeOffsetZ.mul(bladeOffsetZ));
+      const baseScale = getOriginalScale(bladeState).mul(clumpState.z);
+      const visibility = getVisibility(bladeState);
+      const scaleY = mix(baseScale, getScale(bladeState), visibility);
+      const bendXZ = getBend(bladeState).mul(visibility);
+      const bladeHeight = uv().y;
+      const bladeHeightSquared = bladeHeight.mul(bladeHeight);
+      const bendLengthSquared = bendXZ.dot(bendXZ);
+      const bendDrop = bendLengthSquared
+        .div(scaleY.mul(grassConfig.BLADE_HEIGHT * 2))
+        .mul(grassUniforms.uBendDropStrength);
+      const bendControlShape = bladeHeight
+        .mul(float(1).sub(bladeHeight))
+        .mul(grassUniforms.uBendControlPoint.mul(2));
+      const bendShape = bendControlShape.add(bladeHeightSquared);
+      const bendOffset = vec3(bendXZ.x, bendDrop.negate(), bendXZ.y).mul(
+        bendShape,
+      );
+      const widthDistanceFactor = smoothstep(
+        grassUniforms.uWidthNearRadiusSquared,
+        grassUniforms.uWidthFarRadiusSquared,
+        playerDistanceSquared,
+      );
+      const distanceWidthGain = mix(
+        1,
+        grassUniforms.uWidthFarGain,
+        widthDistanceFactor,
+      );
+      const widthScale = getPositionNoise(bladeState)
+        .add(0.5)
+        .mul(grassUniforms.uBladeWidth)
+        .mul(distanceWidthGain);
+      const densityFactor = playerDistanceSquared
+        .sub(grassUniforms.uFullDensityRadiusSquared)
+        .div(
+          grassUniforms.uDensityFalloffRadiusSquared.sub(
+            grassUniforms.uFullDensityRadiusSquared,
+          ),
+        )
+        .clamp();
+      const keepProbability = mix(
+        1,
+        grassUniforms.uFarDensity,
+        densityFactor,
+      );
+      const densityKeep = step(
+        hash(bladeIndex.add(9176)),
+        keepProbability,
+      );
+      const terrainKeep = step(grassConfig.MIN_VISIBLE_SCALE, baseScale);
+      const shadowKeep = densityKeep.max(visibility).mul(terrainKeep);
+
+      const absoluteSunY = this.sunDirection.y.abs().max(0.0001);
+      const horizontalSunLength = this.sunDirection.xz.length().max(0.0001);
+      const lightXAxis = vec3(
+        this.sunDirection.z,
+        0,
+        this.sunDirection.x.negate(),
+      ).div(horizontalSunLength);
+      const lightYAxis = this.sunDirection.cross(lightXAxis).normalize();
+      const bladeBase = vec3(
+        bladeOffsetX.add(grassUniforms.uPlayerPosition.x),
+        getYOffset(clumpState),
+        bladeOffsetZ.add(grassUniforms.uPlayerPosition.z),
+      );
+      const worldPosition = bladeBase
+        .add(lightXAxis.mul(positionGeometry.x.mul(widthScale)))
+        .add(vec3(0, positionGeometry.y.mul(scaleY), 0))
+        .add(bendOffset);
+      const { level, pageId } = decodeGpuShadowPageKey(pageKey);
+      const lightPosition = vec2(
+        worldPosition.dot(lightXAxis),
+        worldPosition.dot(lightYAxis),
+      );
+      const pageUv = lightPosition
+        .div(getGpuShadowPageWorldSize(level))
+        .sub(pageId);
+      varyingProperty("vec2", "grassShadowAtlasPageUv").assign(pageUv);
+
+      const relativeDepth = worldPosition.y.negate().div(absoluteSunY);
+      const minimumDepth = this.coordinates.maximumWorldY
+        .negate()
+        .div(absoluteSunY);
+      const maximumDepth = this.coordinates.minimumWorldY
+        .negate()
+        .div(absoluteSunY);
+      const normalizedDepth = relativeDepth
+        .sub(minimumDepth)
+        .div(maximumDepth.sub(minimumDepth));
+      const atlasUv = this.computeAtlasUv(slot, pageUv);
+      const clipPosition = vec4(
+        atlasUv.x.mul(2).sub(1),
+        atlasUv.y.mul(-2).add(1),
+        normalizedDepth,
+        1,
+      );
+      return shadowKeep
+        .greaterThan(0)
+        .select(clipPosition, vec4(-2, -2, 1, 1));
+    })();
+    material.fragmentNode = Fn(() => {
+      const pageUv = varyingProperty("vec2", "grassShadowAtlasPageUv");
+      pageUv.x
+        .lessThan(0)
+        .or(pageUv.y.lessThan(0))
+        .or(pageUv.x.greaterThan(1))
+        .or(pageUv.y.greaterThan(1))
+        .discard();
       return vec4(0);
     })();
     return material;

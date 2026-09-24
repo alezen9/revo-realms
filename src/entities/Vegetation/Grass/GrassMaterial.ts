@@ -31,8 +31,12 @@ import {
 } from "./GrassBladeData";
 
 export class GrassMaterial extends SpriteNodeMaterial {
+  readonly compute: GrassCompute;
+
   constructor(compute: GrassCompute) {
     super();
+
+    this.compute = compute;
 
     this.transparent = false;
     this.stencilWrite = false;

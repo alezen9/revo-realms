@@ -80,6 +80,7 @@ export default class Grass {
     );
 
     const mesh = new Mesh(geometry, this.material);
+    mesh.name = `grass_lod_${lod}`;
     mesh.frustumCulled = false;
 
     return mesh;
