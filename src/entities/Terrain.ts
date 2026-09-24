@@ -19,7 +19,6 @@ import {
   Group,
   LinearFilter,
   Mesh,
-  MeshLambertNodeMaterial,
   NoColorSpace,
   RedFormat,
   type Node,
@@ -33,6 +32,8 @@ import {
 } from "@dimforge/rapier3d";
 import { type State } from "../Game";
 import { realmConfig } from "../realm/config";
+import { DirectSunLambertNodeMaterial } from "../systems/ShadowManager/DirectSunMaterials";
+import { isDirectSunMaterialCaptureEnabled } from "../systems/ShadowManager/config";
 import { RevoColliderType } from "../types";
 import {
   assetManager,
@@ -113,7 +114,7 @@ const computeCausticsColor = Fn<CausticsArgs, Node<"vec3">>(
   },
 );
 
-class TerrainMaterial extends MeshLambertNodeMaterial {
+class TerrainMaterial extends DirectSunLambertNodeMaterial {
   constructor() {
     super();
 
@@ -169,13 +170,13 @@ class TerrainMaterial extends MeshLambertNodeMaterial {
 
     const surfaceColor = mix(landColor, waterColor, waterMask);
 
-    const shadowedColor = mix(
-      surfaceColor.mul(lightingManager.uBakedShadowBrightness),
-      surfaceColor,
-      terrainMapSample.r,
-    );
-
-    this.colorNode = shadowedColor;
+    this.colorNode = isDirectSunMaterialCaptureEnabled
+      ? surfaceColor
+      : mix(
+          surfaceColor.mul(lightingManager.uBakedShadowBrightness),
+          surfaceColor,
+          terrainMapSample.r,
+        );
 
     // NORMAL
     const normalAoSample = texture(

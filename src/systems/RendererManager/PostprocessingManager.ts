@@ -1,5 +1,10 @@
 import { ACESFilmicToneMapping, Matrix4, NoToneMapping, Vector3 } from "three";
-import { RenderPipeline, WebGPURenderer } from "three/webgpu";
+import {
+  RenderPipeline,
+  RGBFormat,
+  UnsignedInt101111Type,
+  WebGPURenderer,
+} from "three/webgpu";
 import {
   float,
   Fn,
@@ -8,6 +13,8 @@ import {
   int,
   max,
   mix,
+  mrt,
+  output,
   pass,
   renderOutput,
   screenUV,
@@ -27,6 +34,11 @@ import type { SceneManager } from "../SceneManager";
 import { assetManager, lightingManager } from "..";
 import { playerUniforms } from "../../entities/Player/PlayerMaterial";
 import { TSLUtils } from "../../utils/TSLUtils";
+import {
+  isDirectSunPreviewEnabled,
+  isDirectSunTargetEnabled,
+  isShadowBaseline,
+} from "../ShadowManager/config";
 
 const MAIN_SCENE_PASS_SAMPLES = 4;
 const LUMINANCE_WEIGHTS = vec3(0.2126, 0.7152, 0.0722);
@@ -68,6 +80,12 @@ export class PostprocessingManager extends RenderPipeline {
       this.sceneManager.renderCamera,
       { samples: MAIN_SCENE_PASS_SAMPLES },
     );
+    if (isDirectSunTargetEnabled) {
+      this.mainScenePass.setMRT(mrt({ output, directSun: vec4(0) }));
+      const directSunTexture = this.mainScenePass.getTexture("directSun");
+      directSunTexture.format = RGBFormat;
+      directSunTexture.type = UnsignedInt101111Type;
+    }
     this.waterPass = pass(
       this.sceneManager.waterScene,
       this.sceneManager.renderCamera,
@@ -186,6 +204,14 @@ export class PostprocessingManager extends RenderPipeline {
 
   private makeGraph() {
     this.outputColorTransform = false;
+    if (isDirectSunPreviewEnabled)
+      return renderOutput(
+        vec4(
+          this.mainScenePass.getTextureNode("directSun").sample(screenUV).rgb,
+          1,
+        ),
+        NoToneMapping,
+      );
     const mainSceneColor = this.mainScenePass.getTextureNode();
     const water = this.waterPass.getTextureNode();
     const colorHDR = mainSceneColor.mul(water.a.oneMinus()).add(water.rgb);
@@ -209,12 +235,13 @@ export class PostprocessingManager extends RenderPipeline {
     });
 
     const withBloomHDR = colorHDR.add(bloomPass);
-    const shadowFactor = this.computeBallShadowFactor();
-    const shadowedHDR = mix(
-      withBloomHDR.mul(lightingManager.uPlayerShadowBrightness),
-      withBloomHDR,
-      shadowFactor,
-    );
+    const shadowedHDR = isShadowBaseline
+      ? withBloomHDR
+      : mix(
+          withBloomHDR.mul(lightingManager.uPlayerShadowBrightness),
+          withBloomHDR,
+          this.computeBallShadowFactor(),
+        );
 
     const toneMapped = toneMapping(
       ACESFilmicToneMapping,

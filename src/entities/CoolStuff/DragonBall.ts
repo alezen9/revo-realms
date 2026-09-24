@@ -5,7 +5,7 @@ import {
   windManager,
 } from "../../systems";
 import { Mesh } from "three";
-import { MeshStandardNodeMaterial } from "three/webgpu";
+import { DirectSunStandardNodeMaterial } from "../../systems/ShadowManager/DirectSunMaterials";
 import { ColliderDesc } from "@dimforge/rapier3d";
 import { physicsManager, sceneManager } from "../../systems";
 import { RevoColliderType } from "../../types";
@@ -17,7 +17,7 @@ const uniforms = {
   uUvScale: uniform(4.75),
 };
 
-class GokuStatueMaterial extends MeshStandardNodeMaterial {
+class GokuStatueMaterial extends DirectSunStandardNodeMaterial {
   constructor() {
     super();
 

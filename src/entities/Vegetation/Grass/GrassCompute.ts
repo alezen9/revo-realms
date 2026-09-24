@@ -35,6 +35,7 @@ import { assetManager, sceneManager, windManager } from "../../../systems";
 import { TSLUtils } from "../../../utils/TSLUtils";
 import { gameDeltaTime, gameTime } from "../../../utils/GameTime";
 import { config, uniforms } from "./config";
+import { isDirectSunMaterialCaptureEnabled } from "../../../systems/ShadowManager/config";
 import {
   getBladeLocalOffset,
   getClumpRotation,
@@ -274,7 +275,8 @@ export class GrassCompute {
 
       clumpState.z = terrainGrassScale;
       clumpState.assign(setYOffset(clumpState, terrainYOffset));
-      clumpState.assign(setBakedShadowFactor(clumpState, terrainSample.r));
+      if (!isDirectSunMaterialCaptureEnabled)
+        clumpState.assign(setBakedShadowFactor(clumpState, terrainSample.r));
       clumpState.assign(setTerrainCacheValidity(clumpState, 1));
     });
 

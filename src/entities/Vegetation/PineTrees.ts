@@ -5,7 +5,8 @@ import {
   physicsManager,
   sceneManager,
 } from "../../systems";
-import { BatchedMesh, MeshLambertNodeMaterial } from "three/webgpu";
+import { BatchedMesh } from "three/webgpu";
+import { DirectSunLambertNodeMaterial } from "../../systems/ShadowManager/DirectSunMaterials";
 import {
   attribute,
   normalMap,
@@ -28,7 +29,7 @@ const uniforms = {
   uBarkUvScale: uniform(3),
 };
 
-class PineTreeCanopyMaterial extends MeshLambertNodeMaterial {
+class PineTreeCanopyMaterial extends DirectSunLambertNodeMaterial {
   constructor() {
     super();
     this.forceSinglePass = true;
@@ -48,7 +49,7 @@ class PineTreeCanopyMaterial extends MeshLambertNodeMaterial {
   }
 }
 
-class PineTreeBarkMaterial extends MeshLambertNodeMaterial {
+class PineTreeBarkMaterial extends DirectSunLambertNodeMaterial {
   constructor() {
     super();
     this.forceSinglePass = true;

@@ -6,6 +6,7 @@ import {
   hash,
   instanceIndex,
   mix,
+  mrt,
   saturate,
   sin,
   smoothstep,
@@ -16,6 +17,7 @@ import {
 } from "three/tsl";
 import { SpriteNodeMaterial } from "three/webgpu";
 import { lightingManager } from "../../../systems";
+import { isDirectSunMaterialCaptureEnabled } from "../../../systems/ShadowManager/config";
 import { config, uniforms } from "./config";
 import type { GrassCompute } from "./GrassCompute";
 import {
@@ -57,7 +59,9 @@ export class GrassMaterial extends SpriteNodeMaterial {
     const bendXZ = getBend(bladeState);
     const scaleY = getScale(bladeState);
     const positionNoise = getPositionNoise(bladeState);
-    const bakedShadowFactor = getBakedShadowFactor(clumpState);
+    const bakedShadowFactor = isDirectSunMaterialCaptureEnabled
+      ? float(1)
+      : getBakedShadowFactor(clumpState);
 
     const bladeUv = uv();
     const bladeHeight = bladeUv.y;
@@ -289,6 +293,20 @@ export class GrassMaterial extends SpriteNodeMaterial {
     );
 
     const shadedColor = diffuseColor.add(sheenColor).add(transmittedColor);
+
+    if (isDirectSunMaterialCaptureEnabled) {
+      const sunLighting = sceneLighting.sub(
+        hemisphereLight.mul(uniforms.uLightExposure),
+      );
+      const directSun = albedo
+        .mul(detailOcclusion)
+        .mul(sunLighting)
+        .add(sheenColor)
+        .add(transmittedColor);
+      this.mrtNode = mrt({
+        directSun: vec4(mix(directSun, vec3(0), uniforms.uLodDebugEnabled), 1),
+      });
+    }
 
     // LOD DEBUG
     const lodIndex = instanceIndex.div(config.BLADE_COUNT);
