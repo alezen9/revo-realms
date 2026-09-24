@@ -120,6 +120,7 @@ export class ShadowAtlas {
   private flowerCasterMesh?: Mesh;
   private grassCasterBucket?: GrassShadowCasterBucket;
   private grassCasterMesh?: Mesh;
+  private isGrassEnabled = true;
   private isRenderTargetInitialized = false;
 
   constructor(args: ConstructorArgs) {
@@ -217,11 +218,7 @@ export class ShadowAtlas {
     this.scene.add(this.casterMesh);
   }
 
-  attachFlowers(
-    source: Mesh,
-    ssbo: FlowersSsbo,
-    opacityTexture: Texture,
-  ) {
+  attachFlowers(source: Mesh, ssbo: FlowersSsbo, opacityTexture: Texture) {
     if (this.flowerCasterBucket) return;
 
     this.flowerCasterBucket = new FlowerShadowCasterBucket(
@@ -267,6 +264,11 @@ export class ShadowAtlas {
     this.scene.add(this.grassCasterMesh);
   }
 
+  setGrassEnabled(isEnabled: boolean) {
+    this.isGrassEnabled = isEnabled;
+    if (this.grassCasterMesh) this.grassCasterMesh.visible = isEnabled;
+  }
+
   render() {
     if (!this.casterMesh && !this.flowerCasterMesh && !this.grassCasterMesh)
       return;
@@ -278,7 +280,7 @@ export class ShadowAtlas {
     this.rigidCasterBucket?.run();
     this.pineCasterBucket?.run();
     this.flowerCasterBucket?.run();
-    this.grassCasterBucket?.run();
+    if (this.isGrassEnabled) this.grassCasterBucket?.run();
 
     const previousRenderTarget = this.renderer.getRenderTarget();
     const wasAutoClearEnabled = this.renderer.autoClear;
@@ -297,7 +299,7 @@ export class ShadowAtlas {
     }
   }
 
-  computeVisibility(
+  computeVisibilityAndCoverage(
     worldPosition: Node<"vec3">,
     sceneDepth: Node<"float">,
     viewDepth: Node<"float">,
@@ -305,12 +307,16 @@ export class ShadowAtlas {
     return Fn(() => {
       const visibility = float(1).toVar();
       const nearVisibility = float(1).toVar();
+      const coverage = float(0).toVar();
+      const nearCoverage = float(0).toVar();
       const hasNearPage = uint(0).toVar();
       If(viewDepth.lessThan(shadowPageCoordinateConfig.transitionEnd), () => {
         const nearPage = this.lookupPage(worldPosition, sceneDepth, 0);
         If(nearPage.isValid, () => {
           nearVisibility.assign(nearPage.visibility);
+          nearCoverage.assign(nearPage.coverage);
           visibility.assign(nearPage.visibility);
+          coverage.assign(nearPage.coverage);
           hasNearPage.assign(1);
         });
       });
@@ -334,10 +340,18 @@ export class ShadowAtlas {
                   farPage.visibility,
                 ),
             );
+            coverage.assign(
+              hasNearPage
+                .greaterThan(0)
+                .select(
+                  mix(nearCoverage, farPage.coverage, blend),
+                  farPage.coverage,
+                ),
+            );
           });
         },
       );
-      return visibility;
+      return vec2(visibility, coverage);
     })();
   }
 
@@ -353,22 +367,23 @@ export class ShadowAtlas {
       maximumWorldY: this.coordinates.maximumWorldY,
       level: uint(level),
     });
-    const negativeTap = this.samplePage(
-      address,
-      sceneDepth,
-      level,
-      vec2(-0.5),
-    );
-    const positiveTap = this.samplePage(
-      address,
-      sceneDepth,
-      level,
-      vec2(0.5),
-    );
+    const negativeTap = this.samplePage(address, sceneDepth, level, vec2(-0.5));
+    const positiveTap = this.samplePage(address, sceneDepth, level, vec2(0.5));
 
     return {
-      isValid: negativeTap.isValid.and(positiveTap.isValid),
-      visibility: negativeTap.visibility.add(positiveTap.visibility).mul(0.5),
+      isValid: negativeTap.isValid.or(positiveTap.isValid),
+      coverage: negativeTap.isValid
+        .select(float(0.5), float(0))
+        .add(positiveTap.isValid.select(float(0.5), float(0))),
+      visibility: negativeTap.isValid
+        .and(positiveTap.isValid)
+        .select(
+          negativeTap.visibility.add(positiveTap.visibility).mul(0.5),
+          negativeTap.isValid.select(
+            negativeTap.visibility,
+            positiveTap.visibility,
+          ),
+        ),
     };
   }
 
@@ -395,9 +410,7 @@ export class ShadowAtlas {
     );
     const mapping = this.residency.resolvePage(pageKey);
     const halfPageTexel = 0.5 / this.pageTexelSize;
-    const pageUv = pagePosition
-      .fract()
-      .clamp(halfPageTexel, 1 - halfPageTexel);
+    const pageUv = pagePosition.fract().clamp(halfPageTexel, 1 - halfPageTexel);
     const atlasUv = this.computeAtlasUv(mapping.slot, pageUv);
     const visibility = this.depthTextureNode
       .sample(atlasUv)
@@ -784,16 +797,11 @@ export class ShadowAtlas {
       const slot = workItem.y;
       const clumpIndex = workItem.z;
       const bladeSlot = uint(attribute<"float">("grassBladeSlot"));
-      const bladeIndex = bladeSlot
-        .mul(grassConfig.CLUMP_COUNT)
-        .add(clumpIndex);
+      const bladeIndex = bladeSlot.mul(grassConfig.CLUMP_COUNT).add(clumpIndex);
       const clumpState = compute.clumpStateBuffer.element(clumpIndex);
       const bladeState = compute.bladeStateBuffer.element(bladeIndex);
       const clumpRotation = getClumpRotation(clumpState);
-      const bladeLocalOffset = getBladeLocalOffset(
-        bladeSlot,
-        clumpRotation,
-      );
+      const bladeLocalOffset = getBladeLocalOffset(bladeSlot, clumpRotation);
       const bladeOffsetX = clumpState.x.add(bladeLocalOffset.x);
       const bladeOffsetZ = clumpState.y.add(bladeLocalOffset.y);
       const playerDistanceSquared = bladeOffsetX
@@ -838,15 +846,8 @@ export class ShadowAtlas {
           ),
         )
         .clamp();
-      const keepProbability = mix(
-        1,
-        grassUniforms.uFarDensity,
-        densityFactor,
-      );
-      const densityKeep = step(
-        hash(bladeIndex.add(9176)),
-        keepProbability,
-      );
+      const keepProbability = mix(1, grassUniforms.uFarDensity, densityFactor);
+      const densityKeep = step(hash(bladeIndex.add(9176)), keepProbability);
       const terrainKeep = step(grassConfig.MIN_VISIBLE_SCALE, baseScale);
       const shadowKeep = densityKeep.max(visibility).mul(terrainKeep);
 
@@ -894,9 +895,7 @@ export class ShadowAtlas {
         normalizedDepth,
         1,
       );
-      return shadowKeep
-        .greaterThan(0)
-        .select(clipPosition, vec4(-2, -2, 1, 1));
+      return shadowKeep.greaterThan(0).select(clipPosition, vec4(-2, -2, 1, 1));
     })();
     material.fragmentNode = Fn(() => {
       const pageUv = varyingProperty("vec2", "grassShadowAtlasPageUv");

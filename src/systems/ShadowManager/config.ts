@@ -5,6 +5,7 @@ export const SHADOW_DEBUG_VIEWS = [
   "pageIds",
   "pageEdges",
   "shadowDepth",
+  "pageCoverage",
   "range",
 ] as const;
 

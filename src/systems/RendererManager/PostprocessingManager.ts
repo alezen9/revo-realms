@@ -95,7 +95,8 @@ const SHADOW_DEBUG_VIEW_INDEX: Record<ShadowDebugView, number> = {
   pageIds: 2,
   pageEdges: 3,
   shadowDepth: 4,
-  range: 5,
+  pageCoverage: 5,
+  range: 6,
 };
 
 export class PostprocessingManager extends RenderPipeline {
@@ -124,8 +125,10 @@ export class PostprocessingManager extends RenderPipeline {
   private uShadowDebugView = uniform(
     SHADOW_DEBUG_VIEW_INDEX[shadowConfig.initialDebugView],
   );
+  private uShadowVisibilityLayer = uniform(0);
   private shadowDebugState = {
     view: shadowConfig.initialDebugView,
+    visibilityLayer: "all",
     cameraPageX: 0,
     cameraPageY: 0,
     minimumWorldY: 0,
@@ -133,6 +136,11 @@ export class PostprocessingManager extends RenderPipeline {
     sunElevationDegrees: 0,
     rayDepthSpan: 0,
     isDynamicCasterEnabled: true,
+    isReceiverRequestStageEnabled: true,
+    isDynamicAtlasStageEnabled: true,
+    isRigidAtlasStageEnabled: true,
+    isVegetationAtlasStageEnabled: true,
+    isGrassCasterStageEnabled: true,
   };
   private uSaturation = uniform(1);
   private uProjectionMatrixInverse = uniform(new Matrix4());
@@ -315,11 +323,32 @@ export class PostprocessingManager extends RenderPipeline {
           "Page IDs": "pageIds",
           "Page edges": "pageEdges",
           "Shadow visibility": "shadowDepth",
+          "Page coverage": "pageCoverage",
           Range: "range",
         },
       })
       .on("change", ({ value }) => {
         this.uShadowDebugView.value = SHADOW_DEBUG_VIEW_INDEX[value];
+      });
+    this.debugFolder
+      .addBinding(this.shadowDebugState, "visibilityLayer", {
+        label: "Visibility layer",
+        options: {
+          All: "all",
+          Player: "player",
+          Rigid: "rigid",
+          Vegetation: "vegetation",
+        },
+      })
+      .on("change", ({ value }) => {
+        this.uShadowVisibilityLayer.value =
+          value === "player"
+            ? 1
+            : value === "rigid"
+              ? 2
+              : value === "vegetation"
+                ? 3
+                : 0;
       });
     this.debugFolder.addBinding(this.shadowDebugState, "cameraPageX", {
       label: "Camera page X",
@@ -349,6 +378,31 @@ export class PostprocessingManager extends RenderPipeline {
       this.shadowDebugState,
       "isDynamicCasterEnabled",
       { label: "Dynamic player caster" },
+    );
+    this.debugFolder.addBinding(
+      this.shadowDebugState,
+      "isReceiverRequestStageEnabled",
+      { label: "Run receiver requests" },
+    );
+    this.debugFolder.addBinding(
+      this.shadowDebugState,
+      "isDynamicAtlasStageEnabled",
+      { label: "Run player atlas" },
+    );
+    this.debugFolder.addBinding(
+      this.shadowDebugState,
+      "isRigidAtlasStageEnabled",
+      { label: "Run rigid atlas" },
+    );
+    this.debugFolder.addBinding(
+      this.shadowDebugState,
+      "isVegetationAtlasStageEnabled",
+      { label: "Run vegetation atlas" },
+    );
+    this.debugFolder.addBinding(
+      this.shadowDebugState,
+      "isGrassCasterStageEnabled",
+      { label: "Run grass caster" },
     );
   }
 
@@ -456,19 +510,30 @@ export class PostprocessingManager extends RenderPipeline {
       .mul(lightingManager.uFogDensity, viewDepth, viewDepth)
       .negate()
       .exp();
-    const dynamicVisibility = this.shadowAtlas
-      ? this.shadowAtlas.computeVisibility(worldPosition, depth, viewDepth)
-      : float(1);
-    const staticVisibility = this.staticShadowAtlas
-      ? this.staticShadowAtlas.computeVisibility(
+    const dynamicSample = this.shadowAtlas
+      ? this.shadowAtlas.computeVisibilityAndCoverage(
           worldPosition,
           depth,
           viewDepth,
         )
-      : float(1);
-    const pineVisibility = this.pineShadowAtlas
-      ? this.pineShadowAtlas.computeVisibility(worldPosition, depth, viewDepth)
-      : float(1);
+      : vec2(1, 0);
+    const staticSample = this.staticShadowAtlas
+      ? this.staticShadowAtlas.computeVisibilityAndCoverage(
+          worldPosition,
+          depth,
+          viewDepth,
+        )
+      : vec2(1, 0);
+    const pineSample = this.pineShadowAtlas
+      ? this.pineShadowAtlas.computeVisibilityAndCoverage(
+          worldPosition,
+          depth,
+          viewDepth,
+        )
+      : vec2(1, 0);
+    const dynamicVisibility = dynamicSample.x;
+    const staticVisibility = staticSample.x;
+    const pineVisibility = pineSample.x;
     const resolvedVisibility = dynamicVisibility
       .min(staticVisibility)
       .min(pineVisibility);
@@ -479,6 +544,36 @@ export class PostprocessingManager extends RenderPipeline {
       viewDepth,
     );
     const visibility = mix(resolvedVisibility, float(1), distanceFade);
+    const debugVisibility = mix(
+      select(
+        this.uShadowVisibilityLayer.equal(1),
+        dynamicVisibility,
+        select(
+          this.uShadowVisibilityLayer.equal(2),
+          staticVisibility,
+          select(
+            this.uShadowVisibilityLayer.equal(3),
+            pineVisibility,
+            resolvedVisibility,
+          ),
+        ),
+      ),
+      float(1),
+      distanceFade,
+    );
+    const debugCoverage = select(
+      this.uShadowVisibilityLayer.equal(1),
+      dynamicSample.y,
+      select(
+        this.uShadowVisibilityLayer.equal(2),
+        staticSample.y,
+        select(
+          this.uShadowVisibilityLayer.equal(3),
+          pineSample.y,
+          dynamicSample.y.max(staticSample.y).max(pineSample.y),
+        ),
+      ),
+    );
     const removedDirectSun = directSun
       .mul(fogTransmittance)
       .mul(visibility.oneMinus())
@@ -486,13 +581,15 @@ export class PostprocessingManager extends RenderPipeline {
 
     return {
       color: vec4(mainSceneColor.rgb.sub(removedDirectSun), mainSceneColor.a),
-      visibility,
+      visibility: debugVisibility,
+      coverage: debugCoverage,
     };
   }
 
   private applyShadowDebug(
     finalColor: Color3Node,
     shadowVisibility: Node<"float">,
+    pageCoverage: Node<"float">,
   ) {
     const depth = this.getMainSceneTextureNode("depth").sample(screenUV).r;
     const viewPosition = getViewPosition(
@@ -537,6 +634,7 @@ export class PostprocessingManager extends RenderPipeline {
       pageColor,
     ).mul(isSky.oneMinus());
     const shadowDepth = vec3(shadowVisibility);
+    const coverageColor = vec3(pageCoverage);
     const rangeColor = select(
       address.isOutOfRange,
       vec3(1, 0, 1),
@@ -554,7 +652,11 @@ export class PostprocessingManager extends RenderPipeline {
           select(
             this.uShadowDebugView.equal(4),
             shadowDepth,
-            select(this.uShadowDebugView.equal(5), rangeColor, finalColor),
+            select(
+              this.uShadowDebugView.equal(5),
+              coverageColor,
+              select(this.uShadowDebugView.equal(6), rangeColor, finalColor),
+            ),
           ),
         ),
       ),
@@ -617,7 +719,11 @@ export class PostprocessingManager extends RenderPipeline {
     const desaturated = mix(vec3(luminance), toneMapped, this.uSaturation);
 
     const finalColor = shadowConfig.isPagedEnabled
-      ? this.applyShadowDebug(desaturated, pagedShadow?.visibility ?? float(1))
+      ? this.applyShadowDebug(
+          desaturated,
+          pagedShadow?.visibility ?? float(1),
+          pagedShadow?.coverage ?? float(0),
+        )
       : desaturated;
 
     return renderOutput(finalColor, NoToneMapping);
@@ -761,7 +867,10 @@ export class PostprocessingManager extends RenderPipeline {
   private syncFlowerShadowCaster() {
     if (!this.pineShadowAtlas) return;
     const source = this.sceneManager.mainScene.getObjectByName("flower_batch");
-    if (!(source instanceof Mesh) || !(source.material instanceof FlowerMaterial))
+    if (
+      !(source instanceof Mesh) ||
+      !(source.material instanceof FlowerMaterial)
+    )
       return;
     this.pineShadowAtlas.attachFlowers(
       source,
@@ -773,7 +882,10 @@ export class PostprocessingManager extends RenderPipeline {
   private syncGrassShadowCaster() {
     if (!this.pineShadowAtlas) return;
     const source = this.sceneManager.mainScene.getObjectByName("grass_lod_2");
-    if (!(source instanceof Mesh) || !(source.material instanceof GrassMaterial))
+    if (
+      !(source instanceof Mesh) ||
+      !(source.material instanceof GrassMaterial)
+    )
       return;
     this.pineShadowAtlas.attachGrass(source, source.material.compute);
   }
@@ -814,14 +926,25 @@ export class PostprocessingManager extends RenderPipeline {
       this.syncPineShadowCaster();
       this.syncFlowerShadowCaster();
       this.syncGrassShadowCaster();
-      this.shadowPageRequests?.run();
-      this.pineShadowPages?.run();
-      this.shadowResidency?.run();
-      this.staticShadowResidency?.run();
-      this.pineShadowResidency?.run();
-      this.shadowAtlas?.render();
-      this.staticShadowAtlas?.render();
-      this.pineShadowAtlas?.render();
+      if (this.shadowDebugState.isReceiverRequestStageEnabled)
+        this.shadowPageRequests?.run();
+      if (this.shadowDebugState.isVegetationAtlasStageEnabled)
+        this.pineShadowPages?.run();
+      if (this.shadowDebugState.isDynamicAtlasStageEnabled)
+        this.shadowResidency?.run();
+      if (this.shadowDebugState.isRigidAtlasStageEnabled)
+        this.staticShadowResidency?.run();
+      if (this.shadowDebugState.isVegetationAtlasStageEnabled)
+        this.pineShadowResidency?.run();
+      if (this.shadowDebugState.isDynamicAtlasStageEnabled)
+        this.shadowAtlas?.render();
+      if (this.shadowDebugState.isRigidAtlasStageEnabled)
+        this.staticShadowAtlas?.render();
+      this.pineShadowAtlas?.setGrassEnabled(
+        this.shadowDebugState.isGrassCasterStageEnabled,
+      );
+      if (this.shadowDebugState.isVegetationAtlasStageEnabled)
+        this.pineShadowAtlas?.render();
       this.schedulingProof?.run();
       this.renderer.toneMapping = toneMapping;
       this.renderer.outputColorSpace = outputColorSpace;
