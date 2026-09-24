@@ -270,7 +270,36 @@ export class ShadowAtlas {
       maximumWorldY: this.coordinates.maximumWorldY,
       level: uint(level),
     });
-    const localPage = address.pageId.sub(MINIMUM_PAGE_COORDINATE);
+    const negativeTap = this.samplePage(
+      address,
+      sceneDepth,
+      level,
+      vec2(-0.5),
+    );
+    const positiveTap = this.samplePage(
+      address,
+      sceneDepth,
+      level,
+      vec2(0.5),
+    );
+
+    return {
+      isValid: negativeTap.isValid.and(positiveTap.isValid),
+      visibility: negativeTap.visibility.add(positiveTap.visibility).mul(0.5),
+    };
+  }
+
+  private samplePage(
+    address: ReturnType<typeof computeGpuShadowPageAddress>,
+    sceneDepth: Node<"float">,
+    level: number,
+    texelOffset: Node<"vec2">,
+  ) {
+    const pagePosition = address.pageId
+      .add(address.pageUv)
+      .add(texelOffset.div(this.pageTexelSize));
+    const pageId = pagePosition.floor();
+    const localPage = pageId.sub(MINIMUM_PAGE_COORDINATE);
     const isInsideVirtualGrid = localPage.x
       .greaterThanEqual(0)
       .and(localPage.y.greaterThanEqual(0))
@@ -283,7 +312,9 @@ export class ShadowAtlas {
     );
     const mapping = this.residency.resolvePage(pageKey);
     const halfPageTexel = 0.5 / this.pageTexelSize;
-    const pageUv = address.pageUv.clamp(halfPageTexel, 1 - halfPageTexel);
+    const pageUv = pagePosition
+      .fract()
+      .clamp(halfPageTexel, 1 - halfPageTexel);
     const atlasUv = this.computeAtlasUv(mapping.slot, pageUv);
     const visibility = this.depthTextureNode
       .sample(atlasUv)
