@@ -27,6 +27,7 @@ import {
   Fn,
   If,
   instanceIndex,
+  mix,
   positionGeometry,
   storage,
   texture,
@@ -246,7 +247,7 @@ export class ShadowAtlas {
               hasNearPage
                 .greaterThan(0)
                 .select(
-                  nearVisibility.mix(farPage.visibility, blend),
+                  mix(nearVisibility, farPage.visibility, blend),
                   farPage.visibility,
                 ),
             );

@@ -62,8 +62,8 @@ export const encodeGpuShadowPageKey = (
 
 export const shadowPageCoordinateConfig = Object.freeze({
   pageWorldSize: 32,
-  transitionStart: 64,
-  transitionEnd: 96,
+  transitionStart: 96,
+  transitionEnd: 128,
   minimumSunElevationDegrees: 15,
   maximumSunElevationDegrees: 85,
   terrainBelowPadding: 8,

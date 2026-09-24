@@ -74,6 +74,9 @@ const LUMINANCE_WEIGHTS = vec3(0.2126, 0.7152, 0.0722);
 const BALL_SHADOW_PENUMBRA = 0.08;
 const BALL_DEPTH_MATCH_EPSILON = 0.05;
 const STATIC_SHADOW_PAGE_TEXEL_SIZE = 256;
+const SHADOW_MAX_DISTANCE = 150;
+const SHADOW_FADE_START_RATIO = 0.64;
+const SHADOW_FADE_END_RATIO = 0.9;
 const STATIC_SHADOW_CASTER_NAMES = [
   "goku_statue",
   "leviathan_axe",
@@ -133,6 +136,7 @@ export class PostprocessingManager extends RenderPipeline {
   private uProjectionMatrixInverse = uniform(new Matrix4());
   private uCameraWorldMatrix = uniform(new Matrix4());
   private uCameraPosition = uniform(new Vector3());
+  private uCameraFar = uniform(150);
   private uPagedShadowVisibility = uniform(shadowConfig.initialVisibility);
   private saturationTarget = 1;
   private saturationLerpSpeed = 14;
@@ -220,6 +224,7 @@ export class PostprocessingManager extends RenderPipeline {
     this.uProjectionMatrixInverse.value = camera.projectionMatrixInverse;
     this.uCameraWorldMatrix.value = camera.matrixWorld;
     this.uCameraPosition.value = camera.position;
+    this.uCameraFar.value = camera.far;
   }
 
   private setupDirectSunTarget() {
@@ -462,9 +467,16 @@ export class PostprocessingManager extends RenderPipeline {
     const pineVisibility = this.pineShadowAtlas
       ? this.pineShadowAtlas.computeVisibility(worldPosition, depth, viewDepth)
       : float(1);
-    const visibility = dynamicVisibility
+    const resolvedVisibility = dynamicVisibility
       .min(staticVisibility)
       .min(pineVisibility);
+    const shadowDistance = this.uCameraFar.min(SHADOW_MAX_DISTANCE);
+    const distanceFade = smoothstep(
+      shadowDistance.mul(SHADOW_FADE_START_RATIO),
+      shadowDistance.mul(SHADOW_FADE_END_RATIO),
+      viewDepth,
+    );
+    const visibility = mix(resolvedVisibility, float(1), distanceFade);
     const removedDirectSun = directSun
       .mul(fogTransmittance)
       .mul(visibility.oneMinus())

@@ -27,7 +27,7 @@ import {
   SHADOW_REQUESTED_PAGE_COUNTER,
 } from "./ShadowPageRequests";
 
-export const PINE_SHADOW_PAGE_CAPACITY = 16;
+export const PINE_SHADOW_PAGE_CAPACITY = 64;
 
 export class PineShadowPages {
   readonly requestListAttribute = new StorageBufferAttribute(

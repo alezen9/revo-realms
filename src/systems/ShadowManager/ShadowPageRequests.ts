@@ -244,7 +244,7 @@ export class ShadowPageRequests {
             Loop(
               { start: 0, end: SHADOW_PAGE_LEVEL_COUNT, type: "int" },
               ({ i: levelIndex }) => {
-                const level = uint(levelIndex);
+                const level = uint(levelIndex).toVar();
                 const shouldRequest = level
                   .equal(uint(0))
                   .and(
@@ -269,7 +269,7 @@ export class ShadowPageRequests {
                     maximumWorldY: this.coordinates.maximumWorldY,
                     level,
                   });
-                  const pageId = ivec2(address.pageId);
+                  const pageId = ivec2(address.pageId).toVar();
                   const maximumPageCoordinate =
                     MINIMUM_PAGE_COORDINATE + PAGE_GRID_SIZE;
                   const isInsideGrid = pageId.x
