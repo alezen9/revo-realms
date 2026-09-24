@@ -7,17 +7,13 @@ import {
 import {
   atomicAdd,
   atomicStore,
-  Break,
   Fn,
   If,
   instanceIndex,
-  Loop,
   storage,
-  uint,
 } from "three/tsl";
 import { PINE_CANOPY_MAXIMUM_SWAY } from "../../entities/Vegetation/PineTreeCanopy";
 import {
-  decodeGpuShadowPageKey,
   SHADOW_PAGE_LEVEL_COUNT,
   type ShadowPageCoordinates,
 } from "./ShadowPageCoordinates";
@@ -191,11 +187,6 @@ export class PineShadowPages {
       "uint",
       receiverCounters.count,
     );
-    const pageRanges = storage(
-      this.pageRangesAttribute,
-      "uvec4",
-      this.pageRangesAttribute.count,
-    );
     const requestList = storage(
       this.requestListAttribute,
       "uint",
@@ -222,38 +213,13 @@ export class PineShadowPages {
       });
       If(requestIndex.lessThan(requestedCount), () => {
         const pageKey = receiverRequestList.element(requestIndex);
-        const {
-          level,
-          localPageX: pageX,
-          localPageY: pageY,
-        } = decodeGpuShadowPageKey(pageKey);
-        const hasOverlap = uint(0).toVar();
-        Loop(
-          { start: 0, end: this.instanceCount, type: "uint" },
-          ({ i: pineIndex }) => {
-            const range = pageRanges.element(
-              pineIndex.mul(SHADOW_PAGE_LEVEL_COUNT).add(level),
-            );
-            const overlaps = pageX
-              .greaterThanEqual(range.x)
-              .and(pageY.greaterThanEqual(range.y))
-              .and(pageX.lessThanEqual(range.z))
-              .and(pageY.lessThanEqual(range.w));
-            If(overlaps, () => {
-              hasOverlap.assign(1);
-              Break();
-            });
-          },
-        );
-        If(hasOverlap.greaterThan(0), () => {
-          const outputIndex = atomicAdd(counters.element(0), 1);
-          If(outputIndex.lessThan(PINE_SHADOW_PAGE_CAPACITY), () => {
-            requestList.element(outputIndex).assign(pageKey);
-          });
+        const outputIndex = atomicAdd(counters.element(0), 1);
+        If(outputIndex.lessThan(PINE_SHADOW_PAGE_CAPACITY), () => {
+          requestList.element(outputIndex).assign(pageKey);
         });
       });
     })().compute(receiverRequests.count, [64]);
-    filter.name = "Filter pine shadow page requests";
+    filter.name = "Gather vegetation shadow page requests";
 
     return { reset, filter };
   }

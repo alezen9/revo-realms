@@ -70,6 +70,8 @@ const getConfig = () => {
   };
 };
 const config = getConfig();
+export const FLOWER_SHADOW_INSTANCE_COUNT = config.COUNT;
+export const FLOWER_ALPHA_TEST = 0.15;
 
 const uniforms = {
   uPlayerDeltaXZ: uniform(new Vector2(0, 0)),
@@ -92,7 +94,7 @@ const uniforms = {
   uMaxScale: uniform(config.MAX_SCALE),
 };
 
-class FlowersSsbo {
+export class FlowersSsbo {
   // x -> offsetX (0 unused)
   // y -> offsetZ (0 unused)
   // z -> 0/12 offsetY - 12/1 visibility - 13/6 grass scale (5 unused)
@@ -243,26 +245,19 @@ class FlowersSsbo {
 
     data.assign(this.setVisibility(data, isVisible));
 
-    If(isVisible, () => {
-      // Y offset
-      const mapUv = TSLUtils.computeMapUvByPosition(worldPos.xz);
-      const heightUv = vec2(mapUv.x, float(1).sub(mapUv.y));
-      const yOffset = texture(assetManager.resources.heightmap, heightUv).r;
-      data.assign(this.setYOffset(data, yOffset));
+    const mapUv = TSLUtils.computeMapUvByPosition(worldPos.xz);
+    const heightUv = vec2(mapUv.x, float(1).sub(mapUv.y));
+    const yOffset = texture(assetManager.resources.heightmap, heightUv).r;
+    data.assign(this.setYOffset(data, yOffset));
 
-      // Grass scale
-      const grassMapValue = texture(
-        assetManager.resources.terrainMaps,
-        TSLUtils.computeMapUvByPosition(worldPos.xz),
-      ).g;
-      const grassScale = grassMapValue
-        .sub(0.5)
-        .div(1 - 0.5)
-        .clamp();
-      const grassVisibility = step(0.05, grassScale);
-      data.assign(this.setGrassScale(data, grassScale));
-      data.assign(this.setVisibility(data, grassVisibility));
+    const grassMapValue = texture(assetManager.resources.terrainMaps, mapUv).g;
+    const grassScale = grassMapValue.sub(0.5).div(1 - 0.5).clamp();
+    const grassVisibility = step(0.05, grassScale);
+    data.assign(this.setGrassScale(data, grassScale));
+    const isRenderable = isVisible.mul(grassVisibility);
+    data.assign(this.setVisibility(data, isRenderable));
 
+    If(isRenderable.greaterThan(0), () => {
       const drawIndex = atomicAdd(this.atomicCounter, 1);
 
       this.visibleFlowerIndices.element(drawIndex).assign(instanceIndex);
@@ -273,6 +268,92 @@ class FlowersSsbo {
     atomicStore(this.atomicCounter, 0);
   })().compute(1, [1]); // one counter only needs one thread
 }
+
+const computeFlowerLocalPosition = (
+  ssbo: FlowersSsbo,
+  flowerIndex: Node<"uint">,
+  sourcePosition: Node<"vec3">,
+) => {
+  const data = ssbo.computeBuffer.element(flowerIndex);
+  const grassScale = ssbo.getGrassScale(data);
+  const noise = ssbo.getNoise(data);
+  const x = data.x;
+  const y = ssbo.getYOffset(data);
+  const z = data.y;
+  const rand1 = hash(flowerIndex.add(9234));
+  const rand2 = hash(flowerIndex.add(33.87));
+  const rand3 = hash(float(flowerIndex).add(noise.r.mul(97.13)));
+  const scale = rand1
+    .remap(0, 1, uniforms.uMinScale, uniforms.uMaxScale)
+    .mul(grassScale);
+  const windDirection = windManager.uDirection;
+  const windEvent = windManager.uIntensityDirectional;
+  const timer = gameTime.mul(uniforms.uWindSwaySpeed);
+  const windTravel = x.mul(windDirection.x).add(z.mul(windDirection.y));
+  const travelWave = sin(
+    windTravel.mul(0.16).sub(timer.mul(2.2)).add(rand3.mul(PI2)),
+  )
+    .mul(0.5)
+    .add(0.5);
+  const directionalWave = smoothstep(0.28, 0.88, travelWave);
+  const responseVariation = mix(0.55, 1.15, noise.g).mul(
+    mix(0.72, 1.05, rand1),
+  );
+  const ambientPhase = timer.add(rand1.mul(100)).add(noise.b.mul(12));
+  const ambientSway = uniforms.uWindAmbientStrength
+    .mul(mix(0.45, 1, noise.a))
+    .mul(grassScale);
+  const directionalSway = uniforms.uWindDirectionalStrength
+    .mul(windEvent)
+    .mul(directionalWave)
+    .mul(responseVariation)
+    .mul(grassScale);
+  const sideDirection = vec2(windDirection.y.negate(), windDirection.x);
+  const sideSway = sin(ambientPhase.mul(1.35))
+    .mul(ambientSway)
+    .mul(mix(0.12, 0.42, rand2));
+  const windLean = windDirection.mul(directionalSway);
+  const ambientLean = windDirection
+    .mul(sin(ambientPhase).mul(ambientSway))
+    .add(sideDirection.mul(sideSway));
+  const swayOffset = vec3(
+    ambientLean.x.add(windLean.x),
+    rand2
+      .mul(0.28)
+      .add(
+        sin(ambientPhase.mul(1.7).add(rand3.mul(PI2))).mul(
+          uniforms.uWindVerticalBobStrength.mul(grassScale),
+        ),
+      ),
+    ambientLean.y.add(windLean.y),
+  );
+  const baseHeight = rand1.add(rand2).add(0.25).clamp().mul(grassScale);
+  return sourcePosition
+    .mul(scale)
+    .add(vec3(x, y.add(baseHeight), z))
+    .add(swayOffset);
+};
+
+export const getFlowerLocalPosition = (
+  ssbo: FlowersSsbo,
+  flowerIndex: Node<"uint">,
+) => computeFlowerLocalPosition(ssbo, flowerIndex, positionLocal);
+
+export const getFlowerWorldPosition = (
+  ssbo: FlowersSsbo,
+  flowerIndex: Node<"uint">,
+) =>
+  getFlowerLocalPosition(ssbo, flowerIndex).add(
+    vec3(uniforms.uPlayerPosition.x, 0, uniforms.uPlayerPosition.z),
+  );
+
+export const getFlowerCenterWorldPosition = (
+  ssbo: FlowersSsbo,
+  flowerIndex: Node<"uint">,
+) =>
+  computeFlowerLocalPosition(ssbo, flowerIndex, vec3(0)).add(
+    vec3(uniforms.uPlayerPosition.x, 0, uniforms.uPlayerPosition.z),
+  );
 
 export default class Flowers {
   private mesh: Mesh;
@@ -308,6 +389,7 @@ export default class Flowers {
     const ssbo = new FlowersSsbo(atomicCounter);
     const material = new FlowerMaterial(ssbo);
     const mesh = new Mesh(geometry, material);
+    mesh.name = "flower_batch";
 
     this.mesh = mesh;
     sceneManager.mainScene.add(this.mesh);
@@ -462,8 +544,8 @@ export default class Flowers {
   }
 }
 
-class FlowerMaterial extends MeshBasicNodeMaterial {
-  private ssbo: FlowersSsbo;
+export class FlowerMaterial extends MeshBasicNodeMaterial {
+  readonly ssbo: FlowersSsbo;
   constructor(ssbo: FlowersSsbo) {
     super();
 
@@ -477,70 +559,8 @@ class FlowerMaterial extends MeshBasicNodeMaterial {
     this.transparent = false;
 
     const flowerIndex = this.ssbo.visibleFlowerIndices.element(instanceIndex);
-
-    const data = this.ssbo.computeBuffer.element(flowerIndex);
-    const grassScale = this.ssbo.getGrassScale(data);
-    const noise = this.ssbo.getNoise(data);
-    const x = data.x;
-    const y = this.ssbo.getYOffset(data);
-    const z = data.y;
-
-    const rand1 = hash(flowerIndex.add(9234));
     const rand2 = hash(flowerIndex.add(33.87));
-    const rand3 = hash(float(flowerIndex).add(noise.r.mul(97.13)));
-
-    // Position
-    const scale = rand1
-      .remap(0, 1, uniforms.uMinScale, uniforms.uMaxScale)
-      .mul(grassScale);
-
-    const windDirection = windManager.uDirection;
-    const windEvent = windManager.uIntensityDirectional;
-    const timer = gameTime.mul(uniforms.uWindSwaySpeed);
-    const windTravel = x.mul(windDirection.x).add(z.mul(windDirection.y));
-    const travelWave = sin(
-      windTravel.mul(0.16).sub(timer.mul(2.2)).add(rand3.mul(PI2)),
-    )
-      .mul(0.5)
-      .add(0.5);
-    const directionalWave = smoothstep(0.28, 0.88, travelWave);
-    const responseVariation = mix(0.55, 1.15, noise.g).mul(
-      mix(0.72, 1.05, rand1),
-    );
-    const ambientPhase = timer.add(rand1.mul(100)).add(noise.b.mul(12.0));
-    const ambientSway = uniforms.uWindAmbientStrength
-      .mul(mix(0.45, 1.0, noise.a))
-      .mul(grassScale);
-    const directionalSway = uniforms.uWindDirectionalStrength
-      .mul(windEvent)
-      .mul(directionalWave)
-      .mul(responseVariation)
-      .mul(grassScale);
-    const sideDirection = vec2(windDirection.y.negate(), windDirection.x);
-    const sideSway = sin(ambientPhase.mul(1.35))
-      .mul(ambientSway)
-      .mul(mix(0.12, 0.42, rand2));
-    const windLean = windDirection.mul(directionalSway);
-    const ambientLean = windDirection
-      .mul(sin(ambientPhase).mul(ambientSway))
-      .add(sideDirection.mul(sideSway));
-    const swayX = ambientLean.x.add(windLean.x);
-    const swayY = rand2
-      .mul(0.28)
-      .add(
-        sin(ambientPhase.mul(1.7).add(rand3.mul(PI2))).mul(
-          uniforms.uWindVerticalBobStrength.mul(grassScale),
-        ),
-      );
-    const swayZ = ambientLean.y.add(windLean.y);
-    const swayOffset = vec3(swayX, swayY, swayZ);
-    const baseHeight = rand1.add(rand2).add(0.25).clamp().mul(grassScale);
-    const offsetY = y.add(baseHeight);
-    const basePosition = vec3(x, offsetY, z);
-    this.positionNode = positionLocal
-      .mul(scale)
-      .add(basePosition)
-      .add(swayOffset);
+    this.positionNode = getFlowerLocalPosition(this.ssbo, flowerIndex);
 
     // Diffuse
     const flower = texture(assetManager.resources.edelweiss, uv());
@@ -549,6 +569,6 @@ class FlowerMaterial extends MeshBasicNodeMaterial {
 
     // Opacity
     this.opacityNode = flower.a;
-    this.alphaTest = 0.15;
+    this.alphaTest = FLOWER_ALPHA_TEST;
   }
 }

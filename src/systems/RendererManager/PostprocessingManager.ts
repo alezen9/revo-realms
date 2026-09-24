@@ -48,6 +48,7 @@ import type { EventsManager } from "../EventsManager";
 import type { SceneManager } from "../SceneManager";
 import { assetManager, lightingManager } from "..";
 import { playerUniforms } from "../../entities/Player/PlayerMaterial";
+import { FlowerMaterial } from "../../entities/Vegetation/Flowers";
 import { TSLUtils } from "../../utils/TSLUtils";
 import { shadowConfig } from "../ShadowManager/config";
 import type { ShadowDebugView } from "../ShadowManager/config";
@@ -756,6 +757,18 @@ export class PostprocessingManager extends RenderPipeline {
     this.pineShadowSunDirection.copy(lightingManager.sunDirection);
   }
 
+  private syncFlowerShadowCaster() {
+    if (!this.pineShadowAtlas) return;
+    const source = this.sceneManager.mainScene.getObjectByName("flower_batch");
+    if (!(source instanceof Mesh) || !(source.material instanceof FlowerMaterial))
+      return;
+    this.pineShadowAtlas.attachFlowers(
+      source,
+      source.material.ssbo,
+      assetManager.resources.edelweiss,
+    );
+  }
+
   render() {
     if (!shadowConfig.isPagedEnabled) {
       super.render();
@@ -790,6 +803,7 @@ export class PostprocessingManager extends RenderPipeline {
       }
       this.syncStaticShadowCasters();
       this.syncPineShadowCaster();
+      this.syncFlowerShadowCaster();
       this.shadowPageRequests?.run();
       this.pineShadowPages?.run();
       this.shadowResidency?.run();

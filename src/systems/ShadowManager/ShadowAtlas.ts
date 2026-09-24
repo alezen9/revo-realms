@@ -54,9 +54,15 @@ import { RigidShadowCasterBucket } from "./RigidShadowCasterBucket";
 import type { PineShadowPages } from "./PineShadowPages";
 import { PineShadowCasterBucket } from "./PineShadowCasterBucket";
 import {
+  FLOWER_ALPHA_TEST,
+  FlowersSsbo,
+  getFlowerWorldPosition,
+} from "../../entities/Vegetation/Flowers";
+import {
   getPineCanopyPosition,
   PINE_CANOPY_ALPHA_TEST,
 } from "../../entities/Vegetation/PineTreeCanopy";
+import { FlowerShadowCasterBucket } from "./FlowerShadowCasterBucket";
 
 const PAGE_GRID_SIZE = SHADOW_PAGE_GRID_SIZE;
 const MINIMUM_PAGE_COORDINATE = SHADOW_MINIMUM_PAGE_COORDINATE;
@@ -90,6 +96,8 @@ export class ShadowAtlas {
   private casterMesh?: Mesh;
   private rigidCasterBucket?: RigidShadowCasterBucket;
   private pineCasterBucket?: PineShadowCasterBucket;
+  private flowerCasterBucket?: FlowerShadowCasterBucket;
+  private flowerCasterMesh?: Mesh;
   private isRenderTargetInitialized = false;
 
   constructor(args: ConstructorArgs) {
@@ -187,8 +195,37 @@ export class ShadowAtlas {
     this.scene.add(this.casterMesh);
   }
 
+  attachFlowers(
+    source: Mesh,
+    ssbo: FlowersSsbo,
+    opacityTexture: Texture,
+  ) {
+    if (this.flowerCasterBucket) return;
+
+    this.flowerCasterBucket = new FlowerShadowCasterBucket(
+      this.renderer,
+      this.residency,
+      source,
+      ssbo,
+      this.coordinates.minimumWorldY,
+      this.coordinates.maximumWorldY,
+      this.sunDirection,
+    );
+    this.flowerCasterMesh = new Mesh(
+      this.flowerCasterBucket.geometry,
+      this.createFlowerCasterMaterial(
+        this.flowerCasterBucket,
+        ssbo,
+        opacityTexture,
+      ),
+    );
+    this.flowerCasterMesh.frustumCulled = false;
+    this.flowerCasterMesh.renderOrder = 1;
+    this.scene.add(this.flowerCasterMesh);
+  }
+
   render() {
-    if (!this.casterMesh) return;
+    if (!this.casterMesh && !this.flowerCasterMesh) return;
 
     if (this.casterSource) {
       this.casterSource.updateWorldMatrix(true, false);
@@ -196,6 +233,7 @@ export class ShadowAtlas {
     }
     this.rigidCasterBucket?.run();
     this.pineCasterBucket?.run();
+    this.flowerCasterBucket?.run();
 
     const previousRenderTarget = this.renderer.getRenderTarget();
     const wasAutoClearEnabled = this.renderer.autoClear;
@@ -603,6 +641,79 @@ export class ShadowAtlas {
         .or(pageUv.y.greaterThan(1))
         .discard();
       opacityTextureNode.a.lessThan(PINE_CANOPY_ALPHA_TEST).discard();
+      return vec4(0);
+    })();
+    return material;
+  }
+
+  private createFlowerCasterMaterial(
+    bucket: FlowerShadowCasterBucket,
+    ssbo: FlowersSsbo,
+    opacityTexture: Texture,
+  ) {
+    const workItemsNode = storage(
+      bucket.workItemsAttribute,
+      "uvec4",
+      bucket.workItemsAttribute.count,
+    );
+    const opacityTextureNode = texture(opacityTexture, uv());
+    const material = new MeshBasicNodeMaterial();
+    material.colorWrite = false;
+    material.depthTest = true;
+    material.depthWrite = true;
+    material.side = DoubleSide;
+    material.vertexNode = Fn(() => {
+      const workItem = workItemsNode.element(instanceIndex);
+      const pageKey = workItem.x;
+      const slot = workItem.y;
+      const flowerIndex = workItem.z;
+      const worldPosition = getFlowerWorldPosition(ssbo, flowerIndex);
+      const { level, pageId } = decodeGpuShadowPageKey(pageKey);
+      const absoluteSunY = this.sunDirection.y.abs().max(0.0001);
+      const horizontalSunLength = this.sunDirection.xz.length().max(0.0001);
+      const lightXAxis = vec3(
+        this.sunDirection.z,
+        0,
+        this.sunDirection.x.negate(),
+      ).div(horizontalSunLength);
+      const lightYAxis = this.sunDirection.cross(lightXAxis).normalize();
+      const lightPosition = vec2(
+        worldPosition.dot(lightXAxis),
+        worldPosition.dot(lightYAxis),
+      );
+      const pageUv = lightPosition
+        .div(getGpuShadowPageWorldSize(level))
+        .sub(pageId);
+      varyingProperty("vec2", "flowerShadowAtlasPageUv").assign(pageUv);
+
+      const relativeDepth = worldPosition.y.negate().div(absoluteSunY);
+      const minimumDepth = this.coordinates.maximumWorldY
+        .negate()
+        .div(absoluteSunY);
+      const maximumDepth = this.coordinates.minimumWorldY
+        .negate()
+        .div(absoluteSunY);
+      const normalizedDepth = relativeDepth
+        .sub(minimumDepth)
+        .div(maximumDepth.sub(minimumDepth));
+      const atlasUv = this.computeAtlasUv(slot, pageUv);
+
+      return vec4(
+        atlasUv.x.mul(2).sub(1),
+        atlasUv.y.mul(-2).add(1),
+        normalizedDepth,
+        1,
+      );
+    })();
+    material.fragmentNode = Fn(() => {
+      const pageUv = varyingProperty("vec2", "flowerShadowAtlasPageUv");
+      pageUv.x
+        .lessThan(0)
+        .or(pageUv.y.lessThan(0))
+        .or(pageUv.x.greaterThan(1))
+        .or(pageUv.y.greaterThan(1))
+        .discard();
+      opacityTextureNode.a.lessThan(FLOWER_ALPHA_TEST).discard();
       return vec4(0);
     })();
     return material;
