@@ -35,6 +35,7 @@ import { assetManager, lightingManager } from "..";
 import { playerUniforms } from "../../entities/Player/PlayerMaterial";
 import { TSLUtils } from "../../utils/TSLUtils";
 import {
+  isDirectSunMaterialCaptureEnabled,
   isDirectSunPreviewEnabled,
   isDirectSunTargetEnabled,
   isShadowBaseline,
@@ -58,6 +59,11 @@ export class PostprocessingManager extends RenderPipeline {
   private eventsManager: EventsManager;
   private debugManager: DebugManager;
   private debugFolder: DebugFolder;
+  private debugView = {
+    target: isDirectSunPreviewEnabled ? "directSun" : "scene",
+  };
+  private sceneOutputNode?: ReturnType<typeof renderOutput>;
+  private directSunOutputNode?: ReturnType<typeof renderOutput>;
 
   constructor(
     renderer: WebGPURenderer,
@@ -99,8 +105,23 @@ export class PostprocessingManager extends RenderPipeline {
 
     this.syncCameraUniforms();
 
-    const passes = this.makeGraph();
-    this.outputNode = passes;
+    this.sceneOutputNode = this.makeGraph();
+    if (isDirectSunMaterialCaptureEnabled) {
+      this.directSunOutputNode = renderOutput(
+        vec4(
+          this.mainScenePass.getTextureNode("directSun").sample(screenUV).rgb,
+          1,
+        ),
+        NoToneMapping,
+      );
+      this.debugFolder
+        .addBinding(this.debugView, "target", {
+          label: "View",
+          options: { Scene: "scene", "Direct sun": "directSun" },
+        })
+        .on("change", this.selectDebugView);
+    }
+    this.selectDebugView();
 
     this.eventsManager.on("engine-camera-change", () => {
       this.mainScenePass.camera = this.sceneManager.renderCamera;
@@ -128,6 +149,16 @@ export class PostprocessingManager extends RenderPipeline {
     this.uCameraWorldMatrix.value = camera.matrixWorld;
     this.uCameraPosition.value = camera.position;
   }
+
+  private selectDebugView = () => {
+    const selected =
+      this.debugView.target === "directSun"
+        ? this.directSunOutputNode
+        : this.sceneOutputNode;
+    if (!selected) return;
+    this.outputNode = selected;
+    this.needsUpdate = true;
+  };
 
   private computeBallShadowFactor = Fn(() => {
     const radius = playerUniforms.uRadius;
@@ -204,14 +235,6 @@ export class PostprocessingManager extends RenderPipeline {
 
   private makeGraph() {
     this.outputColorTransform = false;
-    if (isDirectSunPreviewEnabled)
-      return renderOutput(
-        vec4(
-          this.mainScenePass.getTextureNode("directSun").sample(screenUV).rgb,
-          1,
-        ),
-        NoToneMapping,
-      );
     const mainSceneColor = this.mainScenePass.getTextureNode();
     const water = this.waterPass.getTextureNode();
     const colorHDR = mainSceneColor.mul(water.a.oneMinus()).add(water.rgb);

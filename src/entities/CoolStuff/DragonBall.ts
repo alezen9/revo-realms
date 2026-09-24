@@ -6,6 +6,7 @@ import {
 } from "../../systems";
 import { Mesh } from "three";
 import { DirectSunStandardNodeMaterial } from "../../systems/ShadowManager/DirectSunMaterials";
+import { isDirectSunMaterialCaptureEnabled } from "../../systems/ShadowManager/config";
 import { ColliderDesc } from "@dimforge/rapier3d";
 import { physicsManager, sceneManager } from "../../systems";
 import { RevoColliderType } from "../../types";
@@ -23,8 +24,11 @@ class GokuStatueMaterial extends DirectSunStandardNodeMaterial {
 
     const _uv = uv().mul(uniforms.uUvScale);
     const diffuse = texture(assetManager.resources.concreteDiffuse, _uv);
-    const shadow = texture(assetManager.resources.concreteDiffuse, uv());
-    const color = mix(vec3(0), diffuse.rgb, shadow.a);
+    let color = diffuse.rgb;
+    if (!isDirectSunMaterialCaptureEnabled) {
+      const shadow = texture(assetManager.resources.concreteDiffuse, uv());
+      color = mix(vec3(0), diffuse.rgb, shadow.a);
+    }
     this.colorNode = color.mul(uniforms.uDiffuseScale);
 
     const normal = texture(assetManager.resources.concreteNormal, _uv);
