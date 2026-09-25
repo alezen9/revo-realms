@@ -1,6 +1,7 @@
 import {
   atomicAdd,
   atomicStore,
+  bool,
   float,
   floor,
   Fn,
@@ -50,7 +51,10 @@ import { gameTime } from "../../utils/GameTime";
 import { TSLUtils } from "../../utils/TSLUtils";
 import { srgbColorTarget } from "../../utils/TweakpaneColor";
 import type { ComputeTask } from "../../systems/RendererManager/ComputeTask";
-import { isDirectSunMaterialCaptureEnabled } from "../../systems/ShadowManager/config";
+import {
+  isDirectSunMaterialCaptureEnabled,
+  isPagedV2,
+} from "../../systems/ShadowManager/config";
 
 const getConfig = () => {
   const FLOWER_WIDTH = 0.5;
@@ -248,7 +252,7 @@ export class FlowersSsbo {
 
     data.assign(this.setVisibility(data, isVisible));
 
-    If(isVisible, () => {
+    If(isVisible.greaterThan(0).or(bool(isPagedV2)), () => {
       // Y offset
       const mapUv = TSLUtils.computeMapUvByPosition(worldPos.xz);
       const heightUv = vec2(mapUv.x, float(1).sub(mapUv.y));
@@ -266,11 +270,12 @@ export class FlowersSsbo {
         .clamp();
       const grassVisibility = step(0.05, grassScale);
       data.assign(this.setGrassScale(data, grassScale));
-      data.assign(this.setVisibility(data, grassVisibility));
+      data.assign(this.setVisibility(data, grassVisibility.mul(isVisible)));
 
-      const drawIndex = atomicAdd(this.atomicCounter, 1);
-
-      this.visibleFlowerIndices.element(drawIndex).assign(instanceIndex);
+      If(isVisible, () => {
+        const drawIndex = atomicAdd(this.atomicCounter, 1);
+        this.visibleFlowerIndices.element(drawIndex).assign(instanceIndex);
+      });
     });
   })().compute(config.COUNT, [config.WORKGROUP_SIZE]);
 
@@ -393,6 +398,7 @@ export default class Flowers {
     sceneManager.mainScene.add(this.mesh);
     shadowCasterRegistry.register(this.mesh, {
       kind: "deformed",
+      localVegetation: true,
       shadowOpacityNode: texture(assetManager.resources.edelweiss, uv()).a,
       alphaCutoff: 0.15,
       deformedInstances: {
@@ -405,9 +411,13 @@ export default class Flowers {
             vec3(uniforms.uPlayerPosition.x, 0, uniforms.uPlayerPosition.z),
           ),
         isActive: (index) =>
-          ssbo
-            .getVisibility(ssbo.computeBuffer.element(index))
-            .greaterThan(0.5),
+          isPagedV2
+            ? ssbo
+                .getGrassScale(ssbo.computeBuffer.element(index))
+                .greaterThanEqual(0.05)
+            : ssbo
+                .getVisibility(ssbo.computeBuffer.element(index))
+                .greaterThan(0.5),
       },
     });
 

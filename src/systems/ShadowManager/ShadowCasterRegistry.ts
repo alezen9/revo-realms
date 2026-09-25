@@ -1,4 +1,4 @@
-import { Matrix4, type Mesh } from "three";
+import { Matrix4, type BufferGeometry, type Mesh } from "three";
 import { BatchedMesh, NodeMaterial, type Node } from "three/webgpu";
 import { isPagedV2 } from "./config";
 
@@ -6,6 +6,8 @@ export type ShadowCasterKind = "fixed" | "moving" | "deformed";
 export type ShadowDeformedInstances = {
   count: number;
   maxRadiusMeters: number;
+  levelCount?: 1 | 2;
+  geometry?: BufferGeometry;
   centerWorldPosition: (index: Node<"uint">) => Node<"vec3">;
   worldPosition: (index: Node<"uint">, position: Node<"vec3">) => Node<"vec3">;
   isActive: (index: Node<"uint">) => Node<"bool">;
@@ -18,6 +20,7 @@ export type ShadowCasterOptions = {
   shadowOpacityNode?: Node<"float">;
   alphaCutoff?: number;
   deformedInstances?: ShadowDeformedInstances;
+  localVegetation?: boolean;
 };
 
 export type ShadowCasterEntry = {
@@ -29,6 +32,7 @@ export type ShadowCasterEntry = {
   shadowOpacityNode?: Node<"float">;
   alphaCutoff: number;
   deformedInstances?: ShadowDeformedInstances;
+  localVegetation: boolean;
   revision: number;
   worldMatrix: Matrix4;
 };
@@ -59,7 +63,12 @@ export class ShadowCasterRegistry {
       shadowOpacityNode,
       alphaCutoff = 0,
       deformedInstances,
+      localVegetation = false,
     } = options;
+    if (localVegetation && (kind !== "deformed" || !deformedInstances))
+      throw new Error(
+        `Local vegetation needs deformed instances: ${mesh.name}`,
+      );
     if (!Number.isFinite(depthBiasMeters) || depthBiasMeters < 0)
       throw new Error(`Invalid shadow depth bias: ${mesh.name}`);
     if (
@@ -106,6 +115,7 @@ export class ShadowCasterRegistry {
       shadowOpacityNode,
       alphaCutoff,
       deformedInstances,
+      localVegetation,
       revision: 0,
       worldMatrix: mesh.matrixWorld.clone(),
     });

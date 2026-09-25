@@ -13,8 +13,10 @@ import { debugGrass } from "./debug";
 import { GrassBladeGeometry } from "./GrassBladeGeometry";
 import { GrassMaterial } from "./GrassMaterial";
 import { GrassCompute } from "./GrassCompute";
+import { createGrassShadowInstances } from "./GrassShadowAdapter";
 import type { ComputeTask } from "../../../systems/RendererManager/ComputeTask";
 import type { GrassMonitoringStats } from "../../../systems/EventsManager";
+import { isPagedV2 } from "../../../systems/ShadowManager/config";
 
 const UINT32_BYTE_SIZE = Uint32Array.BYTES_PER_ELEMENT;
 const INDIRECT_FIRST_INSTANCE_FEATURE = "indirect-first-instance";
@@ -82,7 +84,14 @@ export default class Grass {
 
     const mesh = new Mesh(geometry, this.material);
     mesh.frustumCulled = false;
-    shadowCasterRegistry.register(mesh, { kind: "deformed" });
+    if (lod === 0 && isPagedV2)
+      shadowCasterRegistry.register(mesh, {
+        kind: "deformed",
+        localVegetation: true,
+        deformedInstances: createGrassShadowInstances(this.compute),
+      });
+    else if (!isPagedV2)
+      shadowCasterRegistry.register(mesh, { kind: "deformed" });
 
     return mesh;
   }
@@ -100,9 +109,6 @@ export default class Grass {
     )
       return;
     this.tile.position.set(player.position.x, 0, player.position.z);
-    for (const child of this.tile.children) {
-      if (child instanceof Mesh) shadowCasterRegistry.markMoved(child);
-    }
   };
 
   private accumulatePlayerDelta(player: State["player"]) {

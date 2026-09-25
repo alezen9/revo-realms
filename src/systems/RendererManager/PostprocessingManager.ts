@@ -57,6 +57,7 @@ import {
   ShadowRigidAtlas,
   SHADOW_RIGID_PAGE_TEXELS,
 } from "../ShadowManager/ShadowRigidAtlas";
+import { ShadowVegetationAtlas } from "../ShadowManager/ShadowVegetationAtlas";
 
 const MAIN_SCENE_PASS_SAMPLES = 4;
 const LUMINANCE_WEIGHTS = vec3(0.2126, 0.7152, 0.0722);
@@ -72,6 +73,7 @@ export class PostprocessingManager extends RenderPipeline {
   private shadowResidency?: ShadowResidency;
   private shadowFixedAtlas?: ShadowRigidAtlas;
   private shadowMovingAtlas?: ShadowRigidAtlas;
+  private shadowVegetationAtlas?: ShadowVegetationAtlas;
   private uSaturation = uniform(1);
   private uSunVisibility = uniform(1);
   private uProjectionMatrixInverse = uniform(new Matrix4());
@@ -93,6 +95,7 @@ export class PostprocessingManager extends RenderPipeline {
   private movingDepthOutputNode?: ReturnType<typeof renderOutput>;
   private fixedShadowOutputNode?: ReturnType<typeof renderOutput>;
   private movingShadowOutputNode?: ReturnType<typeof renderOutput>;
+  private vegetationShadowOutputNode?: ReturnType<typeof renderOutput>;
 
   constructor(
     renderer: WebGPURenderer,
@@ -163,6 +166,10 @@ export class PostprocessingManager extends RenderPipeline {
       );
       this.shadowFixedAtlas = fixedAtlas;
       this.shadowMovingAtlas = movingAtlas;
+      this.shadowVegetationAtlas = new ShadowVegetationAtlas(
+        renderer,
+        lightingManager.uSunDir,
+      );
       monitoringManager.setShadowPageStats(this.shadowResidency.stats);
     }
 
@@ -194,6 +201,7 @@ export class PostprocessingManager extends RenderPipeline {
       this.movingShadowOutputNode = this.makeRigidShadowOutput(
         this.shadowMovingAtlas,
       );
+      this.vegetationShadowOutputNode = this.makeVegetationShadowOutput();
       this.debugFolder
         .addBinding(this.debugView, "target", {
           label: "View",
@@ -205,6 +213,7 @@ export class PostprocessingManager extends RenderPipeline {
             "Moving depth": "movingDepth",
             "Fixed shadow": "fixedShadow",
             "Moving shadow": "movingShadow",
+            "Vegetation shadow": "vegetationShadow",
           },
         })
         .on("change", this.selectDebugView);
@@ -252,7 +261,9 @@ export class PostprocessingManager extends RenderPipeline {
                 ? this.fixedShadowOutputNode
                 : this.debugView.target === "movingShadow"
                   ? this.movingShadowOutputNode
-                  : this.sceneOutputNode;
+                  : this.debugView.target === "vegetationShadow"
+                    ? this.vegetationShadowOutputNode
+                    : this.sceneOutputNode;
     if (!selected) return;
     this.outputNode = selected;
     this.needsUpdate = true;
@@ -359,6 +370,25 @@ export class PostprocessingManager extends RenderPipeline {
     return renderOutput(vec4(vec3(visibility), 1), NoToneMapping);
   }
 
+  private makeVegetationShadowOutput() {
+    if (!this.shadowVegetationAtlas)
+      throw new Error("V2 vegetation shadow atlas is required");
+    const depth = this.getMainSceneTextureNode("depth").sample(screenUV).r;
+    const viewPosition = getViewPosition(
+      screenUV,
+      depth,
+      this.uProjectionMatrixInverse,
+    );
+    const worldPosition = this.uCameraWorldMatrix.mul(
+      vec4(viewPosition, 1),
+    ).xyz;
+    const visibility = this.shadowVegetationAtlas.sampleVisibility(
+      worldPosition,
+      depth,
+    );
+    return renderOutput(vec4(vec3(visibility), 1), NoToneMapping);
+  }
+
   private computeBallShadowFactor = Fn(() => {
     const radius = playerUniforms.uRadius;
     const radiusSq = radius.mul(radius);
@@ -427,8 +457,12 @@ export class PostprocessingManager extends RenderPipeline {
   sampleMainSceneColor(uv: Node<"vec2">) {
     const sceneColor = this.getMainSceneTextureNode().sample(uv);
     if (!isPagedV2) return sceneColor;
-    if (!this.shadowFixedAtlas || !this.shadowMovingAtlas)
-      throw new Error("V2 rigid shadow atlases are required");
+    if (
+      !this.shadowFixedAtlas ||
+      !this.shadowMovingAtlas ||
+      !this.shadowVegetationAtlas
+    )
+      throw new Error("V2 shadow atlases are required");
 
     const depth = this.getMainSceneTextureNode("depth").sample(uv).r;
     const viewPosition = getViewPosition(
@@ -439,12 +473,14 @@ export class PostprocessingManager extends RenderPipeline {
     const worldPosition = this.uCameraWorldMatrix.mul(
       vec4(viewPosition, 1),
     ).xyz;
-    const visibility = this.shadowFixedAtlas.computeVisibility(
-      worldPosition,
-      depth,
-      viewPosition.z.negate(),
-      this.shadowMovingAtlas,
-    );
+    const visibility = this.shadowFixedAtlas
+      .computeVisibility(
+        worldPosition,
+        depth,
+        viewPosition.z.negate(),
+        this.shadowMovingAtlas,
+      )
+      .mul(this.shadowVegetationAtlas.sampleVisibility(worldPosition, depth));
     return sceneColor
       .sub(
         vec4(
@@ -552,12 +588,21 @@ export class PostprocessingManager extends RenderPipeline {
         lightingManager.sunDirection,
         { min, max },
       );
+      this.shadowVegetationAtlas?.syncCasters(shadowCasterRegistry, {
+        min,
+        max,
+      });
       this.shadowResidency?.run(
         this.cameraWorldPosition,
         lightingManager.sunDirection,
       );
       this.shadowFixedAtlas?.render();
       this.shadowMovingAtlas?.render();
+      this.shadowVegetationAtlas?.render(
+        playerUniforms.uPosition.value,
+        lightingManager.sunDirection,
+        { min, max },
+      );
     } finally {
       this.renderer.toneMapping = toneMapping;
       this.renderer.outputColorSpace = outputColorSpace;

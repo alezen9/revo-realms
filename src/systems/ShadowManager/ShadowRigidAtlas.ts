@@ -59,7 +59,7 @@ import {
 } from "./ShadowPageCoordinates";
 import type { ShadowResidency } from "./ShadowResidency";
 
-export const SHADOW_RIGID_PAGE_TEXELS = 256;
+export const SHADOW_RIGID_PAGE_TEXELS = 320;
 const DEPTH_BIAS = 0.0015;
 
 export class ShadowRigidAtlas {
@@ -181,7 +181,11 @@ export class ShadowRigidAtlas {
           !entry.deformedInstances
         )
           this.sources.push(entry);
-        if (this.kind === "moving" && entry.deformedInstances) {
+        if (
+          this.kind === "moving" &&
+          entry.deformedInstances &&
+          !entry.localVegetation
+        ) {
           const bucket = new ShadowDeformedCasterBucket(
             this.renderer,
             this.residency,
