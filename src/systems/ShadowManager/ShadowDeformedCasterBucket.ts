@@ -22,10 +22,12 @@ import {
 import type { ShadowDeformedInstances } from "./ShadowCasterRegistry";
 import {
   getGpuShadowPageAddress,
+  getGpuShadowPageSize,
+  SHADOW_FAR_PAGE_WORLD_SIZE,
+  SHADOW_NEAR_PAGE_WORLD_SIZE,
   SHADOW_PAGE_GRID_MIN,
   SHADOW_PAGE_GRID_SIZE,
   SHADOW_PAGES_PER_LEVEL,
-  SHADOW_PAGE_WORLD_SIZE,
 } from "./ShadowPageCoordinates";
 import type { ShadowResidency } from "./ShadowResidency";
 
@@ -55,8 +57,17 @@ export class ShadowDeformedCasterBucket {
       : source.geometry.clone();
     const position = this.geometry.getAttribute("position");
     if (!position) throw new Error("Deformed shadow caster needs positions");
+    const nearPageSpan =
+      Math.ceil((instances.maxRadiusMeters * 2) / SHADOW_NEAR_PAGE_WORLD_SIZE) +
+      1;
+    const farPageSpan =
+      Math.ceil((instances.maxRadiusMeters * 2) / SHADOW_FAR_PAGE_WORLD_SIZE) +
+      1;
+    const workItemsPerInstance =
+      nearPageSpan * nearPageSpan +
+      (instances.levelCount === 1 ? 0 : farPageSpan * farPageSpan);
     this.workItemsAttribute = new StorageBufferAttribute(
-      new Uint32Array(instances.count * (instances.levelCount ?? 2) * 4 * 4),
+      new Uint32Array(instances.count * workItemsPerInstance * 4),
       4,
     );
     this.indirectArguments = new IndirectStorageBufferAttribute(
@@ -95,17 +106,14 @@ export class ShadowDeformedCasterBucket {
               sunDirection,
               level,
             );
-            const pageSize = level
-              .equal(0)
-              .select(
-                float(SHADOW_PAGE_WORLD_SIZE),
-                float(SHADOW_PAGE_WORLD_SIZE * 2),
-              );
+            const pageSize = getGpuShadowPageSize(level);
             const radius = float(instances.maxRadiusMeters).div(pageSize);
             const pagePosition = address.pageId.add(address.pageUv);
             const firstPage = pagePosition.sub(radius).floor();
             const lastPage = pagePosition.add(radius).floor();
-            const pageSpan = 2;
+            const pageSpan = level
+              .equal(0)
+              .select(uint(nearPageSpan), uint(farPageSpan));
             Loop(
               { start: 0, end: pageSpan, type: "uint" },
               ({ i: offsetY }) => {

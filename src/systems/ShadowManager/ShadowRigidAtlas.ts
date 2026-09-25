@@ -54,12 +54,12 @@ import {
   SHADOW_FAR_START,
   SHADOW_NEAR_END,
   SHADOW_PAGES_PER_LEVEL,
-  SHADOW_PAGE_WORLD_SIZE,
+  getGpuShadowPageSize,
   getGpuShadowPageAddress,
 } from "./ShadowPageCoordinates";
 import type { ShadowResidency } from "./ShadowResidency";
 
-export const SHADOW_RIGID_PAGE_TEXELS = 320;
+export const SHADOW_RIGID_PAGE_TEXELS = 384;
 const DEPTH_BIAS = 0.0015;
 
 export class ShadowRigidAtlas {
@@ -376,7 +376,7 @@ export class ShadowRigidAtlas {
       worldPosition,
       sceneDepth,
       level,
-      vec2(-0.75, -0.75),
+      vec2(-0.35, -0.35),
       secondary,
     );
     const topRight = this.sampleTap(
@@ -384,7 +384,7 @@ export class ShadowRigidAtlas {
       worldPosition,
       sceneDepth,
       level,
-      vec2(0.75, -0.75),
+      vec2(0.35, -0.35),
       secondary,
     );
     const bottomLeft = this.sampleTap(
@@ -392,7 +392,7 @@ export class ShadowRigidAtlas {
       worldPosition,
       sceneDepth,
       level,
-      vec2(-0.75, 0.75),
+      vec2(-0.35, 0.35),
       secondary,
     );
     const bottomRight = this.sampleTap(
@@ -400,7 +400,7 @@ export class ShadowRigidAtlas {
       worldPosition,
       sceneDepth,
       level,
-      vec2(0.75, 0.75),
+      vec2(0.35, 0.35),
       secondary,
     );
     const topLeftWeight = topLeft.isValid.select(float(1), float(0));
@@ -578,12 +578,7 @@ export class ShadowRigidAtlas {
         worldPosition.dot(lightX),
         worldPosition.dot(lightY),
       );
-      const pageSize = level
-        .equal(0)
-        .select(
-          float(SHADOW_PAGE_WORLD_SIZE),
-          float(SHADOW_PAGE_WORLD_SIZE * 2),
-        );
+      const pageSize = getGpuShadowPageSize(level);
       const pageUv = lightPosition.div(pageSize).sub(pageId);
       varyingProperty("vec2", "pinePageUv").assign(pageUv);
       const depth = this.maximumY
@@ -643,12 +638,7 @@ export class ShadowRigidAtlas {
         worldPosition.dot(lightX),
         worldPosition.dot(lightY),
       );
-      const pageSize = level
-        .equal(0)
-        .select(
-          float(SHADOW_PAGE_WORLD_SIZE),
-          float(SHADOW_PAGE_WORLD_SIZE * 2),
-        );
+      const pageSize = getGpuShadowPageSize(level);
       const pageUv = lightPosition.div(pageSize).sub(pageId);
       varyingProperty("vec2", "deformedPageUv").assign(pageUv);
       const depth = this.maximumY
@@ -728,12 +718,7 @@ export class ShadowRigidAtlas {
         worldPosition.dot(lightX),
         worldPosition.dot(lightY),
       );
-      const pageSize = level
-        .equal(0)
-        .select(
-          float(SHADOW_PAGE_WORLD_SIZE),
-          float(SHADOW_PAGE_WORLD_SIZE * 2),
-        );
+      const pageSize = getGpuShadowPageSize(level);
       const pageUv = lightPosition.div(pageSize).sub(pageId);
       varyingProperty("vec2", "fixedPageUv").assign(pageUv);
       const depth = this.maximumY

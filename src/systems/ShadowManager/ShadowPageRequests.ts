@@ -31,7 +31,7 @@ import {
   SHADOW_PAGE_GRID_MIN,
   SHADOW_PAGE_GRID_SIZE,
   SHADOW_PAGES_PER_LEVEL,
-  SHADOW_PAGE_WORLD_SIZE,
+  getGpuShadowPageSize,
 } from "./ShadowPageCoordinates";
 
 const TILE_SIZE = 8;
@@ -158,12 +158,7 @@ export class ShadowPageRequests {
               .select(nearMaximum, farMaximum);
             const isNeeded = minimum.x.lessThan(INVALID_MINIMUM);
             If(isNeeded, () => {
-              const pageSize = level
-                .equal(uint(0))
-                .select(
-                  float(SHADOW_PAGE_WORLD_SIZE),
-                  float(SHADOW_PAGE_WORLD_SIZE * 2),
-                );
+              const pageSize = getGpuShadowPageSize(level);
               const firstPage = minimum.xy.div(pageSize).floor().sub(1);
               const lastPage = maximum.xy.div(pageSize).floor().add(1);
               const firstX = firstPage.x.max(SHADOW_PAGE_GRID_MIN).toInt();

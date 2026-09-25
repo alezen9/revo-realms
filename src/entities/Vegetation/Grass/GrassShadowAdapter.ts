@@ -27,9 +27,6 @@ import {
 import type { GrassCompute } from "./GrassCompute";
 import { config, uniforms } from "./config";
 
-// the single triangle has a base width of 0.28 before blade width scaling
-const MIN_SHADOW_CARD_WIDTH = 0.125 / 0.28;
-
 const createGrassShadowGeometry = () => {
   const source = new GrassBladeGeometry({
     nSegments: 1,
@@ -147,9 +144,7 @@ const getGrassBladeWorldPosition = (
     .div(scale.mul(config.BLADE_HEIGHT * 2).max(0.01))
     .mul(uniforms.uBendDropStrength);
   const playerDistanceSquared = bladeOffset.dot(bladeOffset);
-  const width = getBladeWidth(bladeState, playerDistanceSquared).max(
-    MIN_SHADOW_CARD_WIDTH,
-  );
+  const width = getBladeWidth(bladeState, playerDistanceSquared);
   const horizontalLength = lightingManager.uSunDir.xz.length();
   const lightX = horizontalLength
     .lessThan(0.0001)

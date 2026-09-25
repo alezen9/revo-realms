@@ -8,9 +8,18 @@ export const SHADOW_PAGES_PER_LEVEL = SHADOW_PAGE_GRID_SIZE ** 2;
 export const SHADOW_PAGE_LEVEL_COUNT = 2;
 export const SHADOW_PAGE_COUNT =
   SHADOW_PAGES_PER_LEVEL * SHADOW_PAGE_LEVEL_COUNT;
-export const SHADOW_PAGE_WORLD_SIZE = 32;
-export const SHADOW_NEAR_END = 128;
-export const SHADOW_FAR_START = 96;
+export const SHADOW_NEAR_PAGE_WORLD_SIZE = 4;
+export const SHADOW_FAR_PAGE_WORLD_SIZE = 24;
+export const SHADOW_NEAR_END = 24;
+export const SHADOW_FAR_START = 18;
+
+export const getGpuShadowPageSize = (level: Node<"uint">) =>
+  level
+    .equal(uint(0))
+    .select(
+      float(SHADOW_NEAR_PAGE_WORLD_SIZE),
+      float(SHADOW_FAR_PAGE_WORLD_SIZE),
+    );
 
 export const decodeGpuShadowPageKey = (pageKey: Node<"uint">) => {
   const level = pageKey.div(SHADOW_PAGES_PER_LEVEL);
@@ -41,9 +50,7 @@ export const getGpuShadowPageAddress = (
     worldPosition.dot(lightX),
     worldPosition.dot(lightY),
   );
-  const pageSize = level
-    .equal(uint(0))
-    .select(float(SHADOW_PAGE_WORLD_SIZE), float(SHADOW_PAGE_WORLD_SIZE * 2));
+  const pageSize = getGpuShadowPageSize(level);
   const pagePosition = lightPosition.div(pageSize);
   const pageId = pagePosition.floor();
   const isInsideGrid = pageId.x
@@ -77,7 +84,8 @@ export class ShadowPageCoordinates {
         -sunDirection.x / horizontalLength,
       );
     this.lightY.crossVectors(sunDirection, this.lightX).normalize();
-    const pageSize = SHADOW_PAGE_WORLD_SIZE * (level + 1);
+    const pageSize =
+      level === 0 ? SHADOW_NEAR_PAGE_WORLD_SIZE : SHADOW_FAR_PAGE_WORLD_SIZE;
     return {
       x: Math.floor(position.dot(this.lightX) / pageSize),
       y: Math.floor(position.dot(this.lightY) / pageSize),

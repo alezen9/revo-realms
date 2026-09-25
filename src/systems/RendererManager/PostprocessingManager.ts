@@ -76,6 +76,7 @@ export class PostprocessingManager extends RenderPipeline {
   private shadowVegetationAtlas?: ShadowVegetationAtlas;
   private uSaturation = uniform(1);
   private uSunVisibility = uniform(1);
+  private uShadowIntensity = uniform(0.7);
   private uProjectionMatrixInverse = uniform(new Matrix4());
   private uCameraWorldMatrix = uniform(new Matrix4());
   private uCameraPosition = uniform(new Vector3());
@@ -181,6 +182,13 @@ export class PostprocessingManager extends RenderPipeline {
         max: 1,
         step: 0.05,
       });
+    if (isPagedV2)
+      this.debugFolder.addBinding(this.uShadowIntensity, "value", {
+        label: "Shadow intensity",
+        min: 0,
+        max: 1,
+        step: 0.05,
+      });
     if (isPagedV2) {
       if (!this.shadowFixedAtlas || !this.shadowMovingAtlas)
         throw new Error("V2 rigid shadow atlases are required");
@@ -282,7 +290,7 @@ export class PostprocessingManager extends RenderPipeline {
     ).xyz;
     const level = viewPosition.z
       .negate()
-      .lessThan(112)
+      .lessThan(21)
       .select(uint(0), uint(1));
     const address = getGpuShadowPageAddress(
       worldPosition,
@@ -325,7 +333,7 @@ export class PostprocessingManager extends RenderPipeline {
     ).xyz;
     const level = viewPosition.z
       .negate()
-      .lessThan(112)
+      .lessThan(21)
       .select(uint(0), uint(1));
     const address = getGpuShadowPageAddress(
       worldPosition,
@@ -486,7 +494,13 @@ export class PostprocessingManager extends RenderPipeline {
         vec4(
           this.getMainSceneTextureNode("directSun")
             .sample(uv)
-            .rgb.mul(float(1).sub(this.uSunVisibility.mul(visibility))),
+            .rgb.mul(
+              float(1).sub(
+                this.uSunVisibility.mul(
+                  mix(float(1), visibility, this.uShadowIntensity),
+                ),
+              ),
+            ),
           0,
         ),
       )
