@@ -5,6 +5,7 @@ import {
   physicsManager,
   windManager,
   sceneManager,
+  shadowCasterRegistry,
 } from "../../systems";
 import { ColliderDesc } from "@dimforge/rapier3d";
 import { Mesh, Vector3 } from "three";
@@ -48,6 +49,7 @@ export default class Berserk {
     ) as Mesh;
     sword.material = new DragonSlayerMaterial();
     sceneManager.mainScene.add(sword);
+    shadowCasterRegistry.register(sword);
 
     // Physics
     sword.geometry.computeBoundingBox();

@@ -7,6 +7,7 @@ import {
   physicsManager,
   landmarkManager,
   windManager,
+  shadowCasterRegistry,
 } from "../systems";
 import { ColliderDesc } from "@dimforge/rapier3d";
 import { DirectSunStandardNodeMaterial } from "../systems/ShadowManager/DirectSunMaterials";
@@ -48,6 +49,7 @@ export class Campfire {
     fire.position.copy(campfire.position).setY(-0.15);
 
     sceneManager.mainScene.add(campfire, fire);
+    shadowCasterRegistry.register(campfire);
 
     // Physics
     const fireColliderMesh =

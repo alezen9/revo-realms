@@ -42,6 +42,7 @@ import {
   lightingManager,
   physicsManager,
   sceneManager,
+  shadowCasterRegistry,
 } from "../systems";
 import { gameTime } from "../utils/GameTime";
 import { srgbColorTarget } from "../utils/TweakpaneColor";
@@ -302,6 +303,7 @@ class InnerTerrain {
         mesh.geometry.computeBoundingBox();
 
         innerTerrain.add(mesh);
+        shadowCasterRegistry.register(mesh);
       }
     }
 
@@ -465,6 +467,7 @@ class OuterTerrain {
     this.kintoun = this.createKintoun();
 
     sceneManager.mainScene.add(this.outerTerrain);
+    shadowCasterRegistry.register(this.outerTerrain, "moving");
 
     eventsManager.on("engine-render-update", this.onEngineUpdate);
   }
@@ -550,11 +553,15 @@ class OuterTerrain {
         ? absPlayerZ - outerTerrainThreshold
         : 0;
 
-    this.outerTerrain.position.set(
-      offsetX * directionX,
-      0,
-      offsetZ * directionZ,
-    );
+    const nextX = offsetX * directionX;
+    const nextZ = offsetZ * directionZ;
+    if (
+      this.outerTerrain.position.x === nextX &&
+      this.outerTerrain.position.z === nextZ
+    )
+      return;
+    this.outerTerrain.position.set(nextX, 0, nextZ);
+    shadowCasterRegistry.markMoved(this.outerTerrain);
   };
 }
 

@@ -4,6 +4,7 @@ import {
   debugManager,
   physicsManager,
   sceneManager,
+  shadowCasterRegistry,
 } from "../../systems";
 import { BatchedMesh } from "three/webgpu";
 import { DirectSunLambertNodeMaterial } from "../../systems/ShadowManager/DirectSunMaterials";
@@ -111,6 +112,8 @@ export default class PineTrees {
     }
 
     sceneManager.mainScene.add(barkBatch, canopyBatch);
+    shadowCasterRegistry.register(barkBatch);
+    shadowCasterRegistry.register(canopyBatch, "deformed");
     this.debug();
   }
 

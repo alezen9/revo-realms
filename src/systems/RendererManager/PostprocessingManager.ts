@@ -35,14 +35,7 @@ import type { SceneManager } from "../SceneManager";
 import { assetManager, lightingManager } from "..";
 import { playerUniforms } from "../../entities/Player/PlayerMaterial";
 import { TSLUtils } from "../../utils/TSLUtils";
-import {
-  isDirectSunMaterialCaptureEnabled,
-  isDirectSunPreviewEnabled,
-  isDirectSunResolveEnabled,
-  isDirectSunTargetEnabled,
-  isShadowBaseline,
-  isPagedV2,
-} from "../ShadowManager/config";
+import { isShadowBaseline, isPagedV2 } from "../ShadowManager/config";
 
 const MAIN_SCENE_PASS_SAMPLES = 4;
 const LUMINANCE_WEIGHTS = vec3(0.2126, 0.7152, 0.0722);
@@ -64,7 +57,7 @@ export class PostprocessingManager extends RenderPipeline {
   private debugManager: DebugManager;
   private debugFolder: DebugFolder;
   private debugView = {
-    target: isDirectSunPreviewEnabled ? "directSun" : "scene",
+    target: "scene",
   };
   private sceneOutputNode?: ReturnType<typeof renderOutput>;
   private directSunOutputNode?: ReturnType<typeof renderOutput>;
@@ -90,7 +83,7 @@ export class PostprocessingManager extends RenderPipeline {
       this.sceneManager.renderCamera,
       { samples: MAIN_SCENE_PASS_SAMPLES },
     );
-    if (isDirectSunTargetEnabled) {
+    if (isPagedV2) {
       this.mainScenePass.setMRT(mrt({ output, directSun: vec4(0) }));
       const directSunTexture = this.mainScenePass.getTexture("directSun");
       directSunTexture.format = RGBFormat;
@@ -110,14 +103,14 @@ export class PostprocessingManager extends RenderPipeline {
     this.syncCameraUniforms();
 
     this.sceneOutputNode = this.makeGraph();
-    if (isDirectSunResolveEnabled)
+    if (isPagedV2)
       this.debugFolder.addBinding(this.uSunVisibility, "value", {
         label: "Sun visibility",
         min: 0,
         max: 1,
         step: 0.05,
       });
-    if (isDirectSunMaterialCaptureEnabled) {
+    if (isPagedV2) {
       this.directSunOutputNode = renderOutput(
         vec4(
           this.mainScenePass.getTextureNode("directSun").sample(screenUV).rgb,
@@ -238,7 +231,7 @@ export class PostprocessingManager extends RenderPipeline {
 
   sampleMainSceneColor(uv: Node<"vec2">) {
     const sceneColor = this.mainScenePass.getTextureNode().sample(uv);
-    if (!isDirectSunResolveEnabled) return sceneColor;
+    if (!isPagedV2) return sceneColor;
 
     return sceneColor
       .sub(

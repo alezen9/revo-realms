@@ -43,6 +43,7 @@ import {
   eventsManager,
   windManager,
   debugManager,
+  shadowCasterRegistry,
 } from "../../systems";
 import { type State } from "../../Game";
 import { gameTime } from "../../utils/GameTime";
@@ -314,6 +315,7 @@ export default class Flowers {
 
     this.mesh = mesh;
     sceneManager.mainScene.add(this.mesh);
+    shadowCasterRegistry.register(this.mesh, "deformed");
 
     this.computeTask = rendererManager.createComputeTask({
       label: "Flowers",

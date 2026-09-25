@@ -6,6 +6,7 @@ import {
   rendererManager,
   eventsManager,
   monitoringManager,
+  shadowCasterRegistry,
 } from "../../../systems";
 import { config, uniforms } from "./config";
 import { debugGrass } from "./debug";
@@ -81,6 +82,7 @@ export default class Grass {
 
     const mesh = new Mesh(geometry, this.material);
     mesh.frustumCulled = false;
+    shadowCasterRegistry.register(mesh, "deformed");
 
     return mesh;
   }
@@ -92,7 +94,15 @@ export default class Grass {
 
     this.updateCompute();
 
+    if (
+      this.tile.position.x === player.position.x &&
+      this.tile.position.z === player.position.z
+    )
+      return;
     this.tile.position.set(player.position.x, 0, player.position.z);
+    for (const child of this.tile.children) {
+      if (child instanceof Mesh) shadowCasterRegistry.markMoved(child);
+    }
   };
 
   private accumulatePlayerDelta(player: State["player"]) {

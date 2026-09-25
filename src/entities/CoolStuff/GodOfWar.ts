@@ -5,6 +5,7 @@ import {
   physicsManager,
   windManager,
   sceneManager,
+  shadowCasterRegistry,
 } from "../../systems";
 import { ColliderDesc } from "@dimforge/rapier3d";
 import { Mesh, Quaternion, Vector3 } from "three";
@@ -55,6 +56,7 @@ export default class GodOfWar {
     axe.material = new LeviathanAxeMaterial();
 
     sceneManager.mainScene.add(axe);
+    shadowCasterRegistry.register(axe);
 
     // Physics
     const scale = axe.scale.x;

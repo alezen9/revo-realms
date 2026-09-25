@@ -3,6 +3,7 @@ import {
   debugManager,
   landmarkManager,
   windManager,
+  shadowCasterRegistry,
 } from "../../systems";
 import { Mesh } from "three";
 import { DirectSunStandardNodeMaterial } from "../../systems/ShadowManager/DirectSunMaterials";
@@ -44,6 +45,7 @@ export default class DragonBall {
     ) as Mesh;
     gokuStatue.material = new GokuStatueMaterial();
     sceneManager.mainScene.add(gokuStatue);
+    shadowCasterRegistry.register(gokuStatue);
 
     // Physics
     const collider = assetManager.resources.worldModel.scene.getObjectByName(

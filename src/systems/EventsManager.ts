@@ -75,7 +75,14 @@ export type MonitoringSnapshot = {
   sampleRateMs: number;
   sceneTriangles: number;
   grass: GrassMonitoringStats | null;
+  shadowCasters: ShadowCasterCounts | null;
   device: DeviceMetrics | null;
+};
+
+export type ShadowCasterCounts = {
+  fixed: number;
+  moving: number;
+  deformed: number;
 };
 
 export type GrassMonitoringStats = {

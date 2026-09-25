@@ -87,6 +87,7 @@
 	{@const device = snapshot.device}
 	{@const gpu = device?.gpu}
 	{@const grass = snapshot.grass}
+	{@const shadowCasters = snapshot.shadowCasters}
 	{@const budgetMs = snapshot.frameBudgetMs}
 	{@const frame = snapshot.frame}
 	{@const physics = snapshot.physics}
@@ -177,6 +178,17 @@
 							<span class="aside">K</span>
 						</span>
 					</span>
+				</div>
+			</section>
+		{/if}
+
+		{#if shadowCasters}
+			<section>
+				<span class="category">Shadow casters</span>
+				<div class="metrics">
+					<span class="cell"><span class="label">Fixed</span><span class="value">{integerFormat.format(shadowCasters.fixed)}</span></span>
+					<span class="cell"><span class="label">Moving</span><span class="value">{integerFormat.format(shadowCasters.moving)}</span></span>
+					<span class="cell"><span class="label">Deformed</span><span class="value">{integerFormat.format(shadowCasters.deformed)}</span></span>
 				</div>
 			</section>
 		{/if}

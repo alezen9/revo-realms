@@ -9,6 +9,7 @@ import type {
   EventsManager,
   GrassMonitoringStats,
   MonitoringSnapshot,
+  ShadowCasterCounts,
 } from "../EventsManager";
 import { type RendererManager } from "./RendererManager";
 import { ThreeMonitoringAdapter } from "./ThreeMonitoringAdapter";
@@ -119,6 +120,7 @@ export class MonitoringManager {
   private lastSceneTriangles = 0;
   private grassProvider?: GrassProvider;
   private grassStats: GrassMonitoringStats | null = null;
+  private shadowCasterCounts?: ShadowCasterCounts;
   private isGrassPending = false;
   private threeAdapter?: ThreeMonitoringAdapter;
   private snapshotInterval?: ReturnType<typeof window.setInterval>;
@@ -141,6 +143,10 @@ export class MonitoringManager {
 
   setGrassProvider(provider: GrassProvider) {
     this.grassProvider = provider;
+  }
+
+  setShadowCasterCounts(counts: ShadowCasterCounts) {
+    this.shadowCasterCounts = counts;
   }
 
   samplePhysics() {
@@ -412,6 +418,9 @@ export class MonitoringManager {
           grass.renderedTriangles
         : this.lastSceneTriangles,
       grass,
+      shadowCasters: this.shadowCasterCounts
+        ? { ...this.shadowCasterCounts }
+        : null,
       device: this.buildDeviceMetrics(),
     };
 
