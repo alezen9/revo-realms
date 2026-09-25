@@ -66,6 +66,7 @@ export class ShadowRigidAtlas {
   private renderer: WebGPURenderer;
   private residency: ShadowResidency;
   private sunDirection: Node<"vec3">;
+  private softness: Node<"float">;
   private kind: "fixed" | "moving";
   private atlasGridSize: number;
   private renderTarget: RenderTarget;
@@ -103,11 +104,13 @@ export class ShadowRigidAtlas {
     renderer: WebGPURenderer,
     residency: ShadowResidency,
     sunDirection: Node<"vec3">,
+    softness: Node<"float">,
     kind: "fixed" | "moving",
   ) {
     this.renderer = renderer;
     this.residency = residency;
     this.sunDirection = sunDirection;
+    this.softness = softness;
     this.kind = kind;
     this.pageJobOffset = kind === "fixed" ? 0 : residency.capacity;
     this.atlasGridSize = Math.ceil(Math.sqrt(residency.capacity));
@@ -376,7 +379,7 @@ export class ShadowRigidAtlas {
       worldPosition,
       sceneDepth,
       level,
-      vec2(-0.35, -0.35),
+      vec2(this.softness.negate(), this.softness.negate()),
       secondary,
     );
     const topRight = this.sampleTap(
@@ -384,7 +387,7 @@ export class ShadowRigidAtlas {
       worldPosition,
       sceneDepth,
       level,
-      vec2(0.35, -0.35),
+      vec2(this.softness, this.softness.negate()),
       secondary,
     );
     const bottomLeft = this.sampleTap(
@@ -392,7 +395,7 @@ export class ShadowRigidAtlas {
       worldPosition,
       sceneDepth,
       level,
-      vec2(-0.35, 0.35),
+      vec2(this.softness.negate(), this.softness),
       secondary,
     );
     const bottomRight = this.sampleTap(
@@ -400,7 +403,7 @@ export class ShadowRigidAtlas {
       worldPosition,
       sceneDepth,
       level,
-      vec2(0.35, 0.35),
+      vec2(this.softness, this.softness),
       secondary,
     );
     const topLeftWeight = topLeft.isValid.select(float(1), float(0));

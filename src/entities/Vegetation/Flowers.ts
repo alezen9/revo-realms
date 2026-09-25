@@ -1,7 +1,6 @@
 import {
   atomicAdd,
   atomicStore,
-  bool,
   float,
   floor,
   Fn,
@@ -44,17 +43,13 @@ import {
   eventsManager,
   windManager,
   debugManager,
-  shadowCasterRegistry,
 } from "../../systems";
 import { type State } from "../../Game";
 import { gameTime } from "../../utils/GameTime";
 import { TSLUtils } from "../../utils/TSLUtils";
 import { srgbColorTarget } from "../../utils/TweakpaneColor";
 import type { ComputeTask } from "../../systems/RendererManager/ComputeTask";
-import {
-  isDirectSunMaterialCaptureEnabled,
-  isPagedV2,
-} from "../../systems/ShadowManager/config";
+import { isDirectSunMaterialCaptureEnabled } from "../../systems/ShadowManager/config";
 
 const getConfig = () => {
   const FLOWER_WIDTH = 0.5;
@@ -78,7 +73,6 @@ const getConfig = () => {
   };
 };
 const config = getConfig();
-export const FLOWER_SHADOW_INSTANCE_COUNT = config.COUNT;
 
 const uniforms = {
   uPlayerDeltaXZ: uniform(new Vector2(0, 0)),
@@ -252,7 +246,7 @@ export class FlowersSsbo {
 
     data.assign(this.setVisibility(data, isVisible));
 
-    If(isVisible.greaterThan(0).or(bool(isPagedV2)), () => {
+    If(isVisible.greaterThan(0), () => {
       // Y offset
       const mapUv = TSLUtils.computeMapUvByPosition(worldPos.xz);
       const heightUv = vec2(mapUv.x, float(1).sub(mapUv.y));
@@ -349,16 +343,6 @@ export const getFlowerLocalPosition = (
     .add(swayOffset);
 };
 
-export const getFlowerCenterWorldPosition = (
-  ssbo: FlowersSsbo,
-  flowerIndex: Node<"uint">,
-) => {
-  const data = ssbo.computeBuffer.element(flowerIndex);
-  return vec3(data.x, ssbo.getYOffset(data).add(1), data.y).add(
-    vec3(uniforms.uPlayerPosition.x, 0, uniforms.uPlayerPosition.z),
-  );
-};
-
 export default class Flowers {
   private mesh: Mesh;
   private computeTask: ComputeTask;
@@ -396,31 +380,6 @@ export default class Flowers {
 
     this.mesh = mesh;
     sceneManager.mainScene.add(this.mesh);
-    shadowCasterRegistry.register(this.mesh, {
-      kind: "deformed",
-      localVegetation: true,
-      shadowOpacityNode: texture(assetManager.resources.edelweiss, uv()).a,
-      alphaCutoff: 0.15,
-      deformedInstances: {
-        count: FLOWER_SHADOW_INSTANCE_COUNT,
-        maxRadiusMeters: 6,
-        centerWorldPosition: (index) =>
-          getFlowerCenterWorldPosition(ssbo, index),
-        worldPosition: (index, position) =>
-          getFlowerLocalPosition(ssbo, index, position).add(
-            vec3(uniforms.uPlayerPosition.x, 0, uniforms.uPlayerPosition.z),
-          ),
-        isActive: (index) =>
-          isPagedV2
-            ? ssbo
-                .getGrassScale(ssbo.computeBuffer.element(index))
-                .greaterThanEqual(0.05)
-            : ssbo
-                .getVisibility(ssbo.computeBuffer.element(index))
-                .greaterThan(0.5),
-      },
-    });
-
     this.computeTask = rendererManager.createComputeTask({
       label: "Flowers",
       init: ssbo.computeInit,

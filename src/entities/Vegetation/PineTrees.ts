@@ -120,9 +120,7 @@ export default class PineTrees {
     sceneManager.mainScene.add(barkBatch, canopyBatch);
     shadowCasterRegistry.register(barkBatch);
     shadowCasterRegistry.register(canopyBatch, {
-      kind: "deformed",
-      maxVerticalDisplacementMeters: CANOPY_MAXIMUM_SWAY_METERS,
-      shadowPositionNode: canopyMaterial.shadowPositionNode,
+      kind: "fixed",
       shadowOpacityNode: canopyMaterial.shadowOpacityNode,
       alphaCutoff: canopyMaterial.alphaTest,
     });

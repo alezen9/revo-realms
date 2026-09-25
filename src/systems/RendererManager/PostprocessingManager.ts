@@ -77,6 +77,7 @@ export class PostprocessingManager extends RenderPipeline {
   private uSaturation = uniform(1);
   private uSunVisibility = uniform(1);
   private uShadowIntensity = uniform(0.7);
+  private uRigidShadowSoftness = uniform(0.5);
   private uProjectionMatrixInverse = uniform(new Matrix4());
   private uCameraWorldMatrix = uniform(new Matrix4());
   private uCameraPosition = uniform(new Vector3());
@@ -157,12 +158,14 @@ export class PostprocessingManager extends RenderPipeline {
         renderer,
         this.shadowResidency,
         lightingManager.uSunDir,
+        this.uRigidShadowSoftness,
         "fixed",
       );
       const movingAtlas = new ShadowRigidAtlas(
         renderer,
         this.shadowResidency,
         lightingManager.uSunDir,
+        this.uRigidShadowSoftness,
         "moving",
       );
       this.shadowFixedAtlas = fixedAtlas;
@@ -187,6 +190,24 @@ export class PostprocessingManager extends RenderPipeline {
         label: "Shadow intensity",
         min: 0,
         max: 1,
+        step: 0.05,
+      });
+    if (this.shadowVegetationAtlas)
+      this.debugFolder.addBinding(
+        this.shadowVegetationAtlas.softness,
+        "value",
+        {
+          label: "Grass shadow softness",
+          min: 0,
+          max: 2,
+          step: 0.1,
+        },
+      );
+    if (isPagedV2)
+      this.debugFolder.addBinding(this.uRigidShadowSoftness, "value", {
+        label: "Rigid shadow softness",
+        min: 0.25,
+        max: 1.5,
         step: 0.05,
       });
     if (isPagedV2) {
@@ -288,10 +309,7 @@ export class PostprocessingManager extends RenderPipeline {
     const worldPosition = this.uCameraWorldMatrix.mul(
       vec4(viewPosition, 1),
     ).xyz;
-    const level = viewPosition.z
-      .negate()
-      .lessThan(21)
-      .select(uint(0), uint(1));
+    const level = viewPosition.z.negate().lessThan(21).select(uint(0), uint(1));
     const address = getGpuShadowPageAddress(
       worldPosition,
       lightingManager.uSunDir,
@@ -331,10 +349,7 @@ export class PostprocessingManager extends RenderPipeline {
     const worldPosition = this.uCameraWorldMatrix.mul(
       vec4(viewPosition, 1),
     ).xyz;
-    const level = viewPosition.z
-      .negate()
-      .lessThan(21)
-      .select(uint(0), uint(1));
+    const level = viewPosition.z.negate().lessThan(21).select(uint(0), uint(1));
     const address = getGpuShadowPageAddress(
       worldPosition,
       lightingManager.uSunDir,

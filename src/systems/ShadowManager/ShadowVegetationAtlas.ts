@@ -70,6 +70,7 @@ const getLightXAxis = (sunDirection: Node<"vec3">) => {
 };
 
 export class ShadowVegetationAtlas {
+  readonly softness = uniform(1);
   private renderer: WebGPURenderer;
   private sunDirection: Node<"vec3">;
   private target: RenderTarget;
@@ -168,9 +169,17 @@ export class ShadowVegetationAtlas {
       .and(uv.y.lessThan(1))
       .and(sceneDepth.lessThan(1))
       .and(this.isReady.greaterThan(0));
+    const offset = vec2(this.softness.div(MAP_TEXELS), 0);
+    const comparisonDepth = receiverDepth.sub(DEPTH_BIAS);
     const visibility = this.depthNode
-      .sample(uv.clamp(0.5 / MAP_TEXELS, 1 - 0.5 / MAP_TEXELS))
-      .compare(receiverDepth.sub(DEPTH_BIAS));
+      .sample(uv.sub(offset).clamp(0.5 / MAP_TEXELS, 1 - 0.5 / MAP_TEXELS))
+      .compare(comparisonDepth)
+      .add(
+        this.depthNode
+          .sample(uv.add(offset).clamp(0.5 / MAP_TEXELS, 1 - 0.5 / MAP_TEXELS))
+          .compare(comparisonDepth),
+      )
+      .mul(0.5);
     return isInside.select(visibility, float(1));
   }
 
