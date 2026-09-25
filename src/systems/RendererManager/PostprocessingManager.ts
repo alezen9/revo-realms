@@ -38,9 +38,10 @@ import { TSLUtils } from "../../utils/TSLUtils";
 import {
   isDirectSunMaterialCaptureEnabled,
   isDirectSunPreviewEnabled,
-  isDirectSunResolveProbeEnabled,
+  isDirectSunResolveEnabled,
   isDirectSunTargetEnabled,
   isShadowBaseline,
+  isPagedV2,
 } from "../ShadowManager/config";
 
 const MAIN_SCENE_PASS_SAMPLES = 4;
@@ -52,7 +53,7 @@ export class PostprocessingManager extends RenderPipeline {
   private mainScenePass: ReturnType<typeof pass>;
   private waterPass: ReturnType<typeof pass>;
   private uSaturation = uniform(1);
-  private uProbeSunVisibility = uniform(1);
+  private uSunVisibility = uniform(1);
   private uProjectionMatrixInverse = uniform(new Matrix4());
   private uCameraWorldMatrix = uniform(new Matrix4());
   private uCameraPosition = uniform(new Vector3());
@@ -109,8 +110,8 @@ export class PostprocessingManager extends RenderPipeline {
     this.syncCameraUniforms();
 
     this.sceneOutputNode = this.makeGraph();
-    if (isDirectSunResolveProbeEnabled)
-      this.debugFolder.addBinding(this.uProbeSunVisibility, "value", {
+    if (isDirectSunResolveEnabled)
+      this.debugFolder.addBinding(this.uSunVisibility, "value", {
         label: "Sun visibility",
         min: 0,
         max: 1,
@@ -237,7 +238,7 @@ export class PostprocessingManager extends RenderPipeline {
 
   sampleMainSceneColor(uv: Node<"vec2">) {
     const sceneColor = this.mainScenePass.getTextureNode().sample(uv);
-    if (!isDirectSunResolveProbeEnabled) return sceneColor;
+    if (!isDirectSunResolveEnabled) return sceneColor;
 
     return sceneColor
       .sub(
@@ -245,7 +246,7 @@ export class PostprocessingManager extends RenderPipeline {
           this.mainScenePass
             .getTextureNode("directSun")
             .sample(uv)
-            .rgb.mul(float(1).sub(this.uProbeSunVisibility)),
+            .rgb.mul(float(1).sub(this.uSunVisibility)),
           0,
         ),
       )
@@ -281,13 +282,14 @@ export class PostprocessingManager extends RenderPipeline {
     });
 
     const withBloomHDR = colorHDR.add(bloomPass);
-    const shadowedHDR = isShadowBaseline
-      ? withBloomHDR
-      : mix(
-          withBloomHDR.mul(lightingManager.uPlayerShadowBrightness),
-          withBloomHDR,
-          this.computeBallShadowFactor(),
-        );
+    const shadowedHDR =
+      isShadowBaseline || isPagedV2
+        ? withBloomHDR
+        : mix(
+            withBloomHDR.mul(lightingManager.uPlayerShadowBrightness),
+            withBloomHDR,
+            this.computeBallShadowFactor(),
+          );
 
     const toneMapped = toneMapping(
       ACESFilmicToneMapping,
