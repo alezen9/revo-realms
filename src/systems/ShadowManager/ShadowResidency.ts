@@ -1,5 +1,6 @@
 import { Vector2, Vector3 } from "three";
 import {
+  IndirectStorageBufferAttribute,
   StorageBufferAttribute,
   type Node,
   type WebGPURenderer,
@@ -76,6 +77,15 @@ export class ShadowResidency {
   private pageJobsNode = storage(this.pageJobs, "uvec2", POOL_CAPACITY);
   private counters = new StorageBufferAttribute(new Uint32Array(8), 1);
   private atomicCounters = storage(this.counters, "uint", 8).toAtomic();
+  private atlasIndirect = new IndirectStorageBufferAttribute(
+    new Uint32Array([6, 0, 0, 0, 0, 0, 0, 0]),
+    1,
+  );
+  private atomicAtlasIndirect = storage(
+    this.atlasIndirect,
+    "uint",
+    8,
+  ).toAtomic();
   private allocateNode;
   private isReadbackPending = false;
   private nextReadbackTime = 0;
@@ -233,8 +243,46 @@ export class ShadowResidency {
           requestCounters.element(index),
         );
       }
+      atomicStore(
+        this.atomicAtlasIndirect.element(1),
+        atomicLoad(this.atomicCounters.element(1)),
+      );
+      atomicStore(
+        this.atomicAtlasIndirect.element(5),
+        atomicLoad(this.atomicCounters.element(1)),
+      );
     })().compute(1, [1]);
     this.allocateNode.name = "V2 page residency";
+  }
+
+  get capacity() {
+    return POOL_CAPACITY;
+  }
+
+  get pageJobsAttribute() {
+    return this.pageJobs;
+  }
+
+  get counterAttribute() {
+    return this.counters;
+  }
+
+  get clearIndirectAttribute() {
+    return this.atlasIndirect;
+  }
+
+  get fixedIndirectAttribute() {
+    return this.atlasIndirect;
+  }
+
+  setFixedVertexCount(vertexCount: number) {
+    this.atlasIndirect.array[4] = vertexCount;
+    this.atlasIndirect.needsUpdate = true;
+  }
+
+  invalidate() {
+    this.sunGeneration.value = (this.sunGeneration.value + 1) >>> 0;
+    if (this.sunGeneration.value === 0) this.sunGeneration.value = 1;
   }
 
   resolvePage(pageKey: Node<"uint">) {
@@ -258,8 +306,7 @@ export class ShadowResidency {
     this.frame.value = (this.frame.value + 1) >>> 0;
     if (!this.previousSunDirection.equals(sunDirection)) {
       this.previousSunDirection.copy(sunDirection);
-      this.sunGeneration.value = (this.sunGeneration.value + 1) >>> 0;
-      if (this.sunGeneration.value === 0) this.sunGeneration.value = 1;
+      this.invalidate();
     }
     const nearCenter = this.coordinates.getPageCenter(
       cameraPosition,

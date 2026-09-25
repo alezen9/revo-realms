@@ -13,6 +13,7 @@ export type ShadowCasterEntry = {
 
 export class ShadowCasterRegistry {
   private entries = new Map<Mesh, ShadowCasterEntry>();
+  fixedVersion = 0;
   readonly counts = { fixed: 0, moving: 0, deformed: 0 };
 
   get casters() {
@@ -41,6 +42,7 @@ export class ShadowCasterRegistry {
       worldMatrix: mesh.matrixWorld.clone(),
     });
     this.counts[kind]++;
+    if (kind === "fixed") this.fixedVersion++;
   }
 
   unregister(mesh: Mesh) {
@@ -50,6 +52,7 @@ export class ShadowCasterRegistry {
 
     this.entries.delete(mesh);
     this.counts[entry.kind]--;
+    if (entry.kind === "fixed") this.fixedVersion++;
   }
 
   markMoved(mesh: Mesh) {

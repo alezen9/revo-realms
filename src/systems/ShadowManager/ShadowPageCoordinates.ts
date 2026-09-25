@@ -12,6 +12,16 @@ export const SHADOW_PAGE_WORLD_SIZE = 32;
 export const SHADOW_NEAR_END = 128;
 export const SHADOW_FAR_START = 96;
 
+export const decodeGpuShadowPageKey = (pageKey: Node<"uint">) => {
+  const level = pageKey.div(SHADOW_PAGES_PER_LEVEL);
+  const localKey = pageKey.mod(SHADOW_PAGES_PER_LEVEL);
+  const pageId = vec2(
+    float(localKey.mod(SHADOW_PAGE_GRID_SIZE)),
+    float(localKey.div(SHADOW_PAGE_GRID_SIZE)),
+  ).add(SHADOW_PAGE_GRID_MIN);
+  return { level, pageId };
+};
+
 export const getGpuShadowPageAddress = (
   worldPosition: Node<"vec3">,
   sunDirection: Node<"vec3">,

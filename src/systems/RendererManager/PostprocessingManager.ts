@@ -41,13 +41,22 @@ import { bloom } from "three/addons/tsl/display/BloomNode.js";
 import type { DebugFolder, DebugManager } from "../DebugManager";
 import type { EventsManager } from "../EventsManager";
 import type { SceneManager } from "../SceneManager";
-import { assetManager, lightingManager, monitoringManager } from "..";
+import {
+  assetManager,
+  lightingManager,
+  monitoringManager,
+  shadowCasterRegistry,
+} from "..";
 import { playerUniforms } from "../../entities/Player/PlayerMaterial";
 import { TSLUtils } from "../../utils/TSLUtils";
 import { isShadowBaseline, isPagedV2 } from "../ShadowManager/config";
 import { getGpuShadowPageAddress } from "../ShadowManager/ShadowPageCoordinates";
 import { ShadowPageRequests } from "../ShadowManager/ShadowPageRequests";
 import { ShadowResidency } from "../ShadowManager/ShadowResidency";
+import {
+  ShadowFixedAtlas,
+  SHADOW_FIXED_PAGE_TEXELS,
+} from "../ShadowManager/ShadowFixedAtlas";
 
 const MAIN_SCENE_PASS_SAMPLES = 4;
 const LUMINANCE_WEIGHTS = vec3(0.2126, 0.7152, 0.0722);
@@ -61,6 +70,7 @@ export class PostprocessingManager extends RenderPipeline {
   private cameraWorldPosition = new Vector3();
   private shadowPageRequests?: ShadowPageRequests;
   private shadowResidency?: ShadowResidency;
+  private shadowFixedAtlas?: ShadowFixedAtlas;
   private uSaturation = uniform(1);
   private uSunVisibility = uniform(1);
   private uProjectionMatrixInverse = uniform(new Matrix4());
@@ -78,6 +88,7 @@ export class PostprocessingManager extends RenderPipeline {
   private sceneOutputNode?: ReturnType<typeof renderOutput>;
   private directSunOutputNode?: ReturnType<typeof renderOutput>;
   private pageOutputNode?: ReturnType<typeof renderOutput>;
+  private fixedDepthOutputNode?: ReturnType<typeof renderOutput>;
 
   constructor(
     renderer: WebGPURenderer,
@@ -134,6 +145,11 @@ export class PostprocessingManager extends RenderPipeline {
         renderer,
         this.shadowPageRequests,
       );
+      this.shadowFixedAtlas = new ShadowFixedAtlas(
+        renderer,
+        this.shadowResidency,
+        lightingManager.uSunDir,
+      );
       monitoringManager.setShadowPageStats(this.shadowResidency.stats);
     }
 
@@ -151,6 +167,7 @@ export class PostprocessingManager extends RenderPipeline {
         NoToneMapping,
       );
       this.pageOutputNode = this.makePageOutput();
+      this.fixedDepthOutputNode = this.makeFixedDepthOutput();
       this.debugFolder
         .addBinding(this.debugView, "target", {
           label: "View",
@@ -158,6 +175,7 @@ export class PostprocessingManager extends RenderPipeline {
             Scene: "scene",
             "Direct sun": "directSun",
             Pages: "pages",
+            "Fixed depth": "fixedDepth",
           },
         })
         .on("change", this.selectDebugView);
@@ -197,7 +215,9 @@ export class PostprocessingManager extends RenderPipeline {
         ? this.directSunOutputNode
         : this.debugView.target === "pages"
           ? this.pageOutputNode
-          : this.sceneOutputNode;
+          : this.debugView.target === "fixedDepth"
+            ? this.fixedDepthOutputNode
+            : this.sceneOutputNode;
     if (!selected) return;
     this.outputNode = selected;
     this.needsUpdate = true;
@@ -242,6 +262,47 @@ export class PostprocessingManager extends RenderPipeline {
       .select(
         vec3(0),
         address.isInsideGrid.select(pageCoverage, vec3(1, 0, 1)),
+      );
+    return renderOutput(vec4(color, 1), NoToneMapping);
+  }
+
+  private makeFixedDepthOutput() {
+    if (!this.shadowResidency || !this.shadowFixedAtlas)
+      throw new Error("V2 fixed depth requires residency and atlas");
+    const depth = this.getMainSceneTextureNode("depth").sample(screenUV).r;
+    const viewPosition = getViewPosition(
+      screenUV,
+      depth,
+      this.uProjectionMatrixInverse,
+    );
+    const worldPosition = this.uCameraWorldMatrix.mul(
+      vec4(viewPosition, 1),
+    ).xyz;
+    const level = viewPosition.z
+      .negate()
+      .lessThan(112)
+      .select(uint(0), uint(1));
+    const address = getGpuShadowPageAddress(
+      worldPosition,
+      lightingManager.uSunDir,
+      level,
+    );
+    const { slot, isResident } = this.shadowResidency.resolvePage(
+      address.pageKey,
+    );
+    const pageUv = address.pageUv.clamp(
+      0.5 / SHADOW_FIXED_PAGE_TEXELS,
+      1 - 0.5 / SHADOW_FIXED_PAGE_TEXELS,
+    );
+    const fixedDepth = this.shadowFixedAtlas.sampleDebugDepth(slot, pageUv);
+    const visualDepth = fixedDepth.sub(0.65).mul(5).clamp();
+    const color = depth
+      .greaterThanEqual(1)
+      .select(
+        vec3(0),
+        address.isInsideGrid
+          .and(isResident)
+          .select(vec3(visualDepth), vec3(1, 0, 0)),
       );
     return renderOutput(vec4(color, 1), NoToneMapping);
   }
@@ -401,14 +462,23 @@ export class PostprocessingManager extends RenderPipeline {
       this.mainScenePass.updateBefore(this.mainSceneFrame);
       this.shadowPageRequests?.run();
       this.sceneManager.renderCamera.getWorldPosition(this.cameraWorldPosition);
+      const { min, max } = assetManager.resources.heightmap.userData;
+      if (typeof min !== "number" || typeof max !== "number")
+        throw new Error("V2 fixed depth requires terrain height bounds");
+      this.shadowFixedAtlas?.syncCasters(
+        shadowCasterRegistry,
+        lightingManager.sunDirection,
+        { min, max },
+      );
       this.shadowResidency?.run(
         this.cameraWorldPosition,
         lightingManager.sunDirection,
       );
-      super.render();
+      this.shadowFixedAtlas?.render();
     } finally {
       this.renderer.toneMapping = toneMapping;
       this.renderer.outputColorSpace = outputColorSpace;
     }
+    super.render();
   }
 }
