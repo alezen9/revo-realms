@@ -1,4 +1,4 @@
-import { Vector2, type Texture } from "three";
+import { Matrix4, Vector2, Vector3, type Camera, type Texture } from "three";
 import {
   StorageBufferAttribute,
   type Node,
@@ -43,6 +43,12 @@ export class ShadowPageRequests {
   private renderer: WebGPURenderer;
   private depthSize = uniform(new Vector2(1, 1));
   private drawingBufferSize = new Vector2();
+  private previousCamera?: Camera;
+  private previousCameraMatrix = new Matrix4();
+  private previousProjectionMatrix = new Matrix4();
+  private previousSunDirection = new Vector3();
+  private previousDrawingBufferSize = new Vector2();
+  private previousReceiverRevision = -1;
   private requestBits = new StorageBufferAttribute(
     new Uint32Array(REQUEST_WORD_COUNT),
     1,
@@ -233,10 +239,20 @@ export class ShadowPageRequests {
     return this.counters;
   }
 
-  run() {
+  run(camera: Camera, sunDirection: Vector3, receiverRevision: number) {
     this.renderer.getDrawingBufferSize(this.drawingBufferSize);
     const width = Math.max(1, Math.floor(this.drawingBufferSize.x));
     const height = Math.max(1, Math.floor(this.drawingBufferSize.y));
+    if (
+      camera === this.previousCamera &&
+      this.previousCameraMatrix.equals(camera.matrixWorld) &&
+      this.previousProjectionMatrix.equals(camera.projectionMatrix) &&
+      this.previousSunDirection.equals(sunDirection) &&
+      this.previousDrawingBufferSize.x === width &&
+      this.previousDrawingBufferSize.y === height &&
+      this.previousReceiverRevision === receiverRevision
+    )
+      return;
     this.depthSize.value.set(width, height);
     this.renderer.compute(this.resetNode);
     this.renderer.compute(this.requestNode, [
@@ -244,5 +260,11 @@ export class ShadowPageRequests {
       Math.ceil(height / (TILE_SIZE * TILE_SIZE)),
       1,
     ]);
+    this.previousCamera = camera;
+    this.previousCameraMatrix.copy(camera.matrixWorld);
+    this.previousProjectionMatrix.copy(camera.projectionMatrix);
+    this.previousSunDirection.copy(sunDirection);
+    this.previousDrawingBufferSize.set(width, height);
+    this.previousReceiverRevision = receiverRevision;
   }
 }

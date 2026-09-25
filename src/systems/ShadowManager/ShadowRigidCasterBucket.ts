@@ -1,11 +1,6 @@
-import {
-  Box3,
-  BufferGeometry,
-  Float32BufferAttribute,
-  type Mesh,
-  Vector3,
-} from "three";
+import { Box3, BufferGeometry, Float32BufferAttribute, Vector3 } from "three";
 import { StorageBufferAttribute } from "three/webgpu";
+import type { ShadowCasterEntry } from "./ShadowCasterRegistry";
 import {
   SHADOW_PAGE_GRID_MIN,
   SHADOW_PAGE_GRID_SIZE,
@@ -14,23 +9,29 @@ import {
 } from "./ShadowPageCoordinates";
 import type { ShadowResidency } from "./ShadowResidency";
 
-export class ShadowFixedCasterBucket {
+export class ShadowRigidCasterBucket {
   readonly geometry: BufferGeometry;
   readonly matrixColumnsAttribute: StorageBufferAttribute;
   readonly pageRangesAttribute: StorageBufferAttribute;
+  readonly depthBiasAttribute: StorageBufferAttribute;
 
   private casterCount: number;
   private matrixValues: Float32Array;
   private rangeValues: Uint32Array;
+  private depthBiasValues: Float32Array;
   private bounds = new Box3();
   private corner = new Vector3();
   private coordinates = new ShadowPageCoordinates();
 
-  constructor(residency: ShadowResidency, sources: Mesh[]) {
+  constructor(
+    residency: ShadowResidency,
+    sources: ShadowCasterEntry[],
+    kind: "fixed" | "moving",
+  ) {
     this.casterCount = sources.length;
     const chunks: Float32Array[] = [];
     let vertexCount = 0;
-    for (const source of sources) {
+    for (const { mesh: source } of sources) {
       const sourceGeometry = source.geometry.index
         ? source.geometry.toNonIndexed()
         : source.geometry;
@@ -71,10 +72,14 @@ export class ShadowFixedCasterBucket {
       "casterIndex",
       new Float32BufferAttribute(casterIndices, 1),
     );
-    this.geometry.setIndirect(residency.fixedIndirectAttribute, [
-      4 * Uint32Array.BYTES_PER_ELEMENT,
-    ]);
-    residency.setFixedVertexCount(vertexCount);
+    this.geometry.setIndirect(
+      kind === "fixed"
+        ? residency.fixedIndirectAttribute
+        : residency.movingIndirectAttribute,
+      [(kind === "fixed" ? 4 : 12) * Uint32Array.BYTES_PER_ELEMENT],
+    );
+    if (kind === "fixed") residency.setFixedVertexCount(vertexCount);
+    else residency.setMovingVertexCount(vertexCount);
 
     this.matrixValues = new Float32Array(this.casterCount * 16);
     this.matrixColumnsAttribute = new StorageBufferAttribute(
@@ -85,17 +90,23 @@ export class ShadowFixedCasterBucket {
       this.casterCount * SHADOW_PAGE_LEVEL_COUNT * 4,
     );
     this.pageRangesAttribute = new StorageBufferAttribute(this.rangeValues, 4);
+    this.depthBiasValues = new Float32Array(this.casterCount);
+    this.depthBiasAttribute = new StorageBufferAttribute(
+      this.depthBiasValues,
+      1,
+    );
   }
 
-  update(sources: Mesh[], sunDirection: Vector3) {
+  update(sources: ShadowCasterEntry[], sunDirection: Vector3) {
     if (sources.length !== this.casterCount)
       throw new Error(
-        "Fixed caster count changed without rebuilding the bucket",
+        "Rigid caster count changed without rebuilding the bucket",
       );
 
     const maximumPage = SHADOW_PAGE_GRID_MIN + SHADOW_PAGE_GRID_SIZE - 1;
     for (let casterIndex = 0; casterIndex < sources.length; casterIndex++) {
-      const source = sources[casterIndex];
+      const { mesh: source, depthBiasMeters } = sources[casterIndex];
+      this.depthBiasValues[casterIndex] = depthBiasMeters;
       source.updateWorldMatrix(true, false);
       this.matrixValues.set(source.matrixWorld.elements, casterIndex * 16);
       this.bounds.setFromObject(source, true);
@@ -146,6 +157,17 @@ export class ShadowFixedCasterBucket {
     }
     this.matrixColumnsAttribute.needsUpdate = true;
     this.pageRangesAttribute.needsUpdate = true;
+    this.depthBiasAttribute.needsUpdate = true;
+  }
+
+  updateBiases(sources: ShadowCasterEntry[]) {
+    if (sources.length !== this.casterCount)
+      throw new Error(
+        "Rigid caster count changed without rebuilding the bucket",
+      );
+    for (let index = 0; index < sources.length; index++)
+      this.depthBiasValues[index] = sources[index].depthBiasMeters;
+    this.depthBiasAttribute.needsUpdate = true;
   }
 
   dispose() {

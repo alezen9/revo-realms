@@ -82,7 +82,7 @@ export default class Grass {
 
     const mesh = new Mesh(geometry, this.material);
     mesh.frustumCulled = false;
-    shadowCasterRegistry.register(mesh, "deformed");
+    shadowCasterRegistry.register(mesh, { kind: "deformed" });
 
     return mesh;
   }

@@ -54,9 +54,9 @@ import { getGpuShadowPageAddress } from "../ShadowManager/ShadowPageCoordinates"
 import { ShadowPageRequests } from "../ShadowManager/ShadowPageRequests";
 import { ShadowResidency } from "../ShadowManager/ShadowResidency";
 import {
-  ShadowFixedAtlas,
-  SHADOW_FIXED_PAGE_TEXELS,
-} from "../ShadowManager/ShadowFixedAtlas";
+  ShadowRigidAtlas,
+  SHADOW_RIGID_PAGE_TEXELS,
+} from "../ShadowManager/ShadowRigidAtlas";
 
 const MAIN_SCENE_PASS_SAMPLES = 4;
 const LUMINANCE_WEIGHTS = vec3(0.2126, 0.7152, 0.0722);
@@ -70,7 +70,8 @@ export class PostprocessingManager extends RenderPipeline {
   private cameraWorldPosition = new Vector3();
   private shadowPageRequests?: ShadowPageRequests;
   private shadowResidency?: ShadowResidency;
-  private shadowFixedAtlas?: ShadowFixedAtlas;
+  private shadowFixedAtlas?: ShadowRigidAtlas;
+  private shadowMovingAtlas?: ShadowRigidAtlas;
   private uSaturation = uniform(1);
   private uSunVisibility = uniform(1);
   private uProjectionMatrixInverse = uniform(new Matrix4());
@@ -89,6 +90,9 @@ export class PostprocessingManager extends RenderPipeline {
   private directSunOutputNode?: ReturnType<typeof renderOutput>;
   private pageOutputNode?: ReturnType<typeof renderOutput>;
   private fixedDepthOutputNode?: ReturnType<typeof renderOutput>;
+  private movingDepthOutputNode?: ReturnType<typeof renderOutput>;
+  private fixedShadowOutputNode?: ReturnType<typeof renderOutput>;
+  private movingShadowOutputNode?: ReturnType<typeof renderOutput>;
 
   constructor(
     renderer: WebGPURenderer,
@@ -145,11 +149,20 @@ export class PostprocessingManager extends RenderPipeline {
         renderer,
         this.shadowPageRequests,
       );
-      this.shadowFixedAtlas = new ShadowFixedAtlas(
+      const fixedAtlas = new ShadowRigidAtlas(
         renderer,
         this.shadowResidency,
         lightingManager.uSunDir,
+        "fixed",
       );
+      const movingAtlas = new ShadowRigidAtlas(
+        renderer,
+        this.shadowResidency,
+        lightingManager.uSunDir,
+        "moving",
+      );
+      this.shadowFixedAtlas = fixedAtlas;
+      this.shadowMovingAtlas = movingAtlas;
       monitoringManager.setShadowPageStats(this.shadowResidency.stats);
     }
 
@@ -162,12 +175,25 @@ export class PostprocessingManager extends RenderPipeline {
         step: 0.05,
       });
     if (isPagedV2) {
+      if (!this.shadowFixedAtlas || !this.shadowMovingAtlas)
+        throw new Error("V2 rigid shadow atlases are required");
       this.directSunOutputNode = renderOutput(
         vec4(this.getMainSceneTextureNode("directSun").sample(screenUV).rgb, 1),
         NoToneMapping,
       );
       this.pageOutputNode = this.makePageOutput();
-      this.fixedDepthOutputNode = this.makeFixedDepthOutput();
+      this.fixedDepthOutputNode = this.makeRigidDepthOutput(
+        this.shadowFixedAtlas,
+      );
+      this.movingDepthOutputNode = this.makeRigidDepthOutput(
+        this.shadowMovingAtlas,
+      );
+      this.fixedShadowOutputNode = this.makeRigidShadowOutput(
+        this.shadowFixedAtlas,
+      );
+      this.movingShadowOutputNode = this.makeRigidShadowOutput(
+        this.shadowMovingAtlas,
+      );
       this.debugFolder
         .addBinding(this.debugView, "target", {
           label: "View",
@@ -176,6 +202,9 @@ export class PostprocessingManager extends RenderPipeline {
             "Direct sun": "directSun",
             Pages: "pages",
             "Fixed depth": "fixedDepth",
+            "Moving depth": "movingDepth",
+            "Fixed shadow": "fixedShadow",
+            "Moving shadow": "movingShadow",
           },
         })
         .on("change", this.selectDebugView);
@@ -217,7 +246,13 @@ export class PostprocessingManager extends RenderPipeline {
           ? this.pageOutputNode
           : this.debugView.target === "fixedDepth"
             ? this.fixedDepthOutputNode
-            : this.sceneOutputNode;
+            : this.debugView.target === "movingDepth"
+              ? this.movingDepthOutputNode
+              : this.debugView.target === "fixedShadow"
+                ? this.fixedShadowOutputNode
+                : this.debugView.target === "movingShadow"
+                  ? this.movingShadowOutputNode
+                  : this.sceneOutputNode;
     if (!selected) return;
     this.outputNode = selected;
     this.needsUpdate = true;
@@ -266,9 +301,8 @@ export class PostprocessingManager extends RenderPipeline {
     return renderOutput(vec4(color, 1), NoToneMapping);
   }
 
-  private makeFixedDepthOutput() {
-    if (!this.shadowResidency || !this.shadowFixedAtlas)
-      throw new Error("V2 fixed depth requires residency and atlas");
+  private makeRigidDepthOutput(atlas: ShadowRigidAtlas) {
+    if (!this.shadowResidency) throw new Error("V2 depth requires residency");
     const depth = this.getMainSceneTextureNode("depth").sample(screenUV).r;
     const viewPosition = getViewPosition(
       screenUV,
@@ -291,11 +325,11 @@ export class PostprocessingManager extends RenderPipeline {
       address.pageKey,
     );
     const pageUv = address.pageUv.clamp(
-      0.5 / SHADOW_FIXED_PAGE_TEXELS,
-      1 - 0.5 / SHADOW_FIXED_PAGE_TEXELS,
+      0.5 / SHADOW_RIGID_PAGE_TEXELS,
+      1 - 0.5 / SHADOW_RIGID_PAGE_TEXELS,
     );
-    const fixedDepth = this.shadowFixedAtlas.sampleDebugDepth(slot, pageUv);
-    const visualDepth = fixedDepth.sub(0.65).mul(5).clamp();
+    const atlasDepth = atlas.sampleDebugDepth(slot, pageUv);
+    const visualDepth = atlasDepth.sub(0.65).mul(5).clamp();
     const color = depth
       .greaterThanEqual(1)
       .select(
@@ -305,6 +339,24 @@ export class PostprocessingManager extends RenderPipeline {
           .select(vec3(visualDepth), vec3(1, 0, 0)),
       );
     return renderOutput(vec4(color, 1), NoToneMapping);
+  }
+
+  private makeRigidShadowOutput(atlas: ShadowRigidAtlas) {
+    const depth = this.getMainSceneTextureNode("depth").sample(screenUV).r;
+    const viewPosition = getViewPosition(
+      screenUV,
+      depth,
+      this.uProjectionMatrixInverse,
+    );
+    const worldPosition = this.uCameraWorldMatrix.mul(
+      vec4(viewPosition, 1),
+    ).xyz;
+    const visibility = atlas.computeVisibility(
+      worldPosition,
+      depth,
+      viewPosition.z.negate(),
+    );
+    return renderOutput(vec4(vec3(visibility), 1), NoToneMapping);
   }
 
   private computeBallShadowFactor = Fn(() => {
@@ -375,13 +427,30 @@ export class PostprocessingManager extends RenderPipeline {
   sampleMainSceneColor(uv: Node<"vec2">) {
     const sceneColor = this.getMainSceneTextureNode().sample(uv);
     if (!isPagedV2) return sceneColor;
+    if (!this.shadowFixedAtlas || !this.shadowMovingAtlas)
+      throw new Error("V2 rigid shadow atlases are required");
 
+    const depth = this.getMainSceneTextureNode("depth").sample(uv).r;
+    const viewPosition = getViewPosition(
+      uv,
+      depth,
+      this.uProjectionMatrixInverse,
+    );
+    const worldPosition = this.uCameraWorldMatrix.mul(
+      vec4(viewPosition, 1),
+    ).xyz;
+    const visibility = this.shadowFixedAtlas.computeVisibility(
+      worldPosition,
+      depth,
+      viewPosition.z.negate(),
+      this.shadowMovingAtlas,
+    );
     return sceneColor
       .sub(
         vec4(
           this.getMainSceneTextureNode("directSun")
             .sample(uv)
-            .rgb.mul(float(1).sub(this.uSunVisibility)),
+            .rgb.mul(float(1).sub(this.uSunVisibility.mul(visibility))),
           0,
         ),
       )
@@ -460,7 +529,15 @@ export class PostprocessingManager extends RenderPipeline {
     try {
       this.mainSceneFrame.renderer = this.renderer;
       this.mainScenePass.updateBefore(this.mainSceneFrame);
-      this.shadowPageRequests?.run();
+      this.shadowPageRequests?.run(
+        this.sceneManager.renderCamera,
+        lightingManager.sunDirection,
+        shadowCasterRegistry.fixedVersion +
+          shadowCasterRegistry.fixedRevision +
+          shadowCasterRegistry.movingVersion +
+          shadowCasterRegistry.deformedVersion +
+          shadowCasterRegistry.movingRevision,
+      );
       this.sceneManager.renderCamera.getWorldPosition(this.cameraWorldPosition);
       const { min, max } = assetManager.resources.heightmap.userData;
       if (typeof min !== "number" || typeof max !== "number")
@@ -470,11 +547,17 @@ export class PostprocessingManager extends RenderPipeline {
         lightingManager.sunDirection,
         { min, max },
       );
+      this.shadowMovingAtlas?.syncCasters(
+        shadowCasterRegistry,
+        lightingManager.sunDirection,
+        { min, max },
+      );
       this.shadowResidency?.run(
         this.cameraWorldPosition,
         lightingManager.sunDirection,
       );
       this.shadowFixedAtlas?.render();
+      this.shadowMovingAtlas?.render();
     } finally {
       this.renderer.toneMapping = toneMapping;
       this.renderer.outputColorSpace = outputColorSpace;

@@ -7,7 +7,10 @@ import {
 } from "../../systems";
 import { Mesh } from "three";
 import { DirectSunStandardNodeMaterial } from "../../systems/ShadowManager/DirectSunMaterials";
-import { isDirectSunMaterialCaptureEnabled } from "../../systems/ShadowManager/config";
+import {
+  isDirectSunMaterialCaptureEnabled,
+  isPagedV2,
+} from "../../systems/ShadowManager/config";
 import { ColliderDesc } from "@dimforge/rapier3d";
 import { physicsManager, sceneManager } from "../../systems";
 import { RevoColliderType } from "../../types";
@@ -38,14 +41,18 @@ class GokuStatueMaterial extends DirectSunStandardNodeMaterial {
 }
 
 export default class DragonBall {
+  private gokuStatue: Mesh;
+  private shadowSettings = { depthBiasMeters: 0.2 };
+
   constructor() {
     // Visual
     const gokuStatue = assetManager.resources.worldModel.scene.getObjectByName(
       "goku_statue",
     ) as Mesh;
+    this.gokuStatue = gokuStatue;
     gokuStatue.material = new GokuStatueMaterial();
     sceneManager.mainScene.add(gokuStatue);
-    shadowCasterRegistry.register(gokuStatue);
+    shadowCasterRegistry.register(gokuStatue, this.shadowSettings);
 
     // Physics
     const collider = assetManager.resources.worldModel.scene.getObjectByName(
@@ -98,5 +105,16 @@ export default class DragonBall {
       label: "Normal scale",
       min: 0,
     });
+    if (isPagedV2)
+      folder
+        .addBinding(this.shadowSettings, "depthBiasMeters", {
+          label: "Shadow bias (m)",
+          min: 0,
+          max: 0.5,
+          step: 0.005,
+        })
+        .on("change", ({ value }) => {
+          shadowCasterRegistry.setDepthBias(this.gokuStatue, value);
+        });
   }
 }

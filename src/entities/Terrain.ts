@@ -467,7 +467,7 @@ class OuterTerrain {
     this.kintoun = this.createKintoun();
 
     sceneManager.mainScene.add(this.outerTerrain);
-    shadowCasterRegistry.register(this.outerTerrain, "moving");
+    shadowCasterRegistry.register(this.outerTerrain);
 
     eventsManager.on("engine-render-update", this.onEngineUpdate);
   }

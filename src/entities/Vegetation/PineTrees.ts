@@ -6,7 +6,7 @@ import {
   sceneManager,
   shadowCasterRegistry,
 } from "../../systems";
-import { BatchedMesh } from "three/webgpu";
+import { BatchedMesh, type Node } from "three/webgpu";
 import { DirectSunLambertNodeMaterial } from "../../systems/ShadowManager/DirectSunMaterials";
 import {
   attribute,
@@ -29,8 +29,12 @@ const uniforms = {
   uBarkNormalScale: uniform(3),
   uBarkUvScale: uniform(3),
 };
+const CANOPY_MAXIMUM_SWAY_METERS = 0.1;
 
 class PineTreeCanopyMaterial extends DirectSunLambertNodeMaterial {
+  readonly shadowPositionNode: Node<"vec3">;
+  readonly shadowOpacityNode: Node<"float">;
+
   constructor() {
     super();
     this.forceSinglePass = true;
@@ -39,14 +43,16 @@ class PineTreeCanopyMaterial extends DirectSunLambertNodeMaterial {
 
     const diffuse = texture(assetManager.resources.pineTreeDiffuse, uv());
     this.colorNode = diffuse.rgb.mul(uniforms.uCanopyDiffuseScale);
-    this.opacityNode = diffuse.a;
+    this.shadowOpacityNode = diffuse.a;
+    this.opacityNode = this.shadowOpacityNode;
     this.alphaTest = 0.35;
 
     const random = uv().x.mul(uv().y).mul(4);
     const profile = windWeight.mul(windWeight);
     const t = gameTime.mul(uniforms.uCanopySwaySpeed).add(random);
-    const swayOffset = oscSine(t).mul(profile).mul(0.1);
-    this.positionNode = positionLocal.add(vec3(0, swayOffset, 0));
+    const swayOffset = oscSine(t).mul(profile).mul(CANOPY_MAXIMUM_SWAY_METERS);
+    this.shadowPositionNode = positionLocal.add(vec3(0, swayOffset, 0));
+    this.positionNode = this.shadowPositionNode;
   }
 }
 
@@ -113,7 +119,13 @@ export default class PineTrees {
 
     sceneManager.mainScene.add(barkBatch, canopyBatch);
     shadowCasterRegistry.register(barkBatch);
-    shadowCasterRegistry.register(canopyBatch, "deformed");
+    shadowCasterRegistry.register(canopyBatch, {
+      kind: "deformed",
+      maxVerticalDisplacementMeters: CANOPY_MAXIMUM_SWAY_METERS,
+      shadowPositionNode: canopyMaterial.shadowPositionNode,
+      shadowOpacityNode: canopyMaterial.shadowOpacityNode,
+      alphaCutoff: canopyMaterial.alphaTest,
+    });
     this.debug();
   }
 

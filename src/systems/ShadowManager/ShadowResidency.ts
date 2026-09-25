@@ -71,14 +71,14 @@ export class ShadowResidency {
   private slotMetadata = new StorageBufferAttribute(initialMetadata, 4);
   private slotMetadataNode = storage(this.slotMetadata, "uvec4", POOL_CAPACITY);
   private pageJobs = new StorageBufferAttribute(
-    new Uint32Array(POOL_CAPACITY * 2),
+    new Uint32Array(POOL_CAPACITY * 4),
     2,
   );
-  private pageJobsNode = storage(this.pageJobs, "uvec2", POOL_CAPACITY);
+  private pageJobsNode = storage(this.pageJobs, "uvec2", POOL_CAPACITY * 2);
   private counters = new StorageBufferAttribute(new Uint32Array(8), 1);
   private atomicCounters = storage(this.counters, "uint", 8).toAtomic();
   private atlasIndirect = new IndirectStorageBufferAttribute(
-    new Uint32Array([6, 0, 0, 0, 0, 0, 0, 0]),
+    new Uint32Array([6, 0, 0, 0, 0, 0, 0, 0, 6, 0, 0, 0, 0, 0, 0, 0]),
     1,
   );
   private atomicAtlasIndirect = storage(
@@ -113,6 +113,7 @@ export class ShadowResidency {
       Loop({ start: 0, end: 4, type: "uint" }, ({ i: index }) => {
         atomicStore(this.atomicCounters.element(index), 0);
       });
+      atomicStore(this.atomicAtlasIndirect.element(9), 0);
 
       for (const levelIndex of [0, 1]) {
         const level = uint(levelIndex);
@@ -147,6 +148,7 @@ export class ShadowResidency {
                 .bitAnd(bit)
                 .notEqual(0);
               If(hasRequest, () => {
+                const activeSlot = uint(INVALID_SLOT).toVar();
                 const entry = this.pageTableNode.element(pageKey).toVar();
                 const slotPlusOne = entry.x;
                 const slot = slotPlusOne
@@ -162,6 +164,7 @@ export class ShadowResidency {
                   .and(entry.z.equal(this.sunGeneration));
 
                 If(isHit, () => {
+                  activeSlot.assign(slot);
                   this.slotMetadataNode
                     .element(slot)
                     .assign(
@@ -194,6 +197,7 @@ export class ShadowResidency {
                   );
 
                   If(selectedSlot.notEqual(INVALID_SLOT), () => {
+                    activeSlot.assign(selectedSlot);
                     const oldMetadata = this.slotMetadataNode
                       .element(selectedSlot)
                       .toVar();
@@ -232,6 +236,15 @@ export class ShadowResidency {
                     atomicAdd(this.atomicCounters.element(3), 1);
                   });
                 });
+                If(activeSlot.notEqual(INVALID_SLOT), () => {
+                  const jobIndex = atomicAdd(
+                    this.atomicAtlasIndirect.element(9),
+                    1,
+                  );
+                  this.pageJobsNode
+                    .element(jobIndex.add(POOL_CAPACITY))
+                    .assign(uvec2(pageKey, activeSlot));
+                });
               });
             });
           },
@@ -250,6 +263,10 @@ export class ShadowResidency {
       atomicStore(
         this.atomicAtlasIndirect.element(5),
         atomicLoad(this.atomicCounters.element(1)),
+      );
+      atomicStore(
+        this.atomicAtlasIndirect.element(13),
+        atomicLoad(this.atomicAtlasIndirect.element(9)),
       );
     })().compute(1, [1]);
     this.allocateNode.name = "V2 page residency";
@@ -275,8 +292,17 @@ export class ShadowResidency {
     return this.atlasIndirect;
   }
 
+  get movingIndirectAttribute() {
+    return this.atlasIndirect;
+  }
+
   setFixedVertexCount(vertexCount: number) {
     this.atlasIndirect.array[4] = vertexCount;
+    this.atlasIndirect.needsUpdate = true;
+  }
+
+  setMovingVertexCount(vertexCount: number) {
+    this.atlasIndirect.array[12] = vertexCount;
     this.atlasIndirect.needsUpdate = true;
   }
 
@@ -299,7 +325,8 @@ export class ShadowResidency {
       .and(metadata.x.equal(pageKey))
       .and(metadata.y.equal(entry.y))
       .and(entry.z.equal(this.sunGeneration));
-    return { slot, isResident };
+    const isActive = isResident.and(metadata.w.equal(this.frame));
+    return { slot, isResident, isActive };
   }
 
   run(cameraPosition: Vector3, sunDirection: Vector3) {
