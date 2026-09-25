@@ -10,3 +10,5 @@ export const isDirectSunTargetEnabled =
   (isShadowBaseline && params.get("shadowMrt") === "true");
 export const isDirectSunPreviewEnabled =
   isDirectSunMaterialCaptureEnabled && isDirectSunPreviewRequested;
+export const isDirectSunResolveProbeEnabled =
+  isDirectSunMaterialCaptureEnabled && params.get("shadowResolve") === "probe";

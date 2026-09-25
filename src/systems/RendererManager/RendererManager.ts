@@ -1,4 +1,4 @@
-import { type ComputeNode, WebGPURenderer } from "three/webgpu";
+import { type ComputeNode, type Node, WebGPURenderer } from "three/webgpu";
 import { PostprocessingManager } from "./PostprocessingManager";
 import { type DebugManager } from "../DebugManager";
 import { type EventsManager } from "../EventsManager";
@@ -78,8 +78,8 @@ export class RendererManager {
     );
   }
 
-  get mainSceneColorNode() {
-    return this.postprocessingManager.mainSceneColorNode;
+  sampleMainSceneColor(uv: Node<"vec2">) {
+    return this.postprocessingManager.sampleMainSceneColor(uv);
   }
 
   get mainSceneDepthNode() {

@@ -4,6 +4,7 @@ import {
   RGBFormat,
   UnsignedInt101111Type,
   WebGPURenderer,
+  type Node,
 } from "three/webgpu";
 import {
   float,
@@ -37,6 +38,7 @@ import { TSLUtils } from "../../utils/TSLUtils";
 import {
   isDirectSunMaterialCaptureEnabled,
   isDirectSunPreviewEnabled,
+  isDirectSunResolveProbeEnabled,
   isDirectSunTargetEnabled,
   isShadowBaseline,
 } from "../ShadowManager/config";
@@ -50,6 +52,7 @@ export class PostprocessingManager extends RenderPipeline {
   private mainScenePass: ReturnType<typeof pass>;
   private waterPass: ReturnType<typeof pass>;
   private uSaturation = uniform(1);
+  private uProbeSunVisibility = uniform(1);
   private uProjectionMatrixInverse = uniform(new Matrix4());
   private uCameraWorldMatrix = uniform(new Matrix4());
   private uCameraPosition = uniform(new Vector3());
@@ -106,6 +109,13 @@ export class PostprocessingManager extends RenderPipeline {
     this.syncCameraUniforms();
 
     this.sceneOutputNode = this.makeGraph();
+    if (isDirectSunResolveProbeEnabled)
+      this.debugFolder.addBinding(this.uProbeSunVisibility, "value", {
+        label: "Sun visibility",
+        min: 0,
+        max: 1,
+        step: 0.05,
+      });
     if (isDirectSunMaterialCaptureEnabled) {
       this.directSunOutputNode = renderOutput(
         vec4(
@@ -225,8 +235,21 @@ export class PostprocessingManager extends RenderPipeline {
     return ballShadow;
   });
 
-  get mainSceneColorNode() {
-    return this.mainScenePass.getTextureNode();
+  sampleMainSceneColor(uv: Node<"vec2">) {
+    const sceneColor = this.mainScenePass.getTextureNode().sample(uv);
+    if (!isDirectSunResolveProbeEnabled) return sceneColor;
+
+    return sceneColor
+      .sub(
+        vec4(
+          this.mainScenePass
+            .getTextureNode("directSun")
+            .sample(uv)
+            .rgb.mul(float(1).sub(this.uProbeSunVisibility)),
+          0,
+        ),
+      )
+      .max(0);
   }
 
   get mainSceneDepthNode() {
@@ -235,9 +258,9 @@ export class PostprocessingManager extends RenderPipeline {
 
   private makeGraph() {
     this.outputColorTransform = false;
-    const mainSceneColor = this.mainScenePass.getTextureNode();
+    const resolvedSceneColor = this.sampleMainSceneColor(screenUV);
     const water = this.waterPass.getTextureNode();
-    const colorHDR = mainSceneColor.mul(water.a.oneMinus()).add(water.rgb);
+    const colorHDR = mix(resolvedSceneColor, vec4(water.rgb, 1), water.a);
 
     const bloomPass = bloom(colorHDR, 0.25, 0.15, 1);
     bloomPass.smoothWidth.value = 0.04;

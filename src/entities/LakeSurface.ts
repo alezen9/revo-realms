@@ -277,7 +277,6 @@ class WaterMaterial extends MeshBasicNodeMaterial {
       .normalize();
 
     // 1. depth
-    const mainSceneColor = rendererManager.mainSceneColorNode;
     const mainSceneDepth = rendererManager.mainSceneDepthNode;
     const zNdc = mainSceneDepth.sample(screenUV).r;
     const zLinear = perspectiveDepthToViewZ(
@@ -310,7 +309,7 @@ class WaterMaterial extends MeshBasicNodeMaterial {
       .div(this.uniforms.uDepthDistance)
       .clamp();
     const safeScreenUv = mix(screenUV, refractedScreenUv, isSafe).clamp();
-    const screenColor = mainSceneColor.sample(safeScreenUv).rgb;
+    const screenColor = rendererManager.sampleMainSceneColor(safeScreenUv).rgb;
 
     // 3. reflections
     const viewDir = normalize(cameraPosition.sub(positionWorld));
@@ -401,6 +400,6 @@ class WaterMaterial extends MeshBasicNodeMaterial {
     const shadedWater = mix(throughWater, reflectedColor, fresnelWeight);
     const color = mix(screenColor, shadedWater, opacity);
     this.colorNode = mix(color, this.uniforms.uSunColor, sunGlint);
-    this.opacityNode = float(1);
+    this.opacityNode = isUnderWater;
   }
 }
