@@ -88,6 +88,7 @@
 	{@const gpu = device?.gpu}
 	{@const grass = snapshot.grass}
 	{@const shadowCasters = snapshot.shadowCasters}
+	{@const shadowPages = snapshot.shadowPages}
 	{@const budgetMs = snapshot.frameBudgetMs}
 	{@const frame = snapshot.frame}
 	{@const physics = snapshot.physics}
@@ -189,6 +190,21 @@
 					<span class="cell"><span class="label">Fixed</span><span class="value">{integerFormat.format(shadowCasters.fixed)}</span></span>
 					<span class="cell"><span class="label">Moving</span><span class="value">{integerFormat.format(shadowCasters.moving)}</span></span>
 					<span class="cell"><span class="label">Deformed</span><span class="value">{integerFormat.format(shadowCasters.deformed)}</span></span>
+				</div>
+			</section>
+		{/if}
+
+		{#if shadowPages}
+			<section>
+				<span class="category">Shadow pages</span>
+				<div class="metrics">
+					<span class="cell"><span class="label">Requested</span><span class="value">{integerFormat.format(shadowPages.requested)}</span></span>
+					<span class="cell"><span class="label">Near / far</span><span class="value">{shadowPages.nearRequested} / {shadowPages.farRequested}</span></span>
+					<span class="cell"><span class="label">Mapped</span><span class="value">{integerFormat.format(shadowPages.mapped)}</span></span>
+					<span class="cell"><span class="label">Missing</span><span class="value">{integerFormat.format(shadowPages.missing)}</span></span>
+					<span class="cell"><span class="label">Allocated</span><span class="value">{integerFormat.format(shadowPages.allocated)}</span></span>
+					<span class="cell"><span class="label">Evicted</span><span class="value">{integerFormat.format(shadowPages.evicted)}</span></span>
+					<span class="cell"><span class="label">Outside grid</span><span class="value">{integerFormat.format(shadowPages.outsideGrid)}</span></span>
 				</div>
 			</section>
 		{/if}

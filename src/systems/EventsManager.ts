@@ -76,6 +76,7 @@ export type MonitoringSnapshot = {
   sceneTriangles: number;
   grass: GrassMonitoringStats | null;
   shadowCasters: ShadowCasterCounts | null;
+  shadowPages: ShadowPageStats | null;
   device: DeviceMetrics | null;
 };
 
@@ -83,6 +84,17 @@ export type ShadowCasterCounts = {
   fixed: number;
   moving: number;
   deformed: number;
+};
+
+export type ShadowPageStats = {
+  requested: number;
+  nearRequested: number;
+  farRequested: number;
+  mapped: number;
+  allocated: number;
+  evicted: number;
+  missing: number;
+  outsideGrid: number;
 };
 
 export type GrassMonitoringStats = {

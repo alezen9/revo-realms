@@ -1,5 +1,12 @@
-import { ACESFilmicToneMapping, Matrix4, NoToneMapping, Vector3 } from "three";
 import {
+  ACESFilmicToneMapping,
+  ColorManagement,
+  Matrix4,
+  NoToneMapping,
+  Vector3,
+} from "three";
+import {
+  NodeFrame,
   RenderPipeline,
   RGBFormat,
   UnsignedInt101111Type,
@@ -21,10 +28,12 @@ import {
   screenUV,
   smoothstep,
   step,
+  texture,
   textureLevel,
   toneMapping,
   toneMappingExposure,
   uniform,
+  uint,
   vec3,
   vec4,
 } from "three/tsl";
@@ -32,10 +41,13 @@ import { bloom } from "three/addons/tsl/display/BloomNode.js";
 import type { DebugFolder, DebugManager } from "../DebugManager";
 import type { EventsManager } from "../EventsManager";
 import type { SceneManager } from "../SceneManager";
-import { assetManager, lightingManager } from "..";
+import { assetManager, lightingManager, monitoringManager } from "..";
 import { playerUniforms } from "../../entities/Player/PlayerMaterial";
 import { TSLUtils } from "../../utils/TSLUtils";
 import { isShadowBaseline, isPagedV2 } from "../ShadowManager/config";
+import { getGpuShadowPageAddress } from "../ShadowManager/ShadowPageCoordinates";
+import { ShadowPageRequests } from "../ShadowManager/ShadowPageRequests";
+import { ShadowResidency } from "../ShadowManager/ShadowResidency";
 
 const MAIN_SCENE_PASS_SAMPLES = 4;
 const LUMINANCE_WEIGHTS = vec3(0.2126, 0.7152, 0.0722);
@@ -45,6 +57,10 @@ const BALL_DEPTH_MATCH_EPSILON = 0.05;
 export class PostprocessingManager extends RenderPipeline {
   private mainScenePass: ReturnType<typeof pass>;
   private waterPass: ReturnType<typeof pass>;
+  private mainSceneFrame = new NodeFrame();
+  private cameraWorldPosition = new Vector3();
+  private shadowPageRequests?: ShadowPageRequests;
+  private shadowResidency?: ShadowResidency;
   private uSaturation = uniform(1);
   private uSunVisibility = uniform(1);
   private uProjectionMatrixInverse = uniform(new Matrix4());
@@ -61,6 +77,7 @@ export class PostprocessingManager extends RenderPipeline {
   };
   private sceneOutputNode?: ReturnType<typeof renderOutput>;
   private directSunOutputNode?: ReturnType<typeof renderOutput>;
+  private pageOutputNode?: ReturnType<typeof renderOutput>;
 
   constructor(
     renderer: WebGPURenderer,
@@ -102,6 +119,24 @@ export class PostprocessingManager extends RenderPipeline {
 
     this.syncCameraUniforms();
 
+    if (isPagedV2) {
+      const depthTexture = this.mainScenePass.renderTarget.depthTexture;
+      if (!depthTexture)
+        throw new Error("V2 page requests require scene depth");
+      this.shadowPageRequests = new ShadowPageRequests(
+        renderer,
+        depthTexture,
+        this.uProjectionMatrixInverse,
+        this.uCameraWorldMatrix,
+        lightingManager.uSunDir,
+      );
+      this.shadowResidency = new ShadowResidency(
+        renderer,
+        this.shadowPageRequests,
+      );
+      monitoringManager.setShadowPageStats(this.shadowResidency.stats);
+    }
+
     this.sceneOutputNode = this.makeGraph();
     if (isPagedV2)
       this.debugFolder.addBinding(this.uSunVisibility, "value", {
@@ -112,16 +147,18 @@ export class PostprocessingManager extends RenderPipeline {
       });
     if (isPagedV2) {
       this.directSunOutputNode = renderOutput(
-        vec4(
-          this.mainScenePass.getTextureNode("directSun").sample(screenUV).rgb,
-          1,
-        ),
+        vec4(this.getMainSceneTextureNode("directSun").sample(screenUV).rgb, 1),
         NoToneMapping,
       );
+      this.pageOutputNode = this.makePageOutput();
       this.debugFolder
         .addBinding(this.debugView, "target", {
           label: "View",
-          options: { Scene: "scene", "Direct sun": "directSun" },
+          options: {
+            Scene: "scene",
+            "Direct sun": "directSun",
+            Pages: "pages",
+          },
         })
         .on("change", this.selectDebugView);
     }
@@ -158,11 +195,56 @@ export class PostprocessingManager extends RenderPipeline {
     const selected =
       this.debugView.target === "directSun"
         ? this.directSunOutputNode
-        : this.sceneOutputNode;
+        : this.debugView.target === "pages"
+          ? this.pageOutputNode
+          : this.sceneOutputNode;
     if (!selected) return;
     this.outputNode = selected;
     this.needsUpdate = true;
   };
+
+  private makePageOutput() {
+    if (!this.shadowResidency) throw new Error("V2 residency is required");
+    const depth = this.getMainSceneTextureNode("depth").sample(screenUV).r;
+    const viewPosition = getViewPosition(
+      screenUV,
+      depth,
+      this.uProjectionMatrixInverse,
+    );
+    const worldPosition = this.uCameraWorldMatrix.mul(
+      vec4(viewPosition, 1),
+    ).xyz;
+    const level = viewPosition.z
+      .negate()
+      .lessThan(112)
+      .select(uint(0), uint(1));
+    const address = getGpuShadowPageAddress(
+      worldPosition,
+      lightingManager.uSunDir,
+      level,
+    );
+    const { isResident } = this.shadowResidency.resolvePage(address.pageKey);
+    const pageColor = vec3(
+      address.pageId.x.mul(0.173).fract().mul(0.6).add(0.3),
+      address.pageId.y.mul(0.127).fract().mul(0.6).add(0.3),
+      level.equal(uint(0)).select(float(0.85), float(0.4)),
+    );
+    const edgeDistance = address.pageUv.x
+      .min(float(1).sub(address.pageUv.x))
+      .min(address.pageUv.y)
+      .min(float(1).sub(address.pageUv.y));
+    const pageCoverage = isResident.select(
+      mix(pageColor, vec3(1), step(edgeDistance, 0.025).mul(0.7)),
+      vec3(1, 0, 0),
+    );
+    const color = depth
+      .greaterThanEqual(1)
+      .select(
+        vec3(0),
+        address.isInsideGrid.select(pageCoverage, vec3(1, 0, 1)),
+      );
+    return renderOutput(vec4(color, 1), NoToneMapping);
+  }
 
   private computeBallShadowFactor = Fn(() => {
     const radius = playerUniforms.uRadius;
@@ -230,14 +312,13 @@ export class PostprocessingManager extends RenderPipeline {
   });
 
   sampleMainSceneColor(uv: Node<"vec2">) {
-    const sceneColor = this.mainScenePass.getTextureNode().sample(uv);
+    const sceneColor = this.getMainSceneTextureNode().sample(uv);
     if (!isPagedV2) return sceneColor;
 
     return sceneColor
       .sub(
         vec4(
-          this.mainScenePass
-            .getTextureNode("directSun")
+          this.getMainSceneTextureNode("directSun")
             .sample(uv)
             .rgb.mul(float(1).sub(this.uSunVisibility)),
           0,
@@ -247,7 +328,17 @@ export class PostprocessingManager extends RenderPipeline {
   }
 
   get mainSceneDepthNode() {
-    return this.mainScenePass.getTextureNode("depth");
+    return this.getMainSceneTextureNode("depth");
+  }
+
+  private getMainSceneTextureNode(name = "output") {
+    if (!isPagedV2) return this.mainScenePass.getTextureNode(name);
+    if (name === "depth") {
+      const depthTexture = this.mainScenePass.renderTarget.depthTexture;
+      if (!depthTexture) throw new Error("V2 scene depth is required");
+      return texture(depthTexture);
+    }
+    return texture(this.mainScenePass.getTexture(name));
   }
 
   private makeGraph() {
@@ -293,5 +384,31 @@ export class PostprocessingManager extends RenderPipeline {
     const desaturated = mix(vec3(luminance), toneMapped, this.uSaturation);
 
     return renderOutput(desaturated, NoToneMapping);
+  }
+
+  render() {
+    if (!isPagedV2) {
+      super.render();
+      return;
+    }
+
+    const toneMapping = this.renderer.toneMapping;
+    const outputColorSpace = this.renderer.outputColorSpace;
+    this.renderer.toneMapping = NoToneMapping;
+    this.renderer.outputColorSpace = ColorManagement.workingColorSpace;
+    try {
+      this.mainSceneFrame.renderer = this.renderer;
+      this.mainScenePass.updateBefore(this.mainSceneFrame);
+      this.shadowPageRequests?.run();
+      this.sceneManager.renderCamera.getWorldPosition(this.cameraWorldPosition);
+      this.shadowResidency?.run(
+        this.cameraWorldPosition,
+        lightingManager.sunDirection,
+      );
+      super.render();
+    } finally {
+      this.renderer.toneMapping = toneMapping;
+      this.renderer.outputColorSpace = outputColorSpace;
+    }
   }
 }
