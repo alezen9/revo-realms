@@ -8,10 +8,7 @@ export type ShadowGpuInstances = {
   geometry?: BufferGeometry;
   baseWorldPosition: (index: Node<"uint">) => Node<"vec3">;
   height: (index: Node<"uint">) => Node<"float">;
-  worldPositions: (
-    index: Node<"uint">,
-    positions: Node<"vec3">[],
-  ) => Node<"vec3">[];
+  worldPosition: (index: Node<"uint">, position: Node<"vec3">) => Node<"vec3">;
   isActive: (index: Node<"uint">) => Node<"bool">;
 };
 export type ShadowCasterOptions = {

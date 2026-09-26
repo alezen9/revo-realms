@@ -41,7 +41,6 @@ import {
   uint,
   uvec2,
   varyingProperty,
-  vertexIndex,
   vec2,
   vec4,
 } from "three/tsl";
@@ -533,16 +532,10 @@ export class ShadowRigidAtlas {
     material.vertexNode = Fn(() => {
       const { slot, level, instance, pageCoordinate } =
         bucket.getWorkItem(instanceIndex);
-      const corners = this.getTriangleCorners(bucket, instance);
-      const cornerIndex = vertexIndex.mod(3);
-      const worldPosition = corners
-        ? cornerIndex
-            .equal(0)
-            .select(
-              corners[0],
-              cornerIndex.equal(1).select(corners[1], corners[2]),
-            )
-        : bucket.instances.worldPositions(instance, [positionGeometry])[0];
+      const worldPosition = bucket.instances.worldPosition(
+        instance,
+        positionGeometry,
+      );
       const casterPageUv = this.getPageUv(level, pageCoordinate, worldPosition);
       const casterDepth = this.maximumY
         .sub(worldPosition.y)
@@ -550,53 +543,16 @@ export class ShadowRigidAtlas {
         .div(this.maximumY.sub(this.minimumY));
       pageUv.assign(casterPageUv);
       depth.assign(casterDepth);
-      const overlapsPage = corners
-        ? this.isTriangleInPage(corners, level, pageCoordinate)
-        : bool(true);
       const atlasUv = this.computeAtlasUv(slot, casterPageUv);
-      return overlapsPage.select(
-        vec4(atlasUv.x.mul(2).sub(1), atlasUv.y.mul(-2).add(1), casterDepth, 1),
-        vec4(-2, -2, 1, 1),
+      return vec4(
+        atlasUv.x.mul(2).sub(1),
+        atlasUv.y.mul(-2).add(1),
+        casterDepth,
+        1,
       );
     })();
     material.fragmentNode = this.createCasterFragment(pageUv, depth, entry);
     return material;
-  }
-
-  private getTriangleCorners(
-    bucket: ShadowDeformedCasterBucket,
-    instance: Node<"uint">,
-  ) {
-    if (!bucket.cornersAttribute) return undefined;
-    const corners = storage(
-      bucket.cornersAttribute,
-      "vec4",
-      bucket.cornersAttribute.count,
-    );
-    const firstCorner = vertexIndex.sub(vertexIndex.mod(3));
-    return bucket.instances
-      .worldPositions(
-        instance,
-        [0, 1, 2].map((corner) => corners.element(firstCorner.add(corner)).xyz),
-      )
-      .map((corner) => corner.toVar());
-  }
-
-  private isTriangleInPage(
-    corners: Node<"vec3">[],
-    level: Node<"uint">,
-    pageCoordinate: Node<"vec2">,
-  ) {
-    const cornerUvs = corners.map((corner) =>
-      this.getPageUv(level, pageCoordinate, corner),
-    );
-    const minimum = cornerUvs[0].min(cornerUvs[1]).min(cornerUvs[2]);
-    const maximum = cornerUvs[0].max(cornerUvs[1]).max(cornerUvs[2]);
-    return minimum.x
-      .lessThan(1)
-      .and(minimum.y.lessThan(1))
-      .and(maximum.x.greaterThan(0))
-      .and(maximum.y.greaterThan(0));
   }
 
   private createCasterFragment(

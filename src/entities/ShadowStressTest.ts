@@ -225,10 +225,8 @@ export default class ShadowStressTest {
       },
       height: (index) =>
         instances.element(index).w.mul(config.DEFORMING_EXTENT * 2),
-      worldPositions: (index, positions) =>
-        positions.map((position) =>
-          getDeformedPosition(instances.element(index), index, position),
-        ),
+      worldPosition: (index, position) =>
+        getDeformedPosition(instances.element(index), index, position),
     };
     sceneManager.mainScene.add(mesh);
     shadowCasterRegistry.register(mesh, { gpuInstances });
@@ -291,12 +289,10 @@ export default class ShadowStressTest {
         return position.xyz.sub(vec3(0, position.w.mul(0.5), 0));
       },
       height: (index) => positions.element(index).w,
-      worldPositions: (index, sourcePositions) =>
-        sourcePositions.map((sourcePosition) =>
-          positions
-            .element(index)
-            .xyz.add(sourcePosition.mul(positions.element(index).w)),
-        ),
+      worldPosition: (index, sourcePosition) =>
+        positions
+          .element(index)
+          .xyz.add(sourcePosition.mul(positions.element(index).w)),
     };
     sceneManager.mainScene.add(mesh);
     shadowCasterRegistry.register(mesh, { gpuInstances });

@@ -41,7 +41,6 @@ export class ShadowDeformedCasterBucket {
     4,
   );
   readonly instances: ShadowGpuInstances;
-  readonly cornersAttribute?: StorageBufferAttribute;
   private renderer: WebGPURenderer;
   private resetNode;
   private buildNode;
@@ -67,15 +66,6 @@ export class ShadowDeformedCasterBucket {
       1,
     );
     this.geometry.setIndirect(indirect);
-    if (!this.geometry.index) {
-      const corners = new Float32Array(position.count * 4);
-      for (let index = 0; index < position.count; index++) {
-        corners[index * 4] = position.getX(index);
-        corners[index * 4 + 1] = position.getY(index);
-        corners[index * 4 + 2] = position.getZ(index);
-      }
-      this.cornersAttribute = new StorageBufferAttribute(corners, 4);
-    }
     const indirectNode = storage(indirect, "uint", indirect.count).toAtomic();
     const workItems = storage(this.workItemsAttribute, "uvec4", MAX_WORK_ITEMS);
 
