@@ -9,6 +9,7 @@ import {
   atomicAdd,
   atomicStore,
   atomicSub,
+  bool,
   Fn,
   If,
   instanceIndex,
@@ -22,6 +23,7 @@ import type { ShadowGpuInstances } from "./ShadowCasterRegistry";
 import {
   getShadowDynamicLevel,
   getShadowLevel,
+  getShadowReceiverLevel,
   getShadowLightPosition,
   getShadowPageCoordinate,
   getShadowPageKey,
@@ -98,7 +100,7 @@ export class ShadowDeformedCasterBucket {
           getShadowLevel(distance.sub(reach).max(0)),
         );
         const lastLevel = getShadowDynamicLevel(
-          getShadowLevel(distance.add(reach)),
+          getShadowReceiverLevel(distance.add(reach), bool(true)),
         );
         Loop(
           { start: firstLevel, end: lastLevel.add(1), type: "uint" },
