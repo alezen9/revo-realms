@@ -14,7 +14,6 @@ import {
   instanceIndex,
   Loop,
   storage,
-  uint,
   uvec2,
   uvec4,
   vec3,

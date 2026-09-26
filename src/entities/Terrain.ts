@@ -33,13 +33,11 @@ import {
 import { type State } from "../Game";
 import { realmConfig } from "../realm/config";
 import { DirectSunLambertNodeMaterial } from "../systems/ShadowManager/DirectSunMaterials";
-import { isDirectSunMaterialCaptureEnabled } from "../systems/ShadowManager/config";
 import { RevoColliderType } from "../types";
 import {
   assetManager,
   debugManager,
   eventsManager,
-  lightingManager,
   physicsManager,
   sceneManager,
   shadowCasterRegistry,
@@ -171,13 +169,7 @@ class TerrainMaterial extends DirectSunLambertNodeMaterial {
 
     const surfaceColor = mix(landColor, waterColor, waterMask);
 
-    this.colorNode = isDirectSunMaterialCaptureEnabled
-      ? surfaceColor
-      : mix(
-          surfaceColor.mul(lightingManager.uBakedShadowBrightness),
-          surfaceColor,
-          terrainMapSample.r,
-        );
+    this.colorNode = surfaceColor;
 
     // NORMAL
     const normalAoSample = texture(

@@ -81,13 +81,13 @@ export class ShadowResidency {
     COUNTER_COUNT,
   ).toAtomic();
   private atlasIndirect = new IndirectStorageBufferAttribute(
-    new Uint32Array([6, 0, 0, 0, 0, 0, 0, 0, 6, 0, 0, 0, 0, 0, 0, 0]),
+    new Uint32Array([6, 0, 0, 0, 6, 0, 0, 0]),
     1,
   );
   private atomicAtlasIndirect = storage(
     this.atlasIndirect,
     "uint",
-    16,
+    8,
   ).toAtomic();
   private resetNode;
   private collectNode;
@@ -124,7 +124,7 @@ export class ShadowResidency {
       Loop({ start: 0, end: COUNTER_COUNT, type: "uint" }, ({ i: index }) => {
         atomicStore(this.atomicCounters.element(index), 0);
       });
-      for (const index of [1, 5, 9, 13])
+      for (const index of [1, 5])
         atomicStore(this.atomicAtlasIndirect.element(index), 0);
     })().compute(1, [1]);
 
@@ -253,7 +253,6 @@ export class ShadowResidency {
           this.pageTableNode.element(pageKey).assign(uvec2(slot.add(1), 0));
           const job = uvec4(pageKey, slot, pageCoordinate);
           const jobIndex = atomicAdd(this.atomicAtlasIndirect.element(1), 1);
-          atomicAdd(this.atomicAtlasIndirect.element(5), 1);
           this.pageJobsNode.element(jobIndex).assign(job);
           const activeIndex = atomicAdd(
             this.atomicCounters.element(COUNTER_ACTIVE),
@@ -294,16 +293,6 @@ export class ShadowResidency {
 
   get atlasIndirectAttribute() {
     return this.atlasIndirect;
-  }
-
-  setFixedVertexCount(vertexCount: number) {
-    this.atlasIndirect.array[4] = vertexCount;
-    this.atlasIndirect.needsUpdate = true;
-  }
-
-  setMovingVertexCount(vertexCount: number) {
-    this.atlasIndirect.array[12] = vertexCount;
-    this.atlasIndirect.needsUpdate = true;
   }
 
   invalidate() {

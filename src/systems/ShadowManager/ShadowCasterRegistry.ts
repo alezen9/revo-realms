@@ -1,6 +1,5 @@
 import { Matrix4, type BufferGeometry, type Mesh } from "three";
 import { BatchedMesh, NodeMaterial, type Node } from "three/webgpu";
-import { isPagedV2 } from "./config";
 
 export type ShadowCasterKind = "fixed" | "moving" | "deformed";
 export type ShadowDeformedInstances = {
@@ -55,7 +54,6 @@ export class ShadowCasterRegistry {
   }
 
   register(mesh: Mesh, options: ShadowCasterOptions = {}) {
-    if (!isPagedV2) return;
     if (this.entries.has(mesh))
       throw new Error(`Shadow caster already registered: ${mesh.name}`);
     const {
@@ -119,7 +117,6 @@ export class ShadowCasterRegistry {
   }
 
   unregister(mesh: Mesh) {
-    if (!isPagedV2) return;
     const entry = this.entries.get(mesh);
     if (!entry) throw new Error(`Shadow caster not registered: ${mesh.name}`);
 
@@ -131,7 +128,6 @@ export class ShadowCasterRegistry {
   }
 
   setDepthBias(mesh: Mesh, depthBiasMeters: number) {
-    if (!isPagedV2) return;
     const entry = this.entries.get(mesh);
     if (!entry || entry.kind !== "fixed")
       throw new Error(`Fixed shadow caster not registered: ${mesh.name}`);
@@ -143,7 +139,6 @@ export class ShadowCasterRegistry {
   }
 
   setCastsShadow(mesh: Mesh, castsShadow: boolean) {
-    if (!isPagedV2) return;
     const entry = this.entries.get(mesh);
     if (!entry) throw new Error(`Shadow caster not registered: ${mesh.name}`);
     if (entry.castsShadow === castsShadow) return;
@@ -154,7 +149,6 @@ export class ShadowCasterRegistry {
   }
 
   markMoved(mesh: Mesh) {
-    if (!isPagedV2) return;
     const entry = this.entries.get(mesh);
     if (!entry) throw new Error(`Shadow caster not registered: ${mesh.name}`);
     mesh.updateWorldMatrix(true, false);

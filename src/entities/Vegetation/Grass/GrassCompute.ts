@@ -36,10 +36,6 @@ import { TSLUtils } from "../../../utils/TSLUtils";
 import { gameDeltaTime, gameTime } from "../../../utils/GameTime";
 import { config, uniforms } from "./config";
 import {
-  isDirectSunMaterialCaptureEnabled,
-  isPagedV2,
-} from "../../../systems/ShadowManager/config";
-import {
   getBladeLocalOffset,
   getClumpRotation,
   getOriginalScale,
@@ -48,7 +44,6 @@ import {
   getTerrainCacheValidity,
   getVisibility,
   getYOffset,
-  setBakedShadowFactor,
   setBend,
   setClumpOrientation,
   setOriginalScale,
@@ -278,8 +273,6 @@ export class GrassCompute {
 
       clumpState.z = terrainGrassScale;
       clumpState.assign(setYOffset(clumpState, terrainYOffset));
-      if (!isDirectSunMaterialCaptureEnabled)
-        clumpState.assign(setBakedShadowFactor(clumpState, terrainSample.r));
       clumpState.assign(setTerrainCacheValidity(clumpState, 1));
     });
 
@@ -293,7 +286,6 @@ export class GrassCompute {
     });
 
     const visibleBladeCount = uint(0).toVar();
-    const shadowBladeCount = uint(0).toVar();
     const clumpDistanceSquared = wrappedCenter.dot(wrappedCenter);
 
     const densityFalloffRangeSquared = max(
@@ -359,14 +351,6 @@ export class GrassCompute {
           .toVar();
 
         visibleBladeCount.addAssign(uint(isVisible));
-        if (isPagedV2)
-          shadowBladeCount.addAssign(
-            uint(
-              step(hash(bladeIndex.add(9176)), densityKeepProbability)
-                .mul(isTerrainVisible)
-                .mul(uniforms.uShadowCasting),
-            ),
-          );
 
         previousClumpVisibility.assign(
           max(previousClumpVisibility, previousVisibility),
@@ -380,12 +364,9 @@ export class GrassCompute {
       },
     );
 
-    If(
-      visibleBladeCount.add(isPagedV2 ? shadowBladeCount : uint(0)).equal(0),
-      () => {
-        Return();
-      },
-    );
+    If(visibleBladeCount.equal(0), () => {
+      Return();
+    });
 
     const clumpRotation = getClumpRotation(clumpState).toVar();
 
@@ -477,18 +458,7 @@ export class GrassCompute {
 
         const bladeState = this.bladeState.element(bladeIndex);
 
-        const isShadowBlade = isPagedV2
-          ? step(hash(bladeIndex.add(9176)), densityKeepProbability)
-              .mul(
-                step(
-                  config.MIN_VISIBLE_SCALE,
-                  getOriginalScale(bladeState).mul(clumpState.z),
-                ),
-              )
-              .mul(uniforms.uShadowCasting)
-              .greaterThan(0)
-          : getVisibility(bladeState).greaterThan(0);
-        If(getVisibility(bladeState).greaterThan(0).or(isShadowBlade), () => {
+        If(getVisibility(bladeState), () => {
           const bladeLocalOffset = getBladeLocalOffset(
             bladeSlot,
             clumpRotation,
@@ -600,10 +570,9 @@ export class GrassCompute {
             .add(drawStartIndex)
             .add(visibleBladeOffset);
 
-          If(getVisibility(bladeState), () => {
-            this.visibleIndices.element(drawSlot).assign(bladeIndex);
-            visibleBladeOffset.addAssign(1);
-          });
+          this.visibleIndices.element(drawSlot).assign(bladeIndex);
+
+          visibleBladeOffset.addAssign(1);
         });
       },
     );

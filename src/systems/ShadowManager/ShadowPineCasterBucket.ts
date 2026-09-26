@@ -84,11 +84,7 @@ export class ShadowPineCasterBucket {
       "uvec4",
       residency.capacity * 3,
     );
-    const sourceIndirect = storage(
-      residency.atlasIndirectAttribute,
-      "uint",
-      16,
-    );
+    const sourceIndirect = storage(residency.atlasIndirectAttribute, "uint", 8);
     const pageRanges = storage(
       this.pageRangesAttribute,
       "uvec4",

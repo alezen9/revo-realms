@@ -28,7 +28,7 @@ import {
   SHADOW_PAGE_COUNT,
   SHADOW_PAGE_TEXELS,
   getShadowDynamicLevel,
-  getShadowLevel,
+  getShadowReceiverLevel,
   getShadowLightPosition,
   getShadowPageCoordinate,
   getShadowPageKey,
@@ -37,6 +37,7 @@ import {
   isShadowPageInWindow,
   shadowDynamicLevel,
   shadowResolutionBias,
+  shadowSoftReceiverLevelBias,
 } from "./ShadowPageCoordinates";
 
 const TILE_SIZE = 8;
@@ -57,6 +58,7 @@ export class ShadowPageRequests {
   private previousReceiverRevision = -1;
   private previousResolutionBias = -1;
   private previousDynamicLevel = -1;
+  private previousSoftReceiverLevelBias = -1;
   private requestBits = new StorageBufferAttribute(
     new Uint32Array(REQUEST_WORD_COUNT),
     1,
@@ -69,6 +71,7 @@ export class ShadowPageRequests {
   private counters = new StorageBufferAttribute(new Uint32Array(4), 1);
   private atomicCounters = storage(this.counters, "uint", 4).toAtomic();
   private depthNode;
+  private softReceiverNode;
   private projectionMatrixInverse: Node<"mat4">;
   private cameraWorldMatrix: Node<"mat4">;
   private sunDirection: Node<"vec3">;
@@ -80,11 +83,13 @@ export class ShadowPageRequests {
     depthTexture: Texture,
     projectionMatrixInverse: Node<"mat4">,
     cameraWorldMatrix: Node<"mat4">,
+    softReceiverTexture: Texture,
     cameraPosition: Node<"vec3">,
     sunDirection: Node<"vec3">,
   ) {
     this.renderer = renderer;
     this.depthNode = texture(depthTexture);
+    this.softReceiverNode = texture(softReceiverTexture);
     this.projectionMatrixInverse = projectionMatrixInverse;
     this.cameraWorldMatrix = cameraWorldMatrix;
     this.sunDirection = sunDirection;
@@ -232,7 +237,12 @@ export class ShadowPageRequests {
     const worldPosition = this.cameraWorldMatrix.mul(vec4(viewPosition, 1)).xyz;
     return {
       isValid: isInside.and(depth.lessThan(1)),
-      level: getShadowLevel(viewPosition.length()),
+      level: getShadowReceiverLevel(
+        viewPosition.length(),
+        textureLoad(this.softReceiverNode, pixel)
+          .level(uint(0))
+          .r.greaterThan(0.5),
+      ),
       lightPosition: getShadowLightPosition(worldPosition, this.sunDirection),
     };
   }
@@ -250,7 +260,8 @@ export class ShadowPageRequests {
       this.previousDrawingBufferSize.y === height &&
       this.previousReceiverRevision === receiverRevision &&
       this.previousResolutionBias === shadowResolutionBias.value &&
-      this.previousDynamicLevel === shadowDynamicLevel.value
+      this.previousDynamicLevel === shadowDynamicLevel.value &&
+      this.previousSoftReceiverLevelBias === shadowSoftReceiverLevelBias.value
     )
       return;
     this.depthSize.value.set(width, height);
@@ -268,5 +279,6 @@ export class ShadowPageRequests {
     this.previousReceiverRevision = receiverRevision;
     this.previousResolutionBias = shadowResolutionBias.value;
     this.previousDynamicLevel = shadowDynamicLevel.value;
+    this.previousSoftReceiverLevelBias = shadowSoftReceiverLevelBias.value;
   }
 }

@@ -115,20 +115,6 @@ export const setPreviousVisibility = Fn<
   return data;
 });
 
-export const getBakedShadowFactor = Fn<[data: Node<"vec4">], Node<"float">>(
-  ([data]) => {
-    return TSLUtils.unpackUnit(data.w, 16, 4);
-  },
-);
-
-export const setBakedShadowFactor = Fn<
-  [data: Node<"vec4">, value: Node<"float">],
-  Node<"vec4">
->(([data, value]) => {
-  data.w = TSLUtils.packUnit(data.w, 16, 4, value);
-  return data;
-});
-
 export const setClumpOrientation = Fn<
   [data: Node<"vec4">, value: Node<"float">],
   Node<"vec4">

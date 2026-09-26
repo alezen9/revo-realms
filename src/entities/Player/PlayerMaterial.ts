@@ -3,7 +3,6 @@ import {
   mix,
   normalMap,
   normalWorld,
-  positionWorld,
   texture,
   uniform,
   uv,
@@ -12,8 +11,6 @@ import {
 import { Vector3 } from "three/webgpu";
 import { assetManager, lightingManager } from "../../systems";
 import { DirectSunLambertNodeMaterial } from "../../systems/ShadowManager/DirectSunMaterials";
-import { isDirectSunMaterialCaptureEnabled } from "../../systems/ShadowManager/config";
-import { TSLUtils } from "../../utils/TSLUtils";
 import { playerConfig as config } from "./config";
 
 export const playerUniforms = {
@@ -43,26 +40,13 @@ export class PlayerMaterial extends DirectSunLambertNodeMaterial {
     const baseColor = texture(assetManager.resources.playerDiffuse, uv())
       .blur(blurAmount)
       .mul(uDiffuseScale);
-    let surfaceColor = baseColor;
-    if (!isDirectSunMaterialCaptureEnabled) {
-      const terrainMapUv = TSLUtils.computeMapUvByPosition(positionWorld.xz);
-      const bakedShadowFactor = texture(
-        assetManager.resources.terrainMaps,
-        terrainMapUv,
-      ).r;
-      surfaceColor = mix(
-        baseColor.mul(lightingManager.uBakedShadowBrightness),
-        baseColor,
-        bakedShadowFactor,
-      );
-    }
     const sunFacing = normalWorld.dot(lightingManager.uSunDir.negate()).clamp();
     const sunTint = mix(
       vec3(1),
       lightingManager.uSunColor,
       sunFacing.mul(uSunTintStrength),
     );
-    this.colorNode = surfaceColor.mul(sunTint);
+    this.colorNode = baseColor.mul(sunTint);
 
     const normal = texture(assetManager.resources.playerNormal, uv()).blur(
       blurAmount,

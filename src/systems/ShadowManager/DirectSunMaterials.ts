@@ -5,10 +5,8 @@ import {
   PhongLightingModel,
   PhysicalLightingModel,
   type LightingModel,
-  type Node,
 } from "three/webgpu";
 import { mrt, vec3, vec4 } from "three/tsl";
-import { isDirectSunMaterialCaptureEnabled } from "./config";
 
 type LightingBuilder = Parameters<LightingModel["start"]>[0];
 type DirectLight = Parameters<LightingModel["direct"]>[0] & {
@@ -48,8 +46,6 @@ class DirectSunPhongLightingModel extends PhongLightingModel {
 
 export class DirectSunLambertNodeMaterial extends MeshLambertNodeMaterial {
   setupLightingModel() {
-    if (!isDirectSunMaterialCaptureEnabled) return super.setupLightingModel();
-
     const lightingModel = new DirectSunPhongLightingModel();
     this.mrtNode = mrt({ directSun: vec4(lightingModel.directSun, 1) });
     return lightingModel;
@@ -82,8 +78,6 @@ class DirectSunPhysicalLightingModel extends PhysicalLightingModel {
 
 export class DirectSunStandardNodeMaterial extends MeshStandardNodeMaterial {
   setupLightingModel() {
-    if (!isDirectSunMaterialCaptureEnabled) return super.setupLightingModel();
-
     const lightingModel = new DirectSunPhysicalLightingModel();
     this.mrtNode = mrt({ directSun: vec4(lightingModel.directSun, 1) });
     return lightingModel;

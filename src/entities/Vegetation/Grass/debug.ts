@@ -386,5 +386,4 @@ export const debugGrass = (uniforms: GrassUniforms, config: GrassConfig) => {
     max: 5,
     step: 0.01,
   });
-  return folder;
 };

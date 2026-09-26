@@ -17,11 +17,9 @@ import {
 } from "three/tsl";
 import { SpriteNodeMaterial } from "three/webgpu";
 import { lightingManager } from "../../../systems";
-import { isDirectSunMaterialCaptureEnabled } from "../../../systems/ShadowManager/config";
 import { config, uniforms } from "./config";
 import type { GrassCompute } from "./GrassCompute";
 import {
-  getBakedShadowFactor,
   getBladeLocalOffset,
   getBend,
   getClumpRotation,
@@ -59,9 +57,6 @@ export class GrassMaterial extends SpriteNodeMaterial {
     const bendXZ = getBend(bladeState);
     const scaleY = getScale(bladeState);
     const positionNoise = getPositionNoise(bladeState);
-    const bakedShadowFactor = isDirectSunMaterialCaptureEnabled
-      ? float(1)
-      : getBakedShadowFactor(clumpState);
 
     const bladeUv = uv();
     const bladeHeight = bladeUv.y;
@@ -176,12 +171,6 @@ export class GrassMaterial extends SpriteNodeMaterial {
       warmMask,
     );
 
-    const bakedShadow = mix(
-      lightingManager.uBakedShadowBrightness,
-      1,
-      bakedShadowFactor,
-    );
-
     // LIGHTING
     const lightingAngle = bladeHash.mul(53.3).fract().mul(TWO_PI);
 
@@ -226,16 +215,13 @@ export class GrassMaterial extends SpriteNodeMaterial {
       .mul(uniforms.uLightExposure);
 
     // PACK VARYINGS
-    const colorShadow = varying(vec4(variedColor, bakedShadow));
+    const bladeColor = varying(variedColor);
 
     const lightingGrazing = varying(vec4(sceneLight, grazing));
 
     const viewLightingDetail = varying(
       vec3(backlight, viewSunAlignment, nearDetailOcclusionValue),
     );
-
-    const bladeColor = colorShadow.rgb;
-    const shadow = colorShadow.a;
 
     const sceneLighting = lightingGrazing.rgb;
     const bladeGrazing = lightingGrazing.a;
@@ -277,12 +263,9 @@ export class GrassMaterial extends SpriteNodeMaterial {
       .mul(mix(0.35, 1, bladeBacklight))
       .mul(uniforms.uBacklightStrength);
 
-    const detailStrength = smoothstep(0.1, 0.9, bladeHeight).mul(shadow);
+    const detailStrength = smoothstep(0.1, 0.9, bladeHeight);
 
-    const diffuseColor = albedo
-      .mul(shadow)
-      .mul(detailOcclusion)
-      .mul(sceneLighting);
+    const diffuseColor = albedo.mul(detailOcclusion).mul(sceneLighting);
 
     const sheenColor = lightingManager.uSunRadiance.mul(
       grazingSheen.mul(detailStrength),
@@ -294,19 +277,18 @@ export class GrassMaterial extends SpriteNodeMaterial {
 
     const shadedColor = diffuseColor.add(sheenColor).add(transmittedColor);
 
-    if (isDirectSunMaterialCaptureEnabled) {
-      const sunLighting = sceneLighting.sub(
-        hemisphereLight.mul(uniforms.uLightExposure),
-      );
-      const directSun = albedo
-        .mul(detailOcclusion)
-        .mul(sunLighting)
-        .add(sheenColor)
-        .add(transmittedColor);
-      this.mrtNode = mrt({
-        directSun: vec4(mix(directSun, vec3(0), uniforms.uLodDebugEnabled), 1),
-      });
-    }
+    const sunLighting = sceneLighting.sub(
+      hemisphereLight.mul(uniforms.uLightExposure),
+    );
+    const directSun = albedo
+      .mul(detailOcclusion)
+      .mul(sunLighting)
+      .add(sheenColor)
+      .add(transmittedColor);
+    this.mrtNode = mrt({
+      directSun: vec4(mix(directSun, vec3(0), uniforms.uLodDebugEnabled), 1),
+      softShadow: vec4(1),
+    });
 
     // LOD DEBUG
     const lodIndex = instanceIndex.div(config.BLADE_COUNT);

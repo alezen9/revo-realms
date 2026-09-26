@@ -56,8 +56,6 @@ export class LightingManager {
   uHemiSkyColor = uniform(config.hemiSkyColor.clone());
   uHemiGroundColor = uniform(config.hemiGroundColor.clone());
   uHemiIntensity = uniform(config.hemiIntensity);
-  uPlayerShadowBrightness = uniform(0.7);
-  uBakedShadowBrightness = uniform(0.45);
 
   constructor(
     sceneManager: SceneManager,
@@ -176,18 +174,6 @@ export class LightingManager {
         this.directionalLight.intensity = value;
         this.syncSunRadiance();
       });
-    lightFolder.addBinding(this.uPlayerShadowBrightness, "value", {
-      label: "Player shadow brightness",
-      min: 0,
-      max: 1,
-      step: 0.01,
-    });
-    lightFolder.addBinding(this.uBakedShadowBrightness, "value", {
-      label: "Baked shadow brightness",
-      min: 0,
-      max: 1,
-      step: 0.01,
-    });
     lightFolder.addBinding(srgbColorTarget(this.fog.color), "value", {
       label: "Fog Color",
       view: "color",

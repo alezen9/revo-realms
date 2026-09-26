@@ -6,17 +6,14 @@ import {
   rendererManager,
   eventsManager,
   monitoringManager,
-  shadowCasterRegistry,
 } from "../../../systems";
 import { config, uniforms } from "./config";
 import { debugGrass } from "./debug";
 import { GrassBladeGeometry } from "./GrassBladeGeometry";
 import { GrassMaterial } from "./GrassMaterial";
 import { GrassCompute } from "./GrassCompute";
-import { createGrassShadowInstances } from "./GrassShadowAdapter";
 import type { ComputeTask } from "../../../systems/RendererManager/ComputeTask";
 import type { GrassMonitoringStats } from "../../../systems/EventsManager";
-import { isPagedV2 } from "../../../systems/ShadowManager/config";
 
 const UINT32_BYTE_SIZE = Uint32Array.BYTES_PER_ELEMENT;
 const INDIRECT_FIRST_INSTANCE_FEATURE = "indirect-first-instance";
@@ -31,8 +28,6 @@ export default class Grass {
   private playerDeltaXZ = new Vector2();
   private computeTask: ComputeTask;
   private monitoringReadback?: ReadbackBuffer;
-  private shadowCaster?: Mesh;
-  private shadowSettings = { castsShadow: true };
 
   constructor() {
     this.validateRequiredFeatures();
@@ -55,17 +50,7 @@ export default class Grass {
 
     eventsManager.on("engine-render-update", this.onEngineUpdate);
 
-    const folder = debugGrass(uniforms, config);
-    const { shadowCaster } = this;
-    if (shadowCaster)
-      folder
-        .addBinding(this.shadowSettings, "castsShadow", {
-          label: "Casts shadow",
-        })
-        .on("change", ({ value }) => {
-          uniforms.uShadowCasting.value = value ? 1 : 0;
-          shadowCasterRegistry.setCastsShadow(shadowCaster, value);
-        });
+    debugGrass(uniforms, config);
   }
 
   private validateRequiredFeatures() {
@@ -96,14 +81,6 @@ export default class Grass {
 
     const mesh = new Mesh(geometry, this.material);
     mesh.frustumCulled = false;
-    if (lod === 0 && isPagedV2) {
-      this.shadowCaster = mesh;
-      shadowCasterRegistry.register(mesh, {
-        kind: "deformed",
-        deformedInstances: createGrassShadowInstances(this.compute),
-      });
-    } else if (!isPagedV2)
-      shadowCasterRegistry.register(mesh, { kind: "deformed" });
 
     return mesh;
   }
@@ -115,11 +92,6 @@ export default class Grass {
 
     this.updateCompute();
 
-    if (
-      this.tile.position.x === player.position.x &&
-      this.tile.position.z === player.position.z
-    )
-      return;
     this.tile.position.set(player.position.x, 0, player.position.z);
   };
 

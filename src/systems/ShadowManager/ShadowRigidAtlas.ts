@@ -58,7 +58,7 @@ import {
   SHADOW_PAGE_TEXELS,
   SHADOW_PAGES_PER_LEVEL,
   getShadowDynamicLevel,
-  getShadowLevel,
+  getShadowReceiverLevel,
   getShadowLightPosition,
   getShadowPageCoordinate,
   getShadowPageKey,
@@ -87,7 +87,7 @@ export class ShadowRigidAtlas {
   private maximumY = uniform(64);
   private sources: ShadowCasterEntry[] = [];
   private bucket?: ShadowRigidCasterBucket;
-  private casterMesh?: Mesh;
+  private casterMeshes: Mesh[] = [];
   private batchedCasters: {
     entry: ShadowCasterEntry;
     source: BatchedMesh;
@@ -228,26 +228,26 @@ export class ShadowRigidAtlas {
           this.batchedCasters.push({ entry, source: entry.mesh, bucket, mesh });
         }
       }
-      if (this.casterMesh) this.scene.remove(this.casterMesh);
+      for (const mesh of this.casterMeshes) this.scene.remove(mesh);
+      this.casterMeshes = [];
       this.bucket?.dispose();
       this.bucket = undefined;
-      this.casterMesh = undefined;
       if (this.sources.length > 0) {
-        this.bucket = new ShadowRigidCasterBucket(
+        const bucket = new ShadowRigidCasterBucket(
+          this.renderer,
           this.residency,
           this.sources,
           this.kind,
         );
-        this.casterMesh = new Mesh(
-          this.bucket.geometry,
-          this.createCasterMaterial(this.bucket),
-        );
-        this.casterMesh.frustumCulled = false;
-        this.casterMesh.renderOrder = 1;
-        this.scene.add(this.casterMesh);
-      } else {
-        if (this.kind === "fixed") this.residency.setFixedVertexCount(0);
-        else this.residency.setMovingVertexCount(0);
+        const material = this.createCasterMaterial(bucket);
+        for (const geometry of bucket.geometries) {
+          const mesh = new Mesh(geometry, material);
+          mesh.frustumCulled = false;
+          mesh.renderOrder = 1;
+          this.scene.add(mesh);
+          this.casterMeshes.push(mesh);
+        }
+        this.bucket = bucket;
       }
       if (this.kind === "moving")
         this.dynamicJobsNode = this.createDynamicJobsNode(this.bucket);
@@ -294,6 +294,7 @@ export class ShadowRigidAtlas {
       return;
     for (const { bucket } of this.deformedCasters) bucket.run();
     if (this.dynamicJobsNode) this.renderer.compute(this.dynamicJobsNode);
+    this.bucket?.run();
     for (const { bucket } of this.batchedCasters) bucket.run();
     const previousTarget = this.renderer.getRenderTarget();
     const wasAutoClearEnabled = this.renderer.autoClear;
@@ -321,13 +322,18 @@ export class ShadowRigidAtlas {
     worldPosition: Node<"vec3">,
     sceneDepth: Node<"float">,
     viewDistance: Node<"float">,
+    isSoftReceiver: Node<"bool">,
     secondary?: ShadowRigidAtlas,
   ) {
-    const receiverLevel = getShadowLevel(viewDistance);
+    const receiverLevel = getShadowReceiverLevel(viewDistance, isSoftReceiver);
+    const sharpLevel = getShadowReceiverLevel(viewDistance, bool(false));
     const level =
       this.kind === "fixed"
         ? receiverLevel
         : getShadowDynamicLevel(receiverLevel);
+    const biasPageSize = getShadowPageSize(
+      this.kind === "fixed" ? sharpLevel : getShadowDynamicLevel(sharpLevel),
+    );
     const lightPosition = getShadowLightPosition(
       worldPosition,
       this.sunDirection,
@@ -344,6 +350,7 @@ export class ShadowRigidAtlas {
         sceneDepth,
         level,
         texelOffset,
+        biasPageSize,
       ),
     );
     let weight: Node<"float"> = float(0);
@@ -358,7 +365,12 @@ export class ShadowRigidAtlas {
       .select(visibility.div(weight.max(1)), float(1));
     if (!secondary) return ownVisibility;
     return ownVisibility.mul(
-      secondary.computeVisibility(worldPosition, sceneDepth, viewDistance),
+      secondary.computeVisibility(
+        worldPosition,
+        sceneDepth,
+        viewDistance,
+        isSoftReceiver,
+      ),
     );
   }
 
@@ -368,6 +380,7 @@ export class ShadowRigidAtlas {
     sceneDepth: Node<"float">,
     level: Node<"uint">,
     texelOffset: Node<"vec2">,
+    biasPageSize: Node<"float">,
   ) {
     const pageSize = getShadowPageSize(level);
     const pagePosition = lightPosition
@@ -382,7 +395,7 @@ export class ShadowRigidAtlas {
     const pageUv = pagePosition.fract().clamp(halfTexel, 1 - halfTexel);
     const receiverDepth = this.maximumY
       .sub(worldPosition.y)
-      .sub(pageSize.mul(this.depthBiasTexels).div(SHADOW_PAGE_TEXELS))
+      .sub(biasPageSize.mul(this.depthBiasTexels).div(SHADOW_PAGE_TEXELS))
       .div(this.maximumY.sub(this.minimumY));
     const visibility = this.depthTextureNode
       .sample(this.computeAtlasUv(slot, pageUv))
@@ -411,7 +424,7 @@ export class ShadowRigidAtlas {
     const indirect = storage(
       this.residency.atlasIndirectAttribute,
       "uint",
-      16,
+      8,
     ).toAtomic();
     return Fn(() => {
       const activeCount = atomicLoad(
@@ -444,8 +457,7 @@ export class ShadowRigidAtlas {
             .greaterThan(0)
             .and(level.greaterThanEqual(shadowDynamicLevel)),
           () => {
-            const dynamicIndex = atomicAdd(indirect.element(9), 1);
-            atomicAdd(indirect.element(13), 1);
+            const dynamicIndex = atomicAdd(indirect.element(5), 1);
             this.pageJobsNode
               .element(dynamicIndex.add(capacity * 2))
               .assign(job);
@@ -476,7 +488,7 @@ export class ShadowRigidAtlas {
       ),
     );
     geometry.setIndirect(this.residency.atlasIndirectAttribute, [
-      (this.kind === "fixed" ? 0 : 8) * Uint32Array.BYTES_PER_ELEMENT,
+      (this.kind === "fixed" ? 0 : 4) * Uint32Array.BYTES_PER_ELEMENT,
     ]);
     const material = new MeshBasicNodeMaterial();
     material.depthTest = false;
@@ -667,10 +679,10 @@ export class ShadowRigidAtlas {
       "vec4",
       bucket.matrixColumnsAttribute.count,
     );
-    const ranges = storage(
-      bucket.pageRangesAttribute,
-      "uvec4",
-      bucket.pageRangesAttribute.count,
+    const casterJobs = storage(
+      bucket.casterJobsAttribute,
+      "uint",
+      bucket.casterJobsAttribute.count,
     );
     const depthBiases = storage(
       bucket.depthBiasAttribute,
@@ -692,19 +704,10 @@ export class ShadowRigidAtlas {
         .add(matrices.element(matrixOffset.add(1)).mul(positionGeometry.y))
         .add(matrices.element(matrixOffset.add(2)).mul(positionGeometry.z))
         .add(matrices.element(matrixOffset.add(3))).xyz;
-      const job = this.pageJobsNode.element(
-        instanceIndex.add(this.pageJobOffset),
+      const jobIndex = casterJobs.element(
+        casterIndex.mul(this.residency.capacity).add(instanceIndex),
       );
-      const range = ranges.element(
-        casterIndex
-          .mul(SHADOW_LEVEL_COUNT)
-          .add(job.x.div(SHADOW_PAGES_PER_LEVEL)),
-      );
-      const overlaps = job.z
-        .greaterThanEqual(range.x)
-        .and(job.w.greaterThanEqual(range.y))
-        .and(job.z.lessThanEqual(range.z))
-        .and(job.w.lessThanEqual(range.w));
+      const job = this.pageJobsNode.element(jobIndex.add(this.pageJobOffset));
       const casterPageUv = this.getJobPageUv(job, worldPosition);
       const casterDepth = this.maximumY
         .sub(worldPosition.y)
@@ -713,9 +716,11 @@ export class ShadowRigidAtlas {
       pageUv.assign(casterPageUv);
       depth.assign(casterDepth);
       const atlasUv = this.computeAtlasUv(job.y, casterPageUv);
-      return overlaps.select(
-        vec4(atlasUv.x.mul(2).sub(1), atlasUv.y.mul(-2).add(1), casterDepth, 1),
-        vec4(-2, -2, 1, 1),
+      return vec4(
+        atlasUv.x.mul(2).sub(1),
+        atlasUv.y.mul(-2).add(1),
+        casterDepth,
+        1,
       );
     })();
     material.fragmentNode = this.createCasterFragment(pageUv, depth);

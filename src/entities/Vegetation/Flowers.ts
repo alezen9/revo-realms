@@ -49,7 +49,6 @@ import { gameTime } from "../../utils/GameTime";
 import { TSLUtils } from "../../utils/TSLUtils";
 import { srgbColorTarget } from "../../utils/TweakpaneColor";
 import type { ComputeTask } from "../../systems/RendererManager/ComputeTask";
-import { isDirectSunMaterialCaptureEnabled } from "../../systems/ShadowManager/config";
 
 const getConfig = () => {
   const FLOWER_WIDTH = 0.5;
@@ -558,18 +557,17 @@ class FlowerMaterial extends MeshBasicNodeMaterial {
     const tint = mix(uniforms.uColor1, uniforms.uColor2, rand2);
     const flowerColor = tint.mul(flower.rgb).mul(uniforms.uBrightness);
     this.colorNode = flowerColor;
-    if (isDirectSunMaterialCaptureEnabled) {
-      const ambientRadiance = lightingManager.uHemiSkyColor.rgb
-        .add(lightingManager.uHemiGroundColor.rgb)
-        .mul(lightingManager.uHemiIntensity.mul(0.5));
-      const sunRadiance = lightingManager.uSunRadiance.rgb;
-      const directFraction = sunRadiance.div(
-        sunRadiance.add(ambientRadiance).max(0.0001),
-      );
-      this.mrtNode = mrt({
-        directSun: vec4(flowerColor.mul(directFraction), 1),
-      });
-    }
+    const ambientRadiance = lightingManager.uHemiSkyColor.rgb
+      .add(lightingManager.uHemiGroundColor.rgb)
+      .mul(lightingManager.uHemiIntensity.mul(0.5));
+    const sunRadiance = lightingManager.uSunRadiance.rgb;
+    const directFraction = sunRadiance.div(
+      sunRadiance.add(ambientRadiance).max(0.0001),
+    );
+    this.mrtNode = mrt({
+      directSun: vec4(flowerColor.mul(directFraction), 1),
+      softShadow: vec4(1),
+    });
 
     // Opacity
     this.opacityNode = flower.a;

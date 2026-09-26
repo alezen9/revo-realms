@@ -16,6 +16,7 @@ const FIRST_PAGE_SIZE = 2 ** (SHADOW_FIRST_LEVEL + 1) / SHADOW_PAGE_GRID_SIZE;
 
 export const shadowResolutionBias = uniform(2);
 export const shadowDynamicLevel = uniform(3, "uint");
+export const shadowSoftReceiverLevelBias = uniform(2);
 
 export const getShadowLightPosition = (
   worldPosition: Node<"vec3">,
@@ -38,6 +39,18 @@ export const getShadowLevel = (viewDistance: Node<"float">) =>
   uint(
     ceil(log2(viewDistance.max(0.0001)))
       .add(shadowResolutionBias)
+      .sub(SHADOW_FIRST_LEVEL)
+      .clamp(0, SHADOW_LEVEL_COUNT - 1),
+  );
+
+export const getShadowReceiverLevel = (
+  viewDistance: Node<"float">,
+  isSoftReceiver: Node<"bool">,
+) =>
+  uint(
+    ceil(log2(viewDistance.max(0.0001)))
+      .add(shadowResolutionBias)
+      .add(isSoftReceiver.select(shadowSoftReceiverLevelBias, float(0)))
       .sub(SHADOW_FIRST_LEVEL)
       .clamp(0, SHADOW_LEVEL_COUNT - 1),
   );
