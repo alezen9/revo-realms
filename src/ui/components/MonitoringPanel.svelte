@@ -204,6 +204,7 @@
 					<span class="cell"><span class="label">Allocated</span><span class="value">{integerFormat.format(shadowPages.allocated)}</span></span>
 					<span class="cell"><span class="label">Evicted</span><span class="value">{integerFormat.format(shadowPages.evicted)}</span></span>
 					<span class="cell"><span class="label">Dynamic</span><span class="value">{integerFormat.format(shadowPages.dynamic)}</span></span>
+					<span class="cell"><span class="label">Overflow</span><span class="value">{integerFormat.format(shadowPages.overflow)}</span></span>
 					<span class="cell"><span class="label">Outside grid</span><span class="value">{integerFormat.format(shadowPages.outsideGrid)}</span></span>
 				</div>
 			</section>

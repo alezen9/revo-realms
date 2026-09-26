@@ -1,4 +1,4 @@
-import { Vector3 } from "three";
+import { Vector3, type Box3 } from "three";
 import {
   IndirectStorageBufferAttribute,
   StorageBufferAttribute,
@@ -26,6 +26,7 @@ import {
   getShadowPageTag,
   getShadowWindowCenter,
   getShadowWindowPage,
+  ShadowPageCoordinates,
 } from "./ShadowPageCoordinates";
 import type { ShadowPageRequests } from "./ShadowPageRequests";
 
@@ -33,6 +34,10 @@ const POOL_CAPACITY = 1024;
 const DYNAMIC_CAPACITY = 400;
 const INVALID_PAGE_KEY = 0xffffffff;
 const READBACK_INTERVAL_MS = 1000;
+const MAX_INVALIDATION_BOXES = 64;
+const DYNAMIC_LEVEL_COUNTER_OFFSET = 8;
+const ATLAS_INDIRECT_SIZE =
+  DYNAMIC_LEVEL_COUNTER_OFFSET + SHADOW_LEVEL_COUNT * 2;
 const REQUEST_WORD_COUNT = SHADOW_PAGE_COUNT / 32;
 const EMPTY_LIST_OFFSET = SHADOW_LEVEL_COUNT * POOL_CAPACITY;
 const REUSABLE_LIST_OFFSET = EMPTY_LIST_OFFSET + POOL_CAPACITY;
@@ -57,6 +62,26 @@ export class ShadowResidency {
   private renderer: WebGPURenderer;
   private previousSunDirection = new Vector3();
   private sunGeneration = uniform(1, "uint");
+  private invalidationValues = new Uint32Array(
+    MAX_INVALIDATION_BOXES * SHADOW_LEVEL_COUNT * 4,
+  );
+  private invalidationRects = new StorageBufferAttribute(
+    this.invalidationValues,
+    4,
+  );
+  private invalidationCount = uniform(0, "uint");
+  private hasPendingInvalidation = false;
+  private coordinates = new ShadowPageCoordinates();
+  private corner = new Vector3();
+  private slotRenderFrames = new StorageBufferAttribute(
+    new Uint32Array(POOL_CAPACITY),
+    1,
+  );
+  readonly slotRenderFramesNode = storage(
+    this.slotRenderFrames,
+    "uint",
+    POOL_CAPACITY,
+  );
   private pageTable = new StorageBufferAttribute(
     new Uint32Array(SHADOW_PAGE_COUNT * 4),
     4,
@@ -81,15 +106,16 @@ export class ShadowResidency {
     COUNTER_COUNT,
   ).toAtomic();
   private atlasIndirect = new IndirectStorageBufferAttribute(
-    new Uint32Array([6, 0, 0, 0, 0, 0, 0, 0]),
+    new Uint32Array(ATLAS_INDIRECT_SIZE).fill(6, 0, 1),
     1,
   );
   private atomicAtlasIndirect = storage(
     this.atlasIndirect,
     "uint",
-    8,
+    ATLAS_INDIRECT_SIZE,
   ).toAtomic();
   private resetNode;
+  private invalidateNode;
   private collectNode;
   private freeNode;
   private allocateNode;
@@ -101,6 +127,7 @@ export class ShadowResidency {
     mapped: 0,
     allocated: 0,
     dynamic: 0,
+    overflow: 0,
     evicted: 0,
     missing: 0,
     outsideGrid: 0,
@@ -129,6 +156,50 @@ export class ShadowResidency {
       for (const index of [1])
         atomicStore(this.atomicAtlasIndirect.element(index), 0);
     })().compute(1, [1]);
+
+    const invalidationRects = storage(
+      this.invalidationRects,
+      "uvec4",
+      MAX_INVALIDATION_BOXES * SHADOW_LEVEL_COUNT,
+    );
+    this.invalidateNode = Fn(() => {
+      const metadata = this.slotMetadataNode.element(instanceIndex);
+      If(
+        metadata.x
+          .notEqual(INVALID_PAGE_KEY)
+          .and(metadata.w.equal(this.sunGeneration)),
+        () => {
+          const level = metadata.x.div(SHADOW_PAGES_PER_LEVEL).toVar();
+          const pageCoordinate = getShadowWindowPage(
+            metadata.x,
+            getShadowWindowCenter(cameraPosition, sunDirection, level),
+          ).toVar();
+          const isInvalid = getShadowPageTag(pageCoordinate)
+            .notEqual(metadata.y)
+            .toVar();
+          Loop(
+            { start: uint(0), end: this.invalidationCount, type: "uint" },
+            ({ i: boxIndex }) => {
+              const rect = invalidationRects.element(
+                boxIndex.mul(SHADOW_LEVEL_COUNT).add(level),
+              );
+              isInvalid.assign(
+                isInvalid.or(
+                  pageCoordinate.x
+                    .greaterThanEqual(rect.x)
+                    .and(pageCoordinate.y.greaterThanEqual(rect.y))
+                    .and(pageCoordinate.x.lessThanEqual(rect.z))
+                    .and(pageCoordinate.y.lessThanEqual(rect.w)),
+                ),
+              );
+            },
+          );
+          If(isInvalid, () => {
+            metadata.assign(uvec4(metadata.x, metadata.y, metadata.z, 0));
+          });
+        },
+      );
+    })().compute(POOL_CAPACITY, [64]);
 
     this.collectNode = Fn(() => {
       const word = atomicLoad(requestBits.element(instanceIndex));
@@ -255,6 +326,7 @@ export class ShadowResidency {
           this.pageTableNode
             .element(pageKey)
             .assign(uvec4(slot.add(1), 0, 0, 0));
+          this.slotRenderFramesNode.element(slot).assign(this.frame);
           const job = uvec4(pageKey, slot, pageCoordinate);
           const jobIndex = atomicAdd(this.atomicAtlasIndirect.element(1), 1);
           this.pageJobsNode.element(jobIndex).assign(job);
@@ -274,6 +346,7 @@ export class ShadowResidency {
     })().compute(SHADOW_LEVEL_COUNT * POOL_CAPACITY, [64]);
 
     this.resetNode.name = "V2 page residency reset";
+    this.invalidateNode.name = "V2 page residency invalidate";
     this.collectNode.name = "V2 page residency collect";
     this.freeNode.name = "V2 page residency free";
     this.allocateNode.name = "V2 page residency allocate";
@@ -301,6 +374,45 @@ export class ShadowResidency {
 
   get atlasIndirectAttribute() {
     return this.atlasIndirect;
+  }
+
+  get dynamicLevelCounterOffset() {
+    return DYNAMIC_LEVEL_COUNTER_OFFSET;
+  }
+
+  invalidateBounds(boxes: Box3[], sunDirection: Vector3) {
+    const boxCount = Math.min(boxes.length, MAX_INVALIDATION_BOXES);
+    for (let rect = 0; rect < boxCount * SHADOW_LEVEL_COUNT; rect++)
+      this.invalidationValues.set([0xffffffff, 0xffffffff, 0, 0], rect * 4);
+    for (let index = 0; index < boxes.length; index++) {
+      const { min, max } = boxes[index];
+      const offset =
+        Math.min(index, MAX_INVALIDATION_BOXES - 1) * SHADOW_LEVEL_COUNT * 4;
+      for (let level = 0; level < SHADOW_LEVEL_COUNT; level++) {
+        const rectOffset = offset + level * 4;
+        for (let corner = 0; corner < 8; corner++) {
+          this.corner.set(
+            corner & 1 ? max.x : min.x,
+            corner & 2 ? max.y : min.y,
+            corner & 4 ? max.z : min.z,
+          );
+          const page = this.coordinates.getPageCoordinate(
+            this.corner,
+            sunDirection,
+            level,
+          );
+          const values = this.invalidationValues;
+          values[rectOffset] = Math.min(values[rectOffset], page.x);
+          values[rectOffset + 1] = Math.min(values[rectOffset + 1], page.y);
+          values[rectOffset + 2] = Math.max(values[rectOffset + 2], page.x);
+          values[rectOffset + 3] = Math.max(values[rectOffset + 3], page.y);
+        }
+      }
+    }
+    this.invalidationRects.needsUpdate = true;
+    this.invalidationCount.value = boxCount;
+    this.hasPendingInvalidation = true;
+    this.hasPendingWork = true;
   }
 
   invalidate() {
@@ -340,7 +452,11 @@ export class ShadowResidency {
     if (!hasNewRequests && !this.hasPendingWork && this.stats.missing === 0)
       return [];
     this.hasPendingWork = false;
-    return [this.resetNode, this.collectNode, this.freeNode, this.allocateNode];
+    const nodes = [this.resetNode];
+    if (this.hasPendingInvalidation) nodes.push(this.invalidateNode);
+    this.hasPendingInvalidation = false;
+    nodes.push(this.collectNode, this.freeNode, this.allocateNode);
+    return nodes;
   }
 
   private async refreshStatsAsync() {
@@ -370,6 +486,7 @@ export class ShadowResidency {
       this.stats.mapped = mapped;
       this.stats.allocated = residency[COUNTER_ALLOCATED];
       this.stats.dynamic = atlasIndirect[5];
+      this.stats.overflow = atlasIndirect[6];
       this.stats.evicted = residency[COUNTER_EVICTED];
       let overflow = 0;
       for (let level = 0; level < SHADOW_LEVEL_COUNT; level++)

@@ -185,7 +185,11 @@ export class ShadowClusterBucket {
       "uvec4",
       residency.capacity * 3,
     );
-    const atlasIndirect = storage(residency.atlasIndirectAttribute, "uint", 8);
+    const atlasIndirect = storage(
+      residency.atlasIndirectAttribute,
+      "uint",
+      residency.atlasIndirectAttribute.count,
+    );
     const indirect = new IndirectStorageBufferAttribute(
       new Uint32Array([SHADOW_CLUSTER_VERTICES, 0, 0, 0]),
       1,

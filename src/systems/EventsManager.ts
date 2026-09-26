@@ -91,6 +91,7 @@ export type ShadowPageStats = {
   mapped: number;
   allocated: number;
   dynamic: number;
+  overflow: number;
   evicted: number;
   missing: number;
   outsideGrid: number;

@@ -1,4 +1,4 @@
-import { Matrix4, type BufferGeometry, type Mesh } from "three";
+import { Box3, Matrix4, type BufferGeometry, type Mesh } from "three";
 import { BatchedMesh, NodeMaterial, type Node } from "three/webgpu";
 
 export type ShadowCasterKind = "fixed" | "moving" | "deformed";
@@ -29,10 +29,12 @@ export type ShadowCasterEntry = {
   gpuInstances?: ShadowGpuInstances;
   revision: number;
   worldMatrix: Matrix4;
+  worldBounds: Box3;
 };
 
 export class ShadowCasterRegistry {
   private entries = new Map<Mesh, ShadowCasterEntry>();
+  private fixedDirtyBounds: Box3[] = [];
   fixedVersion = 0;
   fixedRevision = 0;
   movingVersion = 0;
@@ -43,6 +45,12 @@ export class ShadowCasterRegistry {
 
   get casters() {
     return this.entries.values();
+  }
+
+  takeFixedDirtyBounds() {
+    const bounds = this.fixedDirtyBounds;
+    this.fixedDirtyBounds = [];
+    return bounds;
   }
 
   register(mesh: Mesh, options: ShadowCasterOptions = {}) {
@@ -75,6 +83,7 @@ export class ShadowCasterRegistry {
       throw new Error(`Shadow opacity needs material alphaTest: ${mesh.name}`);
 
     mesh.updateWorldMatrix(true, false);
+    const worldBounds = new Box3().setFromObject(mesh);
     this.entries.set(mesh, {
       mesh,
       kind,
@@ -85,7 +94,9 @@ export class ShadowCasterRegistry {
       gpuInstances,
       revision: 0,
       worldMatrix: mesh.matrixWorld.clone(),
+      worldBounds,
     });
+    if (kind === "fixed") this.fixedDirtyBounds.push(worldBounds.clone());
     this.counts[kind]++;
     this.bumpVersion(kind);
   }
@@ -95,6 +106,7 @@ export class ShadowCasterRegistry {
     if (!entry) throw new Error(`Shadow caster not registered: ${mesh.name}`);
 
     this.entries.delete(mesh);
+    if (entry.kind === "fixed") this.fixedDirtyBounds.push(entry.worldBounds);
     this.counts[entry.kind]--;
     this.bumpVersion(entry.kind);
   }
@@ -107,6 +119,7 @@ export class ShadowCasterRegistry {
       throw new Error(`Invalid shadow depth bias: ${mesh.name}`);
     if (entry.depthBias === depthBias) return;
     entry.depthBias = depthBias;
+    this.fixedDirtyBounds.push(entry.worldBounds.clone());
     this.biasVersion++;
   }
 
@@ -115,6 +128,8 @@ export class ShadowCasterRegistry {
     if (!entry) throw new Error(`Shadow caster not registered: ${mesh.name}`);
     if (entry.castsShadow === castsShadow) return;
     entry.castsShadow = castsShadow;
+    if (entry.kind === "fixed")
+      this.fixedDirtyBounds.push(entry.worldBounds.clone());
     this.bumpVersion(entry.kind);
   }
 
@@ -125,7 +140,12 @@ export class ShadowCasterRegistry {
     if (entry.worldMatrix.equals(mesh.matrixWorld)) return;
     entry.worldMatrix.copy(mesh.matrixWorld);
     entry.revision++;
-    if (entry.kind === "fixed") this.fixedRevision++;
+    if (entry.kind === "fixed") {
+      this.fixedDirtyBounds.push(entry.worldBounds.clone());
+      entry.worldBounds.setFromObject(mesh);
+      this.fixedDirtyBounds.push(entry.worldBounds.clone());
+      this.fixedRevision++;
+    }
     if (entry.kind === "moving") this.movingRevision++;
   }
 

@@ -20,6 +20,7 @@ import {
   StorageBufferAttribute,
   type ComputeNode,
   RenderTarget,
+  type StorageBufferNode,
   type Node,
   type WebGPURenderer,
 } from "three/webgpu";
@@ -27,16 +28,20 @@ import {
   atomicAdd,
   atomicLoad,
   atomicStore,
-  atomicSub,
   bool,
+  cos,
   float,
   Fn,
+  fract,
   If,
   instanceIndex,
   Loop,
   positionGeometry,
+  screenCoordinate,
+  sin,
   storage,
   texture,
+  textureLoad,
   uniform,
   uint,
   uvec2,
@@ -71,12 +76,31 @@ import type { ShadowResidency } from "./ShadowResidency";
 type CasterMesh = Mesh<BufferGeometry, MeshBasicNodeMaterial>;
 
 const DEPTH_BIAS_TEXELS = { fixed: 3, moving: 8 };
+const PENUMBRA_TAP_COUNT = 8;
+const GOLDEN_ANGLE = 2.399963;
+
+type ShadowPageLookup = {
+  coordinate: Node<"uvec2">;
+  slot: Node<"uint">;
+  isResident: Node<"bool">;
+  hasDynamic: Node<"bool">;
+  dynamicSlot: Node<"uint">;
+};
+
+export type ShadowFilter = {
+  softness: Node<"float">;
+  lightSize: Node<"float">;
+  maxSoftness: Node<"float">;
+};
+
+const getInterleavedGradientNoise = (pixel: Node<"vec2">) =>
+  fract(pixel.dot(vec2(0.06711056, 0.00583715)).fract().mul(52.9829189));
 
 export class ShadowRigidAtlas {
   private renderer: WebGPURenderer;
   private residency: ShadowResidency;
   private sunDirection: Node<"vec3">;
-  private softness: Node<"float">;
+  private filter: ShadowFilter;
   private kind: "fixed" | "moving";
   private atlasGridSize: number;
   private renderTarget: RenderTarget;
@@ -97,8 +121,9 @@ export class ShadowRigidAtlas {
     bucket: ShadowDeformedCasterBucket;
     mesh: CasterMesh;
   }[] = [];
+  private dynamicPrepareNode?: ComputeNode;
+  private dynamicTouchNode?: ComputeNode;
   private dynamicJobsNode?: ComputeNode;
-  private dynamicResetNode?: ComputeNode;
   private emptyRangesAttribute = new StorageBufferAttribute(
     new Uint32Array(4),
     4,
@@ -117,13 +142,13 @@ export class ShadowRigidAtlas {
     renderer: WebGPURenderer,
     residency: ShadowResidency,
     sunDirection: Node<"vec3">,
-    softness: Node<"float">,
+    filter: ShadowFilter,
     kind: "fixed" | "moving",
   ) {
     this.renderer = renderer;
     this.residency = residency;
     this.sunDirection = sunDirection;
-    this.softness = softness;
+    this.filter = filter;
     this.kind = kind;
     this.pageJobOffset = kind === "fixed" ? 0 : residency.capacity * 2;
     this.atlasGridSize = Math.ceil(
@@ -205,14 +230,17 @@ export class ShadowRigidAtlas {
       minimumY = Math.min(minimumY, this.bounds.min.y);
       maximumY = Math.max(maximumY, this.bounds.max.y);
     }
+    const hasDepthRangeChange =
+      this.minimumY.value !== Math.floor(minimumY) ||
+      this.maximumY.value !== Math.ceil(maximumY);
     this.minimumY.value = Math.floor(minimumY);
     this.maximumY.value = Math.ceil(maximumY);
     this.bucket?.update(this.sources, sunDirection);
-    if (
-      this.kind === "fixed" &&
-      (hasRosterChange || hasMovement || hasBiasChange)
-    )
-      this.residency.invalidate();
+    if (this.kind !== "fixed") return;
+    const dirtyBounds = registry.takeFixedDirtyBounds();
+    if (hasDepthRangeChange) this.residency.invalidate();
+    else if (dirtyBounds.length > 0)
+      this.residency.invalidateBounds(dirtyBounds, sunDirection);
   }
 
   private rebuildClusterCasters(registry: ShadowCasterRegistry) {
@@ -296,18 +324,21 @@ export class ShadowRigidAtlas {
       }
       this.bucket = bucket;
     }
-    this.dynamicResetNode?.dispose();
+    this.dynamicPrepareNode?.dispose();
+    this.dynamicTouchNode?.dispose();
     this.dynamicJobsNode?.dispose();
-    this.dynamicResetNode = this.createDynamicResetNode(this.bucket);
+    this.dynamicPrepareNode = this.createDynamicPrepareNode(this.bucket);
+    this.dynamicTouchNode = this.createDynamicTouchNode(this.bucket);
     this.dynamicJobsNode = this.createDynamicJobsNode(this.bucket);
   }
 
   takeComputeNodes() {
     const nodes: ComputeNode[] = [];
+    if (this.dynamicPrepareNode) nodes.push(this.dynamicPrepareNode);
     for (const { bucket } of this.deformedCasters)
       nodes.push(...bucket.computeNodes);
-    if (this.dynamicResetNode && this.dynamicJobsNode)
-      nodes.push(this.dynamicResetNode, this.dynamicJobsNode);
+    if (this.dynamicTouchNode && this.dynamicJobsNode)
+      nodes.push(this.dynamicTouchNode, this.dynamicJobsNode);
     for (const { bucket } of this.clusterCasters)
       nodes.push(...bucket.takeComputeNodes());
     return nodes;
@@ -349,65 +380,238 @@ export class ShadowRigidAtlas {
     isSoftReceiver: Node<"bool">,
     dynamicAtlas?: ShadowRigidAtlas,
   ) {
-    const level = getShadowReceiverLevel(viewDistance, isSoftReceiver);
-    const pageSize = getShadowPageSize(level);
-    const texelMeters = getShadowPageSize(
-      getShadowReceiverLevel(viewDistance, bool(false)),
-    ).div(SHADOW_PAGE_TEXELS);
-    const lightPosition = getShadowLightPosition(
-      worldPosition,
-      this.sunDirection,
+    return Fn(() => {
+      const level = getShadowReceiverLevel(viewDistance, isSoftReceiver);
+      const texelMeters = getShadowPageSize(
+        getShadowReceiverLevel(viewDistance, bool(false)),
+      ).div(SHADOW_PAGE_TEXELS);
+      const pagePosition = getShadowLightPosition(
+        worldPosition,
+        this.sunDirection,
+      )
+        .div(getShadowPageSize(level))
+        .toVar();
+      const isInside = this.isReady
+        .greaterThan(0)
+        .and(sceneDepth.lessThan(1))
+        .and(this.sunDirection.y.lessThan(-0.25));
+      const { softness } = this.filter;
+      const visibility = float(1).toVar();
+      If(isInside, () => {
+        const centerPage = this.lookupPage(
+          getShadowPageCoordinate(pagePosition),
+          level,
+        );
+        const visibilitySum = float(0).toVar();
+        const weight = float(0).toVar();
+        If(isSoftReceiver, () => {
+          for (const direction of [
+            vec2(-1, -1),
+            vec2(1, -1),
+            vec2(-1, 1),
+            vec2(1, 1),
+          ]) {
+            const tap = this.sampleTap(
+              pagePosition.add(direction.mul(softness).div(SHADOW_PAGE_TEXELS)),
+              level,
+              centerPage,
+              worldPosition,
+              texelMeters,
+              float(0),
+              dynamicAtlas,
+            );
+            visibilitySum.addAssign(tap.visibility);
+            weight.addAssign(tap.weight);
+          }
+        }).Else(() => {
+          const radius = this.computePenumbraTexels(
+            pagePosition,
+            centerPage,
+            worldPosition,
+            texelMeters,
+            dynamicAtlas,
+          );
+          const rotation = getInterleavedGradientNoise(screenCoordinate.xy).mul(
+            Math.PI * 2,
+          );
+          for (let tapIndex = 0; tapIndex < PENUMBRA_TAP_COUNT; tapIndex++) {
+            const angle = rotation.add(tapIndex * GOLDEN_ANGLE);
+            const offset = vec2(cos(angle), sin(angle)).mul(
+              radius.mul(Math.sqrt((tapIndex + 0.5) / PENUMBRA_TAP_COUNT)),
+            );
+            const tap = this.sampleTap(
+              pagePosition.add(offset.div(SHADOW_PAGE_TEXELS)),
+              level,
+              centerPage,
+              worldPosition,
+              texelMeters,
+              radius,
+              dynamicAtlas,
+            );
+            visibilitySum.addAssign(tap.visibility);
+            weight.addAssign(tap.weight);
+          }
+        });
+        If(weight.greaterThan(0), () => {
+          visibility.assign(visibilitySum.div(weight));
+        });
+      });
+      return visibility;
+    })();
+  }
+
+  private lookupPage(
+    pageCoordinate: Node<"uvec2">,
+    level: Node<"uint">,
+  ): ShadowPageLookup {
+    const page = this.residency.resolvePage(
+      getShadowPageKey(level, pageCoordinate),
+      getShadowPageTag(pageCoordinate),
     );
-    const isInside = this.isReady
-      .greaterThan(0)
-      .and(sceneDepth.lessThan(1))
-      .and(this.sunDirection.y.lessThan(-0.25));
+    return {
+      coordinate: pageCoordinate.toVar(),
+      slot: page.slot.toVar(),
+      isResident: page.isResident.toVar(),
+      hasDynamic: page.hasDynamic.toVar(),
+      dynamicSlot: page.dynamicSlot.toVar(),
+    };
+  }
+
+  private sampleTap(
+    pagePosition: Node<"vec2">,
+    level: Node<"uint">,
+    centerPage: ShadowPageLookup,
+    worldPosition: Node<"vec3">,
+    texelMeters: Node<"float">,
+    radius: Node<"float">,
+    dynamicAtlas?: ShadowRigidAtlas,
+  ) {
     const halfTexel = 0.5 / SHADOW_PAGE_TEXELS;
-    let weight: Node<"float"> = float(0);
-    let visibility: Node<"float"> = float(0);
-    for (const texelOffset of [
-      vec2(this.softness.negate(), this.softness.negate()),
-      vec2(this.softness, this.softness.negate()),
-      vec2(this.softness.negate(), this.softness),
-      vec2(this.softness, this.softness),
-    ]) {
-      const pagePosition = lightPosition
-        .div(pageSize)
-        .add(texelOffset.div(SHADOW_PAGE_TEXELS));
-      const pageCoordinate = getShadowPageCoordinate(pagePosition);
-      const { slot, isResident, hasDynamic, dynamicSlot } =
-        this.residency.resolvePage(
+    const pageCoordinate = getShadowPageCoordinate(pagePosition).toVar();
+    const slot = centerPage.slot.toVar();
+    const isResident = centerPage.isResident.toVar();
+    const hasDynamic = centerPage.hasDynamic.toVar();
+    const dynamicSlot = centerPage.dynamicSlot.toVar();
+    If(
+      pageCoordinate.x
+        .notEqual(centerPage.coordinate.x)
+        .or(pageCoordinate.y.notEqual(centerPage.coordinate.y)),
+      () => {
+        const page = this.residency.resolvePage(
           getShadowPageKey(level, pageCoordinate),
           getShadowPageTag(pageCoordinate),
         );
-      const pageUv = pagePosition.fract().clamp(halfTexel, 1 - halfTexel);
-      let tapVisibility = this.sampleDepth(
-        slot,
+        slot.assign(page.slot);
+        isResident.assign(page.isResident);
+        hasDynamic.assign(page.hasDynamic);
+        dynamicSlot.assign(page.dynamicSlot);
+      },
+    );
+    const pageUv = pagePosition.fract().clamp(halfTexel, 1 - halfTexel);
+    const visibility = this.sampleDepth(
+      slot,
+      pageUv,
+      worldPosition,
+      texelMeters,
+      radius,
+    ).toVar();
+    if (dynamicAtlas)
+      If(hasDynamic, () => {
+        visibility.mulAssign(
+          dynamicAtlas.sampleDepth(
+            dynamicSlot,
+            pageUv,
+            worldPosition,
+            texelMeters,
+            radius,
+          ),
+        );
+      });
+    const weight = (this.kind === "fixed" ? isResident : hasDynamic).select(
+      float(1),
+      float(0),
+    );
+    return { visibility: visibility.mul(weight), weight };
+  }
+
+  private computePenumbraTexels(
+    pagePosition: Node<"vec2">,
+    centerPage: ShadowPageLookup,
+    worldPosition: Node<"vec3">,
+    texelMeters: Node<"float">,
+    dynamicAtlas?: ShadowRigidAtlas,
+  ) {
+    const pageUv = pagePosition.fract();
+    const heightSum = float(0).toVar();
+    const count = float(0).toVar();
+    If(centerPage.isResident, () => {
+      const blockers = this.searchBlockers(
+        centerPage.slot,
         pageUv,
         worldPosition,
         texelMeters,
       );
-      if (dynamicAtlas)
-        tapVisibility = tapVisibility.mul(
-          hasDynamic.select(
-            dynamicAtlas.sampleDepth(
-              dynamicSlot,
-              pageUv,
-              worldPosition,
-              texelMeters,
-            ),
-            float(1),
-          ),
+      heightSum.addAssign(blockers.heightSum);
+      count.addAssign(blockers.count);
+    });
+    if (dynamicAtlas)
+      If(centerPage.hasDynamic, () => {
+        const blockers = dynamicAtlas.searchBlockers(
+          centerPage.dynamicSlot,
+          pageUv,
+          worldPosition,
+          texelMeters,
         );
-      const tapWeight = isInside
-        .and(this.kind === "fixed" ? isResident : hasDynamic)
-        .select(float(1), float(0));
-      weight = weight.add(tapWeight);
-      visibility = visibility.add(tapVisibility.mul(tapWeight));
+        heightSum.addAssign(blockers.heightSum);
+        count.addAssign(blockers.count);
+      });
+    const rayDistance = heightSum
+      .div(count.max(1))
+      .div(this.sunDirection.y.abs().max(0.25));
+    return rayDistance
+      .mul(this.filter.lightSize)
+      .div(texelMeters)
+      .clamp(this.filter.softness, this.filter.maxSoftness)
+      .toVar();
+  }
+
+  private searchBlockers(
+    slot: Node<"uint">,
+    pageUv: Node<"vec2">,
+    worldPosition: Node<"vec3">,
+    texelMeters: Node<"float">,
+  ) {
+    const tile = uvec2(
+      slot.mod(this.atlasGridSize),
+      slot.div(this.atlasGridSize),
+    ).mul(SHADOW_PAGE_TEXELS);
+    const minimumHeight = texelMeters.mul(DEPTH_BIAS_TEXELS[this.kind] * 2);
+    let heightSum: Node<"float"> = float(0);
+    let count: Node<"float"> = float(0);
+    for (const direction of [
+      vec2(0, 0),
+      vec2(-1, -1),
+      vec2(1, -1),
+      vec2(-1, 1),
+      vec2(1, 1),
+    ]) {
+      const texel = uvec2(
+        pageUv
+          .mul(SHADOW_PAGE_TEXELS)
+          .add(direction.mul(this.filter.maxSoftness))
+          .clamp(0, SHADOW_PAGE_TEXELS - 1),
+      );
+      const depth = textureLoad(this.depthTextureNode, tile.add(texel)).level(
+        uint(0),
+      ).r;
+      const blockerHeight = this.maximumY
+        .sub(depth.mul(this.maximumY.sub(this.minimumY)))
+        .sub(worldPosition.y);
+      const isBlocker = blockerHeight.greaterThan(minimumHeight);
+      heightSum = heightSum.add(isBlocker.select(blockerHeight, float(0)));
+      count = count.add(isBlocker.select(float(1), float(0)));
     }
-    return weight
-      .greaterThan(0)
-      .select(visibility.div(weight.max(1)), float(1));
+    return { heightSum, count };
   }
 
   private sampleDepth(
@@ -415,10 +619,11 @@ export class ShadowRigidAtlas {
     pageUv: Node<"vec2">,
     worldPosition: Node<"vec3">,
     texelMeters: Node<"float">,
+    radius: Node<"float">,
   ) {
     const receiverDepth = this.maximumY
       .sub(worldPosition.y)
-      .sub(texelMeters.mul(DEPTH_BIAS_TEXELS[this.kind]))
+      .sub(texelMeters.mul(radius.add(DEPTH_BIAS_TEXELS[this.kind])))
       .div(this.maximumY.sub(this.minimumY));
     const isInRange = worldPosition.y
       .greaterThanEqual(this.minimumY)
@@ -431,11 +636,17 @@ export class ShadowRigidAtlas {
     );
   }
 
-  private createDynamicResetNode(bucket?: ShadowRigidCasterBucket) {
+  private createDynamicPrepareNode(bucket?: ShadowRigidCasterBucket) {
+    const capacity = this.residency.capacity;
+    const counters = storage(
+      this.residency.counterAttribute,
+      "uint",
+      this.residency.counterAttribute.count,
+    ).toAtomic();
     const indirect = storage(
       this.residency.atlasIndirectAttribute,
       "uint",
-      8,
+      this.residency.atlasIndirectAttribute.count,
     ).toAtomic();
     const groupIndirect = bucket
       ? storage(
@@ -445,10 +656,64 @@ export class ShadowRigidAtlas {
         ).toAtomic()
       : undefined;
     return Fn(() => {
-      atomicStore(indirect.element(5), 0);
-      for (let group = 0; group < (bucket?.groupCount ?? 0); group++)
-        if (groupIndirect) atomicStore(groupIndirect.element(group * 4 + 1), 0);
-    })().compute(1, [1]);
+      If(instanceIndex.equal(0), () => {
+        atomicStore(indirect.element(5), 0);
+        atomicStore(indirect.element(6), 0);
+        for (let group = 0; group < (bucket?.groupCount ?? 0); group++)
+          if (groupIndirect)
+            atomicStore(groupIndirect.element(group * 4 + 1), 0);
+        for (let index = 0; index < SHADOW_LEVEL_COUNT * 2; index++)
+          atomicStore(
+            indirect.element(this.residency.dynamicLevelCounterOffset + index),
+            0,
+          );
+      });
+      const activeCount = atomicLoad(
+        counters.element(this.residency.activeCountIndex),
+      );
+      If(instanceIndex.lessThan(activeCount), () => {
+        const pageKey = this.pageJobsNode.element(
+          instanceIndex.add(capacity),
+        ).x;
+        const page = this.residency.pageTableNode.element(pageKey);
+        page.assign(uvec4(page.x, 0, page.z, this.residency.frame));
+      });
+    })().compute(capacity, [64]);
+  }
+
+  private createDynamicTouchNode(bucket?: ShadowRigidCasterBucket) {
+    const capacity = this.residency.capacity;
+    const rangesAttribute =
+      bucket?.pageRangesAttribute ?? this.emptyRangesAttribute;
+    const ranges = storage(rangesAttribute, "uvec4", rangesAttribute.count);
+    const counters = storage(
+      this.residency.counterAttribute,
+      "uint",
+      this.residency.counterAttribute.count,
+    ).toAtomic();
+    const indirect = storage(
+      this.residency.atlasIndirectAttribute,
+      "uint",
+      this.residency.atlasIndirectAttribute.count,
+    ).toAtomic();
+    const casterCount = bucket?.casterCount ?? 0;
+    return Fn(() => {
+      const activeCount = atomicLoad(
+        counters.element(this.residency.activeCountIndex),
+      );
+      If(instanceIndex.lessThan(activeCount), () => {
+        const job = this.pageJobsNode.element(instanceIndex.add(capacity));
+        const level = job.x.div(SHADOW_PAGES_PER_LEVEL);
+        If(this.isPageTouched(job, level, ranges, casterCount), () => {
+          atomicAdd(
+            indirect.element(
+              level.add(this.residency.dynamicLevelCounterOffset),
+            ),
+            1,
+          );
+        });
+      });
+    })().compute(capacity, [64]);
   }
 
   private createDynamicJobsNode(bucket?: ShadowRigidCasterBucket) {
@@ -464,7 +729,7 @@ export class ShadowRigidAtlas {
     const indirect = storage(
       this.residency.atlasIndirectAttribute,
       "uint",
-      8,
+      this.residency.atlasIndirectAttribute.count,
     ).toAtomic();
     const casterCount = bucket?.casterCount ?? 0;
     const groups = bucket
@@ -490,71 +755,107 @@ export class ShadowRigidAtlas {
       );
       If(instanceIndex.lessThan(activeCount), () => {
         const job = this.pageJobsNode.element(instanceIndex.add(capacity));
-        const level = job.x.div(SHADOW_PAGES_PER_LEVEL);
-        const isTouched = this.residency.pageTableNode
-          .element(job.x)
-          .y.equal(this.residency.frame)
-          .select(uint(1), uint(0))
-          .toVar();
-        Loop(
-          { start: 0, end: casterCount, type: "uint" },
-          ({ i: casterIndex }) => {
-            isTouched.assign(
-              this.isCasterOnPage(
-                ranges.element(casterIndex.mul(SHADOW_LEVEL_COUNT).add(level)),
-                job,
-              ).select(uint(1), isTouched),
-            );
-          },
-        );
-        If(isTouched.greaterThan(0), () => {
-          const dynamicSlot = atomicAdd(indirect.element(5), 1).toVar();
-          If(dynamicSlot.lessThan(this.residency.dynamicCapacity), () => {
-            this.pageJobsNode
-              .element(dynamicSlot.add(capacity * 2))
-              .assign(uvec4(job.x, dynamicSlot, job.z, job.w));
-            this.residency.pageTableNode
-              .element(job.x)
-              .assign(
-                uvec4(job.y.add(1), this.residency.frame, dynamicSlot, 0),
+        const level = job.x.div(SHADOW_PAGES_PER_LEVEL).toVar();
+        If(this.isPageTouched(job, level, ranges, casterCount), () => {
+          const counterOffset = this.residency.dynamicLevelCounterOffset;
+          const firstSlot = uint(0).toVar();
+          Loop(
+            { start: uint(0), end: level, type: "uint" },
+            ({ i: finerLevel }) => {
+              firstSlot.addAssign(
+                atomicLoad(indirect.element(finerLevel.add(counterOffset))),
               );
-            if (groups && groupIndirect && workItems)
-              Loop(
-                { start: 0, end: casterCount, type: "uint" },
-                ({ i: casterLoopIndex }) => {
-                  const casterIndex = casterLoopIndex.toVar();
-                  If(
-                    this.isCasterOnPage(
-                      ranges.element(
-                        casterIndex.mul(SHADOW_LEVEL_COUNT).add(level),
+            },
+          );
+          const levelCount = atomicLoad(
+            indirect.element(level.add(counterOffset)),
+          );
+          If(
+            firstSlot
+              .add(levelCount)
+              .lessThanEqual(this.residency.dynamicCapacity),
+            () => {
+              const dynamicSlot = atomicAdd(
+                indirect.element(level.add(counterOffset + SHADOW_LEVEL_COUNT)),
+                1,
+              )
+                .add(firstSlot)
+                .toVar();
+              atomicAdd(indirect.element(5), 1);
+              this.pageJobsNode
+                .element(dynamicSlot.add(capacity * 2))
+                .assign(uvec4(job.x, dynamicSlot, job.z, job.w));
+              this.residency.pageTableNode
+                .element(job.x)
+                .assign(
+                  uvec4(
+                    job.y.add(1),
+                    this.residency.frame,
+                    dynamicSlot,
+                    this.residency.frame,
+                  ),
+                );
+              if (groups && groupIndirect && workItems)
+                Loop(
+                  { start: 0, end: casterCount, type: "uint" },
+                  ({ i: casterLoopIndex }) => {
+                    const casterIndex = casterLoopIndex.toVar();
+                    If(
+                      this.isCasterOnPage(
+                        ranges.element(
+                          casterIndex.mul(SHADOW_LEVEL_COUNT).add(level),
+                        ),
+                        job,
                       ),
-                      job,
-                    ),
-                    () => {
-                      const group = groups.element(casterIndex);
-                      const itemIndex = atomicAdd(
-                        groupIndirect.element(group.mul(4).add(1)),
-                        1,
-                      );
-                      const firstItem = atomicLoad(
-                        groupIndirect.element(group.mul(4).add(3)),
-                      );
-                      workItems
-                        .element(firstItem.add(itemIndex))
-                        .assign(uvec2(dynamicSlot, casterIndex));
-                    },
-                  );
-                },
-              );
-          }).Else(() => {
-            atomicSub(indirect.element(5), 1);
+                      () => {
+                        const group = groups.element(casterIndex);
+                        const itemIndex = atomicAdd(
+                          groupIndirect.element(group.mul(4).add(1)),
+                          1,
+                        );
+                        const firstItem = atomicLoad(
+                          groupIndirect.element(group.mul(4).add(3)),
+                        );
+                        workItems
+                          .element(firstItem.add(itemIndex))
+                          .assign(uvec2(dynamicSlot, casterIndex));
+                      },
+                    );
+                  },
+                );
+            },
+          ).Else(() => {
+            atomicAdd(indirect.element(6), 1);
             this.residency.pageTableNode
               .element(job.x)
-              .assign(uvec4(job.y.add(1), 0, 0, 0));
+              .assign(uvec4(job.y.add(1), 0, 0, this.residency.frame));
           });
         });
       });
     })().compute(capacity, [64]);
+  }
+
+  private isPageTouched(
+    job: Node<"uvec4">,
+    level: Node<"uint">,
+    ranges: StorageBufferNode<"uvec4">,
+    casterCount: number,
+  ) {
+    const isTouched = this.residency.pageTableNode
+      .element(job.x)
+      .y.equal(this.residency.frame)
+      .toVar();
+    Loop({ start: 0, end: casterCount, type: "uint" }, ({ i: casterIndex }) => {
+      isTouched.assign(
+        isTouched.or(
+          this.isCasterOnPage(
+            ranges.element(casterIndex.mul(SHADOW_LEVEL_COUNT).add(level)),
+            job,
+          ),
+        ),
+      );
+    });
+    return isTouched;
   }
 
   private isCasterOnPage(range: Node<"uvec4">, job: Node<"uvec4">) {

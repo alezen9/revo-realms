@@ -112,7 +112,10 @@ export class ShadowDeformedCasterBucket {
                   pageKey,
                   getShadowPageTag(pageCoordinate),
                 );
-                If(isResident, () => {
+                const isActive = residency.pageTableNode
+                  .element(pageKey)
+                  .w.equal(residency.frame);
+                If(isResident.and(isActive), () => {
                   const itemIndex = atomicAdd(indirectNode.element(1), 1);
                   If(itemIndex.lessThan(MAX_WORK_ITEMS), () => {
                     workItems
@@ -120,7 +123,9 @@ export class ShadowDeformedCasterBucket {
                       .assign(uvec4(pageKey, instanceIndex, pageCoordinate));
                     residency.pageTableNode
                       .element(pageKey)
-                      .assign(uvec4(slot.add(1), residency.frame, 0, 0));
+                      .assign(
+                        uvec4(slot.add(1), residency.frame, 0, residency.frame),
+                      );
                   }).Else(() => {
                     atomicSub(indirectNode.element(1), 1);
                   });

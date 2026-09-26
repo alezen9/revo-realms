@@ -72,7 +72,11 @@ export class PostprocessingManager extends RenderPipeline {
   private uSaturation = uniform(1);
   private uSunVisibility = uniform(1);
   private uShadowIntensity = uniform(0.7);
-  private uShadowSoftness = uniform(0.5);
+  private shadowFilter = {
+    softness: uniform(0.5),
+    lightSize: uniform(0.02),
+    maxSoftness: uniform(6),
+  };
   private uProjectionMatrixInverse = uniform(new Matrix4());
   private uCameraWorldMatrix = uniform(new Matrix4());
   private uCameraWorldPosition = uniform(this.cameraWorldPosition);
@@ -149,14 +153,14 @@ export class PostprocessingManager extends RenderPipeline {
       renderer,
       this.shadowResidency,
       lightingManager.uSunDir,
-      this.uShadowSoftness,
+      this.shadowFilter,
       "fixed",
     );
     this.shadowMovingAtlas = new ShadowRigidAtlas(
       renderer,
       this.shadowResidency,
       lightingManager.uSunDir,
-      this.uShadowSoftness,
+      this.shadowFilter,
       "moving",
     );
     monitoringManager.setShadowPageStats(this.shadowResidency.stats);
@@ -178,6 +182,7 @@ export class PostprocessingManager extends RenderPipeline {
       ),
       receivers: this.makeReceiverOutput(),
       dynamicPages: this.makeDynamicPageOutput(),
+      pageHeat: this.makePageHeatOutput(),
     };
     this.addShadowBindings();
     this.debugFolder
@@ -194,6 +199,7 @@ export class PostprocessingManager extends RenderPipeline {
           Shadow: "shadow",
           Receivers: "receivers",
           "Dynamic pages": "dynamicPages",
+          "Page heat": "pageHeat",
         },
       })
       .on("change", this.selectDebugView);
@@ -232,11 +238,23 @@ export class PostprocessingManager extends RenderPipeline {
       max: 1,
       step: 0.05,
     });
-    this.debugFolder.addBinding(this.uShadowSoftness, "value", {
+    this.debugFolder.addBinding(this.shadowFilter.softness, "value", {
       label: "Shadow softness",
       min: 0,
       max: 3,
       step: 0.05,
+    });
+    this.debugFolder.addBinding(this.shadowFilter.lightSize, "value", {
+      label: "Shadow light size",
+      min: 0,
+      max: 0.1,
+      step: 0.001,
+    });
+    this.debugFolder.addBinding(this.shadowFilter.maxSoftness, "value", {
+      label: "Shadow max softness",
+      min: 0,
+      max: 16,
+      step: 0.5,
     });
     this.debugFolder.addBinding(shadowSoftReceiverLevelBias, "value", {
       label: "Soft receiver blur level",
@@ -378,6 +396,39 @@ export class PostprocessingManager extends RenderPipeline {
     return renderOutput(vec4(color, 1), NoToneMapping);
   }
 
+  private makePageHeatOutput() {
+    const { depth, pageKey, pageTag } = this.getDebugPage();
+    const { slot, isResident } = this.shadowResidency.resolvePage(
+      pageKey,
+      pageTag,
+    );
+    const age = this.shadowResidency.frame.sub(
+      this.shadowResidency.slotRenderFramesNode.element(slot),
+    );
+    const heatColor = age
+      .lessThan(2)
+      .select(
+        vec3(1, 0.1, 0.05),
+        age
+          .lessThan(30)
+          .select(
+            vec3(1, 0.5, 0.05),
+            age
+              .lessThan(120)
+              .select(
+                vec3(0.95, 0.85, 0.1),
+                age
+                  .lessThan(600)
+                  .select(vec3(0.2, 0.6, 0.3), vec3(0.12, 0.16, 0.3)),
+              ),
+          ),
+      );
+    const color = depth
+      .greaterThanEqual(1)
+      .select(vec3(0), isResident.select(heatColor, vec3(1, 0, 1)));
+    return renderOutput(vec4(color, 1), NoToneMapping);
+  }
+
   private computeShadowVisibility(
     uv: Node<"vec2">,
     atlas: ShadowRigidAtlas,
@@ -488,8 +539,7 @@ export class PostprocessingManager extends RenderPipeline {
         shadowCasterRegistry.fixedVersion +
           shadowCasterRegistry.fixedRevision +
           shadowCasterRegistry.movingVersion +
-          shadowCasterRegistry.deformedVersion +
-          shadowCasterRegistry.movingRevision,
+          shadowCasterRegistry.deformedVersion,
       );
       const { min, max } = assetManager.resources.heightmap.userData;
       if (typeof min !== "number" || typeof max !== "number")
