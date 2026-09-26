@@ -29,7 +29,7 @@ import {
   SHADOW_PAGE_TEXELS,
   getShadowDynamicLevel,
   getShadowReceiverLevel,
-  getShadowLightPosition,
+  getShadowLightBasis,
   getShadowPageCoordinate,
   getShadowPageKey,
   getShadowPageSize,
@@ -103,107 +103,56 @@ export class ShadowPageRequests {
 
     this.requestNode = Fn(() => {
       const tile = uvec2(globalId.xy);
-      const minimumLevel = uint(SHADOW_LEVEL_COUNT).toVar();
-      const maximumLevel = uint(0).toVar();
+      const { lightX, lightY } = getShadowLightBasis(sunDirection);
+      const lightXAxis = lightX.toVar();
+      const lightYAxis = lightY.toVar();
+      const levelBounds = Array.from({ length: SHADOW_LEVEL_COUNT }, () =>
+        vec4(
+          INVALID_MINIMUM,
+          INVALID_MINIMUM,
+          INVALID_MAXIMUM,
+          INVALID_MAXIMUM,
+        ).toVar(),
+      );
       Loop({ start: 0, end: TILE_SIZE, type: "uint" }, ({ i: localYIndex }) => {
         const localY = localYIndex.toVar();
         Loop(
           { start: 0, end: TILE_SIZE, type: "uint" },
           ({ i: localXIndex }) => {
             const localX = localXIndex.toVar();
-            const receiver = this.loadReceiver(tile, localX, localY);
-            If(receiver.isValid, () => {
-              minimumLevel.assign(
-                receiver.level
-                  .lessThan(minimumLevel)
-                  .select(receiver.level, minimumLevel),
+            const receiver = this.loadReceiver(
+              tile,
+              localX,
+              localY,
+              lightXAxis,
+              lightYAxis,
+            );
+            const level = receiver.level.toVar();
+            const dynamicLevel = getShadowDynamicLevel(level).toVar();
+            const lightPosition = receiver.lightPosition.toVar();
+            const expandedBounds = vec4(lightPosition, lightPosition);
+            levelBounds.forEach((bounds, levelIndex) => {
+              const isHit = receiver.isValid.and(
+                level.equal(levelIndex).or(dynamicLevel.equal(levelIndex)),
               );
-              maximumLevel.assign(
-                receiver.level
-                  .greaterThan(maximumLevel)
-                  .select(receiver.level, maximumLevel),
+              bounds.assign(
+                isHit.select(
+                  vec4(
+                    bounds.xy.min(expandedBounds.xy),
+                    bounds.zw.max(expandedBounds.zw),
+                  ),
+                  bounds,
+                ),
               );
             });
           },
         );
       });
-      Loop(
-        {
-          start: minimumLevel,
-          end: getShadowDynamicLevel(maximumLevel).add(1),
-          type: "uint",
-        },
-        ({ i: levelIndex }) => {
-          const level = levelIndex.toVar();
-          const minimum = vec2(INVALID_MINIMUM).toVar();
-          const maximum = vec2(INVALID_MAXIMUM).toVar();
-          Loop(
-            { start: 0, end: TILE_SIZE, type: "uint" },
-            ({ i: localYIndex }) => {
-              const localY = localYIndex.toVar();
-              Loop(
-                { start: 0, end: TILE_SIZE, type: "uint" },
-                ({ i: localXIndex }) => {
-                  const localX = localXIndex.toVar();
-                  const receiver = this.loadReceiver(tile, localX, localY);
-                  const isLevelReceiver = receiver.level
-                    .equal(level)
-                    .or(getShadowDynamicLevel(receiver.level).equal(level));
-                  If(receiver.isValid.and(isLevelReceiver), () => {
-                    minimum.assign(minimum.min(receiver.lightPosition));
-                    maximum.assign(maximum.max(receiver.lightPosition));
-                  });
-                },
-              );
-            },
-          );
-          If(minimum.x.lessThan(INVALID_MINIMUM), () => {
-            const pageSize = getShadowPageSize(level);
-            const filterMargin = pageSize.mul(
-              FILTER_TEXELS / SHADOW_PAGE_TEXELS,
-            );
-            const firstPage = getShadowPageCoordinate(
-              minimum.sub(filterMargin).div(pageSize),
-            );
-            const lastPage = getShadowPageCoordinate(
-              maximum.add(filterMargin).div(pageSize),
-            );
-            const windowCenter = getShadowWindowCenter(
-              cameraPosition,
-              sunDirection,
-              level,
-            );
-            const pageWidth = lastPage.x.sub(firstPage.x).add(1);
-            const pageHeight = lastPage.y.sub(firstPage.y).add(1);
-            Loop(
-              {
-                start: 0,
-                end: pageWidth.mul(pageHeight),
-                type: "uint",
-              },
-              ({ i: pageLoopIndex }) => {
-                const pageIndex = pageLoopIndex.toVar();
-                const pageCoordinate = firstPage.add(
-                  uvec2(pageIndex.mod(pageWidth), pageIndex.div(pageWidth)),
-                );
-                If(isShadowPageInWindow(pageCoordinate, windowCenter), () => {
-                  const key = getShadowPageKey(level, pageCoordinate);
-                  const bit = uint(1).shiftLeft(key.mod(32));
-                  const previous = atomicOr(
-                    this.atomicRequestBits.element(key.div(32)),
-                    bit,
-                  );
-                  If(previous.bitAnd(bit).equal(0), () => {
-                    atomicAdd(this.atomicCounters.element(0), 1);
-                  });
-                }).Else(() => {
-                  atomicAdd(this.atomicCounters.element(1), 1);
-                });
-              },
-            );
-          });
-        },
-      );
+      levelBounds.forEach((bounds, levelIndex) => {
+        If(bounds.x.lessThan(INVALID_MINIMUM), () => {
+          this.requestPages(uint(levelIndex), bounds, cameraPosition);
+        });
+      });
     })().computeKernel([TILE_SIZE, TILE_SIZE]);
 
     this.resetNode.name = "V2 page request reset";
@@ -218,10 +167,56 @@ export class ShadowPageRequests {
     return this.counters;
   }
 
+  private requestPages(
+    level: Node<"uint">,
+    bounds: Node<"vec4">,
+    cameraPosition: Node<"vec3">,
+  ) {
+    const pageSize = getShadowPageSize(level);
+    const filterMargin = pageSize.mul(FILTER_TEXELS / SHADOW_PAGE_TEXELS);
+    const firstPage = getShadowPageCoordinate(
+      bounds.xy.sub(filterMargin).div(pageSize),
+    );
+    const lastPage = getShadowPageCoordinate(
+      bounds.zw.add(filterMargin).div(pageSize),
+    );
+    const windowCenter = getShadowWindowCenter(
+      cameraPosition,
+      this.sunDirection,
+      level,
+    );
+    const pageWidth = lastPage.x.sub(firstPage.x).add(1);
+    const pageHeight = lastPage.y.sub(firstPage.y).add(1);
+    Loop(
+      { start: 0, end: pageWidth.mul(pageHeight), type: "uint" },
+      ({ i: pageLoopIndex }) => {
+        const pageIndex = pageLoopIndex.toVar();
+        const pageCoordinate = firstPage.add(
+          uvec2(pageIndex.mod(pageWidth), pageIndex.div(pageWidth)),
+        );
+        If(isShadowPageInWindow(pageCoordinate, windowCenter), () => {
+          const key = getShadowPageKey(level, pageCoordinate);
+          const bit = uint(1).shiftLeft(key.mod(32));
+          const previous = atomicOr(
+            this.atomicRequestBits.element(key.div(32)),
+            bit,
+          );
+          If(previous.bitAnd(bit).equal(0), () => {
+            atomicAdd(this.atomicCounters.element(0), 1);
+          });
+        }).Else(() => {
+          atomicAdd(this.atomicCounters.element(1), 1);
+        });
+      },
+    );
+  }
+
   private loadReceiver(
     tile: Node<"uvec2">,
     localX: Node<"uint">,
     localY: Node<"uint">,
+    lightX: Node<"vec3">,
+    lightY: Node<"vec3">,
   ) {
     const pixel = tile.mul(TILE_SIZE).add(uvec2(localX, localY));
     const isInside = pixel.x
@@ -243,7 +238,7 @@ export class ShadowPageRequests {
           .level(uint(0))
           .r.greaterThan(0.5),
       ),
-      lightPosition: getShadowLightPosition(worldPosition, this.sunDirection),
+      lightPosition: vec2(worldPosition.dot(lightX), worldPosition.dot(lightY)),
     };
   }
 

@@ -18,10 +18,7 @@ export const shadowResolutionBias = uniform(2);
 export const shadowDynamicLevel = uniform(3, "uint");
 export const shadowSoftReceiverLevelBias = uniform(2);
 
-export const getShadowLightPosition = (
-  worldPosition: Node<"vec3">,
-  sunDirection: Node<"vec3">,
-) => {
+export const getShadowLightBasis = (sunDirection: Node<"vec3">) => {
   const horizontalLength = sunDirection.xz.length();
   const lightX = horizontalLength
     .lessThan(0.0001)
@@ -32,6 +29,14 @@ export const getShadowLightPosition = (
       ),
     );
   const lightY = sunDirection.cross(lightX).normalize();
+  return { lightX, lightY };
+};
+
+export const getShadowLightPosition = (
+  worldPosition: Node<"vec3">,
+  sunDirection: Node<"vec3">,
+) => {
+  const { lightX, lightY } = getShadowLightBasis(sunDirection);
   return vec2(worldPosition.dot(lightX), worldPosition.dot(lightY));
 };
 
