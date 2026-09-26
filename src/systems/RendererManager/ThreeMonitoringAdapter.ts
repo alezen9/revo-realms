@@ -6,6 +6,8 @@ import {
   type WebGPURenderer,
 } from "three/webgpu";
 
+const ARRAY_COMPUTE_ENCODER_LABEL = "computeGroup_undefined";
+
 const getEncoderLabel = (uid: string, prefix: string) => {
   const segments = uid.split(":");
   const contextId = segments[2];
@@ -42,7 +44,9 @@ class PassLabelInspector extends InspectorBase {
   }
 
   beginCompute(uid: string, computeNodes: ComputeNode | ComputeNode[]) {
-    const encoderLabel = getEncoderLabel(uid, "computeGroup");
+    const encoderLabel = Array.isArray(computeNodes)
+      ? ARRAY_COMPUTE_ENCODER_LABEL
+      : getEncoderLabel(uid, "computeGroup");
     if (!encoderLabel) return;
     this.passLabels.set(encoderLabel, getComputeLabel(computeNodes));
   }
