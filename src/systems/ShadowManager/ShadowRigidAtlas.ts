@@ -30,6 +30,8 @@ import {
   atomicStore,
   bool,
   cos,
+  dFdx,
+  dFdy,
   float,
   Fn,
   fract,
@@ -77,7 +79,14 @@ type CasterMesh = Mesh<BufferGeometry, MeshBasicNodeMaterial>;
 
 const DEPTH_BIAS_TEXELS = { fixed: 3, moving: 8 };
 const PENUMBRA_TAP_COUNT = 8;
+const MAX_RECEIVER_SLOPE = 4;
 const GOLDEN_ANGLE = 2.399963;
+
+type ShadowReceiver = {
+  worldY: Node<"float">;
+  texelMeters: Node<"float">;
+  heightPerPage: Node<"vec2">;
+};
 
 type ShadowPageLookup = {
   coordinate: Node<"uvec2">;
@@ -91,6 +100,30 @@ export type ShadowFilter = {
   softness: Node<"float">;
   lightSize: Node<"float">;
   maxSoftness: Node<"float">;
+};
+
+const getReceiverSlope = (
+  lightPosition: Node<"vec2">,
+  worldHeight: Node<"float">,
+) => {
+  const lightDx = dFdx(lightPosition);
+  const lightDy = dFdy(lightPosition);
+  const heightDx = dFdx(worldHeight);
+  const heightDy = dFdy(worldHeight);
+  const determinant = lightDx.x.mul(lightDy.y).sub(lightDx.y.mul(lightDy.x));
+  const slope = vec2(
+    heightDx.mul(lightDy.y).sub(heightDy.mul(lightDx.y)),
+    lightDx.x.mul(heightDy).sub(lightDy.x.mul(heightDx)),
+  ).div(determinant.abs().max(1e-12).mul(determinant.sign()));
+  return determinant
+    .abs()
+    .greaterThan(1e-12)
+    .select(
+      slope.mul(
+        float(MAX_RECEIVER_SLOPE).div(slope.length().max(MAX_RECEIVER_SLOPE)),
+      ),
+      vec2(0),
+    );
 };
 
 const getInterleavedGradientNoise = (pixel: Node<"vec2">) =>
@@ -369,8 +402,13 @@ export class ShadowRigidAtlas {
   }
 
   sampleDebugDepth(slot: Node<"uint">, pageUv: Node<"vec2">) {
-    const atlasUv = this.computeAtlasUv(slot, pageUv);
-    return texture(this.renderTarget.texture).sample(atlasUv).r;
+    const texel = uvec2(
+      slot.mod(this.atlasGridSize),
+      slot.div(this.atlasGridSize),
+    )
+      .mul(SHADOW_PAGE_TEXELS)
+      .add(uvec2(pageUv.mul(SHADOW_PAGE_TEXELS).floor()));
+    return textureLoad(this.depthTextureNode, texel).level(uint(0)).r;
   }
 
   computeVisibility(
@@ -381,16 +419,30 @@ export class ShadowRigidAtlas {
     dynamicAtlas?: ShadowRigidAtlas,
   ) {
     return Fn(() => {
-      const level = getShadowReceiverLevel(viewDistance, isSoftReceiver);
-      const texelMeters = getShadowPageSize(
-        getShadowReceiverLevel(viewDistance, bool(false)),
-      ).div(SHADOW_PAGE_TEXELS);
-      const pagePosition = getShadowLightPosition(
+      const level = getShadowReceiverLevel(
+        viewDistance,
+        isSoftReceiver,
+      ).toVar();
+      const pageSize = getShadowPageSize(level).toVar();
+      const lightPosition = getShadowLightPosition(
         worldPosition,
         this.sunDirection,
-      )
-        .div(getShadowPageSize(level))
-        .toVar();
+      ).toVar();
+      const pagePosition = lightPosition.div(pageSize).toVar();
+      const receiver = {
+        worldY: worldPosition.y.toVar(),
+        texelMeters: getShadowPageSize(
+          getShadowReceiverLevel(viewDistance, bool(false)),
+        )
+          .div(SHADOW_PAGE_TEXELS)
+          .toVar(),
+        heightPerPage: isSoftReceiver
+          .select(
+            vec2(0),
+            getReceiverSlope(lightPosition, worldPosition.y).mul(pageSize),
+          )
+          .toVar(),
+      };
       const isInside = this.isReady
         .greaterThan(0)
         .and(sceneDepth.lessThan(1))
@@ -412,12 +464,11 @@ export class ShadowRigidAtlas {
             vec2(1, 1),
           ]) {
             const tap = this.sampleTap(
-              pagePosition.add(direction.mul(softness).div(SHADOW_PAGE_TEXELS)),
+              pagePosition,
+              direction.mul(softness).div(SHADOW_PAGE_TEXELS),
               level,
               centerPage,
-              worldPosition,
-              texelMeters,
-              float(0),
+              receiver,
               dynamicAtlas,
             );
             visibilitySum.addAssign(tap.visibility);
@@ -427,8 +478,7 @@ export class ShadowRigidAtlas {
           const radius = this.computePenumbraTexels(
             pagePosition,
             centerPage,
-            worldPosition,
-            texelMeters,
+            receiver,
             dynamicAtlas,
           );
           const rotation = getInterleavedGradientNoise(screenCoordinate.xy).mul(
@@ -440,12 +490,11 @@ export class ShadowRigidAtlas {
               radius.mul(Math.sqrt((tapIndex + 0.5) / PENUMBRA_TAP_COUNT)),
             );
             const tap = this.sampleTap(
-              pagePosition.add(offset.div(SHADOW_PAGE_TEXELS)),
+              pagePosition,
+              offset.div(SHADOW_PAGE_TEXELS),
               level,
               centerPage,
-              worldPosition,
-              texelMeters,
-              radius,
+              receiver,
               dynamicAtlas,
             );
             visibilitySum.addAssign(tap.visibility);
@@ -479,15 +528,15 @@ export class ShadowRigidAtlas {
 
   private sampleTap(
     pagePosition: Node<"vec2">,
+    pageOffset: Node<"vec2">,
     level: Node<"uint">,
     centerPage: ShadowPageLookup,
-    worldPosition: Node<"vec3">,
-    texelMeters: Node<"float">,
-    radius: Node<"float">,
+    receiver: ShadowReceiver,
     dynamicAtlas?: ShadowRigidAtlas,
   ) {
     const halfTexel = 0.5 / SHADOW_PAGE_TEXELS;
-    const pageCoordinate = getShadowPageCoordinate(pagePosition).toVar();
+    const tapPosition = pagePosition.add(pageOffset).toVar();
+    const pageCoordinate = getShadowPageCoordinate(tapPosition).toVar();
     const slot = centerPage.slot.toVar();
     const isResident = centerPage.isResident.toVar();
     const hasDynamic = centerPage.hasDynamic.toVar();
@@ -507,24 +556,17 @@ export class ShadowRigidAtlas {
         dynamicSlot.assign(page.dynamicSlot);
       },
     );
-    const pageUv = pagePosition.fract().clamp(halfTexel, 1 - halfTexel);
+    const pageUv = tapPosition.fract().clamp(halfTexel, 1 - halfTexel);
     const visibility = this.sampleDepth(
-      slot,
+      this.kind === "fixed" ? slot : dynamicSlot,
       pageUv,
-      worldPosition,
-      texelMeters,
-      radius,
+      pageOffset,
+      receiver,
     ).toVar();
     if (dynamicAtlas)
       If(hasDynamic, () => {
         visibility.mulAssign(
-          dynamicAtlas.sampleDepth(
-            dynamicSlot,
-            pageUv,
-            worldPosition,
-            texelMeters,
-            radius,
-          ),
+          dynamicAtlas.sampleDepth(dynamicSlot, pageUv, pageOffset, receiver),
         );
       });
     const weight = (this.kind === "fixed" ? isResident : hasDynamic).select(
@@ -537,19 +579,18 @@ export class ShadowRigidAtlas {
   private computePenumbraTexels(
     pagePosition: Node<"vec2">,
     centerPage: ShadowPageLookup,
-    worldPosition: Node<"vec3">,
-    texelMeters: Node<"float">,
+    receiver: ShadowReceiver,
     dynamicAtlas?: ShadowRigidAtlas,
   ) {
     const pageUv = pagePosition.fract();
     const heightSum = float(0).toVar();
     const count = float(0).toVar();
-    If(centerPage.isResident, () => {
+    const isFixed = this.kind === "fixed";
+    If(isFixed ? centerPage.isResident : centerPage.hasDynamic, () => {
       const blockers = this.searchBlockers(
-        centerPage.slot,
+        isFixed ? centerPage.slot : centerPage.dynamicSlot,
         pageUv,
-        worldPosition,
-        texelMeters,
+        receiver,
       );
       heightSum.addAssign(blockers.heightSum);
       count.addAssign(blockers.count);
@@ -559,8 +600,7 @@ export class ShadowRigidAtlas {
         const blockers = dynamicAtlas.searchBlockers(
           centerPage.dynamicSlot,
           pageUv,
-          worldPosition,
-          texelMeters,
+          receiver,
         );
         heightSum.addAssign(blockers.heightSum);
         count.addAssign(blockers.count);
@@ -570,7 +610,7 @@ export class ShadowRigidAtlas {
       .div(this.sunDirection.y.abs().max(0.25));
     return rayDistance
       .mul(this.filter.lightSize)
-      .div(texelMeters)
+      .div(receiver.texelMeters)
       .clamp(this.filter.softness, this.filter.maxSoftness)
       .toVar();
   }
@@ -578,14 +618,13 @@ export class ShadowRigidAtlas {
   private searchBlockers(
     slot: Node<"uint">,
     pageUv: Node<"vec2">,
-    worldPosition: Node<"vec3">,
-    texelMeters: Node<"float">,
+    receiver: ShadowReceiver,
   ) {
     const tile = uvec2(
       slot.mod(this.atlasGridSize),
       slot.div(this.atlasGridSize),
     ).mul(SHADOW_PAGE_TEXELS);
-    const minimumHeight = texelMeters.mul(DEPTH_BIAS_TEXELS[this.kind] * 2);
+    const minimumHeight = this.getReceiverBias(receiver).mul(2);
     let heightSum: Node<"float"> = float(0);
     let count: Node<"float"> = float(0);
     for (const direction of [
@@ -595,10 +634,11 @@ export class ShadowRigidAtlas {
       vec2(-1, 1),
       vec2(1, 1),
     ]) {
+      const texelOffset = direction.mul(this.filter.maxSoftness);
       const texel = uvec2(
         pageUv
           .mul(SHADOW_PAGE_TEXELS)
-          .add(direction.mul(this.filter.maxSoftness))
+          .add(texelOffset)
           .clamp(0, SHADOW_PAGE_TEXELS - 1),
       );
       const depth = textureLoad(this.depthTextureNode, tile.add(texel)).level(
@@ -606,7 +646,9 @@ export class ShadowRigidAtlas {
       ).r;
       const blockerHeight = this.maximumY
         .sub(depth.mul(this.maximumY.sub(this.minimumY)))
-        .sub(worldPosition.y);
+        .sub(
+          this.getReceiverHeight(receiver, texelOffset.div(SHADOW_PAGE_TEXELS)),
+        );
       const isBlocker = blockerHeight.greaterThan(minimumHeight);
       heightSum = heightSum.add(isBlocker.select(blockerHeight, float(0)));
       count = count.add(isBlocker.select(float(1), float(0)));
@@ -617,23 +659,35 @@ export class ShadowRigidAtlas {
   private sampleDepth(
     slot: Node<"uint">,
     pageUv: Node<"vec2">,
-    worldPosition: Node<"vec3">,
-    texelMeters: Node<"float">,
-    radius: Node<"float">,
+    pageOffset: Node<"vec2">,
+    receiver: ShadowReceiver,
   ) {
     const receiverDepth = this.maximumY
-      .sub(worldPosition.y)
-      .sub(texelMeters.mul(radius.add(DEPTH_BIAS_TEXELS[this.kind])))
+      .sub(this.getReceiverHeight(receiver, pageOffset))
+      .sub(this.getReceiverBias(receiver))
       .div(this.maximumY.sub(this.minimumY));
-    const isInRange = worldPosition.y
+    const isInRange = receiver.worldY
       .greaterThanEqual(this.minimumY)
-      .and(worldPosition.y.lessThanEqual(this.maximumY));
+      .and(receiver.worldY.lessThanEqual(this.maximumY));
     return isInRange.select(
       this.depthTextureNode
         .sample(this.computeAtlasUv(slot, pageUv))
         .compare(receiverDepth),
       float(1),
     );
+  }
+
+  private getReceiverHeight(
+    receiver: ShadowReceiver,
+    pageOffset: Node<"vec2">,
+  ) {
+    return receiver.worldY.add(receiver.heightPerPage.dot(pageOffset));
+  }
+
+  private getReceiverBias(receiver: ShadowReceiver) {
+    return receiver.texelMeters
+      .mul(DEPTH_BIAS_TEXELS[this.kind])
+      .add(receiver.heightPerPage.length().div(SHADOW_PAGE_TEXELS));
   }
 
   private createDynamicPrepareNode(bucket?: ShadowRigidCasterBucket) {
