@@ -1,5 +1,6 @@
 import { Color, Vector2, Vector3 } from "three";
 import { uniform, uniformArray } from "three/tsl";
+import { isPagedV2 } from "../../../systems/ShadowManager/config";
 
 const getBladeIndexCount = (segments: number) =>
   Math.max(0, segments - 1) * 6 + 3;
@@ -73,6 +74,7 @@ export const uniforms = {
   // Player
   uPlayerPosition: uniform(new Vector3(0, 0, 0)),
   uPlayerDeltaXZ: uniform(new Vector2(0, 0)),
+  uShadowCasting: uniform(isPagedV2 ? 1 : 0),
 
   // Width
   uBladeWidth: uniform(config.BLADE_WIDTH),

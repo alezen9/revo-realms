@@ -63,6 +63,7 @@ export default class Grass {
           label: "Casts shadow",
         })
         .on("change", ({ value }) => {
+          uniforms.uShadowCasting.value = value ? 1 : 0;
           shadowCasterRegistry.setCastsShadow(shadowCaster, value);
         });
   }

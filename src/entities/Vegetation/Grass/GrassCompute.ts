@@ -250,10 +250,9 @@ export class GrassCompute {
       setTerrainCacheValidity(clumpState, terrainCacheValidity),
     );
 
-    if (!isPagedV2)
-      If(isInFrustum.equal(0), () => {
-        Return();
-      });
+    If(isInFrustum.add(uniforms.uShadowCasting).equal(0), () => {
+      Return();
+    });
 
     // offscreen clumps can cast into visible shadow pages
     const needsTerrainRefresh = float(1).sub(terrainCacheValidity);
@@ -285,10 +284,9 @@ export class GrassCompute {
       clumpState.assign(setTerrainCacheValidity(clumpState, 1));
     });
 
-    if (!isPagedV2)
-      If(isInFrustum.equal(0), () => {
-        Return();
-      });
+    If(isInFrustum.add(uniforms.uShadowCasting).equal(0), () => {
+      Return();
+    });
 
     const hasGrass = step(
       config.MIN_VISIBLE_SCALE,
@@ -370,9 +368,9 @@ export class GrassCompute {
         if (isPagedV2)
           shadowBladeCount.addAssign(
             uint(
-              step(hash(bladeIndex.add(9176)), densityKeepProbability).mul(
-                isTerrainVisible,
-              ),
+              step(hash(bladeIndex.add(9176)), densityKeepProbability)
+                .mul(isTerrainVisible)
+                .mul(uniforms.uShadowCasting),
             ),
           );
 
@@ -493,6 +491,7 @@ export class GrassCompute {
                   getOriginalScale(bladeState).mul(clumpState.z),
                 ),
               )
+              .mul(uniforms.uShadowCasting)
               .greaterThan(0)
           : getVisibility(bladeState).greaterThan(0);
         If(getVisibility(bladeState).greaterThan(0).or(isShadowBlade), () => {
