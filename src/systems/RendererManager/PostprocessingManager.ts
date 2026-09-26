@@ -58,6 +58,7 @@ import {
   getShadowPageKey,
   getShadowPageSize,
   getShadowPageTag,
+  shadowDynamicLevel,
   shadowResolutionBias,
 } from "../ShadowManager/ShadowPageCoordinates";
 import { ShadowPageRequests } from "../ShadowManager/ShadowPageRequests";
@@ -82,6 +83,7 @@ export class PostprocessingManager extends RenderPipeline {
   private uSunVisibility = uniform(1);
   private uShadowIntensity = uniform(0.7);
   private uRigidShadowSoftness = uniform(0.5);
+  private uDynamicShadowSoftness = uniform(1);
   private uProjectionMatrixInverse = uniform(new Matrix4());
   private uCameraWorldMatrix = uniform(new Matrix4());
   private uCameraPosition = uniform(new Vector3());
@@ -172,7 +174,7 @@ export class PostprocessingManager extends RenderPipeline {
         renderer,
         this.shadowResidency,
         lightingManager.uSunDir,
-        this.uRigidShadowSoftness,
+        this.uDynamicShadowSoftness,
         "moving",
       );
       this.shadowFixedAtlas = fixedAtlas;
@@ -202,6 +204,13 @@ export class PostprocessingManager extends RenderPipeline {
         max: 1.5,
         step: 0.05,
       });
+    if (isPagedV2)
+      this.debugFolder.addBinding(this.uDynamicShadowSoftness, "value", {
+        label: "Dynamic shadow softness",
+        min: 0.25,
+        max: 3,
+        step: 0.05,
+      });
     if (this.shadowMovingAtlas)
       this.debugFolder.addBinding(
         this.shadowMovingAtlas.depthBiasTexels,
@@ -213,6 +222,13 @@ export class PostprocessingManager extends RenderPipeline {
           step: 0.5,
         },
       );
+    if (isPagedV2)
+      this.debugFolder.addBinding(shadowDynamicLevel, "value", {
+        label: "Dynamic shadow level",
+        min: 0,
+        max: 4,
+        step: 1,
+      });
     if (isPagedV2)
       this.debugFolder.addBinding(shadowResolutionBias, "value", {
         label: "Shadow resolution bias",

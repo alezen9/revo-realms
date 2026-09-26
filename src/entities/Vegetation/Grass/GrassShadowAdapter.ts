@@ -9,8 +9,10 @@ import {
   step,
   uint,
   vec3,
+  vec4,
 } from "three/tsl";
-import { lightingManager } from "../../../systems";
+import { lightingManager, sceneManager } from "../../../systems";
+import { TSLUtils } from "../../../utils/TSLUtils";
 import type { ShadowDeformedInstances } from "../../../systems/ShadowManager/ShadowCasterRegistry";
 import { GrassBladeGeometry } from "./GrassBladeGeometry";
 import {
@@ -121,28 +123,24 @@ const isBladeActive = (
     .and(scale.greaterThanEqual(config.MIN_VISIBLE_SCALE));
 };
 
-const getGrassBladeWorldPosition = (
+const getGrassBladeWorldPositions = (
   compute: GrassCompute,
   clumpIndex: Node<"uint">,
   bladeSlot: Node<"uint">,
-  sourcePosition: Node<"vec3">,
+  sourcePositions: Node<"vec3">[],
 ) => {
   const { clumpState, bladeState, bladeOffset } = getBladeState(
     compute,
     clumpIndex,
     bladeSlot,
   );
-  const scale = getScale(bladeState);
-  const bend = getBend(bladeState);
-  const bladeHeight = sourcePosition.y.div(config.BLADE_HEIGHT);
-  const bendShape = bladeHeight
-    .mul(float(1).sub(bladeHeight))
-    .mul(uniforms.uBendControlPoint.mul(2))
-    .add(bladeHeight.mul(bladeHeight));
+  const scale = getScale(bladeState).toVar();
+  const bend = getBend(bladeState).toVar();
   const bendDrop = bend
     .dot(bend)
     .div(scale.mul(config.BLADE_HEIGHT * 2).max(0.01))
     .mul(uniforms.uBendDropStrength);
+  const bendOffset = vec3(bend.x, bendDrop.negate(), bend.y).toVar();
   const playerDistanceSquared = bladeOffset.dot(bladeOffset);
   const width = getBladeWidth(bladeState, playerDistanceSquared);
   const horizontalLength = lightingManager.uSunDir.xz.length();
@@ -156,15 +154,25 @@ const getGrassBladeWorldPosition = (
         lightingManager.uSunDir.x.negate(),
       ).div(horizontalLength.max(0.0001)),
     );
+  const widthAxis = lightX.mul(width).toVar();
   const base = vec3(
     bladeOffset.x.add(uniforms.uPlayerPosition.x),
     getYOffset(clumpState),
     bladeOffset.y.add(uniforms.uPlayerPosition.z),
-  );
-  return base
-    .add(lightX.mul(sourcePosition.x.mul(width)))
-    .add(vec3(0, sourcePosition.y.mul(scale), 0))
-    .add(vec3(bend.x, bendDrop.negate(), bend.y).mul(bendShape));
+  ).toVar();
+  const isActive = isBladeActive(compute, clumpIndex, bladeSlot).toVar();
+  return sourcePositions.map((sourcePosition) => {
+    const bladeHeight = sourcePosition.y.div(config.BLADE_HEIGHT);
+    const bendShape = bladeHeight
+      .mul(float(1).sub(bladeHeight))
+      .mul(uniforms.uBendControlPoint.mul(2))
+      .add(bladeHeight.mul(bladeHeight));
+    const worldPosition = base
+      .add(widthAxis.mul(sourcePosition.x))
+      .add(vec3(0, sourcePosition.y.mul(scale), 0))
+      .add(bendOffset.mul(bendShape));
+    return isActive.select(worldPosition, vec3(0, -1000000, 0));
+  });
 };
 
 export const createGrassShadowInstances = (
@@ -175,7 +183,27 @@ export const createGrassShadowInstances = (
   geometry: createGrassShadowGeometry(),
   isActive: (clumpIndex) => {
     const clumpState = compute.clumpStateBuffer.element(clumpIndex);
+    const clumpClipPosition = sceneManager.uCameraMatrix.mul(
+      vec4(
+        clumpState.x.add(uniforms.uPlayerPosition.x),
+        uniforms.uPlayerPosition.y,
+        clumpState.y.add(uniforms.uPlayerPosition.z),
+        1,
+      ),
+    );
+    const isInFrustum = TSLUtils.computeFrustumVisibility(
+      clumpClipPosition,
+      sceneManager.uFx,
+      sceneManager.uFy,
+      float(config.BLADE_BOUNDING_SPHERE_RADIUS)
+        .add(config.CLUMP_LOCAL_RADIUS)
+        .mul(uniforms.uClumpBoundMultiplier),
+      uniforms.uCullPadNDCX,
+      uniforms.uCullPadNDCYNear,
+      uniforms.uCullPadNDCYFar,
+    );
     return getTerrainCacheValidity(clumpState)
+      .mul(isInFrustum)
       .greaterThan(0)
       .and(
         clumpState.z
@@ -196,17 +224,11 @@ export const createGrassShadowInstances = (
       .element(clumpIndex)
       .z.mul(uniforms.uBladeMaxScale)
       .mul(config.BLADE_HEIGHT),
-  worldPosition: (clumpIndex, sourcePosition) => {
-    const bladeSlot = uint(attribute<"float">("grassBladeSlot", "float"));
-    const worldPosition = getGrassBladeWorldPosition(
+  worldPositions: (clumpIndex, sourcePositions) =>
+    getGrassBladeWorldPositions(
       compute,
       clumpIndex,
-      bladeSlot,
-      sourcePosition,
-    );
-    return isBladeActive(compute, clumpIndex, bladeSlot).select(
-      worldPosition,
-      vec3(0, -1000000, 0),
-    );
-  },
+      uint(attribute<"float">("grassBladeSlot", "float")),
+      sourcePositions,
+    ),
 });

@@ -35,6 +35,7 @@ import {
   getShadowPageSize,
   getShadowWindowCenter,
   isShadowPageInWindow,
+  shadowDynamicLevel,
   shadowResolutionBias,
 } from "./ShadowPageCoordinates";
 
@@ -55,6 +56,7 @@ export class ShadowPageRequests {
   private previousDrawingBufferSize = new Vector2();
   private previousReceiverRevision = -1;
   private previousResolutionBias = -1;
+  private previousDynamicLevel = -1;
   private requestBits = new StorageBufferAttribute(
     new Uint32Array(REQUEST_WORD_COUNT),
     1,
@@ -247,7 +249,8 @@ export class ShadowPageRequests {
       this.previousDrawingBufferSize.x === width &&
       this.previousDrawingBufferSize.y === height &&
       this.previousReceiverRevision === receiverRevision &&
-      this.previousResolutionBias === shadowResolutionBias.value
+      this.previousResolutionBias === shadowResolutionBias.value &&
+      this.previousDynamicLevel === shadowDynamicLevel.value
     )
       return;
     this.depthSize.value.set(width, height);
@@ -264,5 +267,6 @@ export class ShadowPageRequests {
     this.previousDrawingBufferSize.set(width, height);
     this.previousReceiverRevision = receiverRevision;
     this.previousResolutionBias = shadowResolutionBias.value;
+    this.previousDynamicLevel = shadowDynamicLevel.value;
   }
 }

@@ -9,13 +9,13 @@ export const SHADOW_PAGES_PER_LEVEL = SHADOW_PAGE_GRID_SIZE ** 2;
 export const SHADOW_FIRST_LEVEL = 5;
 export const SHADOW_LAST_LEVEL = 11;
 export const SHADOW_LEVEL_COUNT = SHADOW_LAST_LEVEL - SHADOW_FIRST_LEVEL + 1;
-export const SHADOW_DYNAMIC_LEVEL = 2;
 export const SHADOW_PAGE_COUNT = SHADOW_PAGES_PER_LEVEL * SHADOW_LEVEL_COUNT;
 export const SHADOW_PAGE_OFFSET = 1 << 20;
 const TAG_MASK = 0x3fff;
 const FIRST_PAGE_SIZE = 2 ** (SHADOW_FIRST_LEVEL + 1) / SHADOW_PAGE_GRID_SIZE;
 
 export const shadowResolutionBias = uniform(2);
+export const shadowDynamicLevel = uniform(3, "uint");
 
 export const getShadowLightPosition = (
   worldPosition: Node<"vec3">,
@@ -43,9 +43,7 @@ export const getShadowLevel = (viewDistance: Node<"float">) =>
   );
 
 export const getShadowDynamicLevel = (level: Node<"uint">) =>
-  level
-    .lessThan(SHADOW_DYNAMIC_LEVEL)
-    .select(uint(SHADOW_DYNAMIC_LEVEL), level);
+  level.lessThan(shadowDynamicLevel).select(shadowDynamicLevel, level);
 
 export const getShadowPageSize = (level: Node<"uint">) =>
   float(uint(1).shiftLeft(level)).mul(FIRST_PAGE_SIZE);
