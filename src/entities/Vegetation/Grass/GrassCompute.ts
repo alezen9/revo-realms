@@ -250,11 +250,10 @@ export class GrassCompute {
       setTerrainCacheValidity(clumpState, terrainCacheValidity),
     );
 
-    If(isInFrustum.add(uniforms.uShadowCasting).equal(0), () => {
+    If(isInFrustum.equal(0), () => {
       Return();
     });
 
-    // offscreen clumps can cast into visible shadow pages
     const needsTerrainRefresh = float(1).sub(terrainCacheValidity);
 
     If(needsTerrainRefresh, () => {
@@ -282,10 +281,6 @@ export class GrassCompute {
       if (!isDirectSunMaterialCaptureEnabled)
         clumpState.assign(setBakedShadowFactor(clumpState, terrainSample.r));
       clumpState.assign(setTerrainCacheValidity(clumpState, 1));
-    });
-
-    If(isInFrustum.add(uniforms.uShadowCasting).equal(0), () => {
-      Return();
     });
 
     const hasGrass = step(
