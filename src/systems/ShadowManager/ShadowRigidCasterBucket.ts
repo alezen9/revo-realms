@@ -173,7 +173,7 @@ export class ShadowRigidCasterBucket {
       this.depthBiasValues[casterIndex] = depthBias;
       source.updateWorldMatrix(true, false);
       this.matrixValues.set(source.matrixWorld.elements, casterIndex * 16);
-      this.bounds.setFromObject(source, true);
+      this.bounds.setFromObject(source);
       for (let level = 0; level < SHADOW_LEVEL_COUNT; level++) {
         let minX = Infinity;
         let minY = Infinity;

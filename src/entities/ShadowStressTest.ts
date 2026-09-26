@@ -101,7 +101,13 @@ class StressMaterial extends DirectSunLambertNodeMaterial {
 }
 
 export default class ShadowStressTest {
-  private settings = { isEnabled: false };
+  private settings = {
+    isEnabled: false,
+    hasStatic: true,
+    hasMoving: true,
+    hasDeforming: true,
+    hasGpu: true,
+  };
   private geometries: BufferGeometry[] = [];
   private shadowGeometries: BufferGeometry[] = [];
   private materials: StressMaterial[] = [];
@@ -304,10 +310,10 @@ export default class ShadowStressTest {
     const sphere = new SphereGeometry(0.6, 16, 12);
     const torus = new TorusGeometry(0.5, 0.2, 10, 24);
     this.geometries = [box, sphere, torus];
-    this.createStatic(this.geometries);
-    this.createMoving(this.geometries);
-    this.createDeforming(torus);
-    this.createGpu(box);
+    if (this.settings.hasStatic) this.createStatic(this.geometries);
+    if (this.settings.hasMoving) this.createMoving(this.geometries);
+    if (this.settings.hasDeforming) this.createDeforming(torus);
+    if (this.settings.hasGpu) this.createGpu(box);
   }
 
   private disable() {
@@ -360,6 +366,12 @@ export default class ShadowStressTest {
       title: "🧪 Shadow stress test",
       expanded: false,
     });
+    folder.addBinding(this.settings, "hasStatic", { label: "Static" });
+    folder.addBinding(this.settings, "hasMoving", { label: "CPU moving" });
+    folder.addBinding(this.settings, "hasDeforming", {
+      label: "GPU deforming",
+    });
+    folder.addBinding(this.settings, "hasGpu", { label: "GPU positioned" });
     folder
       .addBinding(this.settings, "isEnabled", { label: "Enabled" })
       .on("change", ({ value }) => {

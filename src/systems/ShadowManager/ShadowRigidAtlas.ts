@@ -262,7 +262,7 @@ export class ShadowRigidAtlas {
     let minimumY = terrainBounds.min - 8;
     let maximumY = terrainBounds.max + 64;
     for (const { mesh } of this.sources) {
-      this.bounds.setFromObject(mesh, true);
+      this.bounds.setFromObject(mesh);
       minimumY = Math.min(minimumY, this.bounds.min.y);
       maximumY = Math.max(maximumY, this.bounds.max.y);
     }
