@@ -1,40 +1,24 @@
 import { Vector3 } from "three";
 import type { Node } from "three/webgpu";
-import { float, uint, vec2, vec3 } from "three/tsl";
+import { ceil, float, log2, uint, uniform, uvec2, vec2, vec3 } from "three/tsl";
 
+export const SHADOW_PAGE_TEXELS = 128;
 export const SHADOW_PAGE_GRID_SIZE = 128;
-export const SHADOW_PAGE_GRID_MIN = -SHADOW_PAGE_GRID_SIZE / 2;
+export const SHADOW_PAGE_WINDOW_HALF = SHADOW_PAGE_GRID_SIZE / 2;
 export const SHADOW_PAGES_PER_LEVEL = SHADOW_PAGE_GRID_SIZE ** 2;
-export const SHADOW_PAGE_LEVEL_COUNT = 2;
-export const SHADOW_PAGE_COUNT =
-  SHADOW_PAGES_PER_LEVEL * SHADOW_PAGE_LEVEL_COUNT;
-export const SHADOW_NEAR_PAGE_WORLD_SIZE = 4;
-export const SHADOW_FAR_PAGE_WORLD_SIZE = 24;
-export const SHADOW_NEAR_END = 24;
-export const SHADOW_FAR_START = 18;
+export const SHADOW_FIRST_LEVEL = 2;
+export const SHADOW_LAST_LEVEL = 11;
+export const SHADOW_LEVEL_COUNT = SHADOW_LAST_LEVEL - SHADOW_FIRST_LEVEL + 1;
+export const SHADOW_PAGE_COUNT = SHADOW_PAGES_PER_LEVEL * SHADOW_LEVEL_COUNT;
+export const SHADOW_PAGE_OFFSET = 1 << 20;
+const TAG_MASK = 0x3fff;
+const FIRST_PAGE_SIZE = 2 ** (SHADOW_FIRST_LEVEL + 1) / SHADOW_PAGE_GRID_SIZE;
 
-export const getGpuShadowPageSize = (level: Node<"uint">) =>
-  level
-    .equal(uint(0))
-    .select(
-      float(SHADOW_NEAR_PAGE_WORLD_SIZE),
-      float(SHADOW_FAR_PAGE_WORLD_SIZE),
-    );
+export const shadowResolutionBias = uniform(2);
 
-export const decodeGpuShadowPageKey = (pageKey: Node<"uint">) => {
-  const level = pageKey.div(SHADOW_PAGES_PER_LEVEL);
-  const localKey = pageKey.mod(SHADOW_PAGES_PER_LEVEL);
-  const pageId = vec2(
-    float(localKey.mod(SHADOW_PAGE_GRID_SIZE)),
-    float(localKey.div(SHADOW_PAGE_GRID_SIZE)),
-  ).add(SHADOW_PAGE_GRID_MIN);
-  return { level, pageId };
-};
-
-export const getGpuShadowPageAddress = (
+export const getShadowLightPosition = (
   worldPosition: Node<"vec3">,
   sunDirection: Node<"vec3">,
-  level: Node<"uint">,
 ) => {
   const horizontalLength = sunDirection.xz.length();
   const lightX = horizontalLength
@@ -46,35 +30,92 @@ export const getGpuShadowPageAddress = (
       ),
     );
   const lightY = sunDirection.cross(lightX).normalize();
-  const lightPosition = vec2(
-    worldPosition.dot(lightX),
-    worldPosition.dot(lightY),
-  );
-  const pageSize = getGpuShadowPageSize(level);
-  const pagePosition = lightPosition.div(pageSize);
-  const pageId = pagePosition.floor();
-  const isInsideGrid = pageId.x
-    .greaterThanEqual(SHADOW_PAGE_GRID_MIN)
-    .and(pageId.x.lessThan(SHADOW_PAGE_GRID_MIN + SHADOW_PAGE_GRID_SIZE))
-    .and(pageId.y.greaterThanEqual(SHADOW_PAGE_GRID_MIN))
-    .and(pageId.y.lessThan(SHADOW_PAGE_GRID_MIN + SHADOW_PAGE_GRID_SIZE));
-  const boundedPageId = pageId
-    .max(SHADOW_PAGE_GRID_MIN)
-    .min(SHADOW_PAGE_GRID_MIN + SHADOW_PAGE_GRID_SIZE - 1);
-  const pageKey = level.mul(SHADOW_PAGES_PER_LEVEL).add(
-    uint(boundedPageId.y.sub(SHADOW_PAGE_GRID_MIN))
-      .mul(SHADOW_PAGE_GRID_SIZE)
-      .add(uint(boundedPageId.x.sub(SHADOW_PAGE_GRID_MIN))),
+  return vec2(worldPosition.dot(lightX), worldPosition.dot(lightY));
+};
+
+export const getShadowLevel = (viewDistance: Node<"float">) =>
+  uint(
+    ceil(log2(viewDistance.max(0.0001)))
+      .add(shadowResolutionBias)
+      .sub(SHADOW_FIRST_LEVEL)
+      .clamp(0, SHADOW_LEVEL_COUNT - 1),
   );
 
-  return { pageId, pageUv: pagePosition.fract(), isInsideGrid, pageKey };
+export const getShadowPageSize = (level: Node<"uint">) =>
+  float(uint(1).shiftLeft(level)).mul(FIRST_PAGE_SIZE);
+
+export const getShadowPageTag = (pageCoordinate: Node<"uvec2">) =>
+  pageCoordinate.x
+    .bitAnd(TAG_MASK)
+    .bitOr(pageCoordinate.y.bitAnd(TAG_MASK).shiftLeft(14));
+
+export const getShadowPageKey = (
+  level: Node<"uint">,
+  pageCoordinate: Node<"uvec2">,
+) =>
+  level
+    .mul(SHADOW_PAGES_PER_LEVEL)
+    .add(
+      pageCoordinate.y
+        .mod(SHADOW_PAGE_GRID_SIZE)
+        .mul(SHADOW_PAGE_GRID_SIZE)
+        .add(pageCoordinate.x.mod(SHADOW_PAGE_GRID_SIZE)),
+    );
+
+export const getShadowPageCoordinate = (pagePosition: Node<"vec2">) =>
+  pagePosition.floor().add(SHADOW_PAGE_OFFSET).toUVec2();
+
+export const getShadowWindowCenter = (
+  cameraPosition: Node<"vec3">,
+  sunDirection: Node<"vec3">,
+  level: Node<"uint">,
+) =>
+  getShadowPageCoordinate(
+    getShadowLightPosition(cameraPosition, sunDirection).div(
+      getShadowPageSize(level),
+    ),
+  );
+
+export const getShadowWindowPage = (
+  pageKey: Node<"uint">,
+  windowCenter: Node<"uvec2">,
+) => {
+  const localKey = pageKey.mod(SHADOW_PAGES_PER_LEVEL);
+  const wrapped = uvec2(
+    localKey.mod(SHADOW_PAGE_GRID_SIZE),
+    localKey.div(SHADOW_PAGE_GRID_SIZE),
+  );
+  const windowStart = windowCenter.sub(SHADOW_PAGE_WINDOW_HALF);
+  return windowStart.add(
+    wrapped
+      .add(SHADOW_PAGE_GRID_SIZE)
+      .sub(windowStart.mod(SHADOW_PAGE_GRID_SIZE))
+      .mod(SHADOW_PAGE_GRID_SIZE),
+  );
 };
+
+export const isShadowPageInWindow = (
+  pageCoordinate: Node<"uvec2">,
+  windowCenter: Node<"uvec2">,
+) =>
+  pageCoordinate.x
+    .add(SHADOW_PAGE_WINDOW_HALF)
+    .greaterThanEqual(windowCenter.x)
+    .and(
+      pageCoordinate.y
+        .add(SHADOW_PAGE_WINDOW_HALF)
+        .greaterThanEqual(windowCenter.y),
+    )
+    .and(pageCoordinate.x.lessThan(windowCenter.x.add(SHADOW_PAGE_WINDOW_HALF)))
+    .and(
+      pageCoordinate.y.lessThan(windowCenter.y.add(SHADOW_PAGE_WINDOW_HALF)),
+    );
 
 export class ShadowPageCoordinates {
   private lightX = new Vector3();
   private lightY = new Vector3();
 
-  getPageCenter(position: Vector3, sunDirection: Vector3, level: number) {
+  getPageCoordinate(position: Vector3, sunDirection: Vector3, level: number) {
     const horizontalLength = Math.hypot(sunDirection.x, sunDirection.z);
     if (horizontalLength < 0.0001) this.lightX.set(1, 0, 0);
     else
@@ -84,11 +125,10 @@ export class ShadowPageCoordinates {
         -sunDirection.x / horizontalLength,
       );
     this.lightY.crossVectors(sunDirection, this.lightX).normalize();
-    const pageSize =
-      level === 0 ? SHADOW_NEAR_PAGE_WORLD_SIZE : SHADOW_FAR_PAGE_WORLD_SIZE;
+    const pageSize = FIRST_PAGE_SIZE * 2 ** level;
     return {
-      x: Math.floor(position.dot(this.lightX) / pageSize),
-      y: Math.floor(position.dot(this.lightY) / pageSize),
+      x: Math.floor(position.dot(this.lightX) / pageSize) + SHADOW_PAGE_OFFSET,
+      y: Math.floor(position.dot(this.lightY) / pageSize) + SHADOW_PAGE_OFFSET,
     };
   }
 }

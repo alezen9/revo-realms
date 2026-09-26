@@ -1,4 +1,4 @@
-import { Vector2, Vector3 } from "three";
+import { Vector3 } from "three";
 import {
   IndirectStorageBufferAttribute,
   StorageBufferAttribute,
@@ -9,10 +9,9 @@ import {
   atomicAdd,
   atomicLoad,
   atomicStore,
-  Break,
   Fn,
   If,
-  ivec2,
+  instanceIndex,
   Loop,
   storage,
   uint,
@@ -22,61 +21,64 @@ import {
 } from "three/tsl";
 import type { ShadowPageStats } from "../EventsManager";
 import {
+  SHADOW_LEVEL_COUNT,
   SHADOW_PAGE_COUNT,
-  SHADOW_PAGE_GRID_MIN,
-  SHADOW_PAGE_GRID_SIZE,
   SHADOW_PAGES_PER_LEVEL,
-  ShadowPageCoordinates,
+  getShadowPageTag,
+  getShadowWindowCenter,
+  getShadowWindowPage,
 } from "./ShadowPageCoordinates";
 import type { ShadowPageRequests } from "./ShadowPageRequests";
 
-const POOL_CAPACITY = 96;
-const SEARCH_WIDTH = 16;
+const POOL_CAPACITY = 1024;
 const INVALID_PAGE_KEY = 0xffffffff;
-const INVALID_SLOT = 0xffffffff;
 const READBACK_INTERVAL_MS = 1000;
-
-const priorityOffsets: { x: number; y: number }[] = [];
-for (let y = -SEARCH_WIDTH / 2; y < SEARCH_WIDTH / 2; y++) {
-  for (let x = -SEARCH_WIDTH / 2; x < SEARCH_WIDTH / 2; x++) {
-    priorityOffsets.push({ x, y });
-  }
-}
-priorityOffsets.sort((a, b) => a.x * a.x + a.y * a.y - b.x * b.x - b.y * b.y);
-const offsetData = new Int32Array(priorityOffsets.length * 2);
-for (let index = 0; index < priorityOffsets.length; index++) {
-  offsetData[index * 2] = priorityOffsets[index].x;
-  offsetData[index * 2 + 1] = priorityOffsets[index].y;
-}
+const REQUEST_WORD_COUNT = SHADOW_PAGE_COUNT / 32;
+const EMPTY_LIST_OFFSET = SHADOW_LEVEL_COUNT * POOL_CAPACITY;
+const REUSABLE_LIST_OFFSET = EMPTY_LIST_OFFSET + POOL_CAPACITY;
+const LIST_SIZE = REUSABLE_LIST_OFFSET + POOL_CAPACITY;
+const COUNTER_REQUESTED = 0;
+const COUNTER_ALLOCATED = 1;
+const COUNTER_EVICTED = 2;
+const COUNTER_MISSING = 3;
+const COUNTER_ACTIVE = 4;
+const COUNTER_EMPTY = 5;
+const COUNTER_REUSABLE = 6;
+const COUNTER_LEVEL_MISSES = 7;
+const COUNTER_COUNT = COUNTER_LEVEL_MISSES + SHADOW_LEVEL_COUNT;
 
 const initialMetadata = new Uint32Array(POOL_CAPACITY * 4);
 for (let slot = 0; slot < POOL_CAPACITY; slot++)
   initialMetadata[slot * 4] = INVALID_PAGE_KEY;
 
 export class ShadowResidency {
+  readonly frame = uniform(0, "uint");
   private renderer: WebGPURenderer;
-  private coordinates = new ShadowPageCoordinates();
   private previousSunDirection = new Vector3();
-  private nearCenter = uniform(new Vector2());
-  private farCenter = uniform(new Vector2());
-  private frame = uniform(0, "uint");
   private sunGeneration = uniform(1, "uint");
-  private offsets = new StorageBufferAttribute(offsetData, 2);
-  private offsetsNode = storage(this.offsets, "ivec2", priorityOffsets.length);
   private pageTable = new StorageBufferAttribute(
-    new Uint32Array(SHADOW_PAGE_COUNT * 4),
-    4,
-  );
-  private pageTableNode = storage(this.pageTable, "uvec4", SHADOW_PAGE_COUNT);
-  private slotMetadata = new StorageBufferAttribute(initialMetadata, 4);
-  private slotMetadataNode = storage(this.slotMetadata, "uvec4", POOL_CAPACITY);
-  private pageJobs = new StorageBufferAttribute(
-    new Uint32Array(POOL_CAPACITY * 4),
+    new Uint32Array(SHADOW_PAGE_COUNT * 2),
     2,
   );
-  private pageJobsNode = storage(this.pageJobs, "uvec2", POOL_CAPACITY * 2);
-  private counters = new StorageBufferAttribute(new Uint32Array(8), 1);
-  private atomicCounters = storage(this.counters, "uint", 8).toAtomic();
+  readonly pageTableNode = storage(this.pageTable, "uvec2", SHADOW_PAGE_COUNT);
+  private slotMetadata = new StorageBufferAttribute(initialMetadata, 4);
+  private slotMetadataNode = storage(this.slotMetadata, "uvec4", POOL_CAPACITY);
+  private lists = new StorageBufferAttribute(new Uint32Array(LIST_SIZE), 1);
+  private listsNode = storage(this.lists, "uint", LIST_SIZE);
+  private pageJobs = new StorageBufferAttribute(
+    new Uint32Array(POOL_CAPACITY * 3 * 4),
+    4,
+  );
+  private pageJobsNode = storage(this.pageJobs, "uvec4", POOL_CAPACITY * 3);
+  private counters = new StorageBufferAttribute(
+    new Uint32Array(COUNTER_COUNT),
+    1,
+  );
+  private atomicCounters = storage(
+    this.counters,
+    "uint",
+    COUNTER_COUNT,
+  ).toAtomic();
   private atlasIndirect = new IndirectStorageBufferAttribute(
     new Uint32Array([6, 0, 0, 0, 0, 0, 0, 0, 6, 0, 0, 0, 0, 0, 0, 0]),
     1,
@@ -84,192 +86,192 @@ export class ShadowResidency {
   private atomicAtlasIndirect = storage(
     this.atlasIndirect,
     "uint",
-    8,
+    16,
   ).toAtomic();
+  private resetNode;
+  private collectNode;
+  private freeNode;
   private allocateNode;
   private isReadbackPending = false;
   private nextReadbackTime = 0;
   readonly stats: ShadowPageStats = {
     requested: 0,
-    nearRequested: 0,
-    farRequested: 0,
     mapped: 0,
     allocated: 0,
     evicted: 0,
     missing: 0,
     outsideGrid: 0,
   };
+  private requestCounters: StorageBufferAttribute;
 
-  constructor(renderer: WebGPURenderer, requests: ShadowPageRequests) {
+  constructor(
+    renderer: WebGPURenderer,
+    requests: ShadowPageRequests,
+    cameraPosition: Node<"vec3">,
+    sunDirection: Node<"vec3">,
+  ) {
     this.renderer = renderer;
+    this.requestCounters = requests.countersAttribute;
     const requestBits = storage(
       requests.bitsAttribute,
       "uint",
       requests.bitsAttribute.count,
     ).toAtomic();
-    const requestCounters = storage(requests.countersAttribute, "uint", 4);
 
-    this.allocateNode = Fn(() => {
-      Loop({ start: 0, end: 4, type: "uint" }, ({ i: index }) => {
+    this.resetNode = Fn(() => {
+      Loop({ start: 0, end: COUNTER_COUNT, type: "uint" }, ({ i: index }) => {
         atomicStore(this.atomicCounters.element(index), 0);
       });
-      atomicStore(this.atomicAtlasIndirect.element(9), 0);
+      for (const index of [1, 5, 9, 13])
+        atomicStore(this.atomicAtlasIndirect.element(index), 0);
+    })().compute(1, [1]);
 
-      for (const levelIndex of [0, 1]) {
-        const level = uint(levelIndex);
-        const center = level
-          .equal(uint(0))
-          .select(this.nearCenter, this.farCenter);
-        Loop(
-          { start: 0, end: priorityOffsets.length, type: "uint" },
-          ({ i: offsetIndex }) => {
-            const pageId = this.offsetsNode
-              .element(offsetIndex)
-              .add(ivec2(center));
-            const isInsideGrid = pageId.x
-              .greaterThanEqual(SHADOW_PAGE_GRID_MIN)
-              .and(
-                pageId.x.lessThan(SHADOW_PAGE_GRID_MIN + SHADOW_PAGE_GRID_SIZE),
-              )
-              .and(pageId.y.greaterThanEqual(SHADOW_PAGE_GRID_MIN))
-              .and(
-                pageId.y.lessThan(SHADOW_PAGE_GRID_MIN + SHADOW_PAGE_GRID_SIZE),
+    this.collectNode = Fn(() => {
+      const word = atomicLoad(requestBits.element(instanceIndex));
+      If(word.notEqual(0), () => {
+        Loop({ start: 0, end: 32, type: "uint" }, ({ i: bitIndex }) => {
+          If(word.shiftRight(bitIndex).bitAnd(1).notEqual(0), () => {
+            const pageKey = instanceIndex.mul(32).add(bitIndex);
+            const level = pageKey.div(SHADOW_PAGES_PER_LEVEL);
+            const pageCoordinate = getShadowWindowPage(
+              pageKey,
+              getShadowWindowCenter(cameraPosition, sunDirection, level),
+            );
+            const pageTag = getShadowPageTag(pageCoordinate);
+            const { slot, isResident } = this.resolvePage(pageKey, pageTag);
+            atomicAdd(this.atomicCounters.element(COUNTER_REQUESTED), 1);
+            If(isResident, () => {
+              this.slotMetadataNode
+                .element(slot)
+                .assign(
+                  uvec4(pageKey, pageTag, this.frame, this.sunGeneration),
+                );
+              const activeIndex = atomicAdd(
+                this.atomicCounters.element(COUNTER_ACTIVE),
+                1,
               );
-            If(isInsideGrid, () => {
-              const pageKey = level.mul(SHADOW_PAGES_PER_LEVEL).add(
-                uint(pageId.y.sub(SHADOW_PAGE_GRID_MIN))
-                  .mul(SHADOW_PAGE_GRID_SIZE)
-                  .add(uint(pageId.x.sub(SHADOW_PAGE_GRID_MIN))),
+              this.pageJobsNode
+                .element(activeIndex.add(POOL_CAPACITY))
+                .assign(uvec4(pageKey, slot, pageCoordinate));
+            }).Else(() => {
+              const missIndex = atomicAdd(
+                this.atomicCounters.element(level.add(COUNTER_LEVEL_MISSES)),
+                1,
               );
-              const bit = uint(1).shiftLeft(pageKey.mod(32));
-              const hasRequest = atomicLoad(
-                requestBits.element(pageKey.div(32)),
-              )
-                .bitAnd(bit)
-                .notEqual(0);
-              If(hasRequest, () => {
-                const activeSlot = uint(INVALID_SLOT).toVar();
-                const entry = this.pageTableNode.element(pageKey).toVar();
-                const slotPlusOne = entry.x;
-                const slot = slotPlusOne
-                  .greaterThan(0)
-                  .and(slotPlusOne.lessThanEqual(POOL_CAPACITY))
-                  .select(slotPlusOne.sub(1), uint(0));
-                const metadata = this.slotMetadataNode.element(slot).toVar();
-                const isHit = slotPlusOne
-                  .greaterThan(0)
-                  .and(slotPlusOne.lessThanEqual(POOL_CAPACITY))
-                  .and(metadata.x.equal(pageKey))
-                  .and(metadata.y.equal(entry.y))
-                  .and(entry.z.equal(this.sunGeneration));
-
-                If(isHit, () => {
-                  activeSlot.assign(slot);
-                  this.slotMetadataNode
-                    .element(slot)
-                    .assign(
-                      uvec4(metadata.x, metadata.y, this.frame, this.frame),
-                    );
-                  atomicAdd(this.atomicCounters.element(0), 1);
-                  atomicAdd(this.atomicCounters.element(3), 1);
-                }).Else(() => {
-                  const selectedSlot = uint(INVALID_SLOT).toVar();
-                  const oldestFrame = uint(INVALID_SLOT).toVar();
-                  Loop(
-                    { start: 0, end: POOL_CAPACITY, type: "uint" },
-                    ({ i: candidateSlot }) => {
-                      const candidate =
-                        this.slotMetadataNode.element(candidateSlot);
-                      If(candidate.x.equal(INVALID_PAGE_KEY), () => {
-                        selectedSlot.assign(candidateSlot);
-                        Break();
-                      });
-                      If(
-                        candidate.w
-                          .notEqual(this.frame)
-                          .and(candidate.z.lessThan(oldestFrame)),
-                        () => {
-                          selectedSlot.assign(candidateSlot);
-                          oldestFrame.assign(candidate.z);
-                        },
-                      );
-                    },
-                  );
-
-                  If(selectedSlot.notEqual(INVALID_SLOT), () => {
-                    activeSlot.assign(selectedSlot);
-                    const oldMetadata = this.slotMetadataNode
-                      .element(selectedSlot)
-                      .toVar();
-                    If(oldMetadata.x.notEqual(INVALID_PAGE_KEY), () => {
-                      this.pageTableNode
-                        .element(oldMetadata.x)
-                        .assign(uvec4(0));
-                      atomicAdd(this.atomicCounters.element(2), 1);
-                    });
-                    const nextGeneration = oldMetadata.y.add(1);
-                    const generation = nextGeneration
-                      .equal(0)
-                      .select(uint(1), nextGeneration);
-                    this.slotMetadataNode
-                      .element(selectedSlot)
-                      .assign(
-                        uvec4(pageKey, generation, this.frame, this.frame),
-                      );
-                    this.pageTableNode
-                      .element(pageKey)
-                      .assign(
-                        uvec4(
-                          selectedSlot.add(1),
-                          generation,
-                          this.sunGeneration,
-                          uint(0),
-                        ),
-                      );
-                    const jobIndex = atomicAdd(
-                      this.atomicCounters.element(1),
-                      1,
-                    );
-                    this.pageJobsNode
-                      .element(jobIndex)
-                      .assign(uvec2(pageKey, selectedSlot));
-                    atomicAdd(this.atomicCounters.element(3), 1);
-                  });
-                });
-                If(activeSlot.notEqual(INVALID_SLOT), () => {
-                  const jobIndex = atomicAdd(
-                    this.atomicAtlasIndirect.element(9),
-                    1,
-                  );
-                  this.pageJobsNode
-                    .element(jobIndex.add(POOL_CAPACITY))
-                    .assign(uvec2(pageKey, activeSlot));
-                });
+              If(missIndex.lessThan(POOL_CAPACITY), () => {
+                this.listsNode
+                  .element(level.mul(POOL_CAPACITY).add(missIndex))
+                  .assign(pageKey);
               });
             });
+          });
+        });
+      });
+    })().compute(REQUEST_WORD_COUNT, [64]);
+
+    this.freeNode = Fn(() => {
+      const metadata = this.slotMetadataNode.element(instanceIndex);
+      If(metadata.z.notEqual(this.frame), () => {
+        If(
+          metadata.x
+            .equal(INVALID_PAGE_KEY)
+            .or(metadata.w.notEqual(this.sunGeneration)),
+          () => {
+            const index = atomicAdd(
+              this.atomicCounters.element(COUNTER_EMPTY),
+              1,
+            );
+            this.listsNode
+              .element(index.add(EMPTY_LIST_OFFSET))
+              .assign(instanceIndex);
           },
+        ).Else(() => {
+          const index = atomicAdd(
+            this.atomicCounters.element(COUNTER_REUSABLE),
+            1,
+          );
+          this.listsNode
+            .element(index.add(REUSABLE_LIST_OFFSET))
+            .assign(instanceIndex);
+        });
+      });
+    })().compute(POOL_CAPACITY, [64]);
+
+    this.allocateNode = Fn(() => {
+      const level = instanceIndex.div(POOL_CAPACITY);
+      const missIndex = instanceIndex.mod(POOL_CAPACITY);
+      const levelMisses = atomicLoad(
+        this.atomicCounters.element(level.add(COUNTER_LEVEL_MISSES)),
+      );
+      If(missIndex.lessThan(levelMisses), () => {
+        const rank = missIndex.toVar();
+        Loop({ start: uint(0), end: level, type: "uint" }, ({ i: finer }) => {
+          const finerMisses = atomicLoad(
+            this.atomicCounters.element(finer.add(COUNTER_LEVEL_MISSES)),
+          );
+          rank.addAssign(
+            finerMisses
+              .lessThan(POOL_CAPACITY)
+              .select(finerMisses, uint(POOL_CAPACITY)),
+          );
+        });
+        const emptyCount = atomicLoad(
+          this.atomicCounters.element(COUNTER_EMPTY),
         );
-      }
-      for (let index = 0; index < 4; index++) {
-        atomicStore(
-          this.atomicCounters.element(index + 4),
-          requestCounters.element(index),
+        const reusableCount = atomicLoad(
+          this.atomicCounters.element(COUNTER_REUSABLE),
         );
-      }
-      atomicStore(
-        this.atomicAtlasIndirect.element(1),
-        atomicLoad(this.atomicCounters.element(1)),
-      );
-      atomicStore(
-        this.atomicAtlasIndirect.element(5),
-        atomicLoad(this.atomicCounters.element(1)),
-      );
-      atomicStore(
-        this.atomicAtlasIndirect.element(13),
-        atomicLoad(this.atomicAtlasIndirect.element(9)),
-      );
-    })().compute(1, [1]);
-    this.allocateNode.name = "V2 page residency";
+        If(rank.lessThan(emptyCount.add(reusableCount)), () => {
+          const isEmpty = rank.lessThan(emptyCount);
+          const slot = this.listsNode
+            .element(
+              isEmpty.select(
+                rank.add(EMPTY_LIST_OFFSET),
+                rank.sub(emptyCount).add(REUSABLE_LIST_OFFSET),
+              ),
+            )
+            .toVar();
+          const pageKey = this.listsNode
+            .element(level.mul(POOL_CAPACITY).add(missIndex))
+            .toVar();
+          const pageCoordinate = getShadowWindowPage(
+            pageKey,
+            getShadowWindowCenter(cameraPosition, sunDirection, level),
+          );
+          this.slotMetadataNode
+            .element(slot)
+            .assign(
+              uvec4(
+                pageKey,
+                getShadowPageTag(pageCoordinate),
+                this.frame,
+                this.sunGeneration,
+              ),
+            );
+          this.pageTableNode.element(pageKey).assign(uvec2(slot.add(1), 0));
+          const job = uvec4(pageKey, slot, pageCoordinate);
+          const jobIndex = atomicAdd(this.atomicAtlasIndirect.element(1), 1);
+          atomicAdd(this.atomicAtlasIndirect.element(5), 1);
+          this.pageJobsNode.element(jobIndex).assign(job);
+          const activeIndex = atomicAdd(
+            this.atomicCounters.element(COUNTER_ACTIVE),
+            1,
+          );
+          this.pageJobsNode.element(activeIndex.add(POOL_CAPACITY)).assign(job);
+          atomicAdd(this.atomicCounters.element(COUNTER_ALLOCATED), 1);
+          If(isEmpty.not(), () => {
+            atomicAdd(this.atomicCounters.element(COUNTER_EVICTED), 1);
+          });
+        }).Else(() => {
+          atomicAdd(this.atomicCounters.element(COUNTER_MISSING), 1);
+        });
+      });
+    })().compute(SHADOW_LEVEL_COUNT * POOL_CAPACITY, [64]);
+
+    this.resetNode.name = "V2 page residency reset";
+    this.collectNode.name = "V2 page residency collect";
+    this.freeNode.name = "V2 page residency free";
+    this.allocateNode.name = "V2 page residency allocate";
   }
 
   get capacity() {
@@ -284,15 +286,11 @@ export class ShadowResidency {
     return this.counters;
   }
 
-  get clearIndirectAttribute() {
-    return this.atlasIndirect;
+  get activeCountIndex() {
+    return COUNTER_ACTIVE;
   }
 
-  get fixedIndirectAttribute() {
-    return this.atlasIndirect;
-  }
-
-  get movingIndirectAttribute() {
+  get atlasIndirectAttribute() {
     return this.atlasIndirect;
   }
 
@@ -311,42 +309,31 @@ export class ShadowResidency {
     if (this.sunGeneration.value === 0) this.sunGeneration.value = 1;
   }
 
-  resolvePage(pageKey: Node<"uint">) {
+  resolvePage(pageKey: Node<"uint">, pageTag: Node<"uint">) {
     const entry = this.pageTableNode.element(pageKey);
     const slotPlusOne = entry.x;
-    const slot = slotPlusOne
+    const hasSlot = slotPlusOne
       .greaterThan(0)
-      .and(slotPlusOne.lessThanEqual(POOL_CAPACITY))
-      .select(slotPlusOne.sub(1), uint(0));
+      .and(slotPlusOne.lessThanEqual(POOL_CAPACITY));
+    const slot = hasSlot.select(slotPlusOne.sub(1), uint(0));
     const metadata = this.slotMetadataNode.element(slot);
-    const isResident = slotPlusOne
-      .greaterThan(0)
-      .and(slotPlusOne.lessThanEqual(POOL_CAPACITY))
+    const isResident = hasSlot
       .and(metadata.x.equal(pageKey))
-      .and(metadata.y.equal(entry.y))
-      .and(entry.z.equal(this.sunGeneration));
-    const isActive = isResident.and(metadata.w.equal(this.frame));
-    return { slot, isResident, isActive };
+      .and(metadata.y.equal(pageTag))
+      .and(metadata.w.equal(this.sunGeneration));
+    const hasDynamic = isResident.and(entry.y.equal(this.frame));
+    return { slot, isResident, hasDynamic };
   }
 
-  run(cameraPosition: Vector3, sunDirection: Vector3) {
+  run(sunDirection: Vector3) {
     this.frame.value = (this.frame.value + 1) >>> 0;
     if (!this.previousSunDirection.equals(sunDirection)) {
       this.previousSunDirection.copy(sunDirection);
       this.invalidate();
     }
-    const nearCenter = this.coordinates.getPageCenter(
-      cameraPosition,
-      sunDirection,
-      0,
-    );
-    const farCenter = this.coordinates.getPageCenter(
-      cameraPosition,
-      sunDirection,
-      1,
-    );
-    this.nearCenter.value.set(nearCenter.x, nearCenter.y);
-    this.farCenter.value.set(farCenter.x, farCenter.y);
+    this.renderer.compute(this.resetNode);
+    this.renderer.compute(this.collectNode);
+    this.renderer.compute(this.freeNode);
     this.renderer.compute(this.allocateNode);
 
     const now = performance.now();
@@ -358,26 +345,35 @@ export class ShadowResidency {
 
   private async refreshStatsAsync() {
     try {
-      const residencyBuffer = await this.renderer.getArrayBufferAsync(
-        this.counters,
+      const residency = new Uint32Array(
+        await this.renderer.getArrayBufferAsync(this.counters),
       );
-      const metadataBuffer = await this.renderer.getArrayBufferAsync(
-        this.slotMetadata,
+      const requests = new Uint32Array(
+        await this.renderer.getArrayBufferAsync(this.requestCounters),
       );
-      const residency = new Uint32Array(residencyBuffer);
-      const metadata = new Uint32Array(metadataBuffer);
+      const metadata = new Uint32Array(
+        await this.renderer.getArrayBufferAsync(this.slotMetadata),
+      );
       let mapped = 0;
       for (let slot = 0; slot < POOL_CAPACITY; slot++) {
-        if (metadata[slot * 4] !== INVALID_PAGE_KEY) mapped++;
+        if (
+          metadata[slot * 4] !== INVALID_PAGE_KEY &&
+          metadata[slot * 4 + 3] === this.sunGeneration.value
+        )
+          mapped++;
       }
-      this.stats.requested = residency[4];
-      this.stats.nearRequested = residency[5];
-      this.stats.farRequested = residency[6];
-      this.stats.outsideGrid = residency[7];
+      this.stats.requested = residency[COUNTER_REQUESTED];
+      this.stats.outsideGrid = requests[1];
       this.stats.mapped = mapped;
-      this.stats.allocated = residency[1];
-      this.stats.evicted = residency[2];
-      this.stats.missing = Math.max(0, residency[4] - residency[3]);
+      this.stats.allocated = residency[COUNTER_ALLOCATED];
+      this.stats.evicted = residency[COUNTER_EVICTED];
+      let overflow = 0;
+      for (let level = 0; level < SHADOW_LEVEL_COUNT; level++)
+        overflow += Math.max(
+          0,
+          residency[COUNTER_LEVEL_MISSES + level] - POOL_CAPACITY,
+        );
+      this.stats.missing = residency[COUNTER_MISSING] + overflow;
     } catch (error) {
       console.error("Shadow page stats readback failed", error);
     } finally {

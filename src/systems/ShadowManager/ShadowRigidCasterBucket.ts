@@ -2,9 +2,7 @@ import { Box3, BufferGeometry, Float32BufferAttribute, Vector3 } from "three";
 import { StorageBufferAttribute } from "three/webgpu";
 import type { ShadowCasterEntry } from "./ShadowCasterRegistry";
 import {
-  SHADOW_PAGE_GRID_MIN,
-  SHADOW_PAGE_GRID_SIZE,
-  SHADOW_PAGE_LEVEL_COUNT,
+  SHADOW_LEVEL_COUNT,
   ShadowPageCoordinates,
 } from "./ShadowPageCoordinates";
 import type { ShadowResidency } from "./ShadowResidency";
@@ -15,7 +13,7 @@ export class ShadowRigidCasterBucket {
   readonly pageRangesAttribute: StorageBufferAttribute;
   readonly depthBiasAttribute: StorageBufferAttribute;
 
-  private casterCount: number;
+  readonly casterCount: number;
   private matrixValues: Float32Array;
   private rangeValues: Uint32Array;
   private depthBiasValues: Float32Array;
@@ -72,12 +70,9 @@ export class ShadowRigidCasterBucket {
       "casterIndex",
       new Float32BufferAttribute(casterIndices, 1),
     );
-    this.geometry.setIndirect(
-      kind === "fixed"
-        ? residency.fixedIndirectAttribute
-        : residency.movingIndirectAttribute,
-      [(kind === "fixed" ? 4 : 12) * Uint32Array.BYTES_PER_ELEMENT],
-    );
+    this.geometry.setIndirect(residency.atlasIndirectAttribute, [
+      (kind === "fixed" ? 4 : 12) * Uint32Array.BYTES_PER_ELEMENT,
+    ]);
     if (kind === "fixed") residency.setFixedVertexCount(vertexCount);
     else residency.setMovingVertexCount(vertexCount);
 
@@ -87,7 +82,7 @@ export class ShadowRigidCasterBucket {
       4,
     );
     this.rangeValues = new Uint32Array(
-      this.casterCount * SHADOW_PAGE_LEVEL_COUNT * 4,
+      this.casterCount * SHADOW_LEVEL_COUNT * 4,
     );
     this.pageRangesAttribute = new StorageBufferAttribute(this.rangeValues, 4);
     this.depthBiasValues = new Float32Array(this.casterCount);
@@ -103,14 +98,13 @@ export class ShadowRigidCasterBucket {
         "Rigid caster count changed without rebuilding the bucket",
       );
 
-    const maximumPage = SHADOW_PAGE_GRID_MIN + SHADOW_PAGE_GRID_SIZE - 1;
     for (let casterIndex = 0; casterIndex < sources.length; casterIndex++) {
       const { mesh: source, depthBiasMeters } = sources[casterIndex];
       this.depthBiasValues[casterIndex] = depthBiasMeters;
       source.updateWorldMatrix(true, false);
       this.matrixValues.set(source.matrixWorld.elements, casterIndex * 16);
       this.bounds.setFromObject(source, true);
-      for (let level = 0; level < SHADOW_PAGE_LEVEL_COUNT; level++) {
+      for (let level = 0; level < SHADOW_LEVEL_COUNT; level++) {
         let minX = Infinity;
         let minY = Infinity;
         let maxX = -Infinity;
@@ -123,7 +117,7 @@ export class ShadowRigidCasterBucket {
                 y === 0 ? this.bounds.min.y : this.bounds.max.y,
                 z === 0 ? this.bounds.min.z : this.bounds.max.z,
               );
-              const page = this.coordinates.getPageCenter(
+              const page = this.coordinates.getPageCoordinate(
                 this.corner,
                 sunDirection,
                 level,
@@ -135,24 +129,10 @@ export class ShadowRigidCasterBucket {
             }
           }
         }
-        const rangeOffset = (casterIndex * SHADOW_PAGE_LEVEL_COUNT + level) * 4;
-        if (
-          maxX < SHADOW_PAGE_GRID_MIN ||
-          maxY < SHADOW_PAGE_GRID_MIN ||
-          minX > maximumPage ||
-          minY > maximumPage
-        ) {
-          this.rangeValues.set([1, 1, 0, 0], rangeOffset);
-          continue;
-        }
-        this.rangeValues[rangeOffset] =
-          Math.max(minX, SHADOW_PAGE_GRID_MIN) - SHADOW_PAGE_GRID_MIN;
-        this.rangeValues[rangeOffset + 1] =
-          Math.max(minY, SHADOW_PAGE_GRID_MIN) - SHADOW_PAGE_GRID_MIN;
-        this.rangeValues[rangeOffset + 2] =
-          Math.min(maxX, maximumPage) - SHADOW_PAGE_GRID_MIN;
-        this.rangeValues[rangeOffset + 3] =
-          Math.min(maxY, maximumPage) - SHADOW_PAGE_GRID_MIN;
+        this.rangeValues.set(
+          [minX, minY, maxX, maxY],
+          (casterIndex * SHADOW_LEVEL_COUNT + level) * 4,
+        );
       }
     }
     this.matrixColumnsAttribute.needsUpdate = true;

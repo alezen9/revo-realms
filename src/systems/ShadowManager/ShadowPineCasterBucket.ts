@@ -16,14 +16,11 @@ import {
   uint,
   uniform,
   uvec2,
-  uvec4,
   workgroupBarrier,
 } from "three/tsl";
 import {
-  decodeGpuShadowPageKey,
-  SHADOW_PAGE_GRID_MIN,
-  SHADOW_PAGE_GRID_SIZE,
-  SHADOW_PAGE_LEVEL_COUNT,
+  SHADOW_LEVEL_COUNT,
+  SHADOW_PAGES_PER_LEVEL,
   ShadowPageCoordinates,
 } from "./ShadowPageCoordinates";
 import type { ShadowResidency } from "./ShadowResidency";
@@ -53,7 +50,6 @@ export class ShadowPineCasterBucket {
     renderer: WebGPURenderer,
     residency: ShadowResidency,
     source: BatchedMesh,
-    kind: "fixed" | "moving",
     depthBiasMeters: number,
   ) {
     this.renderer = renderer;
@@ -67,12 +63,12 @@ export class ShadowPineCasterBucket {
       4,
     );
     this.rangeValues = new Uint32Array(
-      this.instanceCount * SHADOW_PAGE_LEVEL_COUNT * 4,
+      this.instanceCount * SHADOW_LEVEL_COUNT * 4,
     );
     this.pageRangesAttribute = new StorageBufferAttribute(this.rangeValues, 4);
     this.workItemsAttribute = new StorageBufferAttribute(
-      new Uint32Array(this.instanceCount * residency.capacity * 4),
-      4,
+      new Uint32Array(this.instanceCount * residency.capacity * 2),
+      2,
     );
     this.indirectArguments = new IndirectStorageBufferAttribute(
       this.geometry.index
@@ -85,11 +81,11 @@ export class ShadowPineCasterBucket {
 
     const sourcePageJobs = storage(
       residency.pageJobsAttribute,
-      "uvec2",
-      residency.capacity * 2,
+      "uvec4",
+      residency.capacity * 3,
     );
     const sourceIndirect = storage(
-      residency.clearIndirectAttribute,
+      residency.atlasIndirectAttribute,
       "uint",
       16,
     );
@@ -100,7 +96,7 @@ export class ShadowPineCasterBucket {
     );
     const workItems = storage(
       this.workItemsAttribute,
-      "uvec4",
+      "uvec2",
       this.workItemsAttribute.count,
     );
     const indirectArguments = storage(
@@ -108,15 +104,13 @@ export class ShadowPineCasterBucket {
       "uint",
       this.indirectArguments.count,
     ).toAtomic();
-    const pageCountIndex = kind === "fixed" ? 1 : 9;
-    const pageJobOffset = kind === "fixed" ? 0 : residency.capacity;
 
     this.buildNode = Fn(() => {
       If(instanceIndex.equal(0), () => {
         atomicStore(indirectArguments.element(1), 0);
       });
       workgroupBarrier();
-      const pageCount = uint(sourceIndirect.element(pageCountIndex)).toVar();
+      const pageCount = uint(sourceIndirect.element(1)).toVar();
       If(pageCount.greaterThan(residency.capacity), () => {
         pageCount.assign(residency.capacity);
       });
@@ -126,30 +120,28 @@ export class ShadowPineCasterBucket {
           end: Math.ceil(this.instanceCount / 64),
           type: "uint",
         },
-        ({ i: chunk }) => {
+        ({ i: chunkIndex }) => {
+          const chunk = chunkIndex.toVar();
           const pineIndex = chunk.mul(64).add(instanceIndex);
           If(pineIndex.lessThan(this.instanceCount), () => {
             Loop(
               { start: 0, end: pageCount, type: "uint" },
-              ({ i: pageIndex }) => {
-                const pageJob = sourcePageJobs.element(
-                  pageIndex.add(pageJobOffset),
-                );
-                const { level, pageId } = decodeGpuShadowPageKey(pageJob.x);
-                const page = uvec2(pageId.add(-SHADOW_PAGE_GRID_MIN));
+              ({ i: pageLoopIndex }) => {
+                const pageIndex = pageLoopIndex.toVar();
+                const pageJob = sourcePageJobs.element(pageIndex);
                 const range = pageRanges.element(
-                  pineIndex.mul(SHADOW_PAGE_LEVEL_COUNT).add(level),
+                  pineIndex
+                    .mul(SHADOW_LEVEL_COUNT)
+                    .add(pageJob.x.div(SHADOW_PAGES_PER_LEVEL)),
                 );
-                const overlaps = page.x
+                const overlaps = pageJob.z
                   .greaterThanEqual(range.x)
-                  .and(page.y.greaterThanEqual(range.y))
-                  .and(page.x.lessThanEqual(range.z))
-                  .and(page.y.lessThanEqual(range.w));
+                  .and(pageJob.w.greaterThanEqual(range.y))
+                  .and(pageJob.z.lessThanEqual(range.z))
+                  .and(pageJob.w.lessThanEqual(range.w));
                 If(overlaps, () => {
                   const index = atomicAdd(indirectArguments.element(1), 1);
-                  workItems
-                    .element(index)
-                    .assign(uvec4(pageJob.x, pageJob.y, pineIndex, uint(0)));
+                  workItems.element(index).assign(uvec2(pageIndex, pineIndex));
                 });
               },
             );
@@ -157,7 +149,7 @@ export class ShadowPineCasterBucket {
         },
       );
     })().compute(64, [64]);
-    this.buildNode.name = `V2 ${kind} pine page work`;
+    this.buildNode.name = "V2 fixed pine page work";
   }
 
   update(source: BatchedMesh, sunDirection: Vector3, swayMeters: number) {
@@ -172,7 +164,6 @@ export class ShadowPineCasterBucket {
     this.localBounds.max.y += swayMeters;
     this.bounds.makeEmpty();
 
-    const maximumPage = SHADOW_PAGE_GRID_MIN + SHADOW_PAGE_GRID_SIZE - 1;
     for (let index = 0; index < this.instanceCount; index++) {
       source.getMatrixAt(index, this.instanceMatrix);
       this.worldMatrix.multiplyMatrices(
@@ -182,7 +173,7 @@ export class ShadowPineCasterBucket {
       this.matrixValues.set(this.worldMatrix.elements, index * 16);
       this.worldBounds.copy(this.localBounds).applyMatrix4(this.worldMatrix);
       this.bounds.union(this.worldBounds);
-      for (let level = 0; level < SHADOW_PAGE_LEVEL_COUNT; level++) {
+      for (let level = 0; level < SHADOW_LEVEL_COUNT; level++) {
         let minX = Infinity;
         let minY = Infinity;
         let maxX = -Infinity;
@@ -195,7 +186,7 @@ export class ShadowPineCasterBucket {
                 y === 0 ? this.worldBounds.min.y : this.worldBounds.max.y,
                 z === 0 ? this.worldBounds.min.z : this.worldBounds.max.z,
               );
-              const page = this.coordinates.getPageCenter(
+              const page = this.coordinates.getPageCoordinate(
                 this.corner,
                 sunDirection,
                 level,
@@ -207,25 +198,10 @@ export class ShadowPineCasterBucket {
             }
           }
         }
-        const offset = (index * SHADOW_PAGE_LEVEL_COUNT + level) * 4;
-        if (
-          maxX < SHADOW_PAGE_GRID_MIN ||
-          maxY < SHADOW_PAGE_GRID_MIN ||
-          minX > maximumPage ||
-          minY > maximumPage ||
-          !source.getVisibleAt(index)
-        ) {
-          this.rangeValues.set([1, 1, 0, 0], offset);
-          continue;
-        }
-        this.rangeValues[offset] =
-          Math.max(minX, SHADOW_PAGE_GRID_MIN) - SHADOW_PAGE_GRID_MIN;
-        this.rangeValues[offset + 1] =
-          Math.max(minY, SHADOW_PAGE_GRID_MIN) - SHADOW_PAGE_GRID_MIN;
-        this.rangeValues[offset + 2] =
-          Math.min(maxX, maximumPage) - SHADOW_PAGE_GRID_MIN;
-        this.rangeValues[offset + 3] =
-          Math.min(maxY, maximumPage) - SHADOW_PAGE_GRID_MIN;
+        this.rangeValues.set(
+          source.getVisibleAt(index) ? [minX, minY, maxX, maxY] : [1, 1, 0, 0],
+          (index * SHADOW_LEVEL_COUNT + level) * 4,
+        );
       }
     }
     this.matrixColumnsAttribute.needsUpdate = true;

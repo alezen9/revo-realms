@@ -199,7 +199,6 @@
 				<span class="category">Shadow pages</span>
 				<div class="metrics">
 					<span class="cell"><span class="label">Requested</span><span class="value">{integerFormat.format(shadowPages.requested)}</span></span>
-					<span class="cell"><span class="label">Near / far</span><span class="value">{shadowPages.nearRequested} / {shadowPages.farRequested}</span></span>
 					<span class="cell"><span class="label">Mapped</span><span class="value">{integerFormat.format(shadowPages.mapped)}</span></span>
 					<span class="cell"><span class="label">Missing</span><span class="value">{integerFormat.format(shadowPages.missing)}</span></span>
 					<span class="cell"><span class="label">Allocated</span><span class="value">{integerFormat.format(shadowPages.allocated)}</span></span>

@@ -88,8 +88,6 @@ export type ShadowCasterCounts = {
 
 export type ShadowPageStats = {
   requested: number;
-  nearRequested: number;
-  farRequested: number;
   mapped: number;
   allocated: number;
   evicted: number;

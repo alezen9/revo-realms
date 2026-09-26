@@ -87,14 +87,8 @@ export class ShadowCasterRegistry {
         deformedInstances.maxRadiusMeters <= 0)
     )
       throw new Error(`Invalid deformed shadow instances: ${mesh.name}`);
-    if (
-      kind === "deformed" &&
-      mesh instanceof BatchedMesh &&
-      (!shadowPositionNode || !shadowOpacityNode)
-    )
-      throw new Error(
-        `Batched deformed caster needs shadow nodes: ${mesh.name}`,
-      );
+    if (kind !== "fixed" && mesh instanceof BatchedMesh)
+      throw new Error(`Batched shadow caster must be fixed: ${mesh.name}`);
 
     const material = mesh.material;
     if (
