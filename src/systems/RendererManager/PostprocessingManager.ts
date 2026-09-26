@@ -566,7 +566,6 @@ export class PostprocessingManager extends RenderPipeline {
         ...this.shadowMovingAtlas.takeComputeNodes(),
       ];
       if (computeNodes.length > 0) this.renderer.compute(computeNodes);
-      if (hasPageWork) this.shadowFixedAtlas.render();
       this.shadowMovingAtlas.render();
     } finally {
       this.renderer.toneMapping = toneMapping;

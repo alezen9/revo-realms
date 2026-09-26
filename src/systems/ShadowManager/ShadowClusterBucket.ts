@@ -1,11 +1,4 @@
-import {
-  Box3,
-  BufferGeometry,
-  Float32BufferAttribute,
-  Matrix4,
-  Vector3,
-  type Mesh,
-} from "three";
+import { Box3, Matrix4, Vector3, type BufferGeometry, type Mesh } from "three";
 import {
   BatchedMesh,
   IndirectStorageBufferAttribute,
@@ -34,7 +27,7 @@ import type { ShadowResidency } from "./ShadowResidency";
 
 export const SHADOW_CLUSTER_TRIANGLES = 64;
 export const SHADOW_CLUSTER_VERTICES = SHADOW_CLUSTER_TRIANGLES * 3;
-const MAX_WORK_ITEMS = 262144;
+export const SHADOW_CLUSTER_MAX_WORK_ITEMS = 262144;
 
 type ClusterInstance = {
   mesh: Mesh;
@@ -49,19 +42,39 @@ type ClusterGeometry = {
   clusterCount: number;
 };
 
+type ClusterContent = {
+  instances: ClusterInstance[];
+  positions: number[];
+  uvs: number[];
+  clusterBounds: number[];
+  instanceClusters: number[];
+};
+
+const getCapacity = (length: number) =>
+  2 ** Math.ceil(Math.log2(Math.max(length, 1)));
+
 export class ShadowClusterBucket {
-  readonly geometry = new BufferGeometry();
   readonly positionsAttribute: StorageBufferAttribute;
   readonly uvsAttribute?: StorageBufferAttribute;
   readonly matricesAttribute: StorageBufferAttribute;
   readonly instanceClustersAttribute: StorageBufferAttribute;
+  readonly workIndirectAttribute = new IndirectStorageBufferAttribute(
+    new Uint32Array([SHADOW_CLUSTER_VERTICES, 0, 0, 0]),
+    1,
+  );
   readonly workItemsAttribute = new StorageBufferAttribute(
-    new Uint32Array(MAX_WORK_ITEMS * 2),
+    new Uint32Array(SHADOW_CLUSTER_MAX_WORK_ITEMS * 2),
     2,
   );
   readonly bounds = new Box3();
+  private hasUvs: boolean;
   private instances: ClusterInstance[] = [];
+  private positionValues: Float32Array;
+  private uvValues: Float32Array;
   private matrixValues: Float32Array;
+  private instanceClusterValues: Uint32Array;
+  private clusterBoundValues: Float32Array;
+  private clusterBoundsAttribute: StorageBufferAttribute;
   private hasDirtyBounds = true;
   private boundsNode;
   private resetNode;
@@ -76,110 +89,68 @@ export class ShadowClusterBucket {
     sunDirection: Node<"vec3">,
     hasUvs: boolean,
   ) {
-    const geometries = new Map<string, ClusterGeometry>();
-    const positions: number[] = [];
-    const uvs: number[] = [];
-    const clusterBounds: number[] = [];
-    const range = { start: 0, count: 0 };
-    for (const entry of entries) {
-      const { mesh } = entry;
-      const batchIds: (number | undefined)[] = [];
-      if (mesh instanceof BatchedMesh) {
-        for (let id = 0; id < mesh.instanceCount; id++)
-          if (mesh.getVisibleAt(id)) batchIds.push(id);
-      } else batchIds.push(undefined);
-      for (const batchInstanceId of batchIds) {
-        const geometryId =
-          mesh instanceof BatchedMesh && batchInstanceId !== undefined
-            ? mesh.getGeometryIdAt(batchInstanceId)
-            : -1;
-        const key = `${mesh.geometry.uuid}:${geometryId}`;
-        let clusters = geometries.get(key);
-        if (!clusters) {
-          if (mesh instanceof BatchedMesh) {
-            const batchRange = mesh.getGeometryRangeAt(geometryId);
-            if (!batchRange)
-              throw new Error(`Missing batched geometry range: ${mesh.name}`);
-            range.start = batchRange.start;
-            range.count = batchRange.count;
-          } else {
-            range.start = 0;
-            range.count = mesh.geometry.index
-              ? mesh.geometry.index.count
-              : mesh.geometry.getAttribute("position").count;
-          }
-          clusters = this.appendClusters(
-            mesh.geometry,
-            range,
-            positions,
-            hasUvs ? uvs : undefined,
-            clusterBounds,
-          );
-          geometries.set(key, clusters);
-        }
-        this.instances.push({
-          mesh,
-          batchInstanceId,
-          firstCluster: clusters.firstCluster,
-          clusterCount: clusters.clusterCount,
-          depthBias: entry.depthBias,
-        });
-      }
-    }
-
-    const instanceClusters: number[] = [];
-    for (let index = 0; index < this.instances.length; index++) {
-      const { firstCluster, clusterCount } = this.instances[index];
-      for (let cluster = 0; cluster < clusterCount; cluster++)
-        instanceClusters.push(
-          index,
-          (firstCluster + cluster) * SHADOW_CLUSTER_VERTICES,
-          firstCluster + cluster,
-          0,
-        );
-    }
-    const instanceClusterCount = instanceClusters.length / 4;
+    this.hasUvs = hasUvs;
+    const content = this.collectContent(entries);
+    const instanceClusterCapacity = getCapacity(
+      content.instanceClusters.length / 4,
+    );
+    this.positionValues = new Float32Array(
+      getCapacity(content.positions.length),
+    );
+    this.uvValues = new Float32Array(
+      hasUvs ? getCapacity(content.uvs.length) : 2,
+    );
+    this.matrixValues = new Float32Array(
+      getCapacity(content.instances.length) * 16,
+    );
+    this.instanceClusterValues = new Uint32Array(instanceClusterCapacity * 4);
+    this.clusterBoundValues = new Float32Array(
+      getCapacity(content.clusterBounds.length),
+    );
     this.positionsAttribute = new StorageBufferAttribute(
-      new Float32Array(positions),
+      this.positionValues,
       4,
     );
     if (hasUvs)
-      this.uvsAttribute = new StorageBufferAttribute(new Float32Array(uvs), 2);
+      this.uvsAttribute = new StorageBufferAttribute(this.uvValues, 2);
     this.instanceClustersAttribute = new StorageBufferAttribute(
-      new Uint32Array(instanceClusters),
+      this.instanceClusterValues,
       4,
     );
-    this.matrixValues = new Float32Array(this.instances.length * 16);
     this.matricesAttribute = new StorageBufferAttribute(this.matrixValues, 4);
-    const clusterBoundsAttribute = new StorageBufferAttribute(
-      new Float32Array(clusterBounds),
+    this.clusterBoundsAttribute = new StorageBufferAttribute(
+      this.clusterBoundValues,
       4,
     );
     const lightBoundsAttribute = new StorageBufferAttribute(
-      new Float32Array(instanceClusterCount * 4),
+      new Float32Array(instanceClusterCapacity * 4),
       4,
     );
     const clusterBoundsNode = storage(
-      clusterBoundsAttribute,
+      this.clusterBoundsAttribute,
       "vec4",
-      clusterBounds.length / 4,
+      this.clusterBoundsAttribute.count,
     );
     const lightBoundsNode = storage(
       lightBoundsAttribute,
       "vec4",
-      instanceClusterCount,
+      instanceClusterCapacity,
     );
     const instanceClustersNode = storage(
       this.instanceClustersAttribute,
       "uvec4",
-      instanceClusterCount,
+      instanceClusterCapacity,
     );
     const matricesNode = storage(
       this.matricesAttribute,
       "vec4",
-      this.instances.length * 4,
+      this.matricesAttribute.count,
     );
-    const workItems = storage(this.workItemsAttribute, "uvec2", MAX_WORK_ITEMS);
+    const workItems = storage(
+      this.workItemsAttribute,
+      "uvec2",
+      SHADOW_CLUSTER_MAX_WORK_ITEMS,
+    );
     const pageJobs = storage(
       residency.pageJobsAttribute,
       "uvec4",
@@ -190,31 +161,11 @@ export class ShadowClusterBucket {
       "uint",
       residency.atlasIndirectAttribute.count,
     );
-    const indirect = new IndirectStorageBufferAttribute(
-      new Uint32Array([SHADOW_CLUSTER_VERTICES, 0, 0, 0]),
-      1,
-    );
-    const indirectNode = storage(indirect, "uint", 4).toAtomic();
-    this.geometry.setAttribute(
-      "position",
-      new Float32BufferAttribute(
-        new Float32Array(SHADOW_CLUSTER_VERTICES * 3),
-        3,
-      ),
-    );
-    this.geometry.setIndirect(indirect);
-    this.geometry.setAttribute("shadowIndirect", indirect);
-    this.geometry.setAttribute("shadowPositions", this.positionsAttribute);
-    if (this.uvsAttribute)
-      this.geometry.setAttribute("shadowUvs", this.uvsAttribute);
-    this.geometry.setAttribute(
-      "shadowInstanceClusters",
-      this.instanceClustersAttribute,
-    );
-    this.geometry.setAttribute("shadowMatrices", this.matricesAttribute);
-    this.geometry.setAttribute("shadowClusterBounds", clusterBoundsAttribute);
-    this.geometry.setAttribute("shadowLightBounds", lightBoundsAttribute);
-    this.geometry.setAttribute("shadowWorkItems", this.workItemsAttribute);
+    const indirectNode = storage(
+      this.workIndirectAttribute,
+      "uint",
+      4,
+    ).toAtomic();
 
     this.boundsNode = Fn(() => {
       const instanceCluster = instanceClustersNode.element(instanceIndex);
@@ -243,7 +194,7 @@ export class ShadowClusterBucket {
         );
       }
       lightBoundsNode.element(instanceIndex).assign(lightBounds);
-    })().compute(instanceClusterCount, [64]);
+    })().compute(1, [64]);
 
     this.resetNode = Fn(() => {
       atomicStore(indirectNode.element(1), 0);
@@ -265,17 +216,30 @@ export class ShadowClusterBucket {
           .and(job.w.lessThanEqual(lastPage.y));
         If(overlaps, () => {
           const itemIndex = atomicAdd(indirectNode.element(1), 1);
-          If(itemIndex.lessThan(MAX_WORK_ITEMS), () => {
+          If(itemIndex.lessThan(SHADOW_CLUSTER_MAX_WORK_ITEMS), () => {
             workItems.element(itemIndex).assign(uvec2(jobIndex, instanceIndex));
           });
         });
       });
-    })().compute(instanceClusterCount, [64]);
+    })().compute(1, [64]);
 
     this.boundsNode.name = "V2 shadow cluster bounds";
     this.resetNode.name = "V2 shadow cluster work reset";
     this.buildNode.name = "V2 shadow cluster work";
-    this.updateMatrices();
+    this.writeContent(content);
+  }
+
+  setEntries(entries: ShadowCasterEntry[]) {
+    const content = this.collectContent(entries);
+    const hasRoom =
+      content.positions.length <= this.positionValues.length &&
+      content.uvs.length <= this.uvValues.length &&
+      content.instances.length * 16 <= this.matrixValues.length &&
+      content.instanceClusters.length <= this.instanceClusterValues.length &&
+      content.clusterBounds.length <= this.clusterBoundValues.length;
+    if (!hasRoom) return false;
+    this.writeContent(content);
+    return true;
   }
 
   invalidateBounds() {
@@ -316,10 +280,95 @@ export class ShadowClusterBucket {
   }
 
   dispose() {
-    this.geometry.dispose();
     this.boundsNode.dispose();
     this.resetNode.dispose();
     this.buildNode.dispose();
+  }
+
+  private writeContent(content: ClusterContent) {
+    this.instances = content.instances;
+    this.positionValues.set(content.positions);
+    this.uvValues.set(content.uvs);
+    this.instanceClusterValues.set(content.instanceClusters);
+    this.clusterBoundValues.set(content.clusterBounds);
+    this.positionsAttribute.needsUpdate = true;
+    if (this.uvsAttribute) this.uvsAttribute.needsUpdate = true;
+    this.instanceClustersAttribute.needsUpdate = true;
+    this.clusterBoundsAttribute.needsUpdate = true;
+    const instanceClusterCount = content.instanceClusters.length / 4;
+    this.boundsNode.count = instanceClusterCount;
+    this.buildNode.count = instanceClusterCount;
+    this.updateMatrices();
+  }
+
+  private collectContent(entries: ShadowCasterEntry[]): ClusterContent {
+    const geometries = new Map<string, ClusterGeometry>();
+    const content: ClusterContent = {
+      instances: [],
+      positions: [],
+      uvs: [],
+      clusterBounds: [],
+      instanceClusters: [],
+    };
+    const clusterTriangles: number[] = [];
+    const range = { start: 0, count: 0 };
+    for (const entry of entries) {
+      const { mesh } = entry;
+      const batchIds: (number | undefined)[] = [];
+      if (mesh instanceof BatchedMesh) {
+        for (let id = 0; id < mesh.instanceCount; id++)
+          if (mesh.getVisibleAt(id)) batchIds.push(id);
+      } else batchIds.push(undefined);
+      for (const batchInstanceId of batchIds) {
+        const geometryId =
+          mesh instanceof BatchedMesh && batchInstanceId !== undefined
+            ? mesh.getGeometryIdAt(batchInstanceId)
+            : -1;
+        const key = `${mesh.geometry.uuid}:${geometryId}`;
+        let clusters = geometries.get(key);
+        if (!clusters) {
+          if (mesh instanceof BatchedMesh) {
+            const batchRange = mesh.getGeometryRangeAt(geometryId);
+            if (!batchRange)
+              throw new Error(`Missing batched geometry range: ${mesh.name}`);
+            range.start = batchRange.start;
+            range.count = batchRange.count;
+          } else {
+            range.start = 0;
+            range.count = mesh.geometry.index
+              ? mesh.geometry.index.count
+              : mesh.geometry.getAttribute("position").count;
+          }
+          clusters = this.appendClusters(
+            mesh.geometry,
+            range,
+            content.positions,
+            this.hasUvs ? content.uvs : undefined,
+            content.clusterBounds,
+            clusterTriangles,
+          );
+          geometries.set(key, clusters);
+        }
+        content.instances.push({
+          mesh,
+          batchInstanceId,
+          firstCluster: clusters.firstCluster,
+          clusterCount: clusters.clusterCount,
+          depthBias: entry.depthBias,
+        });
+      }
+    }
+    for (let index = 0; index < content.instances.length; index++) {
+      const { firstCluster, clusterCount } = content.instances[index];
+      for (let cluster = 0; cluster < clusterCount; cluster++)
+        content.instanceClusters.push(
+          index,
+          (firstCluster + cluster) * SHADOW_CLUSTER_VERTICES,
+          firstCluster + cluster,
+          clusterTriangles[firstCluster + cluster],
+        );
+    }
+    return content;
   }
 
   private appendClusters(
@@ -328,6 +377,7 @@ export class ShadowClusterBucket {
     positions: number[],
     uvs: number[] | undefined,
     clusterBounds: number[],
+    clusterTriangles: number[],
   ): ClusterGeometry {
     const position = geometry.getAttribute("position");
     const uv = geometry.getAttribute("uv");
@@ -363,6 +413,12 @@ export class ShadowClusterBucket {
         minimum.min(vertex);
         maximum.max(vertex);
       }
+      clusterTriangles.push(
+        Math.min(
+          SHADOW_CLUSTER_TRIANGLES,
+          triangleCount - cluster * SHADOW_CLUSTER_TRIANGLES,
+        ),
+      );
       clusterBounds.push(
         minimum.x,
         minimum.y,

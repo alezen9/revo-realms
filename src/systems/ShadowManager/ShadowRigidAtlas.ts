@@ -3,11 +3,9 @@ import {
   BufferGeometry,
   DepthTexture,
   DoubleSide,
-  Float32BufferAttribute,
   LessEqualCompare,
   LinearFilter,
   Mesh,
-  NearestFilter,
   OrthographicCamera,
   RedFormat,
   Scene,
@@ -21,6 +19,7 @@ import {
   type ComputeNode,
   RenderTarget,
   type StorageBufferNode,
+  type TextureNode,
   type Node,
   type WebGPURenderer,
 } from "three/webgpu";
@@ -50,7 +49,6 @@ import {
   uvec4,
   uv,
   varyingProperty,
-  vertexIndex,
   vec2,
   vec4,
 } from "three/tsl";
@@ -61,6 +59,7 @@ import type {
 import { ShadowRigidCasterBucket } from "./ShadowRigidCasterBucket";
 import { ShadowClusterBucket } from "./ShadowClusterBucket";
 import { ShadowDeformedCasterBucket } from "./ShadowDeformedCasterBucket";
+import { ShadowFixedPool } from "./ShadowFixedPool";
 import {
   SHADOW_LEVEL_COUNT,
   SHADOW_PAGE_OFFSET,
@@ -79,8 +78,19 @@ type CasterMesh = Mesh<BufferGeometry, MeshBasicNodeMaterial>;
 
 const DEPTH_BIAS_TEXELS = { fixed: 3, moving: 8 };
 const PENUMBRA_TAP_COUNT = 8;
+const TENT_RADIUS_TEXELS = 0.51;
+const SOFT_TAP_DIRECTIONS = [
+  vec2(-0.5, -0.5),
+  vec2(0.5, -0.5),
+  vec2(-0.5, 0.5),
+  vec2(0.5, 0.5),
+];
 const MAX_RECEIVER_SLOPE = 4;
 const GOLDEN_ANGLE = 2.399963;
+
+type AtlasDepthStore =
+  | { pool: ShadowFixedPool }
+  | { renderTarget: RenderTarget; depthTextureNode: TextureNode };
 
 type ShadowReceiver = {
   worldY: Node<"float">;
@@ -136,7 +146,7 @@ export class ShadowRigidAtlas {
   private filter: ShadowFilter;
   private kind: "fixed" | "moving";
   private atlasGridSize: number;
-  private renderTarget: RenderTarget;
+  private depthStore: AtlasDepthStore;
   private scene = new Scene();
   private camera = new OrthographicCamera(-1, 1, 1, -1, 0, 1);
   private pageJobsNode;
@@ -146,10 +156,10 @@ export class ShadowRigidAtlas {
   private sources: ShadowCasterEntry[] = [];
   private bucket?: ShadowRigidCasterBucket;
   private casterMeshes: CasterMesh[] = [];
-  private clusterCasters: {
-    bucket: ShadowClusterBucket;
-    mesh: CasterMesh;
-  }[] = [];
+  private clusterCasters = new Map<
+    string,
+    { bucket: ShadowClusterBucket; rasterNode: ComputeNode }
+  >();
   private deformedCasters: {
     bucket: ShadowDeformedCasterBucket;
     mesh: CasterMesh;
@@ -167,9 +177,7 @@ export class ShadowRigidAtlas {
   private biasVersion = -1;
   private previousSunDirection = new Vector3();
   private bounds = new Box3();
-  private isTargetInitialized = false;
   private isReady = uniform(0);
-  private depthTextureNode;
 
   constructor(
     renderer: WebGPURenderer,
@@ -184,39 +192,16 @@ export class ShadowRigidAtlas {
     this.filter = filter;
     this.kind = kind;
     this.pageJobOffset = kind === "fixed" ? 0 : residency.capacity * 2;
-    this.atlasGridSize = Math.ceil(
-      Math.sqrt(
-        kind === "fixed" ? residency.capacity : residency.dynamicCapacity,
-      ),
-    );
-    const atlasSize = this.atlasGridSize * SHADOW_PAGE_TEXELS;
-    this.renderTarget = new RenderTarget(atlasSize, atlasSize, {
-      depthBuffer: true,
-      format: RedFormat,
-      samples: 0,
-      stencilBuffer: false,
-      type: UnsignedByteType,
-    });
-    this.renderTarget.texture.name = `V2 ${kind} depth debug`;
-    this.renderTarget.texture.magFilter = NearestFilter;
-    this.renderTarget.texture.minFilter = NearestFilter;
-    const depthTexture = new DepthTexture(
-      atlasSize,
-      atlasSize,
-      UnsignedShortType,
-    );
-    depthTexture.compareFunction = LessEqualCompare;
-    depthTexture.magFilter = LinearFilter;
-    depthTexture.minFilter = LinearFilter;
-    depthTexture.name = `V2 ${kind} depth`;
-    this.renderTarget.depthTexture = depthTexture;
-    this.depthTextureNode = texture(depthTexture);
+    this.atlasGridSize = Math.ceil(Math.sqrt(residency.dynamicCapacity));
+    this.depthStore =
+      kind === "fixed"
+        ? { pool: new ShadowFixedPool(residency) }
+        : this.createDepthTarget();
     this.pageJobsNode = storage(
       residency.pageJobsAttribute,
       "uvec4",
       residency.capacity * 3,
     );
-    if (kind === "fixed") this.scene.add(this.createClearMesh());
   }
 
   syncCasters(
@@ -251,7 +236,7 @@ export class ShadowRigidAtlas {
 
     let minimumY = terrainBounds.min - 8;
     let maximumY = terrainBounds.max + 64;
-    for (const { bucket } of this.clusterCasters) {
+    for (const { bucket } of this.clusterCasters.values()) {
       if (hasRosterChange || hasMovement || hasBiasChange)
         bucket.updateMatrices();
       else bucket.invalidateBounds();
@@ -277,37 +262,43 @@ export class ShadowRigidAtlas {
   }
 
   private rebuildClusterCasters(registry: ShadowCasterRegistry) {
-    for (const { mesh, bucket } of this.clusterCasters) {
-      this.scene.remove(mesh);
-      mesh.material.dispose();
-      bucket.dispose();
-    }
-    this.clusterCasters = [];
-    const opaqueEntries: ShadowCasterEntry[] = [];
-    const groups: ShadowCasterEntry[][] = [opaqueEntries];
+    if (!("pool" in this.depthStore)) return;
+    const { pool } = this.depthStore;
+    const groups = new Map<string, ShadowCasterEntry[]>([["opaque", []]]);
     for (const entry of registry.casters) {
       if (!entry.castsShadow || entry.kind !== "fixed" || entry.gpuInstances)
         continue;
-      if (entry.opacity) groups.push([entry]);
-      else opaqueEntries.push(entry);
+      const key = entry.opacity ? entry.mesh.uuid : "opaque";
+      const entries = groups.get(key);
+      if (entries) entries.push(entry);
+      else groups.set(key, [entry]);
     }
-    for (const entries of groups) {
-      if (entries.length === 0) continue;
-      const opacity = entries[0].opacity;
+    for (const [key, caster] of this.clusterCasters) {
+      if (groups.has(key)) continue;
+      caster.rasterNode.dispose();
+      caster.bucket.dispose();
+      this.clusterCasters.delete(key);
+    }
+    for (const [key, entries] of groups) {
+      const caster = this.clusterCasters.get(key);
+      if (caster?.bucket.setEntries(entries)) continue;
+      caster?.rasterNode.dispose();
+      caster?.bucket.dispose();
+      const { opacity, alphaTest } = entries[0] ?? { alphaTest: 0 };
       const bucket = new ShadowClusterBucket(
         this.residency,
         entries,
         this.sunDirection,
         opacity !== undefined,
       );
-      const mesh = new Mesh(
-        bucket.geometry,
-        this.createClusterMaterial(bucket, entries[0]),
-      );
-      mesh.frustumCulled = false;
-      mesh.renderOrder = 1;
-      this.scene.add(mesh);
-      this.clusterCasters.push({ bucket, mesh });
+      const rasterNode = pool.createRasterNode(bucket, {
+        sunDirection: this.sunDirection,
+        minimumY: this.minimumY,
+        maximumY: this.maximumY,
+        opacity,
+        alphaTest,
+      });
+      this.clusterCasters.set(key, { bucket, rasterNode });
     }
   }
 
@@ -372,27 +363,23 @@ export class ShadowRigidAtlas {
       nodes.push(...bucket.computeNodes);
     if (this.dynamicTouchNode && this.dynamicJobsNode)
       nodes.push(this.dynamicTouchNode, this.dynamicJobsNode);
-    for (const { bucket } of this.clusterCasters)
-      nodes.push(...bucket.takeComputeNodes());
+    if ("pool" in this.depthStore) {
+      nodes.push(this.depthStore.pool.clearComputeNode);
+      this.isReady.value = 1;
+    }
+    for (const { bucket, rasterNode } of this.clusterCasters.values())
+      nodes.push(...bucket.takeComputeNodes(), rasterNode);
     return nodes;
   }
 
   render() {
-    if (
-      !this.bucket &&
-      this.clusterCasters.length === 0 &&
-      this.deformedCasters.length === 0
-    )
-      return;
+    if (!("renderTarget" in this.depthStore)) return;
+    if (!this.bucket && this.deformedCasters.length === 0) return;
     const previousTarget = this.renderer.getRenderTarget();
     const wasAutoClearEnabled = this.renderer.autoClear;
-    this.renderer.autoClear = this.kind === "moving";
-    this.renderer.setRenderTarget(this.renderTarget);
+    this.renderer.autoClear = true;
+    this.renderer.setRenderTarget(this.depthStore.renderTarget);
     try {
-      if (!this.isTargetInitialized) {
-        this.renderer.clear(true, true, false);
-        this.isTargetInitialized = true;
-      }
       this.renderer.render(this.scene, this.camera);
       this.isReady.value = 1;
     } finally {
@@ -402,13 +389,15 @@ export class ShadowRigidAtlas {
   }
 
   sampleDebugDepth(slot: Node<"uint">, pageUv: Node<"vec2">) {
-    const texel = uvec2(
-      slot.mod(this.atlasGridSize),
-      slot.div(this.atlasGridSize),
-    )
-      .mul(SHADOW_PAGE_TEXELS)
-      .add(uvec2(pageUv.mul(SHADOW_PAGE_TEXELS).floor()));
-    return textureLoad(this.depthTextureNode, texel).level(uint(0)).r;
+    return this.loadDepth(
+      slot,
+      uvec2(
+        pageUv
+          .mul(SHADOW_PAGE_TEXELS)
+          .floor()
+          .clamp(0, SHADOW_PAGE_TEXELS - 1),
+      ),
+    );
   }
 
   computeVisibility(
@@ -447,7 +436,6 @@ export class ShadowRigidAtlas {
         .greaterThan(0)
         .and(sceneDepth.lessThan(1))
         .and(this.sunDirection.y.lessThan(-0.25));
-      const { softness } = this.filter;
       const visibility = float(1).toVar();
       If(isInside, () => {
         const centerPage = this.lookupPage(
@@ -456,24 +444,38 @@ export class ShadowRigidAtlas {
         );
         const visibilitySum = float(0).toVar();
         const weight = float(0).toVar();
+        const tentOrigin = pagePosition
+          .fract()
+          .mul(SHADOW_PAGE_TEXELS)
+          .sub(1)
+          .floor();
+        const isTentAvailable = tentOrigin.x
+          .greaterThanEqual(0)
+          .and(tentOrigin.y.greaterThanEqual(0))
+          .and(tentOrigin.x.lessThanEqual(SHADOW_PAGE_TEXELS - 3))
+          .and(tentOrigin.y.lessThanEqual(SHADOW_PAGE_TEXELS - 3))
+          .and(this.kind === "fixed" ? centerPage.isResident : bool(false))
+          .toVar();
         If(isSoftReceiver, () => {
-          for (const direction of [
-            vec2(-1, -1),
-            vec2(1, -1),
-            vec2(-1, 1),
-            vec2(1, 1),
-          ]) {
-            const tap = this.sampleTap(
-              pagePosition,
-              direction.mul(softness).div(SHADOW_PAGE_TEXELS),
-              level,
-              centerPage,
-              receiver,
-              dynamicAtlas,
+          If(isTentAvailable, () => {
+            visibilitySum.assign(
+              this.sampleTent(pagePosition, centerPage, receiver, dynamicAtlas),
             );
-            visibilitySum.addAssign(tap.visibility);
-            weight.addAssign(tap.weight);
-          }
+            weight.assign(1);
+          }).Else(() => {
+            for (const direction of SOFT_TAP_DIRECTIONS) {
+              const tap = this.sampleTap(
+                pagePosition,
+                direction.div(SHADOW_PAGE_TEXELS),
+                level,
+                centerPage,
+                receiver,
+                dynamicAtlas,
+              );
+              visibilitySum.addAssign(tap.visibility);
+              weight.addAssign(tap.weight);
+            }
+          });
         }).Else(() => {
           const radius = this.computePenumbraTexels(
             pagePosition,
@@ -481,25 +483,40 @@ export class ShadowRigidAtlas {
             receiver,
             dynamicAtlas,
           );
-          const rotation = getInterleavedGradientNoise(screenCoordinate.xy).mul(
-            Math.PI * 2,
-          );
-          for (let tapIndex = 0; tapIndex < PENUMBRA_TAP_COUNT; tapIndex++) {
-            const angle = rotation.add(tapIndex * GOLDEN_ANGLE);
-            const offset = vec2(cos(angle), sin(angle)).mul(
-              radius.mul(Math.sqrt((tapIndex + 0.5) / PENUMBRA_TAP_COUNT)),
-            );
-            const tap = this.sampleTap(
-              pagePosition,
-              offset.div(SHADOW_PAGE_TEXELS),
-              level,
-              centerPage,
-              receiver,
-              dynamicAtlas,
-            );
-            visibilitySum.addAssign(tap.visibility);
-            weight.addAssign(tap.weight);
-          }
+          If(
+            isTentAvailable.and(radius.lessThanEqual(TENT_RADIUS_TEXELS)),
+            () => {
+              visibilitySum.assign(
+                this.sampleTent(
+                  pagePosition,
+                  centerPage,
+                  receiver,
+                  dynamicAtlas,
+                ),
+              );
+              weight.assign(1);
+            },
+          ).Else(() => {
+            const rotation = getInterleavedGradientNoise(
+              screenCoordinate.xy,
+            ).mul(Math.PI * 2);
+            for (let tapIndex = 0; tapIndex < PENUMBRA_TAP_COUNT; tapIndex++) {
+              const angle = rotation.add(tapIndex * GOLDEN_ANGLE);
+              const offset = vec2(cos(angle), sin(angle)).mul(
+                radius.mul(Math.sqrt((tapIndex + 0.5) / PENUMBRA_TAP_COUNT)),
+              );
+              const tap = this.sampleTap(
+                pagePosition,
+                offset.div(SHADOW_PAGE_TEXELS),
+                level,
+                centerPage,
+                receiver,
+                dynamicAtlas,
+              );
+              visibilitySum.addAssign(tap.visibility);
+              weight.addAssign(tap.weight);
+            }
+          });
         });
         If(weight.greaterThan(0), () => {
           visibility.assign(visibilitySum.div(weight));
@@ -620,10 +637,6 @@ export class ShadowRigidAtlas {
     pageUv: Node<"vec2">,
     receiver: ShadowReceiver,
   ) {
-    const tile = uvec2(
-      slot.mod(this.atlasGridSize),
-      slot.div(this.atlasGridSize),
-    ).mul(SHADOW_PAGE_TEXELS);
     const minimumHeight = this.getReceiverBias(receiver).mul(2);
     let heightSum: Node<"float"> = float(0);
     let count: Node<"float"> = float(0);
@@ -641,9 +654,7 @@ export class ShadowRigidAtlas {
           .add(texelOffset)
           .clamp(0, SHADOW_PAGE_TEXELS - 1),
       );
-      const depth = textureLoad(this.depthTextureNode, tile.add(texel)).level(
-        uint(0),
-      ).r;
+      const depth = this.loadDepth(slot, texel);
       const blockerHeight = this.maximumY
         .sub(depth.mul(this.maximumY.sub(this.minimumY)))
         .sub(
@@ -670,11 +681,111 @@ export class ShadowRigidAtlas {
       .greaterThanEqual(this.minimumY)
       .and(receiver.worldY.lessThanEqual(this.maximumY));
     return isInRange.select(
-      this.depthTextureNode
-        .sample(this.computeAtlasUv(slot, pageUv))
-        .compare(receiverDepth),
+      this.compareDepth(slot, pageUv, receiverDepth),
       float(1),
     );
+  }
+
+  private sampleTent(
+    pagePosition: Node<"vec2">,
+    centerPage: ShadowPageLookup,
+    receiver: ShadowReceiver,
+    dynamicAtlas?: ShadowRigidAtlas,
+  ) {
+    const visibility = this.sampleDepthTent(
+      centerPage.slot,
+      pagePosition.fract(),
+      receiver,
+    ).toVar();
+    if (dynamicAtlas)
+      If(centerPage.hasDynamic, () => {
+        const dynamicSum = float(0).toVar();
+        for (const direction of SOFT_TAP_DIRECTIONS) {
+          const pageOffset = direction.div(SHADOW_PAGE_TEXELS);
+          dynamicSum.addAssign(
+            dynamicAtlas.sampleDepth(
+              centerPage.dynamicSlot,
+              pagePosition.add(pageOffset).fract(),
+              pageOffset,
+              receiver,
+            ),
+          );
+        }
+        visibility.mulAssign(dynamicSum.mul(0.25));
+      });
+    return visibility;
+  }
+
+  private sampleDepthTent(
+    slot: Node<"uint">,
+    pageUv: Node<"vec2">,
+    receiver: ShadowReceiver,
+  ) {
+    const depthRange = this.maximumY.sub(this.minimumY);
+    const receiverDepth = this.maximumY
+      .sub(receiver.worldY)
+      .sub(this.getReceiverBias(receiver))
+      .div(depthRange);
+    const isInRange = receiver.worldY
+      .greaterThanEqual(this.minimumY)
+      .and(receiver.worldY.lessThanEqual(this.maximumY));
+    if (!("pool" in this.depthStore)) return float(1);
+    return isInRange.select(
+      this.depthStore.pool.compareDepthTent(
+        slot,
+        pageUv,
+        receiverDepth,
+        receiver.heightPerPage.negate().div(depthRange),
+      ),
+      float(1),
+    );
+  }
+
+  private loadDepth(slot: Node<"uint">, texel: Node<"uvec2">) {
+    if ("pool" in this.depthStore)
+      return this.depthStore.pool.loadDepth(slot, texel);
+    const tile = uvec2(
+      slot.mod(this.atlasGridSize),
+      slot.div(this.atlasGridSize),
+    ).mul(SHADOW_PAGE_TEXELS);
+    return textureLoad(this.depthStore.depthTextureNode, tile.add(texel)).level(
+      uint(0),
+    ).r;
+  }
+
+  private compareDepth(
+    slot: Node<"uint">,
+    pageUv: Node<"vec2">,
+    receiverDepth: Node<"float">,
+  ) {
+    if ("pool" in this.depthStore)
+      return this.depthStore.pool.compareDepth(slot, pageUv, receiverDepth);
+    return this.depthStore.depthTextureNode
+      .sample(this.computeAtlasUv(slot, pageUv))
+      .compare(receiverDepth).r;
+  }
+
+  private createDepthTarget() {
+    const atlasSize = this.atlasGridSize * SHADOW_PAGE_TEXELS;
+    const renderTarget = new RenderTarget(atlasSize, atlasSize, {
+      depthBuffer: true,
+      format: RedFormat,
+      samples: 0,
+      stencilBuffer: false,
+      type: UnsignedByteType,
+    });
+    renderTarget.texture.name = `V2 ${this.kind} depth debug`;
+    const depthTexture = new DepthTexture(
+      atlasSize,
+      atlasSize,
+      UnsignedShortType,
+    );
+    depthTexture.compareFunction = LessEqualCompare;
+    depthTexture.magFilter = LinearFilter;
+    depthTexture.minFilter = LinearFilter;
+    depthTexture.name = `V2 ${this.kind} depth`;
+    renderTarget.depthTexture = depthTexture;
+    return { renderTarget, depthTextureNode: texture(depthTexture) };
   }
 
   private getReceiverHeight(
@@ -928,35 +1039,6 @@ export class ShadowRigidAtlas {
     return tile.add(pageUv).div(this.atlasGridSize);
   }
 
-  private createClearMesh() {
-    const geometry = new BufferGeometry();
-    geometry.setAttribute(
-      "position",
-      new Float32BufferAttribute(
-        [-1, -1, 0, 1, -1, 0, 1, 1, 0, -1, -1, 0, 1, 1, 0, -1, 1, 0],
-        3,
-      ),
-    );
-    geometry.setIndirect(this.residency.atlasIndirectAttribute);
-    const material = new MeshBasicNodeMaterial();
-    material.depthTest = false;
-    material.depthWrite = true;
-    material.side = DoubleSide;
-    material.depthNode = float(1);
-    material.vertexNode = Fn(() => {
-      const slot = this.pageJobsNode.element(
-        instanceIndex.add(this.pageJobOffset),
-      ).y;
-      const pageUv = positionGeometry.xy.mul(0.5).add(0.5);
-      const atlasUv = this.computeAtlasUv(slot, pageUv);
-      return vec4(atlasUv.x.mul(2).sub(1), atlasUv.y.mul(-2).add(1), 1, 1);
-    })();
-    material.fragmentNode = vec4(1);
-    const mesh = new Mesh(geometry, material);
-    mesh.frustumCulled = false;
-    return mesh;
-  }
-
   private getJobPageUv(job: Node<"uvec4">, worldPosition: Node<"vec3">) {
     return this.getPageUv(
       job.x.div(SHADOW_PAGES_PER_LEVEL),
@@ -1032,80 +1114,6 @@ export class ShadowRigidAtlas {
       if (opacity) opacity.lessThan(alphaTest).discard();
       return vec4(depth, 0, 0, 1);
     })();
-  }
-
-  private createClusterMaterial(
-    bucket: ShadowClusterBucket,
-    entry: ShadowCasterEntry,
-  ) {
-    const workItems = storage(
-      bucket.workItemsAttribute,
-      "uvec2",
-      bucket.workItemsAttribute.count,
-    );
-    const instanceClusters = storage(
-      bucket.instanceClustersAttribute,
-      "uvec4",
-      bucket.instanceClustersAttribute.count,
-    );
-    const positions = storage(
-      bucket.positionsAttribute,
-      "vec4",
-      bucket.positionsAttribute.count,
-    );
-    const matrices = storage(
-      bucket.matricesAttribute,
-      "vec4",
-      bucket.matricesAttribute.count,
-    );
-    const uvsAttribute = bucket.uvsAttribute;
-    const material = new MeshBasicNodeMaterial();
-    material.depthTest = true;
-    material.depthWrite = true;
-    material.side = DoubleSide;
-    const pageUv = varyingProperty("vec2", "clusterPageUv");
-    const depth = varyingProperty("float", "clusterDepth");
-    const casterUv = varyingProperty("vec2", "clusterUv");
-    material.vertexNode = Fn(() => {
-      const workItem = workItems.element(instanceIndex);
-      const job = this.pageJobsNode.element(workItem.x.add(this.pageJobOffset));
-      const instanceCluster = instanceClusters.element(workItem.y);
-      const vertex = instanceCluster.y.add(vertexIndex);
-      const localPosition = positions.element(vertex).xyz;
-      const matrixOffset = instanceCluster.x.mul(4);
-      const translation = matrices.element(matrixOffset.add(3));
-      const worldPosition = matrices
-        .element(matrixOffset)
-        .mul(localPosition.x)
-        .add(matrices.element(matrixOffset.add(1)).mul(localPosition.y))
-        .add(matrices.element(matrixOffset.add(2)).mul(localPosition.z))
-        .add(vec4(translation.xyz, 0)).xyz;
-      if (uvsAttribute)
-        casterUv.assign(
-          storage(uvsAttribute, "vec2", uvsAttribute.count).element(vertex),
-        );
-      const casterPageUv = this.getJobPageUv(job, worldPosition);
-      const casterDepth = this.maximumY
-        .sub(worldPosition.y)
-        .add(translation.w)
-        .div(this.maximumY.sub(this.minimumY));
-      pageUv.assign(casterPageUv);
-      depth.assign(casterDepth);
-      const atlasUv = this.computeAtlasUv(job.y, casterPageUv);
-      return vec4(
-        atlasUv.x.mul(2).sub(1),
-        atlasUv.y.mul(-2).add(1),
-        casterDepth,
-        1,
-      );
-    })();
-    material.fragmentNode = this.createCasterFragment(
-      pageUv,
-      depth,
-      entry.opacity?.(casterUv),
-      entry.alphaTest,
-    );
-    return material;
   }
 
   private createCasterMaterial(bucket: ShadowRigidCasterBucket) {
