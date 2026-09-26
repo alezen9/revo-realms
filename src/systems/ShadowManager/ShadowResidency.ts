@@ -94,6 +94,7 @@ export class ShadowResidency {
   private freeNode;
   private allocateNode;
   private isReadbackPending = false;
+  private hasPendingWork = true;
   private nextReadbackTime = 0;
   readonly stats: ShadowPageStats = {
     requested: 0,
@@ -125,7 +126,7 @@ export class ShadowResidency {
       Loop({ start: 0, end: COUNTER_COUNT, type: "uint" }, ({ i: index }) => {
         atomicStore(this.atomicCounters.element(index), 0);
       });
-      for (const index of [1, 5])
+      for (const index of [1])
         atomicStore(this.atomicAtlasIndirect.element(index), 0);
     })().compute(1, [1]);
 
@@ -299,6 +300,7 @@ export class ShadowResidency {
   invalidate() {
     this.sunGeneration.value = (this.sunGeneration.value + 1) >>> 0;
     if (this.sunGeneration.value === 0) this.sunGeneration.value = 1;
+    this.hasPendingWork = true;
   }
 
   resolvePage(pageKey: Node<"uint">, pageTag: Node<"uint">) {
@@ -317,22 +319,27 @@ export class ShadowResidency {
     return { slot, isResident, hasDynamic };
   }
 
-  run(sunDirection: Vector3) {
+  run(sunDirection: Vector3, hasNewRequests: boolean) {
     this.frame.value = (this.frame.value + 1) >>> 0;
     if (!this.previousSunDirection.equals(sunDirection)) {
       this.previousSunDirection.copy(sunDirection);
       this.invalidate();
     }
+    if (!hasNewRequests && !this.hasPendingWork && this.stats.missing === 0)
+      return false;
+    this.hasPendingWork = false;
     this.renderer.compute(this.resetNode);
     this.renderer.compute(this.collectNode);
     this.renderer.compute(this.freeNode);
     this.renderer.compute(this.allocateNode);
 
     const now = performance.now();
-    if (this.isReadbackPending || now < this.nextReadbackTime) return;
-    this.isReadbackPending = true;
-    this.nextReadbackTime = now + READBACK_INTERVAL_MS;
-    void this.refreshStatsAsync();
+    if (!this.isReadbackPending && now >= this.nextReadbackTime) {
+      this.isReadbackPending = true;
+      this.nextReadbackTime = now + READBACK_INTERVAL_MS;
+      void this.refreshStatsAsync();
+    }
+    return true;
   }
 
   private async refreshStatsAsync() {

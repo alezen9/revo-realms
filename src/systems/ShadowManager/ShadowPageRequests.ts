@@ -251,7 +251,7 @@ export class ShadowPageRequests {
       this.previousResolutionBias === shadowResolutionBias.value &&
       this.previousSoftReceiverLevelBias === shadowSoftReceiverLevelBias.value
     )
-      return;
+      return false;
     this.depthSize.value.set(width, height);
     this.renderer.compute(this.resetNode);
     this.renderer.compute(this.requestNode, [
@@ -267,5 +267,6 @@ export class ShadowPageRequests {
     this.previousReceiverRevision = receiverRevision;
     this.previousResolutionBias = shadowResolutionBias.value;
     this.previousSoftReceiverLevelBias = shadowSoftReceiverLevelBias.value;
+    return true;
   }
 }

@@ -26,6 +26,7 @@ import {
 import {
   atomicAdd,
   atomicLoad,
+  atomicStore,
   bool,
   float,
   Fn,
@@ -93,6 +94,7 @@ export class ShadowRigidAtlas {
     mesh: Mesh;
   }[] = [];
   private dynamicJobsNode?: ComputeNode;
+  private dynamicResetNode: ComputeNode;
   private registryVersion = -1;
   private movingRevision = -1;
   private fixedRevision = -1;
@@ -112,6 +114,14 @@ export class ShadowRigidAtlas {
   ) {
     this.renderer = renderer;
     this.residency = residency;
+    this.dynamicResetNode = Fn(() => {
+      atomicStore(
+        storage(residency.atlasIndirectAttribute, "uint", 8)
+          .toAtomic()
+          .element(5),
+        0,
+      );
+    })().compute(1, [1]);
     this.sunDirection = sunDirection;
     this.softness = softness;
     this.kind = kind;
@@ -293,7 +303,10 @@ export class ShadowRigidAtlas {
     )
       return;
     for (const { bucket } of this.deformedCasters) bucket.run();
-    if (this.dynamicJobsNode) this.renderer.compute(this.dynamicJobsNode);
+    if (this.dynamicJobsNode) {
+      this.renderer.compute(this.dynamicResetNode);
+      this.renderer.compute(this.dynamicJobsNode);
+    }
     this.bucket?.run();
     for (const { bucket } of this.clusterCasters) bucket.run();
     const previousTarget = this.renderer.getRenderTarget();
