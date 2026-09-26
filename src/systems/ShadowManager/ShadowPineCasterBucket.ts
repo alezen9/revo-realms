@@ -39,7 +39,6 @@ export class ShadowPineCasterBucket {
   private pageRangesAttribute: StorageBufferAttribute;
   private indirectArguments: IndirectStorageBufferAttribute;
   private buildNode;
-  private localBounds = new Box3();
   private worldBounds = new Box3();
   private instanceMatrix = new Matrix4();
   private worldMatrix = new Matrix4();
@@ -148,16 +147,13 @@ export class ShadowPineCasterBucket {
     this.buildNode.name = "V2 fixed pine page work";
   }
 
-  update(source: BatchedMesh, sunDirection: Vector3, swayMeters: number) {
+  update(source: BatchedMesh, sunDirection: Vector3) {
     if (source.instanceCount !== this.instanceCount)
       throw new Error("Pine shadow instance count changed");
     source.updateWorldMatrix(true, false);
     source.geometry.computeBoundingBox();
     const sourceBounds = source.geometry.boundingBox;
     if (!sourceBounds) throw new Error("Pine shadow caster needs bounds");
-    this.localBounds.copy(sourceBounds);
-    this.localBounds.min.y -= swayMeters;
-    this.localBounds.max.y += swayMeters;
     this.bounds.makeEmpty();
 
     for (let index = 0; index < this.instanceCount; index++) {
@@ -167,7 +163,7 @@ export class ShadowPineCasterBucket {
         this.instanceMatrix,
       );
       this.matrixValues.set(this.worldMatrix.elements, index * 16);
-      this.worldBounds.copy(this.localBounds).applyMatrix4(this.worldMatrix);
+      this.worldBounds.copy(sourceBounds).applyMatrix4(this.worldMatrix);
       this.bounds.union(this.worldBounds);
       for (let level = 0; level < SHADOW_LEVEL_COUNT; level++) {
         let minX = Infinity;

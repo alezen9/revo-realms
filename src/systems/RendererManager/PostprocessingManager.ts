@@ -44,13 +44,13 @@ import {
 } from "..";
 import {
   SHADOW_PAGE_TEXELS,
-  getShadowLevel,
+  getShadowDynamicLevel,
+  getShadowReceiverLevel,
   getShadowLightPosition,
   getShadowPageCoordinate,
   getShadowPageKey,
   getShadowPageSize,
   getShadowPageTag,
-  shadowDynamicLevel,
   shadowResolutionBias,
   shadowSoftReceiverLevelBias,
 } from "../ShadowManager/ShadowPageCoordinates";
@@ -73,8 +73,7 @@ export class PostprocessingManager extends RenderPipeline {
   private uSaturation = uniform(1);
   private uSunVisibility = uniform(1);
   private uShadowIntensity = uniform(0.7);
-  private uRigidShadowSoftness = uniform(0.5);
-  private uDynamicShadowSoftness = uniform(1);
+  private uShadowSoftness = uniform(0.5);
   private uProjectionMatrixInverse = uniform(new Matrix4());
   private uCameraWorldMatrix = uniform(new Matrix4());
   private uCameraWorldPosition = uniform(this.cameraWorldPosition);
@@ -151,14 +150,14 @@ export class PostprocessingManager extends RenderPipeline {
       renderer,
       this.shadowResidency,
       lightingManager.uSunDir,
-      this.uRigidShadowSoftness,
+      this.uShadowSoftness,
       "fixed",
     );
     this.shadowMovingAtlas = new ShadowRigidAtlas(
       renderer,
       this.shadowResidency,
       lightingManager.uSunDir,
-      this.uDynamicShadowSoftness,
+      this.uShadowSoftness,
       "moving",
     );
     monitoringManager.setShadowPageStats(this.shadowResidency.stats);
@@ -170,8 +169,8 @@ export class PostprocessingManager extends RenderPipeline {
         NoToneMapping,
       ),
       pages: this.makePageOutput(),
-      fixedDepth: this.makeRigidDepthOutput(this.shadowFixedAtlas),
-      movingDepth: this.makeRigidDepthOutput(this.shadowMovingAtlas),
+      fixedDepth: this.makeRigidDepthOutput(this.shadowFixedAtlas, false),
+      movingDepth: this.makeRigidDepthOutput(this.shadowMovingAtlas, true),
       fixedShadow: this.makeRigidShadowOutput(this.shadowFixedAtlas),
       movingShadow: this.makeRigidShadowOutput(this.shadowMovingAtlas),
     };
@@ -225,36 +224,14 @@ export class PostprocessingManager extends RenderPipeline {
       max: 1,
       step: 0.05,
     });
-    this.debugFolder.addBinding(this.uRigidShadowSoftness, "value", {
-      label: "Rigid shadow softness",
-      min: 0.25,
-      max: 1.5,
-      step: 0.05,
-    });
-    this.debugFolder.addBinding(this.uDynamicShadowSoftness, "value", {
-      label: "Dynamic shadow softness",
-      min: 0.25,
+    this.debugFolder.addBinding(this.uShadowSoftness, "value", {
+      label: "Shadow softness",
+      min: 0,
       max: 3,
       step: 0.05,
     });
-    this.debugFolder.addBinding(
-      this.shadowMovingAtlas.depthBiasTexels,
-      "value",
-      {
-        label: "Dynamic shadow bias",
-        min: 0,
-        max: 16,
-        step: 0.5,
-      },
-    );
     this.debugFolder.addBinding(shadowSoftReceiverLevelBias, "value", {
       label: "Soft receiver blur level",
-      min: 0,
-      max: 4,
-      step: 1,
-    });
-    this.debugFolder.addBinding(shadowDynamicLevel, "value", {
-      label: "Dynamic shadow level",
       min: 0,
       max: 4,
       step: 1,
@@ -279,7 +256,7 @@ export class PostprocessingManager extends RenderPipeline {
     this.needsUpdate = true;
   };
 
-  private getDebugPage() {
+  private getDebugPage(isDynamic: boolean) {
     const depth = this.getMainSceneTextureNode("depth").sample(screenUV).r;
     const viewPosition = getViewPosition(
       screenUV,
@@ -289,7 +266,13 @@ export class PostprocessingManager extends RenderPipeline {
     const worldPosition = this.uCameraWorldMatrix.mul(
       vec4(viewPosition, 1),
     ).xyz;
-    const level = getShadowLevel(viewPosition.length());
+    const receiverLevel = getShadowReceiverLevel(
+      viewPosition.length(),
+      this.isSoftShadowReceiver(screenUV),
+    );
+    const level = isDynamic
+      ? getShadowDynamicLevel(receiverLevel)
+      : receiverLevel;
     const pagePosition = getShadowLightPosition(
       worldPosition,
       lightingManager.uSunDir,
@@ -306,7 +289,7 @@ export class PostprocessingManager extends RenderPipeline {
 
   private makePageOutput() {
     const { depth, level, pagePosition, pageKey, pageTag } =
-      this.getDebugPage();
+      this.getDebugPage(false);
     const { isResident } = this.shadowResidency.resolvePage(pageKey, pageTag);
     const pageUv = pagePosition.fract();
     const pageColor = vec3(
@@ -326,8 +309,9 @@ export class PostprocessingManager extends RenderPipeline {
     return renderOutput(vec4(color, 1), NoToneMapping);
   }
 
-  private makeRigidDepthOutput(atlas: ShadowRigidAtlas) {
-    const { depth, pagePosition, pageKey, pageTag } = this.getDebugPage();
+  private makeRigidDepthOutput(atlas: ShadowRigidAtlas, isDynamic: boolean) {
+    const { depth, pagePosition, pageKey, pageTag } =
+      this.getDebugPage(isDynamic);
     const { slot, isResident } = this.shadowResidency.resolvePage(
       pageKey,
       pageTag,

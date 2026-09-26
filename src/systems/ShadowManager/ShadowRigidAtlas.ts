@@ -71,7 +71,6 @@ import type { ShadowResidency } from "./ShadowResidency";
 const DEPTH_BIAS_TEXELS = { fixed: 3, moving: 8 };
 
 export class ShadowRigidAtlas {
-  readonly depthBiasTexels;
   private renderer: WebGPURenderer;
   private residency: ShadowResidency;
   private sunDirection: Node<"vec3">;
@@ -121,7 +120,6 @@ export class ShadowRigidAtlas {
     this.sunDirection = sunDirection;
     this.softness = softness;
     this.kind = kind;
-    this.depthBiasTexels = uniform(DEPTH_BIAS_TEXELS[kind]);
     this.pageJobOffset = kind === "fixed" ? 0 : residency.capacity * 2;
     this.atlasGridSize = Math.ceil(Math.sqrt(residency.capacity));
     const atlasSize = this.atlasGridSize * SHADOW_PAGE_TEXELS;
@@ -189,12 +187,12 @@ export class ShadowRigidAtlas {
       this.deformedCasters = [];
       for (const entry of registry.casters) {
         if (!entry.castsShadow) continue;
-        if (this.kind === "moving" && entry.deformedInstances) {
+        if (this.kind === "moving" && entry.gpuInstances) {
           const bucket = new ShadowDeformedCasterBucket(
             this.renderer,
             this.residency,
             entry.mesh,
-            entry.deformedInstances,
+            entry.gpuInstances,
             this.sunDirection,
           );
           const mesh = new Mesh(
@@ -206,7 +204,7 @@ export class ShadowRigidAtlas {
           this.scene.add(mesh);
           this.deformedCasters.push({ bucket, mesh });
         }
-        if (entry.kind !== this.kind || entry.deformedInstances) continue;
+        if (entry.kind !== this.kind || entry.gpuInstances) continue;
         if (!(entry.mesh instanceof BatchedMesh)) {
           this.sources.push(entry);
           continue;
@@ -216,7 +214,7 @@ export class ShadowRigidAtlas {
             this.renderer,
             this.residency,
             entry.mesh,
-            entry.depthBiasMeters,
+            entry.depthBias,
           );
           const mesh = new Mesh(
             bucket.geometry,
@@ -256,7 +254,7 @@ export class ShadowRigidAtlas {
     if (hasBiasChange && !hasRosterChange && !hasSunChange && !hasMovement) {
       this.bucket?.updateBiases(this.sources);
       for (const { entry, bucket } of this.batchedCasters)
-        bucket.depthBiasMeters.value = entry.depthBiasMeters;
+        bucket.depthBiasMeters.value = entry.depthBias;
       this.residency.invalidate();
       return;
     }
@@ -268,13 +266,8 @@ export class ShadowRigidAtlas {
       minimumY = Math.min(minimumY, this.bounds.min.y);
       maximumY = Math.max(maximumY, this.bounds.max.y);
     }
-    for (const { entry, source, bucket } of this.batchedCasters) {
-      if (hasRosterChange || hasSunChange)
-        bucket.update(
-          source,
-          sunDirection,
-          entry.maxVerticalDisplacementMeters,
-        );
+    for (const { source, bucket } of this.batchedCasters) {
+      if (hasRosterChange || hasSunChange) bucket.update(source, sunDirection);
       minimumY = Math.min(minimumY, bucket.bounds.min.y);
       maximumY = Math.max(maximumY, bucket.bounds.max.y);
     }
@@ -395,7 +388,7 @@ export class ShadowRigidAtlas {
     const pageUv = pagePosition.fract().clamp(halfTexel, 1 - halfTexel);
     const receiverDepth = this.maximumY
       .sub(worldPosition.y)
-      .sub(biasPageSize.mul(this.depthBiasTexels).div(SHADOW_PAGE_TEXELS))
+      .sub(biasPageSize.mul(DEPTH_BIAS_TEXELS[this.kind] / SHADOW_PAGE_TEXELS))
       .div(this.maximumY.sub(this.minimumY));
     const visibility = this.depthTextureNode
       .sample(this.computeAtlasUv(slot, pageUv))
@@ -553,7 +546,7 @@ export class ShadowRigidAtlas {
       const casterPageUv = this.getPageUv(level, pageCoordinate, worldPosition);
       const casterDepth = this.maximumY
         .sub(worldPosition.y)
-        .add(entry.depthBiasMeters)
+        .add(entry.depthBias)
         .div(this.maximumY.sub(this.minimumY));
       pageUv.assign(casterPageUv);
       depth.assign(casterDepth);
@@ -618,8 +611,7 @@ export class ShadowRigidAtlas {
         .or(pageUv.x.greaterThan(1))
         .or(pageUv.y.greaterThan(1))
         .discard();
-      if (entry?.shadowOpacityNode && entry.alphaCutoff > 0)
-        entry.shadowOpacityNode.lessThan(entry.alphaCutoff).discard();
+      if (entry?.opacity) entry.opacity.lessThan(entry.alphaTest).discard();
       return vec4(depth, 0, 0, 1);
     })();
   }

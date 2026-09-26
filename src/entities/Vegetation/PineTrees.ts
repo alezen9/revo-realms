@@ -29,11 +29,9 @@ const uniforms = {
   uBarkNormalScale: uniform(3),
   uBarkUvScale: uniform(3),
 };
-const CANOPY_MAXIMUM_SWAY_METERS = 0.1;
 
 class PineTreeCanopyMaterial extends DirectSunLambertNodeMaterial {
-  readonly shadowPositionNode: Node<"vec3">;
-  readonly shadowOpacityNode: Node<"float">;
+  readonly shadowOpacity: Node<"float">;
 
   constructor() {
     super();
@@ -43,16 +41,15 @@ class PineTreeCanopyMaterial extends DirectSunLambertNodeMaterial {
 
     const diffuse = texture(assetManager.resources.pineTreeDiffuse, uv());
     this.colorNode = diffuse.rgb.mul(uniforms.uCanopyDiffuseScale);
-    this.shadowOpacityNode = diffuse.a;
-    this.opacityNode = this.shadowOpacityNode;
+    this.shadowOpacity = diffuse.a;
+    this.opacityNode = this.shadowOpacity;
     this.alphaTest = 0.35;
 
     const random = uv().x.mul(uv().y).mul(4);
     const profile = windWeight.mul(windWeight);
     const t = gameTime.mul(uniforms.uCanopySwaySpeed).add(random);
-    const swayOffset = oscSine(t).mul(profile).mul(CANOPY_MAXIMUM_SWAY_METERS);
-    this.shadowPositionNode = positionLocal.add(vec3(0, swayOffset, 0));
-    this.positionNode = this.shadowPositionNode;
+    const swayOffset = oscSine(t).mul(profile).mul(0.1);
+    this.positionNode = positionLocal.add(vec3(0, swayOffset, 0));
   }
 }
 
@@ -120,9 +117,7 @@ export default class PineTrees {
     sceneManager.mainScene.add(barkBatch, canopyBatch);
     shadowCasterRegistry.register(barkBatch);
     shadowCasterRegistry.register(canopyBatch, {
-      kind: "fixed",
-      shadowOpacityNode: canopyMaterial.shadowOpacityNode,
-      alphaCutoff: canopyMaterial.alphaTest,
+      opacity: canopyMaterial.shadowOpacity,
     });
     this.debug();
   }

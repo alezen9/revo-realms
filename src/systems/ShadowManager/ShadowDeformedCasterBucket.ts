@@ -18,7 +18,7 @@ import {
   uvec4,
   vec3,
 } from "three/tsl";
-import type { ShadowDeformedInstances } from "./ShadowCasterRegistry";
+import type { ShadowGpuInstances } from "./ShadowCasterRegistry";
 import {
   getShadowDynamicLevel,
   getShadowLevel,
@@ -38,7 +38,7 @@ export class ShadowDeformedCasterBucket {
     new Uint32Array(MAX_WORK_ITEMS * 4),
     4,
   );
-  readonly instances: ShadowDeformedInstances;
+  readonly instances: ShadowGpuInstances;
   readonly cornersAttribute?: StorageBufferAttribute;
   private renderer: WebGPURenderer;
   private resetNode;
@@ -48,7 +48,7 @@ export class ShadowDeformedCasterBucket {
     renderer: WebGPURenderer,
     residency: ShadowResidency,
     source: Mesh,
-    instances: ShadowDeformedInstances,
+    instances: ShadowGpuInstances,
     sunDirection: Node<"vec3">,
   ) {
     this.renderer = renderer;

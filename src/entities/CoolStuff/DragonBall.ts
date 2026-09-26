@@ -33,7 +33,7 @@ class GokuStatueMaterial extends DirectSunStandardNodeMaterial {
 
 export default class DragonBall {
   private gokuStatue: Mesh;
-  private shadowSettings = { depthBiasMeters: 0.2 };
+  private shadowSettings = { depthBias: 0.2 };
 
   constructor() {
     // Visual
@@ -97,7 +97,7 @@ export default class DragonBall {
       min: 0,
     });
     folder
-      .addBinding(this.shadowSettings, "depthBiasMeters", {
+      .addBinding(this.shadowSettings, "depthBias", {
         label: "Shadow bias (m)",
         min: 0,
         max: 0.5,

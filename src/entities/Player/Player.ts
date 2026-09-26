@@ -62,7 +62,7 @@ export default class Player {
     this.mesh = this.createCharacterMesh();
     this.visualRoot = this.createVisualRoot(this.mesh);
     sceneManager.mainScene.add(this.visualRoot);
-    shadowCasterRegistry.register(this.mesh, { kind: "moving" });
+    shadowCasterRegistry.register(this.mesh, { motion: "moving" });
 
     const rigidBodyDesc = this.createRigidBodyDesc();
     this.rigidBody = physicsManager.world.createRigidBody(rigidBodyDesc);

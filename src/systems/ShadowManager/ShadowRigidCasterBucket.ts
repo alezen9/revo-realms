@@ -169,8 +169,8 @@ export class ShadowRigidCasterBucket {
       );
 
     for (let casterIndex = 0; casterIndex < sources.length; casterIndex++) {
-      const { mesh: source, depthBiasMeters } = sources[casterIndex];
-      this.depthBiasValues[casterIndex] = depthBiasMeters;
+      const { mesh: source, depthBias } = sources[casterIndex];
+      this.depthBiasValues[casterIndex] = depthBias;
       source.updateWorldMatrix(true, false);
       this.matrixValues.set(source.matrixWorld.elements, casterIndex * 16);
       this.bounds.setFromObject(source, true);
@@ -216,7 +216,7 @@ export class ShadowRigidCasterBucket {
         "Rigid caster count changed without rebuilding the bucket",
       );
     for (let index = 0; index < sources.length; index++)
-      this.depthBiasValues[index] = sources[index].depthBiasMeters;
+      this.depthBiasValues[index] = sources[index].depthBias;
     this.depthBiasAttribute.needsUpdate = true;
   }
 

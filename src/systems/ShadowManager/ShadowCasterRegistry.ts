@@ -2,7 +2,7 @@ import { Matrix4, type BufferGeometry, type Mesh } from "three";
 import { BatchedMesh, NodeMaterial, type Node } from "three/webgpu";
 
 export type ShadowCasterKind = "fixed" | "moving" | "deformed";
-export type ShadowDeformedInstances = {
+export type ShadowGpuInstances = {
   count: number;
   radiusMeters: number;
   geometry?: BufferGeometry;
@@ -15,26 +15,21 @@ export type ShadowDeformedInstances = {
   isActive: (index: Node<"uint">) => Node<"bool">;
 };
 export type ShadowCasterOptions = {
-  kind?: ShadowCasterKind;
+  motion?: "fixed" | "moving";
   castsShadow?: boolean;
-  depthBiasMeters?: number;
-  maxVerticalDisplacementMeters?: number;
-  shadowPositionNode?: Node<"vec3">;
-  shadowOpacityNode?: Node<"float">;
-  alphaCutoff?: number;
-  deformedInstances?: ShadowDeformedInstances;
+  depthBias?: number;
+  opacity?: Node<"float">;
+  gpuInstances?: ShadowGpuInstances;
 };
 
 export type ShadowCasterEntry = {
   mesh: Mesh;
   kind: ShadowCasterKind;
   castsShadow: boolean;
-  depthBiasMeters: number;
-  maxVerticalDisplacementMeters: number;
-  shadowPositionNode?: Node<"vec3">;
-  shadowOpacityNode?: Node<"float">;
-  alphaCutoff: number;
-  deformedInstances?: ShadowDeformedInstances;
+  depthBias: number;
+  opacity?: Node<"float">;
+  alphaTest: number;
+  gpuInstances?: ShadowGpuInstances;
   revision: number;
   worldMatrix: Matrix4;
 };
@@ -57,63 +52,45 @@ export class ShadowCasterRegistry {
     if (this.entries.has(mesh))
       throw new Error(`Shadow caster already registered: ${mesh.name}`);
     const {
-      kind = "fixed",
+      motion = "fixed",
       castsShadow = true,
-      depthBiasMeters = 0,
-      maxVerticalDisplacementMeters = 0,
-      shadowPositionNode,
-      shadowOpacityNode,
-      alphaCutoff = 0,
-      deformedInstances,
+      depthBias = 0,
+      opacity,
+      gpuInstances,
     } = options;
-    if (!Number.isFinite(depthBiasMeters) || depthBiasMeters < 0)
+    const kind = gpuInstances ? "deformed" : motion;
+    if (!Number.isFinite(depthBias) || depthBias < 0)
       throw new Error(`Invalid shadow depth bias: ${mesh.name}`);
     if (
-      !Number.isFinite(maxVerticalDisplacementMeters) ||
-      maxVerticalDisplacementMeters < 0
+      gpuInstances &&
+      (!Number.isInteger(gpuInstances.count) ||
+        gpuInstances.count <= 0 ||
+        !Number.isFinite(gpuInstances.radiusMeters) ||
+        gpuInstances.radiusMeters <= 0)
     )
-      throw new Error(`Invalid shadow displacement bound: ${mesh.name}`);
-    if (!Number.isFinite(alphaCutoff) || alphaCutoff < 0 || alphaCutoff > 1)
-      throw new Error(`Invalid shadow alpha cutoff: ${mesh.name}`);
-    if (
-      deformedInstances &&
-      (kind !== "deformed" ||
-        !Number.isInteger(deformedInstances.count) ||
-        deformedInstances.count <= 0 ||
-        !Number.isFinite(deformedInstances.radiusMeters) ||
-        deformedInstances.radiusMeters <= 0)
-    )
-      throw new Error(`Invalid deformed shadow instances: ${mesh.name}`);
+      throw new Error(`Invalid shadow gpu instances: ${mesh.name}`);
     if (kind !== "fixed" && mesh instanceof BatchedMesh)
       throw new Error(`Batched shadow caster must be fixed: ${mesh.name}`);
 
-    const material = mesh.material;
-    if (
-      kind === "deformed" &&
-      (Array.isArray(material) ||
-        !(material instanceof NodeMaterial) ||
-        !material.positionNode)
-    )
-      throw new Error(`Deformed caster needs positionNode: ${mesh.name}`);
+    const { material } = mesh;
+    const alphaTest = material instanceof NodeMaterial ? material.alphaTest : 0;
+    if (opacity && alphaTest <= 0)
+      throw new Error(`Shadow opacity needs material alphaTest: ${mesh.name}`);
 
     mesh.updateWorldMatrix(true, false);
     this.entries.set(mesh, {
       mesh,
       kind,
       castsShadow,
-      depthBiasMeters,
-      maxVerticalDisplacementMeters,
-      shadowPositionNode,
-      shadowOpacityNode,
-      alphaCutoff,
-      deformedInstances,
+      depthBias,
+      opacity,
+      alphaTest,
+      gpuInstances,
       revision: 0,
       worldMatrix: mesh.matrixWorld.clone(),
     });
     this.counts[kind]++;
-    if (kind === "fixed") this.fixedVersion++;
-    if (kind === "moving") this.movingVersion++;
-    if (kind === "deformed") this.deformedVersion++;
+    this.bumpVersion(kind);
   }
 
   unregister(mesh: Mesh) {
@@ -122,19 +99,17 @@ export class ShadowCasterRegistry {
 
     this.entries.delete(mesh);
     this.counts[entry.kind]--;
-    if (entry.kind === "fixed") this.fixedVersion++;
-    if (entry.kind === "moving") this.movingVersion++;
-    if (entry.kind === "deformed") this.deformedVersion++;
+    this.bumpVersion(entry.kind);
   }
 
-  setDepthBias(mesh: Mesh, depthBiasMeters: number) {
+  setDepthBias(mesh: Mesh, depthBias: number) {
     const entry = this.entries.get(mesh);
     if (!entry || entry.kind !== "fixed")
       throw new Error(`Fixed shadow caster not registered: ${mesh.name}`);
-    if (!Number.isFinite(depthBiasMeters) || depthBiasMeters < 0)
+    if (!Number.isFinite(depthBias) || depthBias < 0)
       throw new Error(`Invalid shadow depth bias: ${mesh.name}`);
-    if (entry.depthBiasMeters === depthBiasMeters) return;
-    entry.depthBiasMeters = depthBiasMeters;
+    if (entry.depthBias === depthBias) return;
+    entry.depthBias = depthBias;
     this.biasVersion++;
   }
 
@@ -143,9 +118,7 @@ export class ShadowCasterRegistry {
     if (!entry) throw new Error(`Shadow caster not registered: ${mesh.name}`);
     if (entry.castsShadow === castsShadow) return;
     entry.castsShadow = castsShadow;
-    if (entry.kind === "fixed") this.fixedVersion++;
-    if (entry.kind === "moving") this.movingVersion++;
-    if (entry.kind === "deformed") this.deformedVersion++;
+    this.bumpVersion(entry.kind);
   }
 
   markMoved(mesh: Mesh) {
@@ -157,5 +130,11 @@ export class ShadowCasterRegistry {
     entry.revision++;
     if (entry.kind === "fixed") this.fixedRevision++;
     if (entry.kind === "moving") this.movingRevision++;
+  }
+
+  private bumpVersion(kind: ShadowCasterKind) {
+    if (kind === "fixed") this.fixedVersion++;
+    if (kind === "moving") this.movingVersion++;
+    if (kind === "deformed") this.deformedVersion++;
   }
 }
