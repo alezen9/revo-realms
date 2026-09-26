@@ -81,7 +81,7 @@ export class ShadowResidency {
     COUNTER_COUNT,
   ).toAtomic();
   private atlasIndirect = new IndirectStorageBufferAttribute(
-    new Uint32Array([6, 0, 0, 0, 6, 0, 0, 0]),
+    new Uint32Array([6, 0, 0, 0, 0, 0, 0, 0]),
     1,
   );
   private atomicAtlasIndirect = storage(

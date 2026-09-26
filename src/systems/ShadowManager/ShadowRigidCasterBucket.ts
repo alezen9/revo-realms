@@ -2,22 +2,10 @@ import { Box3, BufferGeometry, Float32BufferAttribute, Vector3 } from "three";
 import {
   IndirectStorageBufferAttribute,
   StorageBufferAttribute,
-  type WebGPURenderer,
 } from "three/webgpu";
-import {
-  atomicAdd,
-  atomicLoad,
-  atomicStore,
-  Fn,
-  If,
-  instanceIndex,
-  storage,
-  uvec2,
-} from "three/tsl";
 import type { ShadowCasterEntry } from "./ShadowCasterRegistry";
 import {
   SHADOW_LEVEL_COUNT,
-  SHADOW_PAGES_PER_LEVEL,
   ShadowPageCoordinates,
 } from "./ShadowPageCoordinates";
 import type { ShadowResidency } from "./ShadowResidency";
@@ -28,27 +16,21 @@ export class ShadowRigidCasterBucket {
   readonly pageRangesAttribute: StorageBufferAttribute;
   readonly depthBiasAttribute: StorageBufferAttribute;
   readonly workItemsAttribute: StorageBufferAttribute;
+  readonly groupIndirectAttribute: IndirectStorageBufferAttribute;
+  readonly casterGroupsAttribute: StorageBufferAttribute;
+  readonly groupCount: number;
 
   readonly casterCount: number;
-  private renderer: WebGPURenderer;
   private matrixValues: Float32Array;
   private rangeValues: Uint32Array;
   private depthBiasValues: Float32Array;
-  private resetNode;
-  private buildNode;
   private bounds = new Box3();
   private corner = new Vector3();
   private coordinates = new ShadowPageCoordinates();
 
-  constructor(
-    renderer: WebGPURenderer,
-    residency: ShadowResidency,
-    sources: ShadowCasterEntry[],
-    kind: "fixed" | "moving",
-  ) {
-    this.renderer = renderer;
+  constructor(residency: ShadowResidency, sources: ShadowCasterEntry[]) {
     this.casterCount = sources.length;
-    const capacity = residency.capacity;
+    const capacity = residency.dynamicCapacity;
     const groupIndices = new Map<BufferGeometry, number>();
     const casterGroups = new Uint32Array(this.casterCount);
     const groupCasterCounts: number[] = [];
@@ -82,15 +64,18 @@ export class ShadowRigidCasterBucket {
       casterGroups[casterIndex] = groupIndex;
       groupCasterCounts[groupIndex]++;
     }
-    const groupCount = this.geometries.length;
-    const indirectValues = new Uint32Array(groupCount * 4);
-    const indirect = new IndirectStorageBufferAttribute(indirectValues, 1);
+    this.groupCount = this.geometries.length;
+    const indirectValues = new Uint32Array(this.groupCount * 4);
+    this.groupIndirectAttribute = new IndirectStorageBufferAttribute(
+      indirectValues,
+      1,
+    );
     let firstItem = 0;
-    for (let groupIndex = 0; groupIndex < groupCount; groupIndex++) {
+    for (let groupIndex = 0; groupIndex < this.groupCount; groupIndex++) {
       const geometry = this.geometries[groupIndex];
       indirectValues[groupIndex * 4] = geometry.getAttribute("position").count;
       indirectValues[groupIndex * 4 + 3] = firstItem;
-      geometry.setIndirect(indirect, [
+      geometry.setIndirect(this.groupIndirectAttribute, [
         groupIndex * 4 * Uint32Array.BYTES_PER_ELEMENT,
       ]);
       firstItem += groupCasterCounts[groupIndex] * capacity;
@@ -115,72 +100,7 @@ export class ShadowRigidCasterBucket {
       1,
     );
 
-    const indirectNode = storage(indirect, "uint", indirect.count).toAtomic();
-    const workItems = storage(
-      this.workItemsAttribute,
-      "uvec2",
-      this.workItemsAttribute.count,
-    );
-    const groups = storage(
-      new StorageBufferAttribute(casterGroups, 1),
-      "uint",
-      this.casterCount,
-    );
-    const ranges = storage(
-      this.pageRangesAttribute,
-      "uvec4",
-      this.pageRangesAttribute.count,
-    );
-    const pageJobs = storage(
-      residency.pageJobsAttribute,
-      "uvec4",
-      residency.capacity * 3,
-    );
-    const atlasIndirect = storage(residency.atlasIndirectAttribute, "uint", 8);
-    const jobCountIndex = kind === "fixed" ? 1 : 5;
-    const pageJobOffset = kind === "fixed" ? 0 : capacity * 2;
-
-    this.resetNode = Fn(() => {
-      atomicStore(indirectNode.element(instanceIndex.mul(4).add(1)), 0);
-    })().compute(groupCount, [1]);
-
-    this.buildNode = Fn(() => {
-      const casterIndex = instanceIndex.div(capacity);
-      const jobIndex = instanceIndex.mod(capacity);
-      If(jobIndex.lessThan(atlasIndirect.element(jobCountIndex)), () => {
-        const job = pageJobs.element(jobIndex.add(pageJobOffset));
-        const range = ranges.element(
-          casterIndex
-            .mul(SHADOW_LEVEL_COUNT)
-            .add(job.x.div(SHADOW_PAGES_PER_LEVEL)),
-        );
-        const overlaps = job.z
-          .greaterThanEqual(range.x)
-          .and(job.w.greaterThanEqual(range.y))
-          .and(job.z.lessThanEqual(range.z))
-          .and(job.w.lessThanEqual(range.w));
-        If(overlaps, () => {
-          const groupIndex = groups.element(casterIndex);
-          const itemIndex = atomicAdd(
-            indirectNode.element(groupIndex.mul(4).add(1)),
-            1,
-          );
-          const firstGroupItem = atomicLoad(
-            indirectNode.element(groupIndex.mul(4).add(3)),
-          );
-          workItems
-            .element(firstGroupItem.add(itemIndex))
-            .assign(uvec2(jobIndex, casterIndex));
-        });
-      });
-    })().compute(this.casterCount * capacity, [64]);
-    this.resetNode.name = `V2 ${kind} rigid page work reset`;
-    this.buildNode.name = `V2 ${kind} rigid page work`;
-  }
-
-  run() {
-    this.renderer.compute(this.resetNode);
-    this.renderer.compute(this.buildNode);
+    this.casterGroupsAttribute = new StorageBufferAttribute(casterGroups, 1);
   }
 
   update(sources: ShadowCasterEntry[], sunDirection: Vector3) {

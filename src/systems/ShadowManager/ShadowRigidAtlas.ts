@@ -39,6 +39,7 @@ import {
   texture,
   uniform,
   uint,
+  uvec2,
   uvec4,
   uv,
   varyingProperty,
@@ -95,7 +96,7 @@ export class ShadowRigidAtlas {
     mesh: Mesh;
   }[] = [];
   private dynamicJobsNode?: ComputeNode;
-  private dynamicResetNode: ComputeNode;
+  private dynamicResetNode?: ComputeNode;
   private registryVersion = -1;
   private movingRevision = -1;
   private fixedRevision = -1;
@@ -115,14 +116,6 @@ export class ShadowRigidAtlas {
   ) {
     this.renderer = renderer;
     this.residency = residency;
-    this.dynamicResetNode = Fn(() => {
-      atomicStore(
-        storage(residency.atlasIndirectAttribute, "uint", 8)
-          .toAtomic()
-          .element(5),
-        0,
-      );
-    })().compute(1, [1]);
     this.sunDirection = sunDirection;
     this.softness = softness;
     this.kind = kind;
@@ -159,7 +152,7 @@ export class ShadowRigidAtlas {
       "uvec4",
       residency.capacity * 3,
     );
-    this.scene.add(this.createClearMesh());
+    if (kind === "fixed") this.scene.add(this.createClearMesh());
   }
 
   syncCasters(
@@ -285,12 +278,7 @@ export class ShadowRigidAtlas {
     this.bucket?.dispose();
     this.bucket = undefined;
     if (this.sources.length > 0) {
-      const bucket = new ShadowRigidCasterBucket(
-        this.renderer,
-        this.residency,
-        this.sources,
-        this.kind,
-      );
+      const bucket = new ShadowRigidCasterBucket(this.residency, this.sources);
       const material = this.createCasterMaterial(bucket);
       for (const geometry of bucket.geometries) {
         const mesh = new Mesh(geometry, material);
@@ -301,6 +289,7 @@ export class ShadowRigidAtlas {
       }
       this.bucket = bucket;
     }
+    this.dynamicResetNode = this.createDynamicResetNode(this.bucket);
     this.dynamicJobsNode = this.createDynamicJobsNode(this.bucket);
   }
 
@@ -312,15 +301,14 @@ export class ShadowRigidAtlas {
     )
       return;
     for (const { bucket } of this.deformedCasters) bucket.run();
-    if (this.dynamicJobsNode) {
+    if (this.dynamicResetNode && this.dynamicJobsNode) {
       this.renderer.compute(this.dynamicResetNode);
       this.renderer.compute(this.dynamicJobsNode);
     }
-    this.bucket?.run();
     for (const { bucket } of this.clusterCasters) bucket.run();
     const previousTarget = this.renderer.getRenderTarget();
     const wasAutoClearEnabled = this.renderer.autoClear;
-    this.renderer.autoClear = false;
+    this.renderer.autoClear = this.kind === "moving";
     this.renderer.setRenderTarget(this.renderTarget);
     try {
       if (!this.isTargetInitialized) {
@@ -429,6 +417,26 @@ export class ShadowRigidAtlas {
     );
   }
 
+  private createDynamicResetNode(bucket?: ShadowRigidCasterBucket) {
+    const indirect = storage(
+      this.residency.atlasIndirectAttribute,
+      "uint",
+      8,
+    ).toAtomic();
+    const groupIndirect = bucket
+      ? storage(
+          bucket.groupIndirectAttribute,
+          "uint",
+          bucket.groupCount * 4,
+        ).toAtomic()
+      : undefined;
+    return Fn(() => {
+      atomicStore(indirect.element(5), 0);
+      for (let group = 0; group < (bucket?.groupCount ?? 0); group++)
+        if (groupIndirect) atomicStore(groupIndirect.element(group * 4 + 1), 0);
+    })().compute(1, [1]);
+  }
+
   private createDynamicJobsNode(bucket?: ShadowRigidCasterBucket) {
     const capacity = this.residency.capacity;
     const rangesAttribute =
@@ -445,6 +453,24 @@ export class ShadowRigidAtlas {
       "uint",
       8,
     ).toAtomic();
+    const casterCount = bucket?.casterCount ?? 0;
+    const groups = bucket
+      ? storage(bucket.casterGroupsAttribute, "uint", casterCount)
+      : undefined;
+    const groupIndirect = bucket
+      ? storage(
+          bucket.groupIndirectAttribute,
+          "uint",
+          bucket.groupCount * 4,
+        ).toAtomic()
+      : undefined;
+    const workItems = bucket
+      ? storage(
+          bucket.workItemsAttribute,
+          "uvec2",
+          bucket.workItemsAttribute.count,
+        )
+      : undefined;
     return Fn(() => {
       const activeCount = atomicLoad(
         counters.element(this.residency.activeCountIndex),
@@ -458,21 +484,18 @@ export class ShadowRigidAtlas {
           .select(uint(1), uint(0))
           .toVar();
         Loop(
-          { start: 0, end: bucket?.casterCount ?? 0, type: "uint" },
+          { start: 0, end: casterCount, type: "uint" },
           ({ i: casterIndex }) => {
-            const range = ranges.element(
-              casterIndex.mul(SHADOW_LEVEL_COUNT).add(level),
+            isTouched.assign(
+              this.isCasterOnPage(
+                ranges.element(casterIndex.mul(SHADOW_LEVEL_COUNT).add(level)),
+                job,
+              ).select(uint(1), isTouched),
             );
-            const overlaps = job.z
-              .greaterThanEqual(range.x)
-              .and(job.w.greaterThanEqual(range.y))
-              .and(job.z.lessThanEqual(range.z))
-              .and(job.w.lessThanEqual(range.w));
-            isTouched.assign(overlaps.select(uint(1), isTouched));
           },
         );
         If(isTouched.greaterThan(0), () => {
-          const dynamicSlot = atomicAdd(indirect.element(5), 1);
+          const dynamicSlot = atomicAdd(indirect.element(5), 1).toVar();
           If(dynamicSlot.lessThan(this.residency.dynamicCapacity), () => {
             this.pageJobsNode
               .element(dynamicSlot.add(capacity * 2))
@@ -481,6 +504,34 @@ export class ShadowRigidAtlas {
               .element(job.x)
               .assign(
                 uvec4(job.y.add(1), this.residency.frame, dynamicSlot, 0),
+              );
+            if (groups && groupIndirect && workItems)
+              Loop(
+                { start: 0, end: casterCount, type: "uint" },
+                ({ i: casterLoopIndex }) => {
+                  const casterIndex = casterLoopIndex.toVar();
+                  If(
+                    this.isCasterOnPage(
+                      ranges.element(
+                        casterIndex.mul(SHADOW_LEVEL_COUNT).add(level),
+                      ),
+                      job,
+                    ),
+                    () => {
+                      const group = groups.element(casterIndex);
+                      const itemIndex = atomicAdd(
+                        groupIndirect.element(group.mul(4).add(1)),
+                        1,
+                      );
+                      const firstItem = atomicLoad(
+                        groupIndirect.element(group.mul(4).add(3)),
+                      );
+                      workItems
+                        .element(firstItem.add(itemIndex))
+                        .assign(uvec2(dynamicSlot, casterIndex));
+                    },
+                  );
+                },
               );
           }).Else(() => {
             atomicSub(indirect.element(5), 1);
@@ -491,6 +542,14 @@ export class ShadowRigidAtlas {
         });
       });
     })().compute(capacity, [64]);
+  }
+
+  private isCasterOnPage(range: Node<"uvec4">, job: Node<"uvec4">) {
+    return job.z
+      .greaterThanEqual(range.x)
+      .and(job.w.greaterThanEqual(range.y))
+      .and(job.z.lessThanEqual(range.z))
+      .and(job.w.lessThanEqual(range.w));
   }
 
   private computeAtlasUv(slot: Node<"uint">, pageUv: Node<"vec2">) {
@@ -510,9 +569,7 @@ export class ShadowRigidAtlas {
         3,
       ),
     );
-    geometry.setIndirect(this.residency.atlasIndirectAttribute, [
-      (this.kind === "fixed" ? 0 : 4) * Uint32Array.BYTES_PER_ELEMENT,
-    ]);
+    geometry.setIndirect(this.residency.atlasIndirectAttribute);
     const material = new MeshBasicNodeMaterial();
     material.depthTest = false;
     material.depthWrite = true;
