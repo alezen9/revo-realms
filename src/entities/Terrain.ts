@@ -459,7 +459,6 @@ class OuterTerrain {
     this.kintoun = this.createKintoun();
 
     sceneManager.mainScene.add(this.outerTerrain);
-    shadowCasterRegistry.register(this.outerTerrain);
 
     eventsManager.on("engine-render-update", this.onEngineUpdate);
   }
@@ -553,7 +552,6 @@ class OuterTerrain {
     )
       return;
     this.outerTerrain.position.set(nextX, 0, nextZ);
-    shadowCasterRegistry.markMoved(this.outerTerrain);
   };
 }
 

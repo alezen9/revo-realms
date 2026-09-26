@@ -140,6 +140,10 @@ export class ShadowCasterRegistry {
     if (entry.worldMatrix.equals(mesh.matrixWorld)) return;
     entry.worldMatrix.copy(mesh.matrixWorld);
     entry.revision++;
+    if (!entry.castsShadow) {
+      entry.worldBounds.setFromObject(mesh);
+      return;
+    }
     if (entry.kind === "fixed") {
       this.fixedDirtyBounds.push(entry.worldBounds.clone());
       entry.worldBounds.setFromObject(mesh);
