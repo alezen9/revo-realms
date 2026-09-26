@@ -6,7 +6,7 @@ import {
   sceneManager,
   shadowCasterRegistry,
 } from "../../systems";
-import { BatchedMesh, type Node } from "three/webgpu";
+import { BatchedMesh } from "three/webgpu";
 import { DirectSunLambertNodeMaterial } from "../../systems/ShadowManager/DirectSunMaterials";
 import {
   attribute,
@@ -31,8 +31,6 @@ const uniforms = {
 };
 
 class PineTreeCanopyMaterial extends DirectSunLambertNodeMaterial {
-  readonly shadowOpacity: Node<"float">;
-
   constructor() {
     super();
     this.forceSinglePass = true;
@@ -41,8 +39,7 @@ class PineTreeCanopyMaterial extends DirectSunLambertNodeMaterial {
 
     const diffuse = texture(assetManager.resources.pineTreeDiffuse, uv());
     this.colorNode = diffuse.rgb.mul(uniforms.uCanopyDiffuseScale);
-    this.shadowOpacity = diffuse.a;
-    this.opacityNode = this.shadowOpacity;
+    this.opacityNode = diffuse.a;
     this.alphaTest = 0.35;
 
     const random = uv().x.mul(uv().y).mul(4);
@@ -117,7 +114,8 @@ export default class PineTrees {
     sceneManager.mainScene.add(barkBatch, canopyBatch);
     shadowCasterRegistry.register(barkBatch);
     shadowCasterRegistry.register(canopyBatch, {
-      opacity: canopyMaterial.shadowOpacity,
+      opacity: (canopyUv) =>
+        texture(assetManager.resources.pineTreeDiffuse, canopyUv).a,
     });
     this.debug();
   }

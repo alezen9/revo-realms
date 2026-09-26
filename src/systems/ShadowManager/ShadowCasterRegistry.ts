@@ -15,7 +15,7 @@ export type ShadowCasterOptions = {
   motion?: "fixed" | "moving";
   castsShadow?: boolean;
   depthBias?: number;
-  opacity?: Node<"float">;
+  opacity?: (uv: Node<"vec2">) => Node<"float">;
   gpuInstances?: ShadowGpuInstances;
 };
 
@@ -24,7 +24,7 @@ export type ShadowCasterEntry = {
   kind: ShadowCasterKind;
   castsShadow: boolean;
   depthBias: number;
-  opacity?: Node<"float">;
+  opacity?: (uv: Node<"vec2">) => Node<"float">;
   alphaTest: number;
   gpuInstances?: ShadowGpuInstances;
   revision: number;

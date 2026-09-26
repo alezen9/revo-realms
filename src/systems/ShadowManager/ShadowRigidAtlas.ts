@@ -16,7 +16,6 @@ import {
   Vector3,
 } from "three";
 import {
-  BatchedMesh,
   MeshBasicNodeMaterial,
   StorageBufferAttribute,
   type ComputeNode,
@@ -39,7 +38,9 @@ import {
   uniform,
   uint,
   uvec2,
+  uv,
   varyingProperty,
+  vertexIndex,
   vec2,
   vec4,
 } from "three/tsl";
@@ -48,7 +49,7 @@ import type {
   ShadowCasterRegistry,
 } from "./ShadowCasterRegistry";
 import { ShadowRigidCasterBucket } from "./ShadowRigidCasterBucket";
-import { ShadowPineCasterBucket } from "./ShadowPineCasterBucket";
+import { ShadowClusterBucket } from "./ShadowClusterBucket";
 import { ShadowDeformedCasterBucket } from "./ShadowDeformedCasterBucket";
 import {
   SHADOW_LEVEL_COUNT,
@@ -83,10 +84,8 @@ export class ShadowRigidAtlas {
   private sources: ShadowCasterEntry[] = [];
   private bucket?: ShadowRigidCasterBucket;
   private casterMeshes: Mesh[] = [];
-  private batchedCasters: {
-    entry: ShadowCasterEntry;
-    source: BatchedMesh;
-    bucket: ShadowPineCasterBucket;
+  private clusterCasters: {
+    bucket: ShadowClusterBucket;
     mesh: Mesh;
   }[] = [];
   private deformedCasters: {
@@ -170,121 +169,133 @@ export class ShadowRigidAtlas {
     this.fixedRevision = registry.fixedRevision;
     if (hasRosterChange) {
       this.registryVersion = registryVersion;
-      this.sources = [];
-      for (const { mesh, bucket } of this.batchedCasters) {
-        this.scene.remove(mesh);
-        bucket.dispose();
-      }
-      this.batchedCasters = [];
-      for (const { mesh, bucket } of this.deformedCasters) {
-        this.scene.remove(mesh);
-        bucket.dispose();
-      }
-      this.deformedCasters = [];
-      for (const entry of registry.casters) {
-        if (!entry.castsShadow) continue;
-        if (this.kind === "moving" && entry.gpuInstances) {
-          const bucket = new ShadowDeformedCasterBucket(
-            this.renderer,
-            this.residency,
-            entry.mesh,
-            entry.gpuInstances,
-            this.sunDirection,
-          );
-          const mesh = new Mesh(
-            bucket.geometry,
-            this.createDeformedCasterMaterial(bucket, entry),
-          );
-          mesh.frustumCulled = false;
-          mesh.renderOrder = 3;
-          this.scene.add(mesh);
-          this.deformedCasters.push({ bucket, mesh });
-        }
-        if (entry.kind !== this.kind || entry.gpuInstances) continue;
-        if (!(entry.mesh instanceof BatchedMesh)) {
-          this.sources.push(entry);
-          continue;
-        }
-        if (this.kind === "fixed") {
-          const bucket = new ShadowPineCasterBucket(
-            this.renderer,
-            this.residency,
-            entry.mesh,
-            entry.depthBias,
-          );
-          const mesh = new Mesh(
-            bucket.geometry,
-            this.createBatchedCasterMaterial(bucket, entry),
-          );
-          mesh.frustumCulled = false;
-          mesh.renderOrder = 2;
-          this.scene.add(mesh);
-          this.batchedCasters.push({ entry, source: entry.mesh, bucket, mesh });
-        }
-      }
-      for (const mesh of this.casterMeshes) this.scene.remove(mesh);
-      this.casterMeshes = [];
-      this.bucket?.dispose();
-      this.bucket = undefined;
-      if (this.sources.length > 0) {
-        const bucket = new ShadowRigidCasterBucket(
-          this.renderer,
-          this.residency,
-          this.sources,
-          this.kind,
-        );
-        const material = this.createCasterMaterial(bucket);
-        for (const geometry of bucket.geometries) {
-          const mesh = new Mesh(geometry, material);
-          mesh.frustumCulled = false;
-          mesh.renderOrder = 1;
-          this.scene.add(mesh);
-          this.casterMeshes.push(mesh);
-        }
-        this.bucket = bucket;
-      }
-      if (this.kind === "moving")
-        this.dynamicJobsNode = this.createDynamicJobsNode(this.bucket);
-    }
-
-    if (hasBiasChange && !hasRosterChange && !hasSunChange && !hasMovement) {
-      this.bucket?.updateBiases(this.sources);
-      for (const { entry, bucket } of this.batchedCasters)
-        bucket.depthBiasMeters.value = entry.depthBias;
-      this.residency.invalidate();
-      return;
+      if (this.kind === "fixed") this.rebuildClusterCasters(registry);
+      else this.rebuildMovingCasters(registry);
     }
 
     let minimumY = terrainBounds.min - 8;
     let maximumY = terrainBounds.max + 64;
+    for (const { bucket } of this.clusterCasters) {
+      if (hasRosterChange || hasMovement || hasBiasChange)
+        bucket.updateMatrices();
+      else bucket.invalidateBounds();
+      minimumY = Math.min(minimumY, bucket.bounds.min.y);
+      maximumY = Math.max(maximumY, bucket.bounds.max.y);
+    }
     for (const { mesh } of this.sources) {
       this.bounds.setFromObject(mesh);
       minimumY = Math.min(minimumY, this.bounds.min.y);
       maximumY = Math.max(maximumY, this.bounds.max.y);
     }
-    for (const { source, bucket } of this.batchedCasters) {
-      if (hasRosterChange || hasSunChange) bucket.update(source, sunDirection);
-      minimumY = Math.min(minimumY, bucket.bounds.min.y);
-      maximumY = Math.max(maximumY, bucket.bounds.max.y);
-    }
     this.minimumY.value = Math.floor(minimumY);
     this.maximumY.value = Math.ceil(maximumY);
     this.bucket?.update(this.sources, sunDirection);
-    if (this.kind === "fixed" && (hasRosterChange || hasMovement))
+    if (
+      this.kind === "fixed" &&
+      (hasRosterChange || hasMovement || hasBiasChange)
+    )
       this.residency.invalidate();
+  }
+
+  private rebuildClusterCasters(registry: ShadowCasterRegistry) {
+    for (const { mesh, bucket } of this.clusterCasters) {
+      this.scene.remove(mesh);
+      bucket.dispose();
+    }
+    this.clusterCasters = [];
+    const opaqueEntries: ShadowCasterEntry[] = [];
+    const groups: ShadowCasterEntry[][] = [opaqueEntries];
+    for (const entry of registry.casters) {
+      if (!entry.castsShadow || entry.kind !== "fixed" || entry.gpuInstances)
+        continue;
+      if (entry.opacity) groups.push([entry]);
+      else opaqueEntries.push(entry);
+    }
+    for (const entries of groups) {
+      if (entries.length === 0) continue;
+      const opacity = entries[0].opacity;
+      const bucket = new ShadowClusterBucket(
+        this.renderer,
+        this.residency,
+        entries,
+        this.sunDirection,
+        opacity !== undefined,
+      );
+      const mesh = new Mesh(
+        bucket.geometry,
+        this.createClusterMaterial(bucket, entries[0]),
+      );
+      mesh.frustumCulled = false;
+      mesh.renderOrder = 1;
+      this.scene.add(mesh);
+      this.clusterCasters.push({ bucket, mesh });
+    }
+  }
+
+  private rebuildMovingCasters(registry: ShadowCasterRegistry) {
+    this.sources = [];
+    for (const { mesh, bucket } of this.deformedCasters) {
+      this.scene.remove(mesh);
+      bucket.dispose();
+    }
+    this.deformedCasters = [];
+    for (const entry of registry.casters) {
+      if (!entry.castsShadow) continue;
+      if (entry.gpuInstances) {
+        const bucket = new ShadowDeformedCasterBucket(
+          this.renderer,
+          this.residency,
+          entry.mesh,
+          entry.gpuInstances,
+          this.sunDirection,
+        );
+        const mesh = new Mesh(
+          bucket.geometry,
+          this.createDeformedCasterMaterial(bucket, entry),
+        );
+        mesh.frustumCulled = false;
+        mesh.renderOrder = 3;
+        this.scene.add(mesh);
+        this.deformedCasters.push({ bucket, mesh });
+        continue;
+      }
+      if (entry.kind === "moving") this.sources.push(entry);
+    }
+    for (const mesh of this.casterMeshes) this.scene.remove(mesh);
+    this.casterMeshes = [];
+    this.bucket?.dispose();
+    this.bucket = undefined;
+    if (this.sources.length > 0) {
+      const bucket = new ShadowRigidCasterBucket(
+        this.renderer,
+        this.residency,
+        this.sources,
+        this.kind,
+      );
+      const material = this.createCasterMaterial(bucket);
+      for (const geometry of bucket.geometries) {
+        const mesh = new Mesh(geometry, material);
+        mesh.frustumCulled = false;
+        mesh.renderOrder = 1;
+        this.scene.add(mesh);
+        this.casterMeshes.push(mesh);
+      }
+      this.bucket = bucket;
+    }
+    this.dynamicJobsNode = this.createDynamicJobsNode(this.bucket);
   }
 
   render() {
     if (
       !this.bucket &&
-      this.batchedCasters.length === 0 &&
+      this.clusterCasters.length === 0 &&
       this.deformedCasters.length === 0
     )
       return;
     for (const { bucket } of this.deformedCasters) bucket.run();
     if (this.dynamicJobsNode) this.renderer.compute(this.dynamicJobsNode);
     this.bucket?.run();
-    for (const { bucket } of this.batchedCasters) bucket.run();
+    for (const { bucket } of this.clusterCasters) bucket.run();
     const previousTarget = this.renderer.getRenderTarget();
     const wasAutoClearEnabled = this.renderer.autoClear;
     this.renderer.autoClear = false;
@@ -532,14 +543,20 @@ export class ShadowRigidAtlas {
         1,
       );
     })();
-    material.fragmentNode = this.createCasterFragment(pageUv, depth, entry);
+    material.fragmentNode = this.createCasterFragment(
+      pageUv,
+      depth,
+      entry.opacity?.(uv()),
+      entry.alphaTest,
+    );
     return material;
   }
 
   private createCasterFragment(
     pageUv: Node<"vec2">,
     depth: Node<"float">,
-    entry?: ShadowCasterEntry,
+    opacity?: Node<"float">,
+    alphaTest = 0,
   ) {
     return Fn(() => {
       pageUv.x
@@ -548,13 +565,13 @@ export class ShadowRigidAtlas {
         .or(pageUv.x.greaterThan(1))
         .or(pageUv.y.greaterThan(1))
         .discard();
-      if (entry?.opacity) entry.opacity.lessThan(entry.alphaTest).discard();
+      if (opacity) opacity.lessThan(alphaTest).discard();
       return vec4(depth, 0, 0, 1);
     })();
   }
 
-  private createBatchedCasterMaterial(
-    bucket: ShadowPineCasterBucket,
+  private createClusterMaterial(
+    bucket: ShadowClusterBucket,
     entry: ShadowCasterEntry,
   ) {
     const workItems = storage(
@@ -562,31 +579,51 @@ export class ShadowRigidAtlas {
       "uvec2",
       bucket.workItemsAttribute.count,
     );
-    const matrices = storage(
-      bucket.matrixColumnsAttribute,
-      "vec4",
-      bucket.matrixColumnsAttribute.count,
+    const instanceClusters = storage(
+      bucket.instanceClustersAttribute,
+      "uvec4",
+      bucket.instanceClustersAttribute.count,
     );
+    const positions = storage(
+      bucket.positionsAttribute,
+      "vec4",
+      bucket.positionsAttribute.count,
+    );
+    const matrices = storage(
+      bucket.matricesAttribute,
+      "vec4",
+      bucket.matricesAttribute.count,
+    );
+    const uvsAttribute = bucket.uvsAttribute;
     const material = new MeshBasicNodeMaterial();
     material.depthTest = true;
     material.depthWrite = true;
     material.side = DoubleSide;
-    const pageUv = varyingProperty("vec2", "batchedPageUv");
-    const depth = varyingProperty("float", "batchedDepth");
+    const pageUv = varyingProperty("vec2", "clusterPageUv");
+    const depth = varyingProperty("float", "clusterDepth");
+    const casterUv = varyingProperty("vec2", "clusterUv");
     material.vertexNode = Fn(() => {
       const workItem = workItems.element(instanceIndex);
-      const job = this.pageJobsNode.element(workItem.x);
-      const matrixOffset = workItem.y.mul(4);
+      const job = this.pageJobsNode.element(workItem.x.add(this.pageJobOffset));
+      const instanceCluster = instanceClusters.element(workItem.y);
+      const vertex = instanceCluster.y.add(vertexIndex);
+      const localPosition = positions.element(vertex).xyz;
+      const matrixOffset = instanceCluster.x.mul(4);
+      const translation = matrices.element(matrixOffset.add(3));
       const worldPosition = matrices
         .element(matrixOffset)
-        .mul(positionGeometry.x)
-        .add(matrices.element(matrixOffset.add(1)).mul(positionGeometry.y))
-        .add(matrices.element(matrixOffset.add(2)).mul(positionGeometry.z))
-        .add(matrices.element(matrixOffset.add(3))).xyz;
+        .mul(localPosition.x)
+        .add(matrices.element(matrixOffset.add(1)).mul(localPosition.y))
+        .add(matrices.element(matrixOffset.add(2)).mul(localPosition.z))
+        .add(vec4(translation.xyz, 0)).xyz;
+      if (uvsAttribute)
+        casterUv.assign(
+          storage(uvsAttribute, "vec2", uvsAttribute.count).element(vertex),
+        );
       const casterPageUv = this.getJobPageUv(job, worldPosition);
       const casterDepth = this.maximumY
         .sub(worldPosition.y)
-        .add(bucket.depthBiasMeters)
+        .add(translation.w)
         .div(this.maximumY.sub(this.minimumY));
       pageUv.assign(casterPageUv);
       depth.assign(casterDepth);
@@ -598,7 +635,12 @@ export class ShadowRigidAtlas {
         1,
       );
     })();
-    material.fragmentNode = this.createCasterFragment(pageUv, depth, entry);
+    material.fragmentNode = this.createCasterFragment(
+      pageUv,
+      depth,
+      entry.opacity?.(casterUv),
+      entry.alphaTest,
+    );
     return material;
   }
 
