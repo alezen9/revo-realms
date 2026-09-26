@@ -68,6 +68,8 @@ import {
 } from "./ShadowPageCoordinates";
 import type { ShadowResidency } from "./ShadowResidency";
 
+type CasterMesh = Mesh<BufferGeometry, MeshBasicNodeMaterial>;
+
 const DEPTH_BIAS_TEXELS = { fixed: 3, moving: 8 };
 
 export class ShadowRigidAtlas {
@@ -86,17 +88,21 @@ export class ShadowRigidAtlas {
   private maximumY = uniform(64);
   private sources: ShadowCasterEntry[] = [];
   private bucket?: ShadowRigidCasterBucket;
-  private casterMeshes: Mesh[] = [];
+  private casterMeshes: CasterMesh[] = [];
   private clusterCasters: {
     bucket: ShadowClusterBucket;
-    mesh: Mesh;
+    mesh: CasterMesh;
   }[] = [];
   private deformedCasters: {
     bucket: ShadowDeformedCasterBucket;
-    mesh: Mesh;
+    mesh: CasterMesh;
   }[] = [];
   private dynamicJobsNode?: ComputeNode;
   private dynamicResetNode?: ComputeNode;
+  private emptyRangesAttribute = new StorageBufferAttribute(
+    new Uint32Array(4),
+    4,
+  );
   private registryVersion = -1;
   private movingRevision = -1;
   private fixedRevision = -1;
@@ -212,6 +218,7 @@ export class ShadowRigidAtlas {
   private rebuildClusterCasters(registry: ShadowCasterRegistry) {
     for (const { mesh, bucket } of this.clusterCasters) {
       this.scene.remove(mesh);
+      mesh.material.dispose();
       bucket.dispose();
     }
     this.clusterCasters = [];
@@ -227,7 +234,6 @@ export class ShadowRigidAtlas {
       if (entries.length === 0) continue;
       const opacity = entries[0].opacity;
       const bucket = new ShadowClusterBucket(
-        this.renderer,
         this.residency,
         entries,
         this.sunDirection,
@@ -248,6 +254,7 @@ export class ShadowRigidAtlas {
     this.sources = [];
     for (const { mesh, bucket } of this.deformedCasters) {
       this.scene.remove(mesh);
+      mesh.material.dispose();
       bucket.dispose();
     }
     this.deformedCasters = [];
@@ -255,7 +262,6 @@ export class ShadowRigidAtlas {
       if (!entry.castsShadow) continue;
       if (entry.gpuInstances) {
         const bucket = new ShadowDeformedCasterBucket(
-          this.renderer,
           this.residency,
           entry.mesh,
           entry.gpuInstances,
@@ -274,6 +280,7 @@ export class ShadowRigidAtlas {
       if (entry.kind === "moving") this.sources.push(entry);
     }
     for (const mesh of this.casterMeshes) this.scene.remove(mesh);
+    this.casterMeshes[0]?.material.dispose();
     this.casterMeshes = [];
     this.bucket?.dispose();
     this.bucket = undefined;
@@ -289,8 +296,21 @@ export class ShadowRigidAtlas {
       }
       this.bucket = bucket;
     }
+    this.dynamicResetNode?.dispose();
+    this.dynamicJobsNode?.dispose();
     this.dynamicResetNode = this.createDynamicResetNode(this.bucket);
     this.dynamicJobsNode = this.createDynamicJobsNode(this.bucket);
+  }
+
+  takeComputeNodes() {
+    const nodes: ComputeNode[] = [];
+    for (const { bucket } of this.deformedCasters)
+      nodes.push(...bucket.computeNodes);
+    if (this.dynamicResetNode && this.dynamicJobsNode)
+      nodes.push(this.dynamicResetNode, this.dynamicJobsNode);
+    for (const { bucket } of this.clusterCasters)
+      nodes.push(...bucket.takeComputeNodes());
+    return nodes;
   }
 
   render() {
@@ -300,12 +320,6 @@ export class ShadowRigidAtlas {
       this.deformedCasters.length === 0
     )
       return;
-    for (const { bucket } of this.deformedCasters) bucket.run();
-    if (this.dynamicResetNode && this.dynamicJobsNode) {
-      this.renderer.compute(this.dynamicResetNode);
-      this.renderer.compute(this.dynamicJobsNode);
-    }
-    for (const { bucket } of this.clusterCasters) bucket.run();
     const previousTarget = this.renderer.getRenderTarget();
     const wasAutoClearEnabled = this.renderer.autoClear;
     this.renderer.autoClear = this.kind === "moving";
@@ -440,8 +454,7 @@ export class ShadowRigidAtlas {
   private createDynamicJobsNode(bucket?: ShadowRigidCasterBucket) {
     const capacity = this.residency.capacity;
     const rangesAttribute =
-      bucket?.pageRangesAttribute ??
-      new StorageBufferAttribute(new Uint32Array(4), 4);
+      bucket?.pageRangesAttribute ?? this.emptyRangesAttribute;
     const ranges = storage(rangesAttribute, "uvec4", rangesAttribute.count);
     const counters = storage(
       this.residency.counterAttribute,
@@ -620,7 +633,8 @@ export class ShadowRigidAtlas {
     material.vertexNode = Fn(() => {
       const { pageKey, level, instance, pageCoordinate } =
         bucket.getWorkItem(instanceIndex);
-      const slot = this.residency.pageTableNode.element(pageKey).z;
+      const page = this.residency.pageTableNode.element(pageKey);
+      const hasDynamicSlot = page.y.equal(this.residency.frame);
       const worldPosition = bucket.instances.worldPosition(
         instance,
         positionGeometry,
@@ -632,12 +646,10 @@ export class ShadowRigidAtlas {
         .div(this.maximumY.sub(this.minimumY));
       pageUv.assign(casterPageUv);
       depth.assign(casterDepth);
-      const atlasUv = this.computeAtlasUv(slot, casterPageUv);
-      return vec4(
-        atlasUv.x.mul(2).sub(1),
-        atlasUv.y.mul(-2).add(1),
-        casterDepth,
-        1,
+      const atlasUv = this.computeAtlasUv(page.z, casterPageUv);
+      return hasDynamicSlot.select(
+        vec4(atlasUv.x.mul(2).sub(1), atlasUv.y.mul(-2).add(1), casterDepth, 1),
+        vec4(0, 0, -1, 1),
       );
     })();
     material.fragmentNode = this.createCasterFragment(

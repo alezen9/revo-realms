@@ -11,7 +11,12 @@ import {
   Vector3,
   type BufferGeometry,
 } from "three";
-import { BatchedMesh, StorageBufferAttribute, type Node } from "three/webgpu";
+import {
+  BatchedMesh,
+  StorageBufferAttribute,
+  type Node,
+  type StorageBufferNode,
+} from "three/webgpu";
 import {
   bool,
   cos,
@@ -48,7 +53,6 @@ const config = {
   MOVING_COUNT: 300,
   DEFORMING_COUNT: 300,
   GPU_COUNT: 5000,
-  SPREAD: 200,
   MOVING_ORBIT_RADIUS: 3,
   MOVING_ORBIT_SPEED: 0.6,
   DEFORMING_EXTENT: 0.9,
@@ -56,7 +60,7 @@ const config = {
 };
 
 const uniforms = {
-  uSpread: uniform(config.SPREAD),
+  uSpread: uniform(realmConfig.HALF_MAP_SIZE),
   uGpuHover: uniform(config.GPU_HOVER),
 };
 
@@ -90,7 +94,32 @@ const getDeformedPosition = (
   return instance.xyz.add(localPosition.mul(wobble).mul(instance.w));
 };
 
-const randomSpread = () => (Math.random() * 2 - 1) * config.SPREAD;
+const createGpuPositionsNode = (positions: StorageBufferNode<"vec4">) =>
+  Fn(() => {
+    const seed = float(instanceIndex);
+    const anchor = vec2(hash(seed.add(1)), hash(seed.add(2)))
+      .mul(2)
+      .sub(1)
+      .mul(uniforms.uSpread);
+    const orbitRadius = hash(seed.add(3)).mul(4).add(2);
+    const angle = gameTime
+      .mul(hash(seed.add(4)).mul(0.8).add(0.2))
+      .add(hash(seed.add(5)).mul(Math.PI * 2));
+    const position = anchor.add(vec2(cos(angle), sin(angle)).mul(orbitRadius));
+    const scale = hash(seed.add(6)).mul(0.6).add(0.4);
+    positions
+      .element(instanceIndex)
+      .assign(
+        vec4(
+          position.x,
+          getTerrainHeightNode(position).add(uniforms.uGpuHover),
+          position.y,
+          scale,
+        ),
+      );
+  })().compute(config.GPU_COUNT, [64]);
+
+const randomSpread = () => (Math.random() * 2 - 1) * realmConfig.HALF_MAP_SIZE;
 
 class StressMaterial extends DirectSunLambertNodeMaterial {
   constructor(color: Color, positionNode?: Node<"vec3">) {
@@ -117,10 +146,25 @@ export default class ShadowStressTest {
   private movingPhases: number[] = [];
   private deformingMesh?: InstancedMesh;
   private gpuMesh?: InstancedMesh;
-  private gpuComputeTask?: ComputeTask;
+  private deformingValues = new Float32Array(config.DEFORMING_COUNT * 4);
+  private deformingInstances = storage(
+    new StorageBufferAttribute(this.deformingValues, 4),
+    "vec4",
+    config.DEFORMING_COUNT,
+  );
+  private gpuPositions = storage(
+    new StorageBufferAttribute(new Float32Array(config.GPU_COUNT * 4), 4),
+    "vec4",
+    config.GPU_COUNT,
+  );
+  private gpuComputeTask: ComputeTask;
   private elapsed = 0;
 
   constructor() {
+    this.gpuComputeTask = rendererManager.createComputeTask({
+      label: "Shadow stress gpu instances",
+      update: createGpuPositionsNode(this.gpuPositions),
+    });
     eventsManager.on("engine-render-update", this.onEngineUpdate);
     this.debug();
   }
@@ -181,12 +225,11 @@ export default class ShadowStressTest {
   }
 
   private createDeforming(geometry: BufferGeometry) {
-    const instanceData = new Float32Array(config.DEFORMING_COUNT * 4);
     for (let index = 0; index < config.DEFORMING_COUNT; index++) {
       const x = randomSpread();
       const z = randomSpread();
       const scale = 0.6 + Math.random() * 1.2;
-      instanceData.set(
+      this.deformingValues.set(
         [
           x,
           sampleTerrainHeight(x, z) + scale * config.DEFORMING_EXTENT,
@@ -196,11 +239,8 @@ export default class ShadowStressTest {
         index * 4,
       );
     }
-    const instances = storage(
-      new StorageBufferAttribute(instanceData, 4),
-      "vec4",
-      config.DEFORMING_COUNT,
-    );
+    this.deformingInstances.value.needsUpdate = true;
+    const instances = this.deformingInstances;
     const material = new StressMaterial(
       new Color(0.3, 0.55, 0.85),
       getDeformedPosition(
@@ -236,40 +276,7 @@ export default class ShadowStressTest {
   }
 
   private createGpu(geometry: BufferGeometry) {
-    const positions = storage(
-      new StorageBufferAttribute(new Float32Array(config.GPU_COUNT * 4), 4),
-      "vec4",
-      config.GPU_COUNT,
-    );
-    const update = Fn(() => {
-      const seed = float(instanceIndex);
-      const anchor = vec2(hash(seed.add(1)), hash(seed.add(2)))
-        .mul(2)
-        .sub(1)
-        .mul(uniforms.uSpread);
-      const orbitRadius = hash(seed.add(3)).mul(4).add(2);
-      const angle = gameTime
-        .mul(hash(seed.add(4)).mul(0.8).add(0.2))
-        .add(hash(seed.add(5)).mul(Math.PI * 2));
-      const position = anchor.add(
-        vec2(cos(angle), sin(angle)).mul(orbitRadius),
-      );
-      const scale = hash(seed.add(6)).mul(0.6).add(0.4);
-      positions
-        .element(instanceIndex)
-        .assign(
-          vec4(
-            position.x,
-            getTerrainHeightNode(position).add(uniforms.uGpuHover),
-            position.y,
-            scale,
-          ),
-        );
-    })().compute(config.GPU_COUNT, [64]);
-    this.gpuComputeTask = rendererManager.createComputeTask({
-      label: "Shadow stress gpu instances",
-      update,
-    });
+    const positions = this.gpuPositions;
     const material = new StressMaterial(
       new Color(0.4, 0.8, 0.45),
       positions
@@ -305,11 +312,13 @@ export default class ShadowStressTest {
     const box = new BoxGeometry(1, 1, 1);
     const sphere = new SphereGeometry(0.6, 16, 12);
     const torus = new TorusGeometry(0.5, 0.2, 10, 24);
-    this.geometries = [box, sphere, torus];
-    if (this.settings.hasStatic) this.createStatic(this.geometries);
-    if (this.settings.hasMoving) this.createMoving(this.geometries);
-    if (this.settings.hasDeforming) this.createDeforming(torus);
-    if (this.settings.hasGpu) this.createGpu(box);
+    const deformingTorus = torus.clone();
+    const gpuBox = box.clone();
+    this.geometries = [box, sphere, torus, deformingTorus, gpuBox];
+    if (this.settings.hasStatic) this.createStatic([box, sphere, torus]);
+    if (this.settings.hasMoving) this.createMoving([box, sphere, torus]);
+    if (this.settings.hasDeforming) this.createDeforming(deformingTorus);
+    if (this.settings.hasGpu) this.createGpu(gpuBox);
   }
 
   private disable() {
@@ -325,13 +334,14 @@ export default class ShadowStressTest {
       shadowCasterRegistry.unregister(mesh);
     }
     this.staticBatch?.dispose();
+    this.deformingMesh?.dispose();
+    this.gpuMesh?.dispose();
     for (const geometry of [...this.geometries, ...this.shadowGeometries])
       geometry.dispose();
     for (const material of this.materials) material.dispose();
     this.staticBatch = undefined;
     this.deformingMesh = undefined;
     this.gpuMesh = undefined;
-    this.gpuComputeTask = undefined;
     this.movingMeshes = [];
     this.movingAnchors = [];
     this.movingPhases = [];
@@ -343,7 +353,7 @@ export default class ShadowStressTest {
   private onEngineUpdate = ({ delta }: { delta: number }) => {
     if (!this.settings.isEnabled) return;
     this.elapsed += delta;
-    this.gpuComputeTask?.update();
+    if (this.gpuMesh) this.gpuComputeTask.update();
     for (let index = 0; index < this.movingMeshes.length; index++) {
       const mesh = this.movingMeshes[index];
       const anchor = this.movingAnchors[index];

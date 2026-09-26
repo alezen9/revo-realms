@@ -3,7 +3,6 @@ import {
   IndirectStorageBufferAttribute,
   StorageBufferAttribute,
   type Node,
-  type WebGPURenderer,
 } from "three/webgpu";
 import {
   atomicAdd,
@@ -41,18 +40,15 @@ export class ShadowDeformedCasterBucket {
     4,
   );
   readonly instances: ShadowGpuInstances;
-  private renderer: WebGPURenderer;
   private resetNode;
   private buildNode;
 
   constructor(
-    renderer: WebGPURenderer,
     residency: ShadowResidency,
     source: Mesh,
     instances: ShadowGpuInstances,
     sunDirection: Node<"vec3">,
   ) {
-    this.renderer = renderer;
     this.instances = instances;
     this.geometry = instances.geometry
       ? new BufferGeometry().copy(instances.geometry)
@@ -66,6 +62,8 @@ export class ShadowDeformedCasterBucket {
       1,
     );
     this.geometry.setIndirect(indirect);
+    this.geometry.setAttribute("shadowIndirect", indirect);
+    this.geometry.setAttribute("shadowWorkItems", this.workItemsAttribute);
     const indirectNode = storage(indirect, "uint", indirect.count).toAtomic();
     const workItems = storage(this.workItemsAttribute, "uvec4", MAX_WORK_ITEMS);
 
@@ -151,12 +149,13 @@ export class ShadowDeformedCasterBucket {
     };
   }
 
-  run() {
-    this.renderer.compute(this.resetNode);
-    this.renderer.compute(this.buildNode);
+  get computeNodes() {
+    return [this.resetNode, this.buildNode];
   }
 
   dispose() {
     this.geometry.dispose();
+    this.resetNode.dispose();
+    this.buildNode.dispose();
   }
 }

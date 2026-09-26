@@ -101,6 +101,14 @@ export class ShadowRigidCasterBucket {
     );
 
     this.casterGroupsAttribute = new StorageBufferAttribute(casterGroups, 1);
+    for (const geometry of this.geometries) {
+      geometry.setAttribute("shadowIndirect", this.groupIndirectAttribute);
+      geometry.setAttribute("shadowWorkItems", this.workItemsAttribute);
+      geometry.setAttribute("shadowMatrices", this.matrixColumnsAttribute);
+      geometry.setAttribute("shadowPageRanges", this.pageRangesAttribute);
+      geometry.setAttribute("shadowDepthBiases", this.depthBiasAttribute);
+      geometry.setAttribute("shadowCasterGroups", this.casterGroupsAttribute);
+    }
   }
 
   update(sources: ShadowCasterEntry[], sunDirection: Vector3) {

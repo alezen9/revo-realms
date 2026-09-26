@@ -482,7 +482,7 @@ export class PostprocessingManager extends RenderPipeline {
       this.mainSceneFrame.renderer = this.renderer;
       this.mainScenePass.updateBefore(this.mainSceneFrame);
       this.sceneManager.renderCamera.getWorldPosition(this.cameraWorldPosition);
-      const hasNewRequests = this.shadowPageRequests.run(
+      const requestNodes = this.shadowPageRequests.takeComputeNodes(
         this.sceneManager.renderCamera,
         lightingManager.sunDirection,
         shadowCasterRegistry.fixedVersion +
@@ -504,10 +504,18 @@ export class PostprocessingManager extends RenderPipeline {
         lightingManager.sunDirection,
         { min, max },
       );
-      const hasPageWork = this.shadowResidency.run(
+      const residencyNodes = this.shadowResidency.takeComputeNodes(
         lightingManager.sunDirection,
-        hasNewRequests,
+        requestNodes.length > 0,
       );
+      const hasPageWork = residencyNodes.length > 0;
+      const computeNodes = [
+        ...requestNodes,
+        ...residencyNodes,
+        ...(hasPageWork ? this.shadowFixedAtlas.takeComputeNodes() : []),
+        ...this.shadowMovingAtlas.takeComputeNodes(),
+      ];
+      if (computeNodes.length > 0) this.renderer.compute(computeNodes);
       if (hasPageWork) this.shadowFixedAtlas.render();
       this.shadowMovingAtlas.render();
     } finally {

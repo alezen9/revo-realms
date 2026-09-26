@@ -11,7 +11,6 @@ import {
   IndirectStorageBufferAttribute,
   StorageBufferAttribute,
   type Node,
-  type WebGPURenderer,
 } from "three/webgpu";
 import {
   atomicAdd,
@@ -61,7 +60,6 @@ export class ShadowClusterBucket {
     2,
   );
   readonly bounds = new Box3();
-  private renderer: WebGPURenderer;
   private instances: ClusterInstance[] = [];
   private matrixValues: Float32Array;
   private hasDirtyBounds = true;
@@ -73,13 +71,11 @@ export class ShadowClusterBucket {
   private instanceBounds = new Box3();
 
   constructor(
-    renderer: WebGPURenderer,
     residency: ShadowResidency,
     entries: ShadowCasterEntry[],
     sunDirection: Node<"vec3">,
     hasUvs: boolean,
   ) {
-    this.renderer = renderer;
     const geometries = new Map<string, ClusterGeometry>();
     const positions: number[] = [];
     const uvs: number[] = [];
@@ -155,13 +151,21 @@ export class ShadowClusterBucket {
     );
     this.matrixValues = new Float32Array(this.instances.length * 16);
     this.matricesAttribute = new StorageBufferAttribute(this.matrixValues, 4);
+    const clusterBoundsAttribute = new StorageBufferAttribute(
+      new Float32Array(clusterBounds),
+      4,
+    );
+    const lightBoundsAttribute = new StorageBufferAttribute(
+      new Float32Array(instanceClusterCount * 4),
+      4,
+    );
     const clusterBoundsNode = storage(
-      new StorageBufferAttribute(new Float32Array(clusterBounds), 4),
+      clusterBoundsAttribute,
       "vec4",
       clusterBounds.length / 4,
     );
     const lightBoundsNode = storage(
-      new StorageBufferAttribute(new Float32Array(instanceClusterCount * 4), 4),
+      lightBoundsAttribute,
       "vec4",
       instanceClusterCount,
     );
@@ -195,6 +199,18 @@ export class ShadowClusterBucket {
       ),
     );
     this.geometry.setIndirect(indirect);
+    this.geometry.setAttribute("shadowIndirect", indirect);
+    this.geometry.setAttribute("shadowPositions", this.positionsAttribute);
+    if (this.uvsAttribute)
+      this.geometry.setAttribute("shadowUvs", this.uvsAttribute);
+    this.geometry.setAttribute(
+      "shadowInstanceClusters",
+      this.instanceClustersAttribute,
+    );
+    this.geometry.setAttribute("shadowMatrices", this.matricesAttribute);
+    this.geometry.setAttribute("shadowClusterBounds", clusterBoundsAttribute);
+    this.geometry.setAttribute("shadowLightBounds", lightBoundsAttribute);
+    this.geometry.setAttribute("shadowWorkItems", this.workItemsAttribute);
 
     this.boundsNode = Fn(() => {
       const instanceCluster = instanceClustersNode.element(instanceIndex);
@@ -287,17 +303,19 @@ export class ShadowClusterBucket {
     this.hasDirtyBounds = true;
   }
 
-  run() {
-    if (this.hasDirtyBounds) {
-      this.renderer.compute(this.boundsNode);
-      this.hasDirtyBounds = false;
-    }
-    this.renderer.compute(this.resetNode);
-    this.renderer.compute(this.buildNode);
+  takeComputeNodes() {
+    const nodes = this.hasDirtyBounds
+      ? [this.boundsNode, this.resetNode, this.buildNode]
+      : [this.resetNode, this.buildNode];
+    this.hasDirtyBounds = false;
+    return nodes;
   }
 
   dispose() {
     this.geometry.dispose();
+    this.boundsNode.dispose();
+    this.resetNode.dispose();
+    this.buildNode.dispose();
   }
 
   private appendClusters(

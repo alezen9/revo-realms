@@ -30,7 +30,7 @@ import {
 import type { ShadowPageRequests } from "./ShadowPageRequests";
 
 const POOL_CAPACITY = 1024;
-const DYNAMIC_CAPACITY = 256;
+const DYNAMIC_CAPACITY = 400;
 const INVALID_PAGE_KEY = 0xffffffff;
 const READBACK_INTERVAL_MS = 1000;
 const REQUEST_WORD_COUNT = SHADOW_PAGE_COUNT / 32;
@@ -325,27 +325,22 @@ export class ShadowResidency {
     return { slot, isResident, hasDynamic, dynamicSlot: entry.z };
   }
 
-  run(sunDirection: Vector3, hasNewRequests: boolean) {
+  takeComputeNodes(sunDirection: Vector3, hasNewRequests: boolean) {
     this.frame.value = (this.frame.value + 1) >>> 0;
     if (!this.previousSunDirection.equals(sunDirection)) {
       this.previousSunDirection.copy(sunDirection);
       this.invalidate();
     }
-    if (!hasNewRequests && !this.hasPendingWork && this.stats.missing === 0)
-      return false;
-    this.hasPendingWork = false;
-    this.renderer.compute(this.resetNode);
-    this.renderer.compute(this.collectNode);
-    this.renderer.compute(this.freeNode);
-    this.renderer.compute(this.allocateNode);
-
     const now = performance.now();
     if (!this.isReadbackPending && now >= this.nextReadbackTime) {
       this.isReadbackPending = true;
       this.nextReadbackTime = now + READBACK_INTERVAL_MS;
       void this.refreshStatsAsync();
     }
-    return true;
+    if (!hasNewRequests && !this.hasPendingWork && this.stats.missing === 0)
+      return [];
+    this.hasPendingWork = false;
+    return [this.resetNode, this.collectNode, this.freeNode, this.allocateNode];
   }
 
   private async refreshStatsAsync() {

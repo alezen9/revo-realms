@@ -236,7 +236,11 @@ export class ShadowPageRequests {
     };
   }
 
-  run(camera: Camera, sunDirection: Vector3, receiverRevision: number) {
+  takeComputeNodes(
+    camera: Camera,
+    sunDirection: Vector3,
+    receiverRevision: number,
+  ) {
     this.renderer.getDrawingBufferSize(this.drawingBufferSize);
     const width = Math.max(1, Math.floor(this.drawingBufferSize.x));
     const height = Math.max(1, Math.floor(this.drawingBufferSize.y));
@@ -251,14 +255,13 @@ export class ShadowPageRequests {
       this.previousResolutionBias === shadowResolutionBias.value &&
       this.previousSoftReceiverLevelBias === shadowSoftReceiverLevelBias.value
     )
-      return false;
+      return [];
     this.depthSize.value.set(width, height);
-    this.renderer.compute(this.resetNode);
-    this.renderer.compute(this.requestNode, [
+    this.requestNode.dispatchSize = [
       Math.ceil(width / (TILE_SIZE * TILE_SIZE)),
       Math.ceil(height / (TILE_SIZE * TILE_SIZE)),
       1,
-    ]);
+    ];
     this.previousCamera = camera;
     this.previousCameraMatrix.copy(camera.matrixWorld);
     this.previousProjectionMatrix.copy(camera.projectionMatrix);
@@ -267,6 +270,6 @@ export class ShadowPageRequests {
     this.previousReceiverRevision = receiverRevision;
     this.previousResolutionBias = shadowResolutionBias.value;
     this.previousSoftReceiverLevelBias = shadowSoftReceiverLevelBias.value;
-    return true;
+    return [this.resetNode, this.requestNode];
   }
 }
