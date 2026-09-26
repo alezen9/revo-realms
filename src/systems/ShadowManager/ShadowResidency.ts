@@ -53,6 +53,7 @@ for (let slot = 0; slot < POOL_CAPACITY; slot++)
 
 export class ShadowResidency {
   readonly frame = uniform(0, "uint");
+  readonly cameraPosition: Node<"vec3">;
   private renderer: WebGPURenderer;
   private previousSunDirection = new Vector3();
   private sunGeneration = uniform(1, "uint");
@@ -111,6 +112,7 @@ export class ShadowResidency {
     sunDirection: Node<"vec3">,
   ) {
     this.renderer = renderer;
+    this.cameraPosition = cameraPosition;
     this.requestCounters = requests.countersAttribute;
     const requestBits = storage(
       requests.bitsAttribute,

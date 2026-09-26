@@ -5,10 +5,10 @@ import { isPagedV2 } from "./config";
 export type ShadowCasterKind = "fixed" | "moving" | "deformed";
 export type ShadowDeformedInstances = {
   count: number;
-  maxRadiusMeters: number;
-  levelCount?: 1 | 2;
+  radiusMeters: number;
   geometry?: BufferGeometry;
-  centerWorldPosition: (index: Node<"uint">) => Node<"vec3">;
+  baseWorldPosition: (index: Node<"uint">) => Node<"vec3">;
+  height: (index: Node<"uint">) => Node<"float">;
   worldPosition: (index: Node<"uint">, position: Node<"vec3">) => Node<"vec3">;
   isActive: (index: Node<"uint">) => Node<"bool">;
 };
@@ -20,7 +20,6 @@ export type ShadowCasterOptions = {
   shadowOpacityNode?: Node<"float">;
   alphaCutoff?: number;
   deformedInstances?: ShadowDeformedInstances;
-  localVegetation?: boolean;
 };
 
 export type ShadowCasterEntry = {
@@ -32,7 +31,6 @@ export type ShadowCasterEntry = {
   shadowOpacityNode?: Node<"float">;
   alphaCutoff: number;
   deformedInstances?: ShadowDeformedInstances;
-  localVegetation: boolean;
   revision: number;
   worldMatrix: Matrix4;
 };
@@ -63,12 +61,7 @@ export class ShadowCasterRegistry {
       shadowOpacityNode,
       alphaCutoff = 0,
       deformedInstances,
-      localVegetation = false,
     } = options;
-    if (localVegetation && (kind !== "deformed" || !deformedInstances))
-      throw new Error(
-        `Local vegetation needs deformed instances: ${mesh.name}`,
-      );
     if (!Number.isFinite(depthBiasMeters) || depthBiasMeters < 0)
       throw new Error(`Invalid shadow depth bias: ${mesh.name}`);
     if (
@@ -83,8 +76,8 @@ export class ShadowCasterRegistry {
       (kind !== "deformed" ||
         !Number.isInteger(deformedInstances.count) ||
         deformedInstances.count <= 0 ||
-        !Number.isFinite(deformedInstances.maxRadiusMeters) ||
-        deformedInstances.maxRadiusMeters <= 0)
+        !Number.isFinite(deformedInstances.radiusMeters) ||
+        deformedInstances.radiusMeters <= 0)
     )
       throw new Error(`Invalid deformed shadow instances: ${mesh.name}`);
     if (kind !== "fixed" && mesh instanceof BatchedMesh)
@@ -109,7 +102,6 @@ export class ShadowCasterRegistry {
       shadowOpacityNode,
       alphaCutoff,
       deformedInstances,
-      localVegetation,
       revision: 0,
       worldMatrix: mesh.matrixWorld.clone(),
     });

@@ -171,7 +171,7 @@ export const createGrassShadowInstances = (
   compute: GrassCompute,
 ): ShadowDeformedInstances => ({
   count: config.CLUMP_COUNT,
-  maxRadiusMeters: 8,
+  radiusMeters: config.CLUMP_LOCAL_RADIUS + 0.5,
   geometry: createGrassShadowGeometry(),
   isActive: (clumpIndex) => {
     const clumpState = compute.clumpStateBuffer.element(clumpIndex);
@@ -183,14 +183,19 @@ export const createGrassShadowInstances = (
           .greaterThanEqual(config.MIN_VISIBLE_SCALE),
       );
   },
-  centerWorldPosition: (clumpIndex) => {
+  baseWorldPosition: (clumpIndex) => {
     const clumpState = compute.clumpStateBuffer.element(clumpIndex);
     return vec3(
       clumpState.x.add(uniforms.uPlayerPosition.x),
-      getYOffset(clumpState).add(1),
+      getYOffset(clumpState),
       clumpState.y.add(uniforms.uPlayerPosition.z),
     );
   },
+  height: (clumpIndex) =>
+    compute.clumpStateBuffer
+      .element(clumpIndex)
+      .z.mul(uniforms.uBladeMaxScale)
+      .mul(config.BLADE_HEIGHT),
   worldPosition: (clumpIndex, sourcePosition) => {
     const bladeSlot = uint(attribute<"float">("grassBladeSlot", "float"));
     const worldPosition = getGrassBladeWorldPosition(

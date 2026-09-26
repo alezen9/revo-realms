@@ -27,6 +27,7 @@ import {
   SHADOW_LEVEL_COUNT,
   SHADOW_PAGE_COUNT,
   SHADOW_PAGE_TEXELS,
+  getShadowDynamicLevel,
   getShadowLevel,
   getShadowLightPosition,
   getShadowPageCoordinate,
@@ -122,7 +123,7 @@ export class ShadowPageRequests {
       Loop(
         {
           start: minimumLevel,
-          end: maximumLevel.add(1),
+          end: getShadowDynamicLevel(maximumLevel).add(1),
           type: "uint",
         },
         ({ i: levelIndex }) => {
@@ -138,7 +139,10 @@ export class ShadowPageRequests {
                 ({ i: localXIndex }) => {
                   const localX = localXIndex.toVar();
                   const receiver = this.loadReceiver(tile, localX, localY);
-                  If(receiver.isValid.and(receiver.level.equal(level)), () => {
+                  const isLevelReceiver = receiver.level
+                    .equal(level)
+                    .or(getShadowDynamicLevel(receiver.level).equal(level));
+                  If(receiver.isValid.and(isLevelReceiver), () => {
                     minimum.assign(minimum.min(receiver.lightPosition));
                     maximum.assign(maximum.max(receiver.lightPosition));
                   });

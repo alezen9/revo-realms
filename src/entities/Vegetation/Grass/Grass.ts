@@ -87,7 +87,6 @@ export default class Grass {
     if (lod === 0 && isPagedV2)
       shadowCasterRegistry.register(mesh, {
         kind: "deformed",
-        localVegetation: true,
         deformedInstances: createGrassShadowInstances(this.compute),
       });
     else if (!isPagedV2)
