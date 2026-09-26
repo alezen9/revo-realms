@@ -173,6 +173,12 @@ export class PostprocessingManager extends RenderPipeline {
       movingDepth: this.makeRigidDepthOutput(this.shadowMovingAtlas, true),
       fixedShadow: this.makeRigidShadowOutput(this.shadowFixedAtlas),
       movingShadow: this.makeRigidShadowOutput(this.shadowMovingAtlas),
+      shadow: this.makeRigidShadowOutput(
+        this.shadowFixedAtlas,
+        this.shadowMovingAtlas,
+      ),
+      receivers: this.makeReceiverOutput(),
+      dynamicPages: this.makeDynamicPageOutput(),
     };
     this.addShadowBindings();
     this.debugFolder
@@ -186,6 +192,9 @@ export class PostprocessingManager extends RenderPipeline {
           "Moving depth": "movingDepth",
           "Fixed shadow": "fixedShadow",
           "Moving shadow": "movingShadow",
+          Shadow: "shadow",
+          Receivers: "receivers",
+          "Dynamic pages": "dynamicPages",
         },
       })
       .on("change", this.selectDebugView);
@@ -256,20 +265,28 @@ export class PostprocessingManager extends RenderPipeline {
     this.needsUpdate = true;
   };
 
-  private getDebugPage(isDynamic: boolean) {
-    const depth = this.getMainSceneTextureNode("depth").sample(screenUV).r;
+  private getReceiver(uv: Node<"vec2">) {
+    const depth = this.getMainSceneTextureNode("depth").sample(uv).r;
     const viewPosition = getViewPosition(
-      screenUV,
+      uv,
       depth,
       this.uProjectionMatrixInverse,
     );
     const worldPosition = this.uCameraWorldMatrix.mul(
       vec4(viewPosition, 1),
     ).xyz;
-    const receiverLevel = getShadowReceiverLevel(
-      viewPosition.length(),
-      this.isSoftShadowReceiver(screenUV),
-    );
+    return {
+      depth,
+      worldPosition,
+      viewDistance: viewPosition.length(),
+      isSoftReceiver: this.isSoftShadowReceiver(uv),
+    };
+  }
+
+  private getDebugPage(isDynamic: boolean) {
+    const { depth, worldPosition, viewDistance, isSoftReceiver } =
+      this.getReceiver(screenUV);
+    const receiverLevel = getShadowReceiverLevel(viewDistance, isSoftReceiver);
     const level = isDynamic
       ? getShadowDynamicLevel(receiverLevel)
       : receiverLevel;
@@ -327,41 +344,59 @@ export class PostprocessingManager extends RenderPipeline {
     return renderOutput(vec4(color, 1), NoToneMapping);
   }
 
-  private makeRigidShadowOutput(atlas: ShadowRigidAtlas) {
+  private makeRigidShadowOutput(
+    atlas: ShadowRigidAtlas,
+    secondary?: ShadowRigidAtlas,
+  ) {
+    const visibility = this.computeShadowVisibility(screenUV, atlas, secondary);
+    return renderOutput(vec4(vec3(visibility), 1), NoToneMapping);
+  }
+
+  private makeReceiverOutput() {
     const depth = this.getMainSceneTextureNode("depth").sample(screenUV).r;
-    const viewPosition = getViewPosition(
-      screenUV,
-      depth,
-      this.uProjectionMatrixInverse,
+    const directSun =
+      this.getMainSceneTextureNode("directSun").sample(screenUV).rgb;
+    const receiverColor = this.isSoftShadowReceiver(screenUV).select(
+      vec3(0.2, 0.45, 1),
+      vec3(0.2, 0.85, 0.3),
     );
-    const worldPosition = this.uCameraWorldMatrix.mul(
-      vec4(viewPosition, 1),
-    ).xyz;
-    const visibility = atlas.computeVisibility(
+    const isReceiver = directSun.dot(vec3(1)).greaterThan(0);
+    const color = depth
+      .greaterThanEqual(1)
+      .select(vec3(0.15), isReceiver.select(receiverColor, vec3(0)));
+    return renderOutput(vec4(color, 1), NoToneMapping);
+  }
+
+  private makeDynamicPageOutput() {
+    const { depth, pageKey, pageTag } = this.getDebugPage(true);
+    const { hasDynamic } = this.shadowResidency.resolvePage(pageKey, pageTag);
+    const color = depth
+      .greaterThanEqual(1)
+      .select(vec3(0), hasDynamic.select(vec3(1, 0.8, 0.1), vec3(0.25)));
+    return renderOutput(vec4(color, 1), NoToneMapping);
+  }
+
+  private computeShadowVisibility(
+    uv: Node<"vec2">,
+    atlas: ShadowRigidAtlas,
+    secondary?: ShadowRigidAtlas,
+  ) {
+    const { depth, worldPosition, viewDistance, isSoftReceiver } =
+      this.getReceiver(uv);
+    return atlas.computeVisibility(
       worldPosition,
       depth,
-      viewPosition.length(),
-      this.isSoftShadowReceiver(screenUV),
+      viewDistance,
+      isSoftReceiver,
+      secondary,
     );
-    return renderOutput(vec4(vec3(visibility), 1), NoToneMapping);
   }
 
   sampleMainSceneColor(uv: Node<"vec2">) {
     const sceneColor = this.getMainSceneTextureNode().sample(uv);
-    const depth = this.getMainSceneTextureNode("depth").sample(uv).r;
-    const viewPosition = getViewPosition(
+    const visibility = this.computeShadowVisibility(
       uv,
-      depth,
-      this.uProjectionMatrixInverse,
-    );
-    const worldPosition = this.uCameraWorldMatrix.mul(
-      vec4(viewPosition, 1),
-    ).xyz;
-    const visibility = this.shadowFixedAtlas.computeVisibility(
-      worldPosition,
-      depth,
-      viewPosition.length(),
-      this.isSoftShadowReceiver(uv),
+      this.shadowFixedAtlas,
       this.shadowMovingAtlas,
     );
     return sceneColor

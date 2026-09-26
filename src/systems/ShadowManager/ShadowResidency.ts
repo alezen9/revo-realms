@@ -99,6 +99,7 @@ export class ShadowResidency {
     requested: 0,
     mapped: 0,
     allocated: 0,
+    dynamic: 0,
     evicted: 0,
     missing: 0,
     outsideGrid: 0,
@@ -345,6 +346,9 @@ export class ShadowResidency {
       const metadata = new Uint32Array(
         await this.renderer.getArrayBufferAsync(this.slotMetadata),
       );
+      const atlasIndirect = new Uint32Array(
+        await this.renderer.getArrayBufferAsync(this.atlasIndirect),
+      );
       let mapped = 0;
       for (let slot = 0; slot < POOL_CAPACITY; slot++) {
         if (
@@ -357,6 +361,7 @@ export class ShadowResidency {
       this.stats.outsideGrid = requests[1];
       this.stats.mapped = mapped;
       this.stats.allocated = residency[COUNTER_ALLOCATED];
+      this.stats.dynamic = atlasIndirect[5];
       this.stats.evicted = residency[COUNTER_EVICTED];
       let overflow = 0;
       for (let level = 0; level < SHADOW_LEVEL_COUNT; level++)
