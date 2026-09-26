@@ -16,7 +16,6 @@ import {
   storage,
   uint,
   uniform,
-  uvec2,
   uvec4,
 } from "three/tsl";
 import type { ShadowPageStats } from "../EventsManager";
@@ -31,6 +30,7 @@ import {
 import type { ShadowPageRequests } from "./ShadowPageRequests";
 
 const POOL_CAPACITY = 1024;
+const DYNAMIC_CAPACITY = 256;
 const INVALID_PAGE_KEY = 0xffffffff;
 const READBACK_INTERVAL_MS = 1000;
 const REQUEST_WORD_COUNT = SHADOW_PAGE_COUNT / 32;
@@ -58,10 +58,10 @@ export class ShadowResidency {
   private previousSunDirection = new Vector3();
   private sunGeneration = uniform(1, "uint");
   private pageTable = new StorageBufferAttribute(
-    new Uint32Array(SHADOW_PAGE_COUNT * 2),
-    2,
+    new Uint32Array(SHADOW_PAGE_COUNT * 4),
+    4,
   );
-  readonly pageTableNode = storage(this.pageTable, "uvec2", SHADOW_PAGE_COUNT);
+  readonly pageTableNode = storage(this.pageTable, "uvec4", SHADOW_PAGE_COUNT);
   private slotMetadata = new StorageBufferAttribute(initialMetadata, 4);
   private slotMetadataNode = storage(this.slotMetadata, "uvec4", POOL_CAPACITY);
   private lists = new StorageBufferAttribute(new Uint32Array(LIST_SIZE), 1);
@@ -252,7 +252,9 @@ export class ShadowResidency {
                 this.sunGeneration,
               ),
             );
-          this.pageTableNode.element(pageKey).assign(uvec2(slot.add(1), 0));
+          this.pageTableNode
+            .element(pageKey)
+            .assign(uvec4(slot.add(1), 0, 0, 0));
           const job = uvec4(pageKey, slot, pageCoordinate);
           const jobIndex = atomicAdd(this.atomicAtlasIndirect.element(1), 1);
           this.pageJobsNode.element(jobIndex).assign(job);
@@ -279,6 +281,10 @@ export class ShadowResidency {
 
   get capacity() {
     return POOL_CAPACITY;
+  }
+
+  get dynamicCapacity() {
+    return DYNAMIC_CAPACITY;
   }
 
   get pageJobsAttribute() {
@@ -316,7 +322,7 @@ export class ShadowResidency {
       .and(metadata.y.equal(pageTag))
       .and(metadata.w.equal(this.sunGeneration));
     const hasDynamic = isResident.and(entry.y.equal(this.frame));
-    return { slot, isResident, hasDynamic };
+    return { slot, isResident, hasDynamic, dynamicSlot: entry.z };
   }
 
   run(sunDirection: Vector3, hasNewRequests: boolean) {

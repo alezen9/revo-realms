@@ -168,8 +168,8 @@ export class PostprocessingManager extends RenderPipeline {
         NoToneMapping,
       ),
       pages: this.makePageOutput(),
-      fixedDepth: this.makeRigidDepthOutput(this.shadowFixedAtlas),
-      movingDepth: this.makeRigidDepthOutput(this.shadowMovingAtlas),
+      fixedDepth: this.makeRigidDepthOutput(this.shadowFixedAtlas, false),
+      movingDepth: this.makeRigidDepthOutput(this.shadowMovingAtlas, true),
       fixedShadow: this.makeRigidShadowOutput(this.shadowFixedAtlas),
       movingShadow: this.makeRigidShadowOutput(this.shadowMovingAtlas),
       shadow: this.makeRigidShadowOutput(
@@ -322,20 +322,27 @@ export class PostprocessingManager extends RenderPipeline {
     return renderOutput(vec4(color, 1), NoToneMapping);
   }
 
-  private makeRigidDepthOutput(atlas: ShadowRigidAtlas) {
+  private makeRigidDepthOutput(atlas: ShadowRigidAtlas, isDynamic: boolean) {
     const { depth, pagePosition, pageKey, pageTag } = this.getDebugPage();
-    const { slot, isResident } = this.shadowResidency.resolvePage(
-      pageKey,
-      pageTag,
-    );
+    const { slot, dynamicSlot, isResident, hasDynamic } =
+      this.shadowResidency.resolvePage(pageKey, pageTag);
     const pageUv = pagePosition
       .fract()
       .clamp(0.5 / SHADOW_PAGE_TEXELS, 1 - 0.5 / SHADOW_PAGE_TEXELS);
-    const atlasDepth = atlas.sampleDebugDepth(slot, pageUv);
+    const atlasDepth = atlas.sampleDebugDepth(
+      isDynamic ? dynamicSlot : slot,
+      pageUv,
+    );
     const visualDepth = atlasDepth.sub(0.65).mul(5).clamp();
     const color = depth
       .greaterThanEqual(1)
-      .select(vec3(0), isResident.select(vec3(visualDepth), vec3(1, 0, 0)));
+      .select(
+        vec3(0),
+        (isDynamic ? hasDynamic : isResident).select(
+          vec3(visualDepth),
+          vec3(1, 0, 0),
+        ),
+      );
     return renderOutput(vec4(color, 1), NoToneMapping);
   }
 

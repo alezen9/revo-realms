@@ -28,6 +28,7 @@ import {
   getShadowPageKey,
   getShadowPageSize,
   getShadowPageTag,
+  SHADOW_PAGES_PER_LEVEL,
 } from "./ShadowPageCoordinates";
 import type { ShadowResidency } from "./ShadowResidency";
 
@@ -118,16 +119,10 @@ export class ShadowDeformedCasterBucket {
                   If(itemIndex.lessThan(MAX_WORK_ITEMS), () => {
                     workItems
                       .element(itemIndex)
-                      .assign(
-                        uvec4(
-                          slot.bitOr(level.shiftLeft(16)),
-                          instanceIndex,
-                          pageCoordinate,
-                        ),
-                      );
+                      .assign(uvec4(pageKey, instanceIndex, pageCoordinate));
                     residency.pageTableNode
                       .element(pageKey)
-                      .assign(uvec2(slot.add(1), residency.frame));
+                      .assign(uvec4(slot.add(1), residency.frame, 0, 0));
                   }).Else(() => {
                     atomicSub(indirectNode.element(1), 1);
                   });
@@ -149,8 +144,8 @@ export class ShadowDeformedCasterBucket {
       MAX_WORK_ITEMS,
     ).element(index);
     return {
-      slot: workItem.x.bitAnd(0xffff),
-      level: workItem.x.shiftRight(16),
+      pageKey: workItem.x,
+      level: workItem.x.div(SHADOW_PAGES_PER_LEVEL),
       instance: workItem.y,
       pageCoordinate: workItem.zw.toVec2(),
     };

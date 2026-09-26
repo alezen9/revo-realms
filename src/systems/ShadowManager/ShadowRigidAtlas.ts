@@ -4,7 +4,6 @@ import {
   DepthTexture,
   DoubleSide,
   Float32BufferAttribute,
-  FloatType,
   LessEqualCompare,
   LinearFilter,
   Mesh,
@@ -13,6 +12,7 @@ import {
   RedFormat,
   Scene,
   UnsignedByteType,
+  UnsignedShortType,
   Vector3,
 } from "three";
 import {
@@ -27,6 +27,7 @@ import {
   atomicAdd,
   atomicLoad,
   atomicStore,
+  atomicSub,
   bool,
   float,
   Fn,
@@ -38,7 +39,7 @@ import {
   texture,
   uniform,
   uint,
-  uvec2,
+  uvec4,
   uv,
   varyingProperty,
   vertexIndex,
@@ -126,7 +127,11 @@ export class ShadowRigidAtlas {
     this.softness = softness;
     this.kind = kind;
     this.pageJobOffset = kind === "fixed" ? 0 : residency.capacity * 2;
-    this.atlasGridSize = Math.ceil(Math.sqrt(residency.capacity));
+    this.atlasGridSize = Math.ceil(
+      Math.sqrt(
+        kind === "fixed" ? residency.capacity : residency.dynamicCapacity,
+      ),
+    );
     const atlasSize = this.atlasGridSize * SHADOW_PAGE_TEXELS;
     this.renderTarget = new RenderTarget(atlasSize, atlasSize, {
       depthBuffer: true,
@@ -138,7 +143,11 @@ export class ShadowRigidAtlas {
     this.renderTarget.texture.name = `V2 ${kind} depth debug`;
     this.renderTarget.texture.magFilter = NearestFilter;
     this.renderTarget.texture.minFilter = NearestFilter;
-    const depthTexture = new DepthTexture(atlasSize, atlasSize, FloatType);
+    const depthTexture = new DepthTexture(
+      atlasSize,
+      atlasSize,
+      UnsignedShortType,
+    );
     depthTexture.compareFunction = LessEqualCompare;
     depthTexture.magFilter = LinearFilter;
     depthTexture.minFilter = LinearFilter;
@@ -364,10 +373,11 @@ export class ShadowRigidAtlas {
         .div(pageSize)
         .add(texelOffset.div(SHADOW_PAGE_TEXELS));
       const pageCoordinate = getShadowPageCoordinate(pagePosition);
-      const { slot, isResident, hasDynamic } = this.residency.resolvePage(
-        getShadowPageKey(level, pageCoordinate),
-        getShadowPageTag(pageCoordinate),
-      );
+      const { slot, isResident, hasDynamic, dynamicSlot } =
+        this.residency.resolvePage(
+          getShadowPageKey(level, pageCoordinate),
+          getShadowPageTag(pageCoordinate),
+        );
       const pageUv = pagePosition.fract().clamp(halfTexel, 1 - halfTexel);
       let tapVisibility = this.sampleDepth(
         slot,
@@ -378,7 +388,12 @@ export class ShadowRigidAtlas {
       if (dynamicAtlas)
         tapVisibility = tapVisibility.mul(
           hasDynamic.select(
-            dynamicAtlas.sampleDepth(slot, pageUv, worldPosition, texelMeters),
+            dynamicAtlas.sampleDepth(
+              dynamicSlot,
+              pageUv,
+              worldPosition,
+              texelMeters,
+            ),
             float(1),
           ),
         );
@@ -457,11 +472,22 @@ export class ShadowRigidAtlas {
           },
         );
         If(isTouched.greaterThan(0), () => {
-          const dynamicIndex = atomicAdd(indirect.element(5), 1);
-          this.pageJobsNode.element(dynamicIndex.add(capacity * 2)).assign(job);
-          this.residency.pageTableNode
-            .element(job.x)
-            .assign(uvec2(job.y.add(1), this.residency.frame));
+          const dynamicSlot = atomicAdd(indirect.element(5), 1);
+          If(dynamicSlot.lessThan(this.residency.dynamicCapacity), () => {
+            this.pageJobsNode
+              .element(dynamicSlot.add(capacity * 2))
+              .assign(uvec4(job.x, dynamicSlot, job.z, job.w));
+            this.residency.pageTableNode
+              .element(job.x)
+              .assign(
+                uvec4(job.y.add(1), this.residency.frame, dynamicSlot, 0),
+              );
+          }).Else(() => {
+            atomicSub(indirect.element(5), 1);
+            this.residency.pageTableNode
+              .element(job.x)
+              .assign(uvec4(job.y.add(1), 0, 0, 0));
+          });
         });
       });
     })().compute(capacity, [64]);
@@ -535,8 +561,9 @@ export class ShadowRigidAtlas {
     const pageUv = varyingProperty("vec2", "deformedPageUv");
     const depth = varyingProperty("float", "deformedDepth");
     material.vertexNode = Fn(() => {
-      const { slot, level, instance, pageCoordinate } =
+      const { pageKey, level, instance, pageCoordinate } =
         bucket.getWorkItem(instanceIndex);
+      const slot = this.residency.pageTableNode.element(pageKey).z;
       const worldPosition = bucket.instances.worldPosition(
         instance,
         positionGeometry,
