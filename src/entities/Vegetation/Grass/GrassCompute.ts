@@ -356,7 +356,6 @@ export class GrassCompute {
 
         const isVisible = passesStochasticVisibility
           .mul(isTerrainVisible)
-          .mul(isInFrustum)
           .toVar();
 
         visibleBladeCount.addAssign(uint(isVisible));
