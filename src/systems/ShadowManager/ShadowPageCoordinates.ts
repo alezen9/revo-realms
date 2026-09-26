@@ -15,7 +15,6 @@ const TAG_MASK = 0x3fff;
 const FIRST_PAGE_SIZE = 2 ** (SHADOW_FIRST_LEVEL + 1) / SHADOW_PAGE_GRID_SIZE;
 
 export const shadowResolutionBias = uniform(2);
-export const shadowDynamicLevel = uniform(3, "uint");
 export const shadowSoftReceiverLevelBias = uniform(2);
 
 export const getShadowLightBasis = (sunDirection: Node<"vec3">) => {
@@ -59,9 +58,6 @@ export const getShadowReceiverLevel = (
       .sub(SHADOW_FIRST_LEVEL)
       .clamp(0, SHADOW_LEVEL_COUNT - 1),
   );
-
-export const getShadowDynamicLevel = (level: Node<"uint">) =>
-  level.lessThan(shadowDynamicLevel).select(shadowDynamicLevel, level);
 
 export const getShadowPageSize = (level: Node<"uint">) =>
   float(uint(1).shiftLeft(level)).mul(FIRST_PAGE_SIZE);

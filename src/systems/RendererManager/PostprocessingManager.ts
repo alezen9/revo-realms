@@ -44,7 +44,6 @@ import {
 } from "..";
 import {
   SHADOW_PAGE_TEXELS,
-  getShadowDynamicLevel,
   getShadowReceiverLevel,
   getShadowLightPosition,
   getShadowPageCoordinate,
@@ -169,8 +168,8 @@ export class PostprocessingManager extends RenderPipeline {
         NoToneMapping,
       ),
       pages: this.makePageOutput(),
-      fixedDepth: this.makeRigidDepthOutput(this.shadowFixedAtlas, false),
-      movingDepth: this.makeRigidDepthOutput(this.shadowMovingAtlas, true),
+      fixedDepth: this.makeRigidDepthOutput(this.shadowFixedAtlas),
+      movingDepth: this.makeRigidDepthOutput(this.shadowMovingAtlas),
       fixedShadow: this.makeRigidShadowOutput(this.shadowFixedAtlas),
       movingShadow: this.makeRigidShadowOutput(this.shadowMovingAtlas),
       shadow: this.makeRigidShadowOutput(
@@ -283,13 +282,10 @@ export class PostprocessingManager extends RenderPipeline {
     };
   }
 
-  private getDebugPage(isDynamic: boolean) {
+  private getDebugPage() {
     const { depth, worldPosition, viewDistance, isSoftReceiver } =
       this.getReceiver(screenUV);
-    const receiverLevel = getShadowReceiverLevel(viewDistance, isSoftReceiver);
-    const level = isDynamic
-      ? getShadowDynamicLevel(receiverLevel)
-      : receiverLevel;
+    const level = getShadowReceiverLevel(viewDistance, isSoftReceiver);
     const pagePosition = getShadowLightPosition(
       worldPosition,
       lightingManager.uSunDir,
@@ -306,7 +302,7 @@ export class PostprocessingManager extends RenderPipeline {
 
   private makePageOutput() {
     const { depth, level, pagePosition, pageKey, pageTag } =
-      this.getDebugPage(false);
+      this.getDebugPage();
     const { isResident } = this.shadowResidency.resolvePage(pageKey, pageTag);
     const pageUv = pagePosition.fract();
     const pageColor = vec3(
@@ -326,9 +322,8 @@ export class PostprocessingManager extends RenderPipeline {
     return renderOutput(vec4(color, 1), NoToneMapping);
   }
 
-  private makeRigidDepthOutput(atlas: ShadowRigidAtlas, isDynamic: boolean) {
-    const { depth, pagePosition, pageKey, pageTag } =
-      this.getDebugPage(isDynamic);
+  private makeRigidDepthOutput(atlas: ShadowRigidAtlas) {
+    const { depth, pagePosition, pageKey, pageTag } = this.getDebugPage();
     const { slot, isResident } = this.shadowResidency.resolvePage(
       pageKey,
       pageTag,
@@ -368,7 +363,7 @@ export class PostprocessingManager extends RenderPipeline {
   }
 
   private makeDynamicPageOutput() {
-    const { depth, pageKey, pageTag } = this.getDebugPage(true);
+    const { depth, pageKey, pageTag } = this.getDebugPage();
     const { hasDynamic } = this.shadowResidency.resolvePage(pageKey, pageTag);
     const color = depth
       .greaterThanEqual(1)

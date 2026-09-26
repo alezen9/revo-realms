@@ -27,7 +27,6 @@ import {
   SHADOW_LEVEL_COUNT,
   SHADOW_PAGE_COUNT,
   SHADOW_PAGE_TEXELS,
-  getShadowDynamicLevel,
   getShadowReceiverLevel,
   getShadowLightBasis,
   getShadowPageCoordinate,
@@ -35,7 +34,6 @@ import {
   getShadowPageSize,
   getShadowWindowCenter,
   isShadowPageInWindow,
-  shadowDynamicLevel,
   shadowResolutionBias,
   shadowSoftReceiverLevelBias,
 } from "./ShadowPageCoordinates";
@@ -57,7 +55,6 @@ export class ShadowPageRequests {
   private previousDrawingBufferSize = new Vector2();
   private previousReceiverRevision = -1;
   private previousResolutionBias = -1;
-  private previousDynamicLevel = -1;
   private previousSoftReceiverLevelBias = -1;
   private requestBits = new StorageBufferAttribute(
     new Uint32Array(REQUEST_WORD_COUNT),
@@ -128,13 +125,10 @@ export class ShadowPageRequests {
               lightYAxis,
             );
             const level = receiver.level.toVar();
-            const dynamicLevel = getShadowDynamicLevel(level).toVar();
             const lightPosition = receiver.lightPosition.toVar();
             const expandedBounds = vec4(lightPosition, lightPosition);
             levelBounds.forEach((bounds, levelIndex) => {
-              const isHit = receiver.isValid.and(
-                level.equal(levelIndex).or(dynamicLevel.equal(levelIndex)),
-              );
+              const isHit = receiver.isValid.and(level.equal(levelIndex));
               bounds.assign(
                 isHit.select(
                   vec4(
@@ -255,7 +249,6 @@ export class ShadowPageRequests {
       this.previousDrawingBufferSize.y === height &&
       this.previousReceiverRevision === receiverRevision &&
       this.previousResolutionBias === shadowResolutionBias.value &&
-      this.previousDynamicLevel === shadowDynamicLevel.value &&
       this.previousSoftReceiverLevelBias === shadowSoftReceiverLevelBias.value
     )
       return;
@@ -273,7 +266,6 @@ export class ShadowPageRequests {
     this.previousDrawingBufferSize.set(width, height);
     this.previousReceiverRevision = receiverRevision;
     this.previousResolutionBias = shadowResolutionBias.value;
-    this.previousDynamicLevel = shadowDynamicLevel.value;
     this.previousSoftReceiverLevelBias = shadowSoftReceiverLevelBias.value;
   }
 }

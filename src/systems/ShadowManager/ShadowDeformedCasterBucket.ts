@@ -21,7 +21,6 @@ import {
 } from "three/tsl";
 import type { ShadowGpuInstances } from "./ShadowCasterRegistry";
 import {
-  getShadowDynamicLevel,
   getShadowLevel,
   getShadowReceiverLevel,
   getShadowLightPosition,
@@ -86,11 +85,10 @@ export class ShadowDeformedCasterBucket {
         const maximum = lightBase.max(lightTop).add(instances.radiusMeters);
         const distance = base.sub(residency.cameraPosition).length();
         const reach = height.add(instances.radiusMeters);
-        const firstLevel = getShadowDynamicLevel(
-          getShadowLevel(distance.sub(reach).max(0)),
-        );
-        const lastLevel = getShadowDynamicLevel(
-          getShadowReceiverLevel(distance.add(reach), bool(true)),
+        const firstLevel = getShadowLevel(distance.sub(reach).max(0));
+        const lastLevel = getShadowReceiverLevel(
+          distance.add(reach),
+          bool(true),
         );
         Loop(
           { start: firstLevel, end: lastLevel.add(1), type: "uint" },
