@@ -202,6 +202,17 @@ export class PostprocessingManager extends RenderPipeline {
         max: 1.5,
         step: 0.05,
       });
+    if (this.shadowMovingAtlas)
+      this.debugFolder.addBinding(
+        this.shadowMovingAtlas.depthBiasTexels,
+        "value",
+        {
+          label: "Dynamic shadow bias",
+          min: 0,
+          max: 16,
+          step: 0.5,
+        },
+      );
     if (isPagedV2)
       this.debugFolder.addBinding(shadowResolutionBias, "value", {
         label: "Shadow resolution bias",

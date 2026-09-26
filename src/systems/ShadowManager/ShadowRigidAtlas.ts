@@ -68,9 +68,10 @@ import {
 } from "./ShadowPageCoordinates";
 import type { ShadowResidency } from "./ShadowResidency";
 
-const DEPTH_BIAS_TEXELS = 3;
+const DEPTH_BIAS_TEXELS = { fixed: 3, moving: 8 };
 
 export class ShadowRigidAtlas {
+  readonly depthBiasTexels;
   private renderer: WebGPURenderer;
   private residency: ShadowResidency;
   private sunDirection: Node<"vec3">;
@@ -120,6 +121,7 @@ export class ShadowRigidAtlas {
     this.sunDirection = sunDirection;
     this.softness = softness;
     this.kind = kind;
+    this.depthBiasTexels = uniform(DEPTH_BIAS_TEXELS[kind]);
     this.pageJobOffset = kind === "fixed" ? 0 : residency.capacity * 2;
     this.atlasGridSize = Math.ceil(Math.sqrt(residency.capacity));
     const atlasSize = this.atlasGridSize * SHADOW_PAGE_TEXELS;
@@ -186,6 +188,7 @@ export class ShadowRigidAtlas {
       }
       this.deformedCasters = [];
       for (const entry of registry.casters) {
+        if (!entry.castsShadow) continue;
         if (this.kind === "moving" && entry.deformedInstances) {
           const bucket = new ShadowDeformedCasterBucket(
             this.renderer,
@@ -379,7 +382,7 @@ export class ShadowRigidAtlas {
     const pageUv = pagePosition.fract().clamp(halfTexel, 1 - halfTexel);
     const receiverDepth = this.maximumY
       .sub(worldPosition.y)
-      .sub(pageSize.mul(DEPTH_BIAS_TEXELS / SHADOW_PAGE_TEXELS))
+      .sub(pageSize.mul(this.depthBiasTexels).div(SHADOW_PAGE_TEXELS))
       .div(this.maximumY.sub(this.minimumY));
     const visibility = this.depthTextureNode
       .sample(this.computeAtlasUv(slot, pageUv))

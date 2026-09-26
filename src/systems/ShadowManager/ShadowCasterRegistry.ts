@@ -14,6 +14,7 @@ export type ShadowDeformedInstances = {
 };
 export type ShadowCasterOptions = {
   kind?: ShadowCasterKind;
+  castsShadow?: boolean;
   depthBiasMeters?: number;
   maxVerticalDisplacementMeters?: number;
   shadowPositionNode?: Node<"vec3">;
@@ -25,6 +26,7 @@ export type ShadowCasterOptions = {
 export type ShadowCasterEntry = {
   mesh: Mesh;
   kind: ShadowCasterKind;
+  castsShadow: boolean;
   depthBiasMeters: number;
   maxVerticalDisplacementMeters: number;
   shadowPositionNode?: Node<"vec3">;
@@ -55,6 +57,7 @@ export class ShadowCasterRegistry {
       throw new Error(`Shadow caster already registered: ${mesh.name}`);
     const {
       kind = "fixed",
+      castsShadow = true,
       depthBiasMeters = 0,
       maxVerticalDisplacementMeters = 0,
       shadowPositionNode,
@@ -96,6 +99,7 @@ export class ShadowCasterRegistry {
     this.entries.set(mesh, {
       mesh,
       kind,
+      castsShadow,
       depthBiasMeters,
       maxVerticalDisplacementMeters,
       shadowPositionNode,
@@ -133,6 +137,17 @@ export class ShadowCasterRegistry {
     if (entry.depthBiasMeters === depthBiasMeters) return;
     entry.depthBiasMeters = depthBiasMeters;
     this.biasVersion++;
+  }
+
+  setCastsShadow(mesh: Mesh, castsShadow: boolean) {
+    if (!isPagedV2) return;
+    const entry = this.entries.get(mesh);
+    if (!entry) throw new Error(`Shadow caster not registered: ${mesh.name}`);
+    if (entry.castsShadow === castsShadow) return;
+    entry.castsShadow = castsShadow;
+    if (entry.kind === "fixed") this.fixedVersion++;
+    if (entry.kind === "moving") this.movingVersion++;
+    if (entry.kind === "deformed") this.deformedVersion++;
   }
 
   markMoved(mesh: Mesh) {

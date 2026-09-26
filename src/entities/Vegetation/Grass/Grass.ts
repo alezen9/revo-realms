@@ -31,6 +31,8 @@ export default class Grass {
   private playerDeltaXZ = new Vector2();
   private computeTask: ComputeTask;
   private monitoringReadback?: ReadbackBuffer;
+  private shadowCaster?: Mesh;
+  private shadowSettings = { castsShadow: true };
 
   constructor() {
     this.validateRequiredFeatures();
@@ -53,7 +55,16 @@ export default class Grass {
 
     eventsManager.on("engine-render-update", this.onEngineUpdate);
 
-    debugGrass(uniforms, config);
+    const folder = debugGrass(uniforms, config);
+    const { shadowCaster } = this;
+    if (shadowCaster)
+      folder
+        .addBinding(this.shadowSettings, "castsShadow", {
+          label: "Casts shadow",
+        })
+        .on("change", ({ value }) => {
+          shadowCasterRegistry.setCastsShadow(shadowCaster, value);
+        });
   }
 
   private validateRequiredFeatures() {
@@ -84,12 +95,13 @@ export default class Grass {
 
     const mesh = new Mesh(geometry, this.material);
     mesh.frustumCulled = false;
-    if (lod === 0 && isPagedV2)
+    if (lod === 0 && isPagedV2) {
+      this.shadowCaster = mesh;
       shadowCasterRegistry.register(mesh, {
         kind: "deformed",
         deformedInstances: createGrassShadowInstances(this.compute),
       });
-    else if (!isPagedV2)
+    } else if (!isPagedV2)
       shadowCasterRegistry.register(mesh, { kind: "deformed" });
 
     return mesh;
