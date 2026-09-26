@@ -6,11 +6,13 @@ import {
 } from "three/webgpu";
 import {
   atomicAdd,
+  atomicLoad,
   atomicStore,
   Fn,
   If,
   instanceIndex,
   storage,
+  uvec2,
 } from "three/tsl";
 import type { ShadowCasterEntry } from "./ShadowCasterRegistry";
 import {
@@ -25,7 +27,7 @@ export class ShadowRigidCasterBucket {
   readonly matrixColumnsAttribute: StorageBufferAttribute;
   readonly pageRangesAttribute: StorageBufferAttribute;
   readonly depthBiasAttribute: StorageBufferAttribute;
-  readonly casterJobsAttribute: StorageBufferAttribute;
+  readonly workItemsAttribute: StorageBufferAttribute;
 
   readonly casterCount: number;
   private renderer: WebGPURenderer;
@@ -47,46 +49,56 @@ export class ShadowRigidCasterBucket {
     this.renderer = renderer;
     this.casterCount = sources.length;
     const capacity = residency.capacity;
-    const indirectValues = new Uint32Array(this.casterCount * 4);
-    const indirect = new IndirectStorageBufferAttribute(indirectValues, 1);
+    const groupIndices = new Map<BufferGeometry, number>();
+    const casterGroups = new Uint32Array(this.casterCount);
+    const groupCasterCounts: number[] = [];
     for (let casterIndex = 0; casterIndex < sources.length; casterIndex++) {
       const source = sources[casterIndex].mesh;
-      const sourceGeometry = source.geometry.index
-        ? source.geometry.toNonIndexed()
-        : source.geometry;
-      const position = sourceGeometry.getAttribute("position");
-      if (!position)
-        throw new Error(`Shadow caster needs positions: ${source.name}`);
-      const positions = new Float32Array(position.count * 3);
-      for (let index = 0; index < position.count; index++) {
-        const offset = index * 3;
-        positions[offset] = position.getX(index);
-        positions[offset + 1] = position.getY(index);
-        positions[offset + 2] = position.getZ(index);
+      let groupIndex = groupIndices.get(source.geometry);
+      if (groupIndex === undefined) {
+        groupIndex = this.geometries.length;
+        groupIndices.set(source.geometry, groupIndex);
+        groupCasterCounts.push(0);
+        const sourceGeometry = source.geometry.index
+          ? source.geometry.toNonIndexed()
+          : source.geometry;
+        const position = sourceGeometry.getAttribute("position");
+        if (!position)
+          throw new Error(`Shadow caster needs positions: ${source.name}`);
+        const positions = new Float32Array(position.count * 3);
+        for (let index = 0; index < position.count; index++) {
+          positions[index * 3] = position.getX(index);
+          positions[index * 3 + 1] = position.getY(index);
+          positions[index * 3 + 2] = position.getZ(index);
+        }
+        const geometry = new BufferGeometry();
+        geometry.setAttribute(
+          "position",
+          new Float32BufferAttribute(positions, 3),
+        );
+        if (sourceGeometry !== source.geometry) sourceGeometry.dispose();
+        this.geometries.push(geometry);
       }
-      if (sourceGeometry !== source.geometry) sourceGeometry.dispose();
-      const geometry = new BufferGeometry();
-      geometry.setAttribute(
-        "position",
-        new Float32BufferAttribute(positions, 3),
-      );
-      geometry.setAttribute(
-        "casterIndex",
-        new Float32BufferAttribute(
-          new Float32Array(position.count).fill(casterIndex),
-          1,
-        ),
-      );
+      casterGroups[casterIndex] = groupIndex;
+      groupCasterCounts[groupIndex]++;
+    }
+    const groupCount = this.geometries.length;
+    const indirectValues = new Uint32Array(groupCount * 4);
+    const indirect = new IndirectStorageBufferAttribute(indirectValues, 1);
+    let firstItem = 0;
+    for (let groupIndex = 0; groupIndex < groupCount; groupIndex++) {
+      const geometry = this.geometries[groupIndex];
+      indirectValues[groupIndex * 4] = geometry.getAttribute("position").count;
+      indirectValues[groupIndex * 4 + 3] = firstItem;
       geometry.setIndirect(indirect, [
-        casterIndex * 4 * Uint32Array.BYTES_PER_ELEMENT,
+        groupIndex * 4 * Uint32Array.BYTES_PER_ELEMENT,
       ]);
-      indirectValues[casterIndex * 4] = position.count;
-      this.geometries.push(geometry);
+      firstItem += groupCasterCounts[groupIndex] * capacity;
     }
 
-    this.casterJobsAttribute = new StorageBufferAttribute(
-      new Uint32Array(this.casterCount * capacity),
-      1,
+    this.workItemsAttribute = new StorageBufferAttribute(
+      new Uint32Array(firstItem * 2),
+      2,
     );
     this.matrixValues = new Float32Array(this.casterCount * 16);
     this.matrixColumnsAttribute = new StorageBufferAttribute(
@@ -104,10 +116,15 @@ export class ShadowRigidCasterBucket {
     );
 
     const indirectNode = storage(indirect, "uint", indirect.count).toAtomic();
-    const casterJobs = storage(
-      this.casterJobsAttribute,
+    const workItems = storage(
+      this.workItemsAttribute,
+      "uvec2",
+      this.workItemsAttribute.count,
+    );
+    const groups = storage(
+      new StorageBufferAttribute(casterGroups, 1),
       "uint",
-      this.casterJobsAttribute.count,
+      this.casterCount,
     );
     const ranges = storage(
       this.pageRangesAttribute,
@@ -125,7 +142,7 @@ export class ShadowRigidCasterBucket {
 
     this.resetNode = Fn(() => {
       atomicStore(indirectNode.element(instanceIndex.mul(4).add(1)), 0);
-    })().compute(this.casterCount, [1]);
+    })().compute(groupCount, [1]);
 
     this.buildNode = Fn(() => {
       const casterIndex = instanceIndex.div(capacity);
@@ -143,13 +160,17 @@ export class ShadowRigidCasterBucket {
           .and(job.z.lessThanEqual(range.z))
           .and(job.w.lessThanEqual(range.w));
         If(overlaps, () => {
-          const casterJobIndex = atomicAdd(
-            indirectNode.element(casterIndex.mul(4).add(1)),
+          const groupIndex = groups.element(casterIndex);
+          const itemIndex = atomicAdd(
+            indirectNode.element(groupIndex.mul(4).add(1)),
             1,
           );
-          casterJobs
-            .element(casterIndex.mul(capacity).add(casterJobIndex))
-            .assign(jobIndex);
+          const firstGroupItem = atomicLoad(
+            indirectNode.element(groupIndex.mul(4).add(3)),
+          );
+          workItems
+            .element(firstGroupItem.add(itemIndex))
+            .assign(uvec2(jobIndex, casterIndex));
         });
       });
     })().compute(this.casterCount * capacity, [64]);

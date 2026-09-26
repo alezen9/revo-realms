@@ -27,7 +27,6 @@ import {
 import {
   atomicAdd,
   atomicLoad,
-  attribute,
   bool,
   float,
   Fn,
@@ -627,10 +626,10 @@ export class ShadowRigidAtlas {
       "vec4",
       bucket.matrixColumnsAttribute.count,
     );
-    const casterJobs = storage(
-      bucket.casterJobsAttribute,
-      "uint",
-      bucket.casterJobsAttribute.count,
+    const workItems = storage(
+      bucket.workItemsAttribute,
+      "uvec2",
+      bucket.workItemsAttribute.count,
     );
     const depthBiases = storage(
       bucket.depthBiasAttribute,
@@ -644,7 +643,8 @@ export class ShadowRigidAtlas {
     const pageUv = varyingProperty("vec2", "rigidPageUv");
     const depth = varyingProperty("float", "rigidDepth");
     material.vertexNode = Fn(() => {
-      const casterIndex = uint(attribute<"float">("casterIndex", "float"));
+      const workItem = workItems.element(instanceIndex);
+      const casterIndex = workItem.y;
       const matrixOffset = casterIndex.mul(4);
       const worldPosition = matrices
         .element(matrixOffset)
@@ -652,10 +652,7 @@ export class ShadowRigidAtlas {
         .add(matrices.element(matrixOffset.add(1)).mul(positionGeometry.y))
         .add(matrices.element(matrixOffset.add(2)).mul(positionGeometry.z))
         .add(matrices.element(matrixOffset.add(3))).xyz;
-      const jobIndex = casterJobs.element(
-        casterIndex.mul(this.residency.capacity).add(instanceIndex),
-      );
-      const job = this.pageJobsNode.element(jobIndex.add(this.pageJobOffset));
+      const job = this.pageJobsNode.element(workItem.x.add(this.pageJobOffset));
       const casterPageUv = this.getJobPageUv(job, worldPosition);
       const casterDepth = this.maximumY
         .sub(worldPosition.y)
