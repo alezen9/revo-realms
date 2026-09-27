@@ -89,7 +89,7 @@ export class VSMClusterBucket {
   private instanceBounds = new Box3();
 
   constructor(context: VSMContext, casters: VSMCaster[], hasUvs: boolean) {
-    const { sunDirection } = context;
+    const { lightBasis } = context;
     this.hasUvs = hasUvs;
     const content = this.collectContent(casters);
     const instanceClusterCapacity = getCapacity(
@@ -185,7 +185,7 @@ export class VSMClusterBucket {
           .add(matricesNode.element(matrixOffset.add(1)).mul(local.y))
           .add(matricesNode.element(matrixOffset.add(2)).mul(local.z))
           .add(matricesNode.element(matrixOffset.add(3))).xyz;
-        const light = getLightPosition(world, sunDirection);
+        const light = getLightPosition(world, lightBasis);
         lightBounds.assign(
           vec4(lightBounds.xy.min(light), lightBounds.zw.max(light)),
         );

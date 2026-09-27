@@ -52,7 +52,7 @@ import {
   VSM_PAGE_TEXELS,
   VSM_PAGES_PER_LEVEL,
   computePageCoordinate,
-  getLightBasis,
+  getLightPosition,
   getPageCoordinate,
   getPageKey,
   getPageSize,
@@ -118,6 +118,7 @@ export class VSMPages {
   private corner = new Vector3();
   private hasPendingInvalidation = false;
   private hasPendingWork = true;
+  private hasDispatchedResidency = false;
   private isReadbackPending = false;
   private nextReadbackTime = 0;
   private requestResetNode;
@@ -136,7 +137,7 @@ export class VSMPages {
   ) {
     this.renderer = renderer;
     this.context = context;
-    const { cameraPosition, sunDirection } = context;
+    const { cameraPosition, lightBasis } = context;
     this.depthNode = texture(depthTexture);
     this.softReceiverNode = texture(softReceiverTexture);
     const { atomicRequestBits, atomicRequestCounters } = this;
@@ -161,9 +162,6 @@ export class VSMPages {
 
     this.requestNode = Fn(() => {
       const tile = uvec2(globalId.xy);
-      const { lightX, lightY } = getLightBasis(sunDirection);
-      const lightXAxis = lightX.toVar();
-      const lightYAxis = lightY.toVar();
       const levelBounds: Node<"vec4">[] = [];
       for (let levelIndex = 0; levelIndex < VSM_LEVEL_COUNT; levelIndex++)
         levelBounds.push(
@@ -180,13 +178,7 @@ export class VSMPages {
           { start: 0, end: TILE_SIZE, type: "uint" },
           ({ i: localXIndex }) => {
             const localX = localXIndex.toVar();
-            const receiver = this.loadReceiver(
-              tile,
-              localX,
-              localY,
-              lightXAxis,
-              lightYAxis,
-            );
+            const receiver = this.loadReceiver(tile, localX, localY);
             const level = receiver.level.toVar();
             const lightPosition = receiver.lightPosition.toVar();
             const expandedBounds = vec4(lightPosition, lightPosition);
@@ -237,7 +229,7 @@ export class VSMPages {
           const level = metadata.x.div(VSM_PAGES_PER_LEVEL).toVar();
           const pageCoordinate = getWindowPage(
             metadata.x,
-            getWindowCenter(cameraPosition, sunDirection, level),
+            getWindowCenter(cameraPosition, lightBasis, level),
           ).toVar();
           const isInvalid = getPageTag(pageCoordinate)
             .notEqual(metadata.y)
@@ -275,7 +267,7 @@ export class VSMPages {
             const level = pageKey.div(VSM_PAGES_PER_LEVEL);
             const pageCoordinate = getWindowPage(
               pageKey,
-              getWindowCenter(cameraPosition, sunDirection, level),
+              getWindowCenter(cameraPosition, lightBasis, level),
             );
             const pageTag = getPageTag(pageCoordinate);
             const { slot, isResident } = context.resolvePage(pageKey, pageTag);
@@ -381,7 +373,7 @@ export class VSMPages {
             .toVar();
           const pageCoordinate = getWindowPage(
             pageKey,
-            getWindowCenter(cameraPosition, sunDirection, level),
+            getWindowCenter(cameraPosition, lightBasis, level),
           );
           context.slotMetadataNode
             .element(slot)
@@ -430,8 +422,6 @@ export class VSMPages {
     tile: Node<"uvec2">,
     localX: Node<"uint">,
     localY: Node<"uint">,
-    lightX: Node<"vec3">,
-    lightY: Node<"vec3">,
   ) {
     const { context } = this;
     const pixel = tile.mul(TILE_SIZE).add(uvec2(localX, localY));
@@ -454,12 +444,12 @@ export class VSMPages {
     return {
       isValid: isInside.and(depth.lessThan(1)),
       level: getReceiverLevel(viewPosition.length(), isSoftReceiver),
-      lightPosition: vec2(worldPosition.dot(lightX), worldPosition.dot(lightY)),
+      lightPosition: getLightPosition(worldPosition, context.lightBasis),
     };
   }
 
   private requestPages(level: Node<"uint">, bounds: Node<"vec4">) {
-    const { cameraPosition, sunDirection } = this.context;
+    const { cameraPosition, lightBasis } = this.context;
     const pageSize = getPageSize(level);
     const filterMargin = pageSize.mul(FILTER_TEXELS / VSM_PAGE_TEXELS);
     const firstPage = getPageCoordinate(
@@ -468,7 +458,7 @@ export class VSMPages {
     const lastPage = getPageCoordinate(
       bounds.zw.add(filterMargin).div(pageSize),
     );
-    const windowCenter = getWindowCenter(cameraPosition, sunDirection, level);
+    const windowCenter = getWindowCenter(cameraPosition, lightBasis, level);
     const pageWidth = lastPage.x.sub(firstPage.x).add(1);
     const pageHeight = lastPage.y.sub(firstPage.y).add(1);
     Loop(
@@ -516,7 +506,7 @@ export class VSMPages {
     if (hasFullInvalidation) this.hasPendingWork = true;
     else if (dirtyBounds.length > 0) this.writeInvalidationRects(dirtyBounds);
 
-    this.refreshStatsOnInterval();
+    if (this.hasDispatchedResidency) this.refreshStatsOnInterval();
     if (
       !changes.shouldRequestPages &&
       !this.hasPendingWork &&
@@ -524,6 +514,7 @@ export class VSMPages {
     )
       return [];
     this.hasPendingWork = false;
+    this.hasDispatchedResidency = true;
     const nodes = [this.resetNode];
     if (this.hasPendingInvalidation) nodes.push(this.invalidateNode);
     this.hasPendingInvalidation = false;
@@ -532,7 +523,7 @@ export class VSMPages {
   }
 
   private writeInvalidationRects(boxes: Box3[]) {
-    const sunDirection = this.context.cpuSunDirection;
+    const { x: lightX, y: lightY } = this.context.lightBasis;
     const boxCount = Math.min(boxes.length, MAX_INVALIDATION_BOXES);
     for (let rect = 0; rect < boxCount * VSM_LEVEL_COUNT; rect++)
       this.invalidationValues.set([0xffffffff, 0xffffffff, 0, 0], rect * 4);
@@ -548,7 +539,12 @@ export class VSMPages {
             corner & 2 ? max.y : min.y,
             corner & 4 ? max.z : min.z,
           );
-          const page = computePageCoordinate(this.corner, sunDirection, level);
+          const page = computePageCoordinate(
+            this.corner,
+            lightX.value,
+            lightY.value,
+            level,
+          );
           const values = this.invalidationValues;
           values[rectOffset] = Math.min(values[rectOffset], page.x);
           values[rectOffset + 1] = Math.min(values[rectOffset + 1], page.y);

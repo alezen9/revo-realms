@@ -1,6 +1,6 @@
-import { Vector3 } from "three";
+import type { Vector3 } from "three";
 import type { Node } from "three/webgpu";
-import { ceil, float, log2, uint, uniform, uvec2, vec2, vec3 } from "three/tsl";
+import { ceil, float, log2, uint, uniform, uvec2, vec2 } from "three/tsl";
 
 export const VSM_PAGE_TEXELS = 128;
 export const VSM_PAGE_GRID_SIZE = 128;
@@ -17,27 +17,31 @@ const FIRST_PAGE_SIZE = 2 ** (VSM_FIRST_LEVEL + 1) / VSM_PAGE_GRID_SIZE;
 export const vsmResolutionBias = uniform(2);
 export const vsmSoftReceiverLevelBias = uniform(4);
 
-export const getLightBasis = (sunDirection: Node<"vec3">) => {
-  const horizontalLength = sunDirection.xz.length();
-  const lightX = horizontalLength
-    .lessThan(0.0001)
-    .select(
-      vec3(1, 0, 0),
-      vec3(sunDirection.z, 0, sunDirection.x.negate()).div(
-        horizontalLength.max(0.0001),
-      ),
+export type VSMLightBasis = {
+  x: Node<"vec3">;
+  y: Node<"vec3">;
+};
+
+export const computeLightBasis = (
+  sunDirection: Vector3,
+  lightX: Vector3,
+  lightY: Vector3,
+) => {
+  const horizontalLength = Math.hypot(sunDirection.x, sunDirection.z);
+  if (horizontalLength < 0.0001) lightX.set(1, 0, 0);
+  else
+    lightX.set(
+      sunDirection.z / horizontalLength,
+      0,
+      -sunDirection.x / horizontalLength,
     );
-  const lightY = sunDirection.cross(lightX).normalize();
-  return { lightX, lightY };
+  lightY.crossVectors(sunDirection, lightX).normalize();
 };
 
 export const getLightPosition = (
   worldPosition: Node<"vec3">,
-  sunDirection: Node<"vec3">,
-) => {
-  const { lightX, lightY } = getLightBasis(sunDirection);
-  return vec2(worldPosition.dot(lightX), worldPosition.dot(lightY));
-};
+  lightBasis: VSMLightBasis,
+) => vec2(worldPosition.dot(lightBasis.x), worldPosition.dot(lightBasis.y));
 
 export const getReceiverLevel = (
   viewDistance: Node<"float">,
@@ -77,11 +81,11 @@ export const getPageCoordinate = (pagePosition: Node<"vec2">) =>
 
 export const getWindowCenter = (
   cameraPosition: Node<"vec3">,
-  sunDirection: Node<"vec3">,
+  lightBasis: VSMLightBasis,
   level: Node<"uint">,
 ) =>
   getPageCoordinate(
-    getLightPosition(cameraPosition, sunDirection).div(getPageSize(level)),
+    getLightPosition(cameraPosition, lightBasis).div(getPageSize(level)),
   );
 
 export const getWindowPage = (
@@ -117,26 +121,15 @@ export const isPageInWindow = (
     .and(pageCoordinate.x.lessThan(windowCenter.x.add(VSM_PAGE_WINDOW_HALF)))
     .and(pageCoordinate.y.lessThan(windowCenter.y.add(VSM_PAGE_WINDOW_HALF)));
 
-const cpuLightX = new Vector3();
-const cpuLightY = new Vector3();
-
 export const computePageCoordinate = (
   position: Vector3,
-  sunDirection: Vector3,
+  lightX: Vector3,
+  lightY: Vector3,
   level: number,
 ) => {
-  const horizontalLength = Math.hypot(sunDirection.x, sunDirection.z);
-  if (horizontalLength < 0.0001) cpuLightX.set(1, 0, 0);
-  else
-    cpuLightX.set(
-      sunDirection.z / horizontalLength,
-      0,
-      -sunDirection.x / horizontalLength,
-    );
-  cpuLightY.crossVectors(sunDirection, cpuLightX).normalize();
   const pageSize = FIRST_PAGE_SIZE * 2 ** level;
   return {
-    x: Math.floor(position.dot(cpuLightX) / pageSize) + VSM_PAGE_OFFSET,
-    y: Math.floor(position.dot(cpuLightY) / pageSize) + VSM_PAGE_OFFSET,
+    x: Math.floor(position.dot(lightX) / pageSize) + VSM_PAGE_OFFSET,
+    y: Math.floor(position.dot(lightY) / pageSize) + VSM_PAGE_OFFSET,
   };
 };

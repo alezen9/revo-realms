@@ -292,7 +292,7 @@ export class VSMStaticCache {
     alphaTest: number,
     opacity?: (uv: Node<"vec2">) => Node<"float">,
   ) {
-    const { sunDirection } = this.context;
+    const { lightBasis } = this.context;
     const { minimumY, maximumY } = this;
     const workCount = storage(
       bucket.workIndirectAttribute,
@@ -360,7 +360,7 @@ export class VSMStaticCache {
                 .add(matrices.element(matrixOffset.add(1)).mul(local.y))
                 .add(matrices.element(matrixOffset.add(2)).mul(local.z))
                 .add(vec4(translation.xyz, 0)).xyz;
-              const texel = getLightPosition(world, sunDirection)
+              const texel = getLightPosition(world, lightBasis)
                 .div(pageSize)
                 .sub(pageOrigin)
                 .mul(VSM_PAGE_TEXELS);

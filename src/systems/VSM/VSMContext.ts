@@ -18,6 +18,7 @@ import { storage, uint, uniform } from "three/tsl";
 import {
   VSM_LEVEL_COUNT,
   VSM_PAGE_COUNT,
+  computeLightBasis,
   vsmResolutionBias,
   vsmSoftReceiverLevelBias,
 } from "./VSMMath";
@@ -127,7 +128,10 @@ export class VSMContext {
   readonly projectionMatrixInverse = uniform(new Matrix4());
   readonly cameraWorldMatrix = uniform(new Matrix4());
   readonly sunDirection: Node<"vec3">;
-  readonly cpuSunDirection = new Vector3();
+  readonly lightBasis = {
+    x: uniform(new Vector3(1, 0, 0)),
+    y: uniform(new Vector3(0, 1, 0)),
+  };
   readonly drawingBufferSize = new Vector2();
   readonly pageTable = new StorageBufferAttribute(
     new Uint32Array(VSM_PAGE_COUNT * 4),
@@ -229,7 +233,12 @@ export class VSMContext {
     previous.projectionMatrix.copy(camera.projectionMatrix);
     previous.drawingBufferSize.copy(this.drawingBufferSize);
     previous.sunDirection.copy(sunDirection);
-    this.cpuSunDirection.copy(sunDirection);
+    if (changes.hasSunChanged)
+      computeLightBasis(
+        sunDirection,
+        this.lightBasis.x.value,
+        this.lightBasis.y.value,
+      );
     previous.resolutionBias = vsmResolutionBias.value;
     previous.softReceiverLevelBias = vsmSoftReceiverLevelBias.value;
     previous.staticVersion = this.staticVersion;

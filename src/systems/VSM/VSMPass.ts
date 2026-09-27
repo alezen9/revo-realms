@@ -216,7 +216,7 @@ export class VSMPass {
     const level = getReceiverLevel(viewDistance, isSoftReceiver);
     const pagePosition = getLightPosition(
       worldPosition,
-      lightingManager.uSunDir,
+      this.context.lightBasis,
     ).div(getPageSize(level));
     const pageCoordinate = getPageCoordinate(pagePosition);
     return {

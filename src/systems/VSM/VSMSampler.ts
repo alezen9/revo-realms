@@ -313,7 +313,10 @@ export class VSMSampler {
     const { sunDirection } = this.context;
     const level = getReceiverLevel(viewDistance, isSoftReceiver).toVar();
     const pageSize = getPageSize(level).toVar();
-    const lightPosition = getLightPosition(worldPosition, sunDirection).toVar();
+    const lightPosition = getLightPosition(
+      worldPosition,
+      this.context.lightBasis,
+    ).toVar();
     const pagePosition = lightPosition.div(pageSize).toVar();
     const receiver = {
       worldY: worldPosition.y.toVar(),

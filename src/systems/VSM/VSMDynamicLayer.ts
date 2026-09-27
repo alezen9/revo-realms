@@ -161,7 +161,8 @@ export class VSMDynamicLayer {
     }
     this.minimumY.value = Math.floor(minimumY);
     this.maximumY.value = Math.ceil(maximumY);
-    this.rigidBucket?.update(this.sources, this.context.cpuSunDirection);
+    const { x: lightX, y: lightY } = this.context.lightBasis;
+    this.rigidBucket?.update(this.sources, lightX.value, lightY.value);
   }
 
   getComputeNodes() {
@@ -506,7 +507,7 @@ export class VSMDynamicLayer {
     pageCoordinate: Node<"vec2">,
     worldPosition: Node<"vec3">,
   ) {
-    return getLightPosition(worldPosition, this.context.sunDirection)
+    return getLightPosition(worldPosition, this.context.lightBasis)
       .div(getPageSize(level))
       .sub(pageCoordinate.sub(VSM_PAGE_OFFSET));
   }
@@ -730,7 +731,7 @@ class RigidCasterBucket {
     }
   }
 
-  update(sources: VSMCaster[], sunDirection: Vector3) {
+  update(sources: VSMCaster[], lightX: Vector3, lightY: Vector3) {
     if (sources.length !== this.casterCount)
       throw new Error(
         "Rigid caster count changed without rebuilding the bucket",
@@ -753,7 +754,12 @@ class RigidCasterBucket {
             corner & 2 ? this.bounds.max.y : this.bounds.min.y,
             corner & 4 ? this.bounds.max.z : this.bounds.min.z,
           );
-          const page = computePageCoordinate(this.corner, sunDirection, level);
+          const page = computePageCoordinate(
+            this.corner,
+            lightX,
+            lightY,
+            level,
+          );
           minX = Math.min(minX, page.x);
           minY = Math.min(minY, page.y);
           maxX = Math.max(maxX, page.x);
@@ -816,10 +822,10 @@ class DeformedCasterBucket {
       If(instances.isActive(instanceIndex), () => {
         const base = instances.baseWorldPosition(instanceIndex);
         const height = instances.height(instanceIndex);
-        const lightBase = getLightPosition(base, context.sunDirection);
+        const lightBase = getLightPosition(base, context.lightBasis);
         const lightTop = getLightPosition(
           base.add(vec3(0, height, 0)),
-          context.sunDirection,
+          context.lightBasis,
         );
         const minimum = lightBase.min(lightTop).sub(instances.radiusMeters);
         const maximum = lightBase.max(lightTop).add(instances.radiusMeters);
