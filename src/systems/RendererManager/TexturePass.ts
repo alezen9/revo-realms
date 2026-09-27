@@ -9,6 +9,7 @@ import {
 import { texture } from "three/tsl";
 
 export class TexturePass {
+  readonly size = new Vector2(1, 1);
   private renderer: WebGPURenderer;
   private scale: number;
   private renderTarget = new RenderTarget(1, 1, {
@@ -44,6 +45,7 @@ export class TexturePass {
       Math.floor(this.drawingBufferSize.y * this.scale),
     );
     this.renderTarget.setSize(width, height);
+    this.size.set(width, height);
     const previousRenderTarget = this.renderer.getRenderTarget();
     this.renderer.setRenderTarget(this.renderTarget);
     this.quad.render(this.renderer);

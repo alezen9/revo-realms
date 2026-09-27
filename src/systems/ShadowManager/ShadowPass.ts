@@ -1,18 +1,24 @@
 import { Matrix4, NoToneMapping, Vector3, type Camera } from "three";
 import type { Node, TextureNode, WebGPURenderer } from "three/webgpu";
 import {
+  Fn,
+  If,
+  bool,
   float,
   getViewPosition,
   mix,
   renderOutput,
+  screenSize,
   screenUV,
   step,
   uniform,
+  vec2,
   vec3,
   vec4,
 } from "three/tsl";
 import type { DebugFolder } from "../DebugManager";
 import type { ScenePass } from "../RendererManager/ScenePass";
+import { TexturePass } from "../RendererManager/TexturePass";
 import {
   assetManager,
   lightingManager,
@@ -34,6 +40,75 @@ import { ShadowPageRequests } from "./ShadowPageRequests";
 import { ShadowResidency } from "./ShadowResidency";
 import { ShadowRigidAtlas } from "./ShadowRigidAtlas";
 
+type FloatNode = Node<"float">;
+type Vec2Node = Node<"vec2">;
+type Vec4Node = Node<"vec4">;
+
+type SoftSampleArgs = [
+  softSample: Vec4Node,
+  bilinearWeight: FloatNode,
+  viewDistance: FloatNode,
+];
+
+type SoftUpsampleArgs = [
+  softVisibility: TextureNode,
+  softVisibilitySize: Vec2Node,
+  uv: Vec2Node,
+  viewDistance: FloatNode,
+];
+
+const SOFT_VISIBILITY_SCALE = 0.5;
+const SOFT_DEPTH_SHARPNESS = 64;
+
+const weighSoftSample = Fn<SoftSampleArgs, Vec2Node>(
+  ([softSample, bilinearWeight, viewDistance]) => {
+    const relativeDistance = softSample.y
+      .sub(viewDistance)
+      .abs()
+      .div(viewDistance.max(0.001));
+    const depthWeight = float(1).div(
+      relativeDistance.mul(SOFT_DEPTH_SHARPNESS).add(1),
+    );
+    const weight = bilinearWeight.mul(depthWeight).max(0.0001);
+    return vec2(softSample.x.mul(weight), weight);
+  },
+);
+
+const upsampleSoftVisibility = Fn<SoftUpsampleArgs, FloatNode>(
+  ([softVisibility, softVisibilitySize, uv, viewDistance]) => {
+    const texelPosition = uv.mul(softVisibilitySize).sub(0.5);
+    const baseTexel = texelPosition.floor();
+    const blend = texelPosition.sub(baseTexel);
+    const inverseBlend = vec2(1).sub(blend);
+    const topLeftUv = baseTexel.add(vec2(0.5, 0.5)).div(softVisibilitySize);
+    const topRightUv = baseTexel.add(vec2(1.5, 0.5)).div(softVisibilitySize);
+    const bottomLeftUv = baseTexel.add(vec2(0.5, 1.5)).div(softVisibilitySize);
+    const bottomRightUv = baseTexel.add(vec2(1.5, 1.5)).div(softVisibilitySize);
+    const topLeft = weighSoftSample(
+      softVisibility.sample(topLeftUv),
+      inverseBlend.x.mul(inverseBlend.y),
+      viewDistance,
+    );
+    const topRight = weighSoftSample(
+      softVisibility.sample(topRightUv),
+      blend.x.mul(inverseBlend.y),
+      viewDistance,
+    );
+    const bottomLeft = weighSoftSample(
+      softVisibility.sample(bottomLeftUv),
+      inverseBlend.x.mul(blend.y),
+      viewDistance,
+    );
+    const bottomRight = weighSoftSample(
+      softVisibility.sample(bottomRightUv),
+      blend.x.mul(blend.y),
+      viewDistance,
+    );
+    const weightedSum = topLeft.add(topRight).add(bottomLeft).add(bottomRight);
+    return weightedSum.x.div(weightedSum.y);
+  },
+);
+
 export class ShadowPass {
   private renderer: WebGPURenderer;
   private scene: ScenePass;
@@ -53,6 +128,9 @@ export class ShadowPass {
   private uProjectionMatrixInverse = uniform(new Matrix4());
   private uCameraWorldMatrix = uniform(new Matrix4());
   private uCameraWorldPosition = uniform(this.cameraWorldPosition);
+  private softVisibilityPass: TexturePass;
+  private softVisibility: TextureNode;
+  private uSoftVisibilitySize: Node<"vec2">;
 
   constructor(renderer: WebGPURenderer, scene: ScenePass, camera: Camera) {
     this.renderer = renderer;
@@ -90,6 +168,16 @@ export class ShadowPass {
       "moving",
     );
     monitoringManager.setShadowPageStats(this.shadowResidency.stats);
+
+    this.softVisibilityPass = new TexturePass(
+      renderer,
+      "Soft shadow visibility",
+      SOFT_VISIBILITY_SCALE,
+    );
+    this.uSoftVisibilitySize = uniform(this.softVisibilityPass.size);
+    this.softVisibility = this.softVisibilityPass.apply(
+      this.resolveSoftVisibility(),
+    );
   }
 
   setCamera(camera: Camera) {
@@ -138,6 +226,7 @@ export class ShadowPass {
     ];
     if (computeNodes.length > 0) this.renderer.compute(computeNodes);
     this.shadowMovingAtlas.render();
+    this.softVisibilityPass.render();
   }
 
   sampleShadowedColor(uv: Node<"vec2">) {
@@ -200,9 +289,9 @@ export class ShadowPass {
       "Moving depth": this.makeRigidDepthOutput(this.shadowMovingAtlas, true),
       "Fixed shadow": this.makeRigidShadowOutput(this.shadowFixedAtlas),
       "Moving shadow": this.makeRigidShadowOutput(this.shadowMovingAtlas),
-      Shadow: this.makeRigidShadowOutput(
-        this.shadowFixedAtlas,
-        this.shadowMovingAtlas,
+      Shadow: renderOutput(
+        vec4(vec3(this.resolveVisibility(screenUV)), 1),
+        NoToneMapping,
       ),
       Receivers: this.makeReceiverOutput(),
       "Dynamic pages": this.makeDynamicPageOutput(),
@@ -210,12 +299,51 @@ export class ShadowPass {
     };
   }
 
-  private resolveShadows(sceneColor: Node<"vec4">, uv: Node<"vec2">) {
-    const visibility = this.computeShadowVisibility(
-      uv,
-      this.shadowFixedAtlas,
+  private resolveVisibility = Fn<[uv: Vec2Node], FloatNode>(([uv]) => {
+    const { depth, worldPosition, viewDistance } = this.getReceiver(uv);
+    const receiverDepth = depth.toVar();
+    const receiverWorldPosition = worldPosition.toVar();
+    const receiverViewDistance = viewDistance.toVar();
+    const visibility = float(1).toVar();
+    If(this.isSoftShadowReceiver(uv), () => {
+      visibility.assign(
+        upsampleSoftVisibility(
+          this.softVisibility,
+          this.uSoftVisibilitySize,
+          uv,
+          receiverViewDistance,
+        ),
+      );
+    }).Else(() => {
+      visibility.assign(
+        this.shadowFixedAtlas.computeVisibility(
+          receiverWorldPosition,
+          receiverDepth,
+          receiverViewDistance,
+          bool(false),
+          this.shadowMovingAtlas,
+        ),
+      );
+    });
+    return visibility;
+  });
+
+  private resolveSoftVisibility() {
+    const representativeUv = screenUV.sub(vec2(0.25).div(screenSize));
+    const { depth, worldPosition, viewDistance } =
+      this.getReceiver(representativeUv);
+    const visibility = this.shadowFixedAtlas.computeVisibility(
+      worldPosition,
+      depth,
+      viewDistance,
+      bool(true),
       this.shadowMovingAtlas,
     );
+    return vec4(visibility, viewDistance, 0, 1);
+  }
+
+  private resolveShadows(sceneColor: Node<"vec4">, uv: Node<"vec2">) {
+    const visibility = this.resolveVisibility(uv);
     return sceneColor
       .sub(
         vec4(
@@ -248,13 +376,12 @@ export class ShadowPass {
       depth,
       worldPosition,
       viewDistance: viewPosition.length(),
-      isSoftReceiver: this.isSoftShadowReceiver(uv),
     };
   }
 
   private getDebugPage() {
-    const { depth, worldPosition, viewDistance, isSoftReceiver } =
-      this.getReceiver(screenUV);
+    const { depth, worldPosition, viewDistance } = this.getReceiver(screenUV);
+    const isSoftReceiver = this.isSoftShadowReceiver(screenUV);
     const level = getShadowReceiverLevel(viewDistance, isSoftReceiver);
     const pagePosition = getShadowLightPosition(
       worldPosition,
@@ -316,11 +443,14 @@ export class ShadowPass {
     return renderOutput(vec4(color, 1), NoToneMapping);
   }
 
-  private makeRigidShadowOutput(
-    atlas: ShadowRigidAtlas,
-    secondary?: ShadowRigidAtlas,
-  ) {
-    const visibility = this.computeShadowVisibility(screenUV, atlas, secondary);
+  private makeRigidShadowOutput(atlas: ShadowRigidAtlas) {
+    const { depth, worldPosition, viewDistance } = this.getReceiver(screenUV);
+    const visibility = atlas.computeVisibility(
+      worldPosition,
+      depth,
+      viewDistance,
+      this.isSoftShadowReceiver(screenUV),
+    );
     return renderOutput(vec4(vec3(visibility), 1), NoToneMapping);
   }
 
@@ -378,22 +508,6 @@ export class ShadowPass {
       .greaterThanEqual(1)
       .select(vec3(0), isResident.select(heatColor, vec3(1, 0, 1)));
     return renderOutput(vec4(color, 1), NoToneMapping);
-  }
-
-  private computeShadowVisibility(
-    uv: Node<"vec2">,
-    atlas: ShadowRigidAtlas,
-    secondary?: ShadowRigidAtlas,
-  ) {
-    const { depth, worldPosition, viewDistance, isSoftReceiver } =
-      this.getReceiver(uv);
-    return atlas.computeVisibility(
-      worldPosition,
-      depth,
-      viewDistance,
-      isSoftReceiver,
-      secondary,
-    );
   }
 
   private isSoftShadowReceiver(uv: Node<"vec2">) {
