@@ -19,7 +19,7 @@ const config = {
   LIGHT_POSITION_OFFSET: new Vector3(10, 5, 10),
   // directionalColor: new Color(0.53, 0.65, 0.79), // Dark
   // directionalIntensity: 0.16, // Dark
-  directionalColor: new Color(0.94, 0.62, 0.4).convertSRGBToLinear(), // Light
+  directionalColor: new Color(0.96, 0.67, 0.46).convertSRGBToLinear(), // Light
   directionalIntensity: 0.62, // Light
   // hemiSkyColor: new Color(0.4, 0.45, 0.6), // Dark
   // hemiGroundColor: new Color(0.3, 0.2, 0.2), // Dark
