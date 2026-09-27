@@ -9,7 +9,6 @@ import {
 } from "three";
 import {
   BatchedMesh,
-  IndirectStorageBufferAttribute,
   NodeMaterial,
   StorageBufferAttribute,
   type Node,
@@ -26,10 +25,26 @@ import {
 export const VSM_POOL_CAPACITY = 1024;
 export const VSM_DYNAMIC_CAPACITY = 400;
 export const VSM_INVALID_PAGE_KEY = 0xffffffff;
+export const VSM_JOBS_ALLOCATED = 0;
+export const VSM_JOBS_ACTIVE = VSM_POOL_CAPACITY;
+export const VSM_JOBS_DYNAMIC = VSM_POOL_CAPACITY * 2;
+export const VSM_JOB_COUNT = VSM_POOL_CAPACITY * 3;
+export const VSM_COUNTER_REQUESTED = 0;
+export const VSM_COUNTER_ALLOCATED = 1;
+export const VSM_COUNTER_EVICTED = 2;
+export const VSM_COUNTER_MISSING = 3;
 export const VSM_COUNTER_ACTIVE = 4;
-export const VSM_COUNTER_COUNT = 7 + VSM_LEVEL_COUNT;
-const DYNAMIC_LEVEL_COUNTER_OFFSET = 8;
-const ATLAS_INDIRECT_SIZE = DYNAMIC_LEVEL_COUNTER_OFFSET + VSM_LEVEL_COUNT * 2;
+export const VSM_COUNTER_EMPTY = 5;
+export const VSM_COUNTER_REUSABLE = 6;
+export const VSM_COUNTER_LEVEL_MISSES = 7;
+export const VSM_COUNTER_COUNT = VSM_COUNTER_LEVEL_MISSES + VSM_LEVEL_COUNT;
+export const VSM_DYNAMIC_COUNTER_TOTAL = 0;
+export const VSM_DYNAMIC_COUNTER_OVERFLOW = 1;
+export const VSM_DYNAMIC_COUNTER_LEVEL_COUNTS = 2;
+export const VSM_DYNAMIC_COUNTER_LEVEL_CURSORS =
+  VSM_DYNAMIC_COUNTER_LEVEL_COUNTS + VSM_LEVEL_COUNT;
+export const VSM_DYNAMIC_COUNTER_COUNT =
+  VSM_DYNAMIC_COUNTER_LEVEL_CURSORS + VSM_LEVEL_COUNT;
 
 export type VSMCasterKind = "fixed" | "moving" | "deformed";
 
@@ -134,22 +149,18 @@ export class VSMContext {
     "uint",
     VSM_POOL_CAPACITY,
   );
-  readonly pageJobsAttribute = new StorageBufferAttribute(
-    new Uint32Array(VSM_POOL_CAPACITY * 3 * 4),
+  readonly pageJobs = new StorageBufferAttribute(
+    new Uint32Array(VSM_JOB_COUNT * 4),
     4,
   );
-  readonly counterAttribute = new StorageBufferAttribute(
+  readonly counters = new StorageBufferAttribute(
     new Uint32Array(VSM_COUNTER_COUNT),
     1,
   );
-  readonly atlasIndirectAttribute = new IndirectStorageBufferAttribute(
-    new Uint32Array(ATLAS_INDIRECT_SIZE).fill(6, 0, 1),
+  readonly dynamicCounters = new StorageBufferAttribute(
+    new Uint32Array(VSM_DYNAMIC_COUNTER_COUNT),
     1,
   );
-  readonly capacity = VSM_POOL_CAPACITY;
-  readonly dynamicCapacity = VSM_DYNAMIC_CAPACITY;
-  readonly activeCountIndex = VSM_COUNTER_ACTIVE;
-  readonly dynamicLevelCounterOffset = DYNAMIC_LEVEL_COUNTER_OFFSET;
   private renderer: WebGPURenderer;
   private casterEntries = new Map<Mesh, VSMCaster>();
   private dirtyStaticBounds: Box3[] = [];

@@ -1,4 +1,8 @@
-import { StorageBufferAttribute, type Node } from "three/webgpu";
+import {
+  StorageBufferAttribute,
+  type ComputeNode,
+  type Node,
+} from "three/webgpu";
 import {
   atomicMin,
   atomicStore,
@@ -10,6 +14,7 @@ import {
   mix,
   storage,
   uint,
+  uniform,
   uvec2,
   vec2,
   vec3,
@@ -21,8 +26,17 @@ import {
 import {
   VSM_CLUSTER_MAX_WORK_ITEMS,
   VSM_CLUSTER_TRIANGLES,
-  type ShadowClusterBucket,
-} from "./ShadowClusterBucket";
+  VSMClusterBucket,
+} from "./VSMClusterBucket";
+import {
+  VSM_COUNTER_ALLOCATED,
+  VSM_COUNTER_COUNT,
+  VSM_JOB_COUNT,
+  VSM_JOBS_ALLOCATED,
+  VSM_POOL_CAPACITY,
+  type VSMCaster,
+  type VSMContext,
+} from "./VSMContext";
 import {
   VSM_PAGE_OFFSET,
   VSM_PAGE_TEXELS,
@@ -30,7 +44,6 @@ import {
   getLightPosition,
   getPageSize,
 } from "./VSMMath";
-import type { VSMContext } from "./VSMContext";
 
 const PAGE_TEXEL_COUNT = VSM_PAGE_TEXELS * VSM_PAGE_TEXELS;
 const DEPTH_SCALE = 16777215;
@@ -38,12 +51,9 @@ const CLEAR_WORKGROUP_SIZE = 256;
 const CLEAR_WORKGROUPS = 128;
 const RASTER_WORKGROUPS = 512;
 
-type ShadowRasterCaster = {
-  sunDirection: Node<"vec3">;
-  minimumY: Node<"float">;
-  maximumY: Node<"float">;
-  opacity?: (uv: Node<"vec2">) => Node<"float">;
-  alphaTest: number;
+type ClusterCaster = {
+  bucket: VSMClusterBucket;
+  rasterNode: ComputeNode;
 };
 
 const getEdge = (from: Node<"vec2">, to: Node<"vec2">, point: Node<"vec2">) =>
@@ -52,14 +62,22 @@ const getEdge = (from: Node<"vec2">, to: Node<"vec2">, point: Node<"vec2">) =>
     .mul(point.y.sub(from.y))
     .sub(to.y.sub(from.y).mul(point.x.sub(from.x)));
 
-export class ShadowFixedPool {
+export class VSMStaticCache {
+  readonly minimumY = uniform(-8);
+  readonly maximumY = uniform(64);
+  readonly isReady = uniform(0);
+  readonly depthBiasTexels = 3;
+  private context: VSMContext;
   private depthNode;
   private readDepthNode;
   private pageJobsNode;
+  private jobCountNode;
   private clearNode;
+  private clusterCasters = new Map<string, ClusterCaster>();
 
   constructor(context: VSMContext) {
-    const texelCount = context.capacity * PAGE_TEXEL_COUNT;
+    this.context = context;
+    const texelCount = VSM_POOL_CAPACITY * PAGE_TEXEL_COUNT;
     const depthAttribute = new StorageBufferAttribute(
       new Uint32Array(texelCount),
       1,
@@ -71,27 +89,27 @@ export class ShadowFixedPool {
       texelCount,
     ).toReadOnly();
     this.pageJobsNode = storage(
-      context.pageJobsAttribute,
+      context.pageJobs,
       "uvec4",
-      context.capacity * 3,
+      VSM_JOB_COUNT,
     ).toReadOnly();
-    const atlasIndirect = storage(
-      context.atlasIndirectAttribute,
+    this.jobCountNode = storage(
+      context.counters,
       "uint",
-      context.atlasIndirectAttribute.count,
+      VSM_COUNTER_COUNT,
     ).toReadOnly();
 
     this.clearNode = Fn(() => {
       Loop(
         {
           start: workgroupId.x,
-          end: atlasIndirect.element(1),
+          end: this.jobCountNode.element(VSM_COUNTER_ALLOCATED),
           type: "uint",
           update: CLEAR_WORKGROUPS,
         },
         ({ i: jobLoopIndex }) => {
           const pageBase = this.pageJobsNode
-            .element(jobLoopIndex)
+            .element(jobLoopIndex.add(VSM_JOBS_ALLOCATED))
             .y.mul(PAGE_TEXEL_COUNT)
             .toVar();
           Loop(
@@ -113,15 +131,169 @@ export class ShadowFixedPool {
     })().compute(CLEAR_WORKGROUPS * CLEAR_WORKGROUP_SIZE, [
       CLEAR_WORKGROUP_SIZE,
     ]);
-    this.clearNode.name = "V2 shadow pool clear";
+    this.clearNode.name = "VSM static clear";
   }
 
-  get clearComputeNode() {
-    return this.clearNode;
+  sync(terrainBounds: { min: number; max: number }) {
+    const { changes } = this.context;
+    const hasRosterChange = changes.hasStaticRosterChanged;
+    const hasMatrixChange =
+      hasRosterChange ||
+      changes.hasStaticCasterMoved ||
+      changes.hasStaticBiasChanged;
+    if (!hasMatrixChange && !changes.hasSunChanged) return;
+
+    if (hasRosterChange) this.rebuildClusterCasters();
+    let minimumY = terrainBounds.min - 8;
+    let maximumY = terrainBounds.max + 64;
+    for (const { bucket } of this.clusterCasters.values()) {
+      if (hasMatrixChange) bucket.updateMatrices();
+      else bucket.invalidateBounds();
+      minimumY = Math.min(minimumY, bucket.bounds.min.y);
+      maximumY = Math.max(maximumY, bucket.bounds.max.y);
+    }
+    const hasDepthRangeChange =
+      this.minimumY.value !== Math.floor(minimumY) ||
+      this.maximumY.value !== Math.ceil(maximumY);
+    this.minimumY.value = Math.floor(minimumY);
+    this.maximumY.value = Math.ceil(maximumY);
+    if (hasDepthRangeChange) this.context.invalidateAllPages();
   }
 
-  createRasterNode(bucket: ShadowClusterBucket, caster: ShadowRasterCaster) {
-    const { sunDirection, minimumY, maximumY, opacity, alphaTest } = caster;
+  getComputeNodes() {
+    const nodes = [this.clearNode];
+    for (const { bucket, rasterNode } of this.clusterCasters.values())
+      nodes.push(...bucket.takeComputeNodes(), rasterNode);
+    this.isReady.value = 1;
+    return nodes;
+  }
+
+  loadDepth(slot: Node<"uint">, texel: Node<"uvec2">) {
+    return float(
+      this.readDepthNode.element(
+        slot
+          .mul(PAGE_TEXEL_COUNT)
+          .add(texel.y.mul(VSM_PAGE_TEXELS))
+          .add(texel.x),
+      ),
+    ).div(DEPTH_SCALE);
+  }
+
+  compareDepth(
+    slot: Node<"uint">,
+    pageUv: Node<"vec2">,
+    receiverDepth: Node<"float">,
+  ) {
+    const position = pageUv.mul(VSM_PAGE_TEXELS).sub(0.5);
+    const origin = position.floor();
+    const weight = position.sub(origin);
+    const first = uvec2(origin.clamp(0, VSM_PAGE_TEXELS - 1));
+    const last = uvec2(origin.add(1).clamp(0, VSM_PAGE_TEXELS - 1));
+    return mix(
+      mix(
+        this.getLit(slot, uvec2(first.x, first.y), receiverDepth),
+        this.getLit(slot, uvec2(last.x, first.y), receiverDepth),
+        weight.x,
+      ),
+      mix(
+        this.getLit(slot, uvec2(first.x, last.y), receiverDepth),
+        this.getLit(slot, uvec2(last.x, last.y), receiverDepth),
+        weight.x,
+      ),
+      weight.y,
+    );
+  }
+
+  compareDepthTent(
+    slot: Node<"uint">,
+    pageUv: Node<"vec2">,
+    receiverDepth: Node<"float">,
+    receiverDepthSlope: Node<"vec2">,
+  ) {
+    const position = pageUv.mul(VSM_PAGE_TEXELS).sub(1);
+    const origin = position.floor();
+    const fraction = position.sub(origin);
+    const base = uvec2(origin);
+    const weightsX = [
+      float(1).sub(fraction.x).mul(0.5),
+      float(0.5),
+      fraction.x.mul(0.5),
+    ];
+    const weightsY = [
+      float(1).sub(fraction.y).mul(0.5),
+      float(0.5),
+      fraction.y.mul(0.5),
+    ];
+    let visibility: Node<"float"> = float(0);
+    for (let row = 0; row < 3; row++) {
+      let rowVisibility: Node<"float"> = float(0);
+      for (let column = 0; column < 3; column++) {
+        const texel = base.add(uvec2(column, row));
+        const pageOffset = vec2(texel)
+          .add(0.5)
+          .div(VSM_PAGE_TEXELS)
+          .sub(pageUv);
+        rowVisibility = rowVisibility.add(
+          this.getLit(
+            slot,
+            texel,
+            receiverDepth.add(receiverDepthSlope.dot(pageOffset)),
+          ).mul(weightsX[column]),
+        );
+      }
+      visibility = visibility.add(rowVisibility.mul(weightsY[row]));
+    }
+    return visibility;
+  }
+
+  private getLit(
+    slot: Node<"uint">,
+    texel: Node<"uvec2">,
+    receiverDepth: Node<"float">,
+  ) {
+    return receiverDepth
+      .lessThanEqual(this.loadDepth(slot, texel))
+      .select(float(1), float(0));
+  }
+
+  private rebuildClusterCasters() {
+    const groups = new Map<string, VSMCaster[]>([["opaque", []]]);
+    for (const caster of this.context.casters) {
+      if (caster.kind !== "fixed") continue;
+      const key = caster.opacity ? caster.mesh.uuid : "opaque";
+      const casters = groups.get(key);
+      if (casters) casters.push(caster);
+      else groups.set(key, [caster]);
+    }
+    for (const [key, clusterCaster] of this.clusterCasters) {
+      if (groups.has(key)) continue;
+      clusterCaster.rasterNode.dispose();
+      clusterCaster.bucket.dispose();
+      this.clusterCasters.delete(key);
+    }
+    for (const [key, casters] of groups) {
+      const clusterCaster = this.clusterCasters.get(key);
+      if (clusterCaster?.bucket.setCasters(casters)) continue;
+      clusterCaster?.rasterNode.dispose();
+      clusterCaster?.bucket.dispose();
+      const { opacity, alphaTest } = casters[0] ?? { alphaTest: 0 };
+      const bucket = new VSMClusterBucket(
+        this.context,
+        casters,
+        opacity !== undefined,
+      );
+      const rasterNode = this.createRasterNode(bucket, alphaTest, opacity);
+      this.clusterCasters.set(key, { bucket, rasterNode });
+    }
+  }
+
+  private createRasterNode(
+    bucket: VSMClusterBucket,
+    alphaTest: number,
+    opacity?: (uv: Node<"vec2">) => Node<"float">,
+  ) {
+    const { sunDirection } = this.context;
+    const { minimumY, maximumY } = this;
     const workCount = storage(
       bucket.workIndirectAttribute,
       "uint",
@@ -168,7 +340,9 @@ export class ShadowFixedPool {
         },
         ({ i: itemLoopIndex }) => {
           const workItem = workItems.element(itemLoopIndex).toVar();
-          const job = this.pageJobsNode.element(workItem.x).toVar();
+          const job = this.pageJobsNode
+            .element(workItem.x.add(VSM_JOBS_ALLOCATED))
+            .toVar();
           const instanceCluster = instanceClusters.element(workItem.y).toVar();
           const pageSize = getPageSize(job.x.div(VSM_PAGES_PER_LEVEL)).toVar();
           const pageOrigin = vec2(job.zw).sub(VSM_PAGE_OFFSET).toVar();
@@ -305,95 +479,7 @@ export class ShadowFixedPool {
     })().compute(RASTER_WORKGROUPS * VSM_CLUSTER_TRIANGLES, [
       VSM_CLUSTER_TRIANGLES,
     ]);
-    rasterNode.name = "V2 shadow pool raster";
+    rasterNode.name = "VSM static raster";
     return rasterNode;
-  }
-
-  loadDepth(slot: Node<"uint">, texel: Node<"uvec2">) {
-    return float(
-      this.readDepthNode.element(
-        slot
-          .mul(PAGE_TEXEL_COUNT)
-          .add(texel.y.mul(VSM_PAGE_TEXELS))
-          .add(texel.x),
-      ),
-    ).div(DEPTH_SCALE);
-  }
-
-  compareDepth(
-    slot: Node<"uint">,
-    pageUv: Node<"vec2">,
-    receiverDepth: Node<"float">,
-  ) {
-    const position = pageUv.mul(VSM_PAGE_TEXELS).sub(0.5);
-    const origin = position.floor();
-    const weight = position.sub(origin);
-    const first = uvec2(origin.clamp(0, VSM_PAGE_TEXELS - 1));
-    const last = uvec2(origin.add(1).clamp(0, VSM_PAGE_TEXELS - 1));
-    return mix(
-      mix(
-        this.getLit(slot, uvec2(first.x, first.y), receiverDepth),
-        this.getLit(slot, uvec2(last.x, first.y), receiverDepth),
-        weight.x,
-      ),
-      mix(
-        this.getLit(slot, uvec2(first.x, last.y), receiverDepth),
-        this.getLit(slot, uvec2(last.x, last.y), receiverDepth),
-        weight.x,
-      ),
-      weight.y,
-    );
-  }
-
-  compareDepthTent(
-    slot: Node<"uint">,
-    pageUv: Node<"vec2">,
-    receiverDepth: Node<"float">,
-    receiverDepthSlope: Node<"vec2">,
-  ) {
-    const position = pageUv.mul(VSM_PAGE_TEXELS).sub(1);
-    const origin = position.floor();
-    const fraction = position.sub(origin);
-    const base = uvec2(origin);
-    const weightsX = [
-      float(1).sub(fraction.x).mul(0.5),
-      float(0.5),
-      fraction.x.mul(0.5),
-    ];
-    const weightsY = [
-      float(1).sub(fraction.y).mul(0.5),
-      float(0.5),
-      fraction.y.mul(0.5),
-    ];
-    let visibility: Node<"float"> = float(0);
-    for (let row = 0; row < 3; row++) {
-      let rowVisibility: Node<"float"> = float(0);
-      for (let column = 0; column < 3; column++) {
-        const texel = base.add(uvec2(column, row));
-        const pageOffset = vec2(texel)
-          .add(0.5)
-          .div(VSM_PAGE_TEXELS)
-          .sub(pageUv);
-        rowVisibility = rowVisibility.add(
-          this.getLit(
-            slot,
-            texel,
-            receiverDepth.add(receiverDepthSlope.dot(pageOffset)),
-          ).mul(weightsX[column]),
-        );
-      }
-      visibility = visibility.add(rowVisibility.mul(weightsY[row]));
-    }
-    return visibility;
-  }
-
-  private getLit(
-    slot: Node<"uint">,
-    texel: Node<"uvec2">,
-    receiverDepth: Node<"float">,
-  ) {
-    return receiverDepth
-      .lessThanEqual(this.loadDepth(slot, texel))
-      .select(float(1), float(0));
   }
 }

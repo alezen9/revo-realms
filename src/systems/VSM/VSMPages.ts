@@ -29,8 +29,20 @@ import {
 import type { ShadowPageStats } from "../EventsManager";
 import {
   VSM_COUNTER_ACTIVE,
+  VSM_COUNTER_ALLOCATED,
   VSM_COUNTER_COUNT,
+  VSM_COUNTER_EMPTY,
+  VSM_COUNTER_EVICTED,
+  VSM_COUNTER_LEVEL_MISSES,
+  VSM_COUNTER_MISSING,
+  VSM_COUNTER_REQUESTED,
+  VSM_COUNTER_REUSABLE,
+  VSM_DYNAMIC_COUNTER_OVERFLOW,
+  VSM_DYNAMIC_COUNTER_TOTAL,
   VSM_INVALID_PAGE_KEY,
+  VSM_JOB_COUNT,
+  VSM_JOBS_ACTIVE,
+  VSM_JOBS_ALLOCATED,
   VSM_POOL_CAPACITY,
   type VSMContext,
 } from "./VSMContext";
@@ -61,13 +73,6 @@ const MAX_INVALIDATION_BOXES = 64;
 const EMPTY_LIST_OFFSET = VSM_LEVEL_COUNT * VSM_POOL_CAPACITY;
 const REUSABLE_LIST_OFFSET = EMPTY_LIST_OFFSET + VSM_POOL_CAPACITY;
 const LIST_SIZE = REUSABLE_LIST_OFFSET + VSM_POOL_CAPACITY;
-const COUNTER_REQUESTED = 0;
-const COUNTER_ALLOCATED = 1;
-const COUNTER_EVICTED = 2;
-const COUNTER_MISSING = 3;
-const COUNTER_EMPTY = 5;
-const COUNTER_REUSABLE = 6;
-const COUNTER_LEVEL_MISSES = 7;
 
 export class VSMPages {
   readonly stats: ShadowPageStats = {
@@ -136,20 +141,11 @@ export class VSMPages {
     this.softReceiverNode = texture(softReceiverTexture);
     const { atomicRequestBits, atomicRequestCounters } = this;
     const atomicCounters = storage(
-      context.counterAttribute,
+      context.counters,
       "uint",
       VSM_COUNTER_COUNT,
     ).toAtomic();
-    const atomicAtlasIndirect = storage(
-      context.atlasIndirectAttribute,
-      "uint",
-      context.atlasIndirectAttribute.count,
-    ).toAtomic();
-    const pageJobsNode = storage(
-      context.pageJobsAttribute,
-      "uvec4",
-      VSM_POOL_CAPACITY * 3,
-    );
+    const pageJobsNode = storage(context.pageJobs, "uvec4", VSM_JOB_COUNT);
     const invalidationRects = storage(
       this.invalidationRects,
       "uvec4",
@@ -229,7 +225,6 @@ export class VSMPages {
           atomicStore(atomicCounters.element(index), 0);
         },
       );
-      atomicStore(atomicAtlasIndirect.element(1), 0);
     })().compute(1, [1]);
 
     this.invalidateNode = Fn(() => {
@@ -284,7 +279,7 @@ export class VSMPages {
             );
             const pageTag = getPageTag(pageCoordinate);
             const { slot, isResident } = context.resolvePage(pageKey, pageTag);
-            atomicAdd(atomicCounters.element(COUNTER_REQUESTED), 1);
+            atomicAdd(atomicCounters.element(VSM_COUNTER_REQUESTED), 1);
             If(isResident, () => {
               context.slotMetadataNode
                 .element(slot)
@@ -301,11 +296,11 @@ export class VSMPages {
                 1,
               );
               pageJobsNode
-                .element(activeIndex.add(VSM_POOL_CAPACITY))
+                .element(activeIndex.add(VSM_JOBS_ACTIVE))
                 .assign(uvec4(pageKey, slot, pageCoordinate));
             }).Else(() => {
               const missIndex = atomicAdd(
-                atomicCounters.element(level.add(COUNTER_LEVEL_MISSES)),
+                atomicCounters.element(level.add(VSM_COUNTER_LEVEL_MISSES)),
                 1,
               );
               If(missIndex.lessThan(VSM_POOL_CAPACITY), () => {
@@ -327,13 +322,19 @@ export class VSMPages {
             .equal(VSM_INVALID_PAGE_KEY)
             .or(metadata.w.notEqual(context.pageGeneration)),
           () => {
-            const index = atomicAdd(atomicCounters.element(COUNTER_EMPTY), 1);
+            const index = atomicAdd(
+              atomicCounters.element(VSM_COUNTER_EMPTY),
+              1,
+            );
             this.listsNode
               .element(index.add(EMPTY_LIST_OFFSET))
               .assign(instanceIndex);
           },
         ).Else(() => {
-          const index = atomicAdd(atomicCounters.element(COUNTER_REUSABLE), 1);
+          const index = atomicAdd(
+            atomicCounters.element(VSM_COUNTER_REUSABLE),
+            1,
+          );
           this.listsNode
             .element(index.add(REUSABLE_LIST_OFFSET))
             .assign(instanceIndex);
@@ -345,13 +346,13 @@ export class VSMPages {
       const level = instanceIndex.div(VSM_POOL_CAPACITY);
       const missIndex = instanceIndex.mod(VSM_POOL_CAPACITY);
       const levelMisses = atomicLoad(
-        atomicCounters.element(level.add(COUNTER_LEVEL_MISSES)),
+        atomicCounters.element(level.add(VSM_COUNTER_LEVEL_MISSES)),
       );
       If(missIndex.lessThan(levelMisses), () => {
         const rank = missIndex.toVar();
         Loop({ start: uint(0), end: level, type: "uint" }, ({ i: finer }) => {
           const finerMisses = atomicLoad(
-            atomicCounters.element(finer.add(COUNTER_LEVEL_MISSES)),
+            atomicCounters.element(finer.add(VSM_COUNTER_LEVEL_MISSES)),
           );
           rank.addAssign(
             finerMisses
@@ -359,9 +360,11 @@ export class VSMPages {
               .select(finerMisses, uint(VSM_POOL_CAPACITY)),
           );
         });
-        const emptyCount = atomicLoad(atomicCounters.element(COUNTER_EMPTY));
+        const emptyCount = atomicLoad(
+          atomicCounters.element(VSM_COUNTER_EMPTY),
+        );
         const reusableCount = atomicLoad(
-          atomicCounters.element(COUNTER_REUSABLE),
+          atomicCounters.element(VSM_COUNTER_REUSABLE),
         );
         If(rank.lessThan(emptyCount.add(reusableCount)), () => {
           const isEmpty = rank.lessThan(emptyCount);
@@ -395,19 +398,21 @@ export class VSMPages {
             .assign(uvec4(slot.add(1), 0, 0, 0));
           context.slotRenderFramesNode.element(slot).assign(context.frame);
           const job = uvec4(pageKey, slot, pageCoordinate);
-          const jobIndex = atomicAdd(atomicAtlasIndirect.element(1), 1);
-          pageJobsNode.element(jobIndex).assign(job);
+          const jobIndex = atomicAdd(
+            atomicCounters.element(VSM_COUNTER_ALLOCATED),
+            1,
+          );
+          pageJobsNode.element(jobIndex.add(VSM_JOBS_ALLOCATED)).assign(job);
           const activeIndex = atomicAdd(
             atomicCounters.element(VSM_COUNTER_ACTIVE),
             1,
           );
-          pageJobsNode.element(activeIndex.add(VSM_POOL_CAPACITY)).assign(job);
-          atomicAdd(atomicCounters.element(COUNTER_ALLOCATED), 1);
+          pageJobsNode.element(activeIndex.add(VSM_JOBS_ACTIVE)).assign(job);
           If(isEmpty.not(), () => {
-            atomicAdd(atomicCounters.element(COUNTER_EVICTED), 1);
+            atomicAdd(atomicCounters.element(VSM_COUNTER_EVICTED), 1);
           });
         }).Else(() => {
-          atomicAdd(atomicCounters.element(COUNTER_MISSING), 1);
+          atomicAdd(atomicCounters.element(VSM_COUNTER_MISSING), 1);
         });
       });
     })().compute(VSM_LEVEL_COUNT * VSM_POOL_CAPACITY, [64]);
@@ -570,7 +575,7 @@ export class VSMPages {
     const { context } = this;
     try {
       const residency = new Uint32Array(
-        await this.renderer.getArrayBufferAsync(context.counterAttribute),
+        await this.renderer.getArrayBufferAsync(context.counters),
       );
       const requests = new Uint32Array(
         await this.renderer.getArrayBufferAsync(this.requestCounters),
@@ -578,8 +583,8 @@ export class VSMPages {
       const metadata = new Uint32Array(
         await this.renderer.getArrayBufferAsync(context.slotMetadata),
       );
-      const atlasIndirect = new Uint32Array(
-        await this.renderer.getArrayBufferAsync(context.atlasIndirectAttribute),
+      const dynamicCounters = new Uint32Array(
+        await this.renderer.getArrayBufferAsync(context.dynamicCounters),
       );
       let mapped = 0;
       for (let slot = 0; slot < VSM_POOL_CAPACITY; slot++) {
@@ -589,20 +594,20 @@ export class VSMPages {
         )
           mapped++;
       }
-      this.stats.requested = residency[COUNTER_REQUESTED];
+      this.stats.requested = residency[VSM_COUNTER_REQUESTED];
       this.stats.outsideGrid = requests[1];
       this.stats.mapped = mapped;
-      this.stats.allocated = residency[COUNTER_ALLOCATED];
-      this.stats.dynamic = atlasIndirect[5];
-      this.stats.overflow = atlasIndirect[6];
-      this.stats.evicted = residency[COUNTER_EVICTED];
+      this.stats.allocated = residency[VSM_COUNTER_ALLOCATED];
+      this.stats.dynamic = dynamicCounters[VSM_DYNAMIC_COUNTER_TOTAL];
+      this.stats.overflow = dynamicCounters[VSM_DYNAMIC_COUNTER_OVERFLOW];
+      this.stats.evicted = residency[VSM_COUNTER_EVICTED];
       let overflow = 0;
       for (let level = 0; level < VSM_LEVEL_COUNT; level++)
         overflow += Math.max(
           0,
-          residency[COUNTER_LEVEL_MISSES + level] - VSM_POOL_CAPACITY,
+          residency[VSM_COUNTER_LEVEL_MISSES + level] - VSM_POOL_CAPACITY,
         );
-      this.stats.missing = residency[COUNTER_MISSING] + overflow;
+      this.stats.missing = residency[VSM_COUNTER_MISSING] + overflow;
     } catch (error) {
       console.error("Shadow page stats readback failed", error);
     } finally {

@@ -3,7 +3,6 @@ import {
   BatchedMesh,
   IndirectStorageBufferAttribute,
   StorageBufferAttribute,
-  type Node,
 } from "three/webgpu";
 import {
   atomicAdd,
@@ -16,14 +15,20 @@ import {
   uvec2,
   vec4,
 } from "three/tsl";
-import type { VSMCaster } from "./VSMContext";
 import {
   VSM_PAGES_PER_LEVEL,
   getLightPosition,
   getPageCoordinate,
   getPageSize,
 } from "./VSMMath";
-import type { VSMContext } from "./VSMContext";
+import {
+  VSM_COUNTER_ALLOCATED,
+  VSM_COUNTER_COUNT,
+  VSM_JOB_COUNT,
+  VSM_JOBS_ALLOCATED,
+  type VSMCaster,
+  type VSMContext,
+} from "./VSMContext";
 
 export const VSM_CLUSTER_TRIANGLES = 64;
 export const VSM_CLUSTER_VERTICES = VSM_CLUSTER_TRIANGLES * 3;
@@ -53,7 +58,7 @@ type ClusterContent = {
 const getCapacity = (length: number) =>
   2 ** Math.ceil(Math.log2(Math.max(length, 1)));
 
-export class ShadowClusterBucket {
+export class VSMClusterBucket {
   readonly positionsAttribute: StorageBufferAttribute;
   readonly uvsAttribute?: StorageBufferAttribute;
   readonly matricesAttribute: StorageBufferAttribute;
@@ -83,14 +88,10 @@ export class ShadowClusterBucket {
   private worldMatrix = new Matrix4();
   private instanceBounds = new Box3();
 
-  constructor(
-    context: VSMContext,
-    entries: VSMCaster[],
-    sunDirection: Node<"vec3">,
-    hasUvs: boolean,
-  ) {
+  constructor(context: VSMContext, casters: VSMCaster[], hasUvs: boolean) {
+    const { sunDirection } = context;
     this.hasUvs = hasUvs;
-    const content = this.collectContent(entries);
+    const content = this.collectContent(casters);
     const instanceClusterCapacity = getCapacity(
       content.instanceClusters.length / 4,
     );
@@ -151,16 +152,12 @@ export class ShadowClusterBucket {
       "uvec2",
       VSM_CLUSTER_MAX_WORK_ITEMS,
     );
-    const pageJobs = storage(
-      context.pageJobsAttribute,
-      "uvec4",
-      context.capacity * 3,
-    );
-    const atlasIndirect = storage(
-      context.atlasIndirectAttribute,
+    const pageJobs = storage(context.pageJobs, "uvec4", VSM_JOB_COUNT);
+    const counters = storage(
+      context.counters,
       "uint",
-      context.atlasIndirectAttribute.count,
-    );
+      VSM_COUNTER_COUNT,
+    ).toReadOnly();
     const indirectNode = storage(
       this.workIndirectAttribute,
       "uint",
@@ -202,10 +199,10 @@ export class ShadowClusterBucket {
 
     this.buildNode = Fn(() => {
       const lightBounds = lightBoundsNode.element(instanceIndex).toVar();
-      const jobCount = atlasIndirect.element(1).toVar();
+      const jobCount = counters.element(VSM_COUNTER_ALLOCATED).toVar();
       Loop({ start: 0, end: jobCount, type: "uint" }, ({ i: jobLoopIndex }) => {
         const jobIndex = jobLoopIndex.toVar();
-        const job = pageJobs.element(jobIndex);
+        const job = pageJobs.element(jobIndex.add(VSM_JOBS_ALLOCATED));
         const pageSize = getPageSize(job.x.div(VSM_PAGES_PER_LEVEL));
         const firstPage = getPageCoordinate(lightBounds.xy.div(pageSize));
         const lastPage = getPageCoordinate(lightBounds.zw.div(pageSize));
@@ -229,8 +226,8 @@ export class ShadowClusterBucket {
     this.writeContent(content);
   }
 
-  setEntries(entries: VSMCaster[]) {
-    const content = this.collectContent(entries);
+  setCasters(casters: VSMCaster[]) {
+    const content = this.collectContent(casters);
     const hasRoom =
       content.positions.length <= this.positionValues.length &&
       content.uvs.length <= this.uvValues.length &&
@@ -301,7 +298,7 @@ export class ShadowClusterBucket {
     this.updateMatrices();
   }
 
-  private collectContent(entries: VSMCaster[]): ClusterContent {
+  private collectContent(casters: VSMCaster[]): ClusterContent {
     const geometries = new Map<string, ClusterGeometry>();
     const content: ClusterContent = {
       instances: [],
@@ -312,8 +309,8 @@ export class ShadowClusterBucket {
     };
     const clusterTriangles: number[] = [];
     const range = { start: 0, count: 0 };
-    for (const entry of entries) {
-      const { mesh } = entry;
+    for (const caster of casters) {
+      const { mesh } = caster;
       const batchIds: (number | undefined)[] = [];
       if (mesh instanceof BatchedMesh) {
         for (let id = 0; id < mesh.instanceCount; id++)
@@ -354,7 +351,7 @@ export class ShadowClusterBucket {
           batchInstanceId,
           firstCluster: clusters.firstCluster,
           clusterCount: clusters.clusterCount,
-          depthBias: entry.depthBias,
+          depthBias: caster.depthBias,
         });
       }
     }
