@@ -11,7 +11,7 @@ import {
 } from "three/webgpu";
 import { mrt, output, pass, texture, vec4 } from "three/tsl";
 
-const SCENE_PASS_SAMPLES = 4;
+export const SCENE_PASS_SAMPLES = 4;
 
 export class ScenePass {
   readonly output: TextureNode;

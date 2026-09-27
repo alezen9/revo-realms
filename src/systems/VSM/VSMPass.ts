@@ -58,7 +58,6 @@ export class VSMPass {
     this.staticCache = new VSMStaticCache(this.context);
     this.dynamicLayer = new VSMDynamicLayer(renderer, this.context);
     this.sampler = new VSMSampler(
-      renderer,
       this.context,
       scene,
       this.staticCache,
@@ -113,7 +112,6 @@ export class VSMPass {
       ...this.dynamicLayer.getComputeNodes(),
     ]);
     this.dynamicLayer.render();
-    this.sampler.render();
   }
 
   sampleShadowedColor(uv: Node<"vec2">) {

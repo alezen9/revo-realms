@@ -1,9 +1,4 @@
-import type {
-  Node,
-  TextureNode,
-  UniformNode,
-  WebGPURenderer,
-} from "three/webgpu";
+import type { Node, UniformNode } from "three/webgpu";
 import {
   bool,
   cos,
@@ -14,17 +9,21 @@ import {
   fract,
   getViewPosition,
   If,
+  mix,
   screenCoordinate,
   screenSize,
-  screenUV,
   sin,
+  textureLoad,
+  uint,
   uniform,
   uvec2,
   vec2,
   vec4,
 } from "three/tsl";
-import type { ScenePass } from "../RendererManager/ScenePass";
-import { TexturePass } from "../RendererManager/TexturePass";
+import {
+  SCENE_PASS_SAMPLES,
+  type ScenePass,
+} from "../RendererManager/ScenePass";
 import type { VSMContext } from "./VSMContext";
 import type { VSMDynamicLayer } from "./VSMDynamicLayer";
 import {
@@ -75,19 +74,6 @@ type PageLookup = {
   dynamicSlot: Node<"uint">;
 };
 
-type SoftSampleArgs = [
-  softSample: Vec4Node,
-  bilinearWeight: FloatNode,
-  viewDistance: FloatNode,
-];
-
-type SoftUpsampleArgs = [
-  softVisibility: TextureNode,
-  softVisibilitySize: Vec2Node,
-  uv: Vec2Node,
-  viewDistance: FloatNode,
-];
-
 const PENUMBRA_TAP_COUNT = 8;
 const TENT_RADIUS_TEXELS = 0.51;
 const SOFT_TAP_DIRECTIONS = [
@@ -105,8 +91,7 @@ const BLOCKER_DIRECTIONS = [
 ];
 const MAX_RECEIVER_SLOPE = 4;
 const GOLDEN_ANGLE = 2.399963;
-const SOFT_VISIBILITY_SCALE = 0.5;
-const SOFT_DEPTH_SHARPNESS = 64;
+const SURFACE_SPLIT_RATIO = 0.01;
 
 const getReceiverSlope = (lightPosition: Vec2Node, worldHeight: FloatNode) => {
   const lightDx = dFdx(lightPosition);
@@ -132,55 +117,6 @@ const getReceiverSlope = (lightPosition: Vec2Node, worldHeight: FloatNode) => {
 const getInterleavedGradientNoise = (pixel: Vec2Node) =>
   fract(pixel.dot(vec2(0.06711056, 0.00583715)).fract().mul(52.9829189));
 
-const weighSoftSample = Fn<SoftSampleArgs, Vec2Node>(
-  ([softSample, bilinearWeight, viewDistance]) => {
-    const relativeDistance = softSample.y
-      .sub(viewDistance)
-      .abs()
-      .div(viewDistance.max(0.001));
-    const depthWeight = float(1).div(
-      relativeDistance.mul(SOFT_DEPTH_SHARPNESS).add(1),
-    );
-    const weight = bilinearWeight.mul(depthWeight).max(0.0001);
-    return vec2(softSample.x.mul(weight), weight);
-  },
-);
-
-const upsampleSoftVisibility = Fn<SoftUpsampleArgs, FloatNode>(
-  ([softVisibility, softVisibilitySize, uv, viewDistance]) => {
-    const texelPosition = uv.mul(softVisibilitySize).sub(0.5);
-    const baseTexel = texelPosition.floor();
-    const blend = texelPosition.sub(baseTexel);
-    const inverseBlend = vec2(1).sub(blend);
-    const topLeftUv = baseTexel.add(vec2(0.5, 0.5)).div(softVisibilitySize);
-    const topRightUv = baseTexel.add(vec2(1.5, 0.5)).div(softVisibilitySize);
-    const bottomLeftUv = baseTexel.add(vec2(0.5, 1.5)).div(softVisibilitySize);
-    const bottomRightUv = baseTexel.add(vec2(1.5, 1.5)).div(softVisibilitySize);
-    const topLeft = weighSoftSample(
-      softVisibility.sample(topLeftUv),
-      inverseBlend.x.mul(inverseBlend.y),
-      viewDistance,
-    );
-    const topRight = weighSoftSample(
-      softVisibility.sample(topRightUv),
-      blend.x.mul(inverseBlend.y),
-      viewDistance,
-    );
-    const bottomLeft = weighSoftSample(
-      softVisibility.sample(bottomLeftUv),
-      inverseBlend.x.mul(blend.y),
-      viewDistance,
-    );
-    const bottomRight = weighSoftSample(
-      softVisibility.sample(bottomRightUv),
-      blend.x.mul(blend.y),
-      viewDistance,
-    );
-    const weightedSum = topLeft.add(topRight).add(bottomLeft).add(bottomRight);
-    return weightedSum.x.div(weightedSum.y);
-  },
-);
-
 export class VSMSampler {
   readonly filter = {
     softness: uniform(0.5),
@@ -191,12 +127,8 @@ export class VSMSampler {
   private scene: ScenePass;
   private staticCache: VSMStaticCache;
   private dynamicLayer: VSMDynamicLayer;
-  private softVisibilityPass: TexturePass;
-  private softVisibility: TextureNode;
-  private softVisibilitySize: Node<"vec2">;
 
   constructor(
-    renderer: WebGPURenderer,
     context: VSMContext,
     scene: ScenePass,
     staticCache: VSMStaticCache,
@@ -206,20 +138,6 @@ export class VSMSampler {
     this.scene = scene;
     this.staticCache = staticCache;
     this.dynamicLayer = dynamicLayer;
-    this.softVisibilityPass = new TexturePass(
-      renderer,
-      "Soft shadow visibility",
-      SOFT_VISIBILITY_SCALE,
-    );
-    this.softVisibilitySize = uniform(this.softVisibilityPass.size);
-    const representativeUv = screenUV.sub(vec2(0.25).div(screenSize));
-    this.softVisibility = this.softVisibilityPass.apply(
-      this.resolveSoftVisibility(representativeUv),
-    );
-  }
-
-  render() {
-    this.softVisibilityPass.render();
   }
 
   resolveVisibility = Fn<[uv: Vec2Node], FloatNode>(([uv]) => {
@@ -229,14 +147,7 @@ export class VSMSampler {
     const receiverViewDistance = viewDistance.toVar();
     const visibility = float(1).toVar();
     If(this.isSoftReceiver(uv), () => {
-      visibility.assign(
-        upsampleSoftVisibility(
-          this.softVisibility,
-          this.softVisibilitySize,
-          uv,
-          receiverViewDistance,
-        ),
-      );
+      visibility.assign(this.resolveSoftSurfaces(uv));
     }).Else(() => {
       visibility.assign(
         this.computeVisibility(
@@ -273,20 +184,71 @@ export class VSMSampler {
     );
   });
 
-  private resolveSoftVisibility = Fn<[uv: Vec2Node], Vec4Node>(([uv]) => {
-    const { depth, worldPosition, viewDistance } = this.getReceiver(uv);
+  private resolveSoftSurfaces(uv: Vec2Node) {
+    const pixel = uvec2(uv.mul(screenSize).floor()).toVar();
+    const layers = {
+      staticCache: this.staticCache,
+      dynamicLayer: this.dynamicLayer,
+    };
+    const depths: FloatNode[] = [];
+    for (let sampleIndex = 0; sampleIndex < SCENE_PASS_SAMPLES; sampleIndex++)
+      depths.push(
+        textureLoad(this.scene.depth, pixel).level(uint(sampleIndex)).r.toVar(),
+      );
+    let nearestDepth = depths[0];
+    let farthestDepth = depths[0];
+    for (const depth of depths) {
+      nearestDepth = nearestDepth.min(depth);
+      farthestDepth = farthestDepth.max(depth);
+    }
+    const nearDepth = nearestDepth.toVar();
+    const farDepth = farthestDepth.toVar();
+    const near = this.getReceiverAtDepth(uv, nearDepth);
+    const far = this.getReceiverAtDepth(uv, farDepth);
+    const nearWorldPosition = near.worldPosition.toVar();
+    const nearViewDistance = near.viewDistance.toVar();
+    const farWorldPosition = far.worldPosition.toVar();
+    const farViewDistance = far.viewDistance.toVar();
+    const middleDepth = nearDepth.add(farDepth).mul(0.5);
+    let farCount: FloatNode = float(0);
+    for (const depth of depths)
+      farCount = farCount.add(depth.greaterThan(middleDepth).select(1, 0));
+    const farCoverage = farCount.div(SCENE_PASS_SAMPLES).toVar();
     const visibility = this.computeVisibility(
-      worldPosition,
-      depth,
-      viewDistance,
+      nearWorldPosition,
+      nearDepth,
+      nearViewDistance,
       bool(true),
-      { staticCache: this.staticCache, dynamicLayer: this.dynamicLayer },
+      layers,
+    ).toVar();
+    If(
+      farViewDistance
+        .sub(nearViewDistance)
+        .greaterThan(nearViewDistance.mul(SURFACE_SPLIT_RATIO)),
+      () => {
+        visibility.assign(
+          mix(
+            visibility,
+            this.computeVisibility(
+              farWorldPosition,
+              farDepth,
+              farViewDistance,
+              bool(true),
+              layers,
+            ),
+            farCoverage,
+          ),
+        );
+      },
     );
-    return vec4(visibility, viewDistance, 0, 1);
-  });
+    return visibility;
+  }
 
   getReceiver(uv: Vec2Node) {
-    const depth = this.scene.depth.sample(uv).r;
+    return this.getReceiverAtDepth(uv, this.scene.depth.sample(uv).r);
+  }
+
+  private getReceiverAtDepth(uv: Vec2Node, depth: FloatNode) {
     const viewPosition = getViewPosition(
       uv,
       depth,
