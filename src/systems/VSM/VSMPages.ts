@@ -65,7 +65,8 @@ import {
   isPageInWindow,
 } from "./VSMMath";
 
-const TILE_SIZE = 8;
+const TILE_SIZE = 2;
+const REQUEST_WORKGROUP_SIZE = 8;
 const FILTER_TEXELS = 3;
 const REQUEST_WORD_COUNT = VSM_PAGE_COUNT / 32;
 const INVALID_MINIMUM = 1e8;
@@ -213,7 +214,7 @@ export class VSMPages {
           this.requestPages(uint(levelIndex), bounds);
         });
       }
-    })().computeKernel([TILE_SIZE, TILE_SIZE]);
+    })().computeKernel([REQUEST_WORKGROUP_SIZE, REQUEST_WORKGROUP_SIZE]);
 
     this.resetNode = Fn(() => {
       Loop(
@@ -484,13 +485,13 @@ export class VSMPages {
         );
         If(isPageInWindow(pageCoordinate, windowCenter), () => {
           const key = getPageKey(level, pageCoordinate);
-          const bit = uint(1).shiftLeft(key.mod(32));
-          const previousWord = atomicOr(
-            this.atomicRequestBits.element(key.div(32)),
-            bit,
-          );
-          If(previousWord.bitAnd(bit).equal(0), () => {
-            atomicAdd(this.atomicRequestCounters.element(0), 1);
+          const bit = uint(1).shiftLeft(key.mod(32)).toVar();
+          const word = this.atomicRequestBits.element(key.div(32));
+          If(atomicLoad(word).bitAnd(bit).equal(0), () => {
+            const previousWord = atomicOr(word, bit);
+            If(previousWord.bitAnd(bit).equal(0), () => {
+              atomicAdd(this.atomicRequestCounters.element(0), 1);
+            });
           });
         }).Else(() => {
           atomicAdd(this.atomicRequestCounters.element(1), 1);
@@ -506,8 +507,8 @@ export class VSMPages {
     const height = Math.max(1, Math.floor(drawingBufferSize.y));
     this.depthSize.value.set(width, height);
     this.requestNode.dispatchSize = [
-      Math.ceil(width / (TILE_SIZE * TILE_SIZE)),
-      Math.ceil(height / (TILE_SIZE * TILE_SIZE)),
+      Math.ceil(width / (REQUEST_WORKGROUP_SIZE * TILE_SIZE)),
+      Math.ceil(height / (REQUEST_WORKGROUP_SIZE * TILE_SIZE)),
       1,
     ];
     return [this.requestResetNode, this.requestNode];
