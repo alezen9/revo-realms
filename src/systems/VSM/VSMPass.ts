@@ -14,7 +14,12 @@ import {
 import type { DebugFolder } from "../DebugManager";
 import type { ScenePass } from "../RendererManager/ScenePass";
 import { assetManager, lightingManager, monitoringManager } from "..";
-import { VSMContext, type VSMCasterOptions } from "./VSMContext";
+import {
+  VSM_POOL_CAPACITY,
+  VSMContext,
+  type VSMCasterOptions,
+} from "./VSMContext";
+import { VSMDepthPool } from "./VSMDepthPool";
 import { VSMDynamicLayer } from "./VSMDynamicLayer";
 import {
   VSM_PAGE_TEXELS,
@@ -29,7 +34,6 @@ import {
 } from "./VSMMath";
 import { VSMPages } from "./VSMPages";
 import { VSMSampler, type VSMDepthLayer } from "./VSMSampler";
-import { VSMStaticCache } from "./VSMStaticCache";
 
 export class VSMPass {
   private renderer: WebGPURenderer;
@@ -37,7 +41,7 @@ export class VSMPass {
   private camera: Camera;
   private context: VSMContext;
   private pages: VSMPages;
-  private staticCache: VSMStaticCache;
+  private staticCache: VSMDepthPool;
   private dynamicLayer: VSMDynamicLayer;
   private sampler: VSMSampler;
   private uSunVisibility = uniform(1);
@@ -55,7 +59,12 @@ export class VSMPass {
       scene.depthTexture,
       scene.softShadow.value,
     );
-    this.staticCache = new VSMStaticCache(this.context);
+    this.staticCache = new VSMDepthPool(this.context, {
+      kind: "fixed",
+      capacity: VSM_POOL_CAPACITY,
+      jobs: this.context.allocatedJobs,
+      depthBiasTexels: 3,
+    });
     this.dynamicLayer = new VSMDynamicLayer(renderer, this.context);
     this.sampler = new VSMSampler(
       this.context,
@@ -148,6 +157,10 @@ export class VSMPass {
       min: 0,
       max: 16,
       step: 0.5,
+    });
+    folder.addBinding(this.dynamicLayer.useMovingPool, "value", {
+      label: "Moving casters compute",
+      options: { Off: 0, On: 1 },
     });
     folder.addBinding(vsmSoftReceiverLevelBias, "value", {
       label: "Soft receiver blur level",

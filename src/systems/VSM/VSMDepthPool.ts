@@ -18,29 +18,20 @@ import {
   uvec2,
   vec2,
   vec3,
-  vec4,
   workgroupArray,
   workgroupBarrier,
   workgroupId,
 } from "three/tsl";
+import { VSM_CLUSTER_TRIANGLES, VSMClusterBucket } from "./VSMClusterBucket";
 import {
-  VSM_CLUSTER_MAX_WORK_ITEMS,
-  VSM_CLUSTER_TRIANGLES,
-  VSMClusterBucket,
-} from "./VSMClusterBucket";
-import {
-  VSM_COUNTER_ALLOCATED,
-  VSM_COUNTER_COUNT,
   VSM_JOB_COUNT,
-  VSM_JOBS_ALLOCATED,
-  VSM_POOL_CAPACITY,
   type VSMCaster,
   type VSMContext,
+  type VSMJobSource,
 } from "./VSMContext";
 import {
   VSM_PAGE_OFFSET,
   VSM_PAGE_TEXELS,
-  VSM_PAGES_PER_LEVEL,
   getLightPosition,
   getPageSize,
 } from "./VSMMath";
@@ -50,6 +41,36 @@ const DEPTH_SCALE = 16777215;
 const CLEAR_WORKGROUP_SIZE = 256;
 const CLEAR_WORKGROUPS = 128;
 const RASTER_WORKGROUPS = 512;
+
+type VSMDepthPoolOptions = {
+  kind: "fixed" | "moving";
+  capacity: number;
+  jobs: VSMJobSource;
+  depthBiasTexels: number;
+};
+
+export type VSMRasterWork = {
+  slot: Node<"uint">;
+  level: Node<"uint">;
+  pageCoordinate: Node<"uvec2">;
+  firstVertex: Node<"uint">;
+  triangleCount: Node<"uint">;
+  instance: Node<"uint">;
+};
+
+export type VSMRasterSource = {
+  readonly hasUvs: boolean;
+  getWorkCount: () => Node<"uint">;
+  getWork: (index: Node<"uint">) => VSMRasterWork;
+  getCorner: (work: VSMRasterWork, vertex: Node<"uint">) => Node<"vec4">;
+  getUv: (vertex: Node<"uint">) => Node<"vec2">;
+};
+
+export type VSMRasterCaster = {
+  source: VSMRasterSource;
+  alphaTest: number;
+  opacity?: (uv: Node<"vec2">) => Node<"float">;
+};
 
 type ClusterCaster = {
   bucket: VSMClusterBucket;
@@ -62,22 +83,29 @@ const getEdge = (from: Node<"vec2">, to: Node<"vec2">, point: Node<"vec2">) =>
     .mul(point.y.sub(from.y))
     .sub(to.y.sub(from.y).mul(point.x.sub(from.x)));
 
-export class VSMStaticCache {
+export class VSMDepthPool {
   readonly minimumY = uniform(-8);
   readonly maximumY = uniform(64);
   readonly isReady = uniform(0);
-  readonly depthBiasTexels = 3;
+  readonly depthBiasTexels: number;
   private context: VSMContext;
+  private kind: VSMDepthPoolOptions["kind"];
+  private jobs: VSMJobSource;
   private depthNode;
   private readDepthNode;
   private pageJobsNode;
   private jobCountNode;
   private clearNode;
   private clusterCasters = new Map<string, ClusterCaster>();
+  private instanceRasterNodes: ComputeNode[] = [];
 
-  constructor(context: VSMContext) {
+  constructor(context: VSMContext, options: VSMDepthPoolOptions) {
+    const { kind, capacity, jobs, depthBiasTexels } = options;
     this.context = context;
-    const texelCount = VSM_POOL_CAPACITY * PAGE_TEXEL_COUNT;
+    this.kind = kind;
+    this.jobs = jobs;
+    this.depthBiasTexels = depthBiasTexels;
+    const texelCount = capacity * PAGE_TEXEL_COUNT;
     const depthAttribute = new StorageBufferAttribute(
       new Uint32Array(texelCount),
       1,
@@ -94,22 +122,22 @@ export class VSMStaticCache {
       VSM_JOB_COUNT,
     ).toReadOnly();
     this.jobCountNode = storage(
-      context.counters,
+      jobs.countAttribute,
       "uint",
-      VSM_COUNTER_COUNT,
+      jobs.countLength,
     ).toReadOnly();
 
     this.clearNode = Fn(() => {
       Loop(
         {
           start: workgroupId.x,
-          end: this.jobCountNode.element(VSM_COUNTER_ALLOCATED),
+          end: this.jobCountNode.element(jobs.countIndex),
           type: "uint",
           update: CLEAR_WORKGROUPS,
         },
         ({ i: jobLoopIndex }) => {
           const pageBase = this.pageJobsNode
-            .element(jobLoopIndex.add(VSM_JOBS_ALLOCATED))
+            .element(jobLoopIndex.add(jobs.offset))
             .y.mul(PAGE_TEXEL_COUNT)
             .toVar();
           Loop(
@@ -131,16 +159,20 @@ export class VSMStaticCache {
     })().compute(CLEAR_WORKGROUPS * CLEAR_WORKGROUP_SIZE, [
       CLEAR_WORKGROUP_SIZE,
     ]);
-    this.clearNode.name = "VSM static clear";
+    this.clearNode.name = `VSM ${kind} clear`;
   }
 
   sync(terrainBounds: { min: number; max: number }) {
     const { changes } = this.context;
-    const hasRosterChange = changes.hasStaticRosterChanged;
+    const isFixed = this.kind === "fixed";
+    const hasRosterChange = isFixed
+      ? changes.hasStaticRosterChanged
+      : changes.hasDynamicRosterChanged;
     const hasMatrixChange =
       hasRosterChange ||
-      changes.hasStaticCasterMoved ||
-      changes.hasStaticBiasChanged;
+      (isFixed
+        ? changes.hasStaticCasterMoved || changes.hasStaticBiasChanged
+        : changes.hasDynamicCasterMoved);
     if (!hasMatrixChange && !changes.hasSunChanged) return;
 
     if (hasRosterChange) this.rebuildClusterCasters();
@@ -157,15 +189,25 @@ export class VSMStaticCache {
       this.maximumY.value !== Math.ceil(maximumY);
     this.minimumY.value = Math.floor(minimumY);
     this.maximumY.value = Math.ceil(maximumY);
-    if (hasDepthRangeChange) this.context.invalidateAllPages();
+    if (isFixed && hasDepthRangeChange) this.context.invalidateAllPages();
   }
 
   getComputeNodes() {
     const nodes = [this.clearNode];
     for (const { bucket, rasterNode } of this.clusterCasters.values())
       nodes.push(...bucket.takeComputeNodes(), rasterNode);
+    nodes.push(...this.instanceRasterNodes);
     this.isReady.value = 1;
     return nodes;
+  }
+
+  setInstanceCasters(casters: VSMRasterCaster[]) {
+    for (const rasterNode of this.instanceRasterNodes) rasterNode.dispose();
+    this.instanceRasterNodes = [];
+    for (const { source, alphaTest, opacity } of casters)
+      this.instanceRasterNodes.push(
+        this.createRasterNode(source, alphaTest, opacity),
+      );
   }
 
   loadDepth(slot: Node<"uint">, texel: Node<"uvec2">) {
@@ -259,7 +301,7 @@ export class VSMStaticCache {
   private rebuildClusterCasters() {
     const groups = new Map<string, VSMCaster[]>([["opaque", []]]);
     for (const caster of this.context.casters) {
-      if (caster.kind !== "fixed") continue;
+      if (caster.kind !== this.kind) continue;
       const key = caster.opacity ? caster.mesh.uuid : "opaque";
       const casters = groups.get(key);
       if (casters) casters.push(caster);
@@ -279,6 +321,7 @@ export class VSMStaticCache {
       const { opacity, alphaTest } = casters[0] ?? { alphaTest: 0 };
       const bucket = new VSMClusterBucket(
         this.context,
+        this.jobs,
         casters,
         opacity !== undefined,
       );
@@ -288,100 +331,61 @@ export class VSMStaticCache {
   }
 
   private createRasterNode(
-    bucket: VSMClusterBucket,
+    source: VSMRasterSource,
     alphaTest: number,
     opacity?: (uv: Node<"vec2">) => Node<"float">,
   ) {
     const { lightBasis } = this.context;
     const { minimumY, maximumY } = this;
-    const workCount = storage(
-      bucket.workIndirectAttribute,
-      "uint",
-      4,
-    ).toReadOnly();
-    const workItems = storage(
-      bucket.workItemsAttribute,
-      "uvec2",
-      VSM_CLUSTER_MAX_WORK_ITEMS,
-    ).toReadOnly();
-    const instanceClusters = storage(
-      bucket.instanceClustersAttribute,
-      "uvec4",
-      bucket.instanceClustersAttribute.count,
-    ).toReadOnly();
-    const positions = storage(
-      bucket.positionsAttribute,
-      "vec4",
-      bucket.positionsAttribute.count,
-    ).toReadOnly();
-    const matrices = storage(
-      bucket.matricesAttribute,
-      "vec4",
-      bucket.matricesAttribute.count,
-    ).toReadOnly();
-    const uvsAttribute = bucket.uvsAttribute;
-    const uvs = uvsAttribute
-      ? storage(uvsAttribute, "vec2", uvsAttribute.count).toReadOnly()
-      : undefined;
+    const hasOpacity = source.hasUvs && opacity !== undefined;
     const triangleCorners = workgroupArray("vec3", VSM_CLUSTER_TRIANGLES * 3);
     const triangleUvs = workgroupArray("vec2", VSM_CLUSTER_TRIANGLES * 3);
 
     const rasterNode = Fn(() => {
-      const count = workCount.element(1);
-      const itemCount = count
-        .lessThan(VSM_CLUSTER_MAX_WORK_ITEMS)
-        .select(count, uint(VSM_CLUSTER_MAX_WORK_ITEMS));
       Loop(
         {
           start: workgroupId.x,
-          end: itemCount,
+          end: source.getWorkCount(),
           type: "uint",
           update: RASTER_WORKGROUPS,
         },
         ({ i: itemLoopIndex }) => {
-          const workItem = workItems.element(itemLoopIndex).toVar();
-          const job = this.pageJobsNode
-            .element(workItem.x.add(VSM_JOBS_ALLOCATED))
+          const work = source.getWork(itemLoopIndex.toVar());
+          const triangleCount = work.triangleCount.toVar();
+          const pageSize = getPageSize(work.level).toVar();
+          const pageOrigin = vec2(work.pageCoordinate)
+            .sub(VSM_PAGE_OFFSET)
             .toVar();
-          const instanceCluster = instanceClusters.element(workItem.y).toVar();
-          const pageSize = getPageSize(job.x.div(VSM_PAGES_PER_LEVEL)).toVar();
-          const pageOrigin = vec2(job.zw).sub(VSM_PAGE_OFFSET).toVar();
-          If(localId.x.lessThan(instanceCluster.w), () => {
-            const matrixOffset = instanceCluster.x.mul(4);
-            const translation = matrices.element(matrixOffset.add(3));
+          If(localId.x.lessThan(triangleCount), () => {
             for (let corner = 0; corner < 3; corner++) {
-              const vertex = instanceCluster.y
+              const vertex = work.firstVertex
                 .add(localId.x.mul(3))
-                .add(corner);
-              const local = positions.element(vertex).xyz;
-              const world = matrices
-                .element(matrixOffset)
-                .mul(local.x)
-                .add(matrices.element(matrixOffset.add(1)).mul(local.y))
-                .add(matrices.element(matrixOffset.add(2)).mul(local.z))
-                .add(vec4(translation.xyz, 0)).xyz;
+                .add(corner)
+                .toVar();
+              const casterCorner = source.getCorner(work, vertex).toVar();
+              const world = casterCorner.xyz;
               const texel = getLightPosition(world, lightBasis)
                 .div(pageSize)
                 .sub(pageOrigin)
                 .mul(VSM_PAGE_TEXELS);
               const depth = maximumY
                 .sub(world.y)
-                .add(translation.w)
+                .add(casterCorner.w)
                 .div(maximumY.sub(minimumY));
               const cornerIndex = localId.x.mul(3).add(corner);
               triangleCorners
                 .element<"vec3">(cornerIndex)
                 .assign(vec3(texel, depth));
-              if (uvs)
+              if (hasOpacity)
                 triangleUvs
                   .element<"vec2">(cornerIndex)
-                  .assign(uvs.element(vertex));
+                  .assign(source.getUv(vertex));
             }
           });
           workgroupBarrier();
-          const pageBase = job.y.mul(PAGE_TEXEL_COUNT).toVar();
+          const pageBase = work.slot.mul(PAGE_TEXEL_COUNT).toVar();
           Loop(
-            { start: uint(0), end: instanceCluster.w, type: "uint" },
+            { start: uint(0), end: triangleCount, type: "uint" },
             ({ i: triangleLoopIndex }) => {
               const cornerBase = triangleLoopIndex.mul(3).toVar();
               const first = triangleCorners.element<"vec3">(cornerBase).toVar();
@@ -439,7 +443,7 @@ export class VSMStaticCache {
                     .and(secondWeight.greaterThanEqual(0))
                     .and(thirdWeight.greaterThanEqual(0));
                   const isOpaque =
-                    uvs && opacity
+                    hasOpacity && opacity
                       ? opacity(
                           triangleUvs
                             .element<"vec2">(cornerBase)
@@ -479,7 +483,7 @@ export class VSMStaticCache {
     })().compute(RASTER_WORKGROUPS * VSM_CLUSTER_TRIANGLES, [
       VSM_CLUSTER_TRIANGLES,
     ]);
-    rasterNode.name = "VSM static raster";
+    rasterNode.name = `VSM ${this.kind} raster`;
     return rasterNode;
   }
 }

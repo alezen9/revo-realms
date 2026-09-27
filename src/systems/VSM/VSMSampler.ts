@@ -25,6 +25,7 @@ import {
   type ScenePass,
 } from "../RendererManager/ScenePass";
 import type { VSMContext } from "./VSMContext";
+import type { VSMDepthPool } from "./VSMDepthPool";
 import type { VSMDynamicLayer } from "./VSMDynamicLayer";
 import {
   VSM_PAGE_TEXELS,
@@ -35,7 +36,6 @@ import {
   getPageTag,
   getReceiverLevel,
 } from "./VSMMath";
-import type { VSMStaticCache } from "./VSMStaticCache";
 
 type FloatNode = Node<"float">;
 type Vec2Node = Node<"vec2">;
@@ -56,7 +56,7 @@ export type VSMDepthLayer = {
 };
 
 type SampledLayers = {
-  staticCache?: VSMStaticCache;
+  staticCache?: VSMDepthPool;
   dynamicLayer?: VSMDynamicLayer;
 };
 
@@ -125,13 +125,13 @@ export class VSMSampler {
   };
   private context: VSMContext;
   private scene: ScenePass;
-  private staticCache: VSMStaticCache;
+  private staticCache: VSMDepthPool;
   private dynamicLayer: VSMDynamicLayer;
 
   constructor(
     context: VSMContext,
     scene: ScenePass,
-    staticCache: VSMStaticCache,
+    staticCache: VSMDepthPool,
     dynamicLayer: VSMDynamicLayer,
   ) {
     this.context = context;
@@ -585,7 +585,7 @@ export class VSMSampler {
   }
 
   private sampleStaticTent(
-    staticCache: VSMStaticCache,
+    staticCache: VSMDepthPool,
     slot: Node<"uint">,
     pageUv: Vec2Node,
     receiver: Receiver,

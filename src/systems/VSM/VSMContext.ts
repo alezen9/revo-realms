@@ -77,6 +77,13 @@ export type VSMCaster = {
   worldBounds: Box3;
 };
 
+export type VSMJobSource = {
+  offset: number;
+  countAttribute: StorageBufferAttribute;
+  countIndex: number;
+  countLength: number;
+};
+
 export type VSMChanges = {
   hasViewChanged: boolean;
   hasSunChanged: boolean;
@@ -165,6 +172,18 @@ export class VSMContext {
     new Uint32Array(VSM_DYNAMIC_COUNTER_COUNT),
     1,
   );
+  readonly allocatedJobs: VSMJobSource = {
+    offset: VSM_JOBS_ALLOCATED,
+    countAttribute: this.counters,
+    countIndex: VSM_COUNTER_ALLOCATED,
+    countLength: VSM_COUNTER_COUNT,
+  };
+  readonly dynamicJobs: VSMJobSource = {
+    offset: VSM_JOBS_DYNAMIC,
+    countAttribute: this.dynamicCounters,
+    countIndex: VSM_DYNAMIC_COUNTER_TOTAL,
+    countLength: VSM_DYNAMIC_COUNTER_COUNT,
+  };
   private renderer: WebGPURenderer;
   private casterEntries = new Map<Mesh, VSMCaster>();
   private dirtyStaticBounds: Box3[] = [];

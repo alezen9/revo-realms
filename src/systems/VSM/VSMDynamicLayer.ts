@@ -23,6 +23,7 @@ import {
   type Node,
   type StorageBufferNode,
   type TextureNode,
+  type UniformNode,
   type WebGPURenderer,
 } from "three/webgpu";
 import {
@@ -68,7 +69,18 @@ import {
   type VSMGpuInstances,
 } from "./VSMContext";
 import {
+  VSMDepthPool,
+  type VSMRasterCaster,
+  type VSMRasterSource,
+  type VSMRasterWork,
+} from "./VSMDepthPool";
+import {
+  VSM_CLUSTER_VERTICES,
+  appendGeometryClusters,
+} from "./VSMClusterBucket";
+import {
   VSM_LEVEL_COUNT,
+  VSM_PAGE_COUNT,
   VSM_PAGE_OFFSET,
   VSM_PAGE_TEXELS,
   VSM_PAGES_PER_LEVEL,
@@ -93,9 +105,11 @@ const ATLAS_GRID_SIZE = Math.ceil(Math.sqrt(VSM_DYNAMIC_CAPACITY));
 const ATLAS_SIZE = ATLAS_GRID_SIZE * VSM_PAGE_TEXELS;
 
 export class VSMDynamicLayer {
-  readonly minimumY = uniform(-8);
-  readonly maximumY = uniform(64);
+  readonly minimumY: UniformNode<"float", number>;
+  readonly maximumY: UniformNode<"float", number>;
   readonly isReady = uniform(0);
+  readonly useMovingPool = uniform(0);
+  private movingPool: VSMDepthPool;
   readonly depthBiasTexels = 8;
   private renderer: WebGPURenderer;
   private context: VSMContext;
@@ -115,12 +129,19 @@ export class VSMDynamicLayer {
     new Uint32Array(4),
     4,
   );
-  private bounds = new Box3();
 
   constructor(renderer: WebGPURenderer, context: VSMContext) {
     this.renderer = renderer;
     this.context = context;
     this.pageJobsNode = storage(context.pageJobs, "uvec4", VSM_JOB_COUNT);
+    this.movingPool = new VSMDepthPool(context, {
+      kind: "moving",
+      capacity: VSM_DYNAMIC_CAPACITY,
+      jobs: context.dynamicJobs,
+      depthBiasTexels: this.depthBiasTexels,
+    });
+    this.minimumY = this.movingPool.minimumY;
+    this.maximumY = this.movingPool.maximumY;
     this.renderTarget = new RenderTarget(ATLAS_SIZE, ATLAS_SIZE, {
       depthBuffer: true,
       format: RedFormat,
@@ -152,15 +173,7 @@ export class VSMDynamicLayer {
       return;
 
     if (changes.hasDynamicRosterChanged) this.rebuildCasters();
-    let minimumY = terrainBounds.min - 8;
-    let maximumY = terrainBounds.max + 64;
-    for (const { mesh } of this.sources) {
-      this.bounds.setFromObject(mesh);
-      minimumY = Math.min(minimumY, this.bounds.min.y);
-      maximumY = Math.max(maximumY, this.bounds.max.y);
-    }
-    this.minimumY.value = Math.floor(minimumY);
-    this.maximumY.value = Math.ceil(maximumY);
+    this.movingPool.sync(terrainBounds);
     const { x: lightX, y: lightY } = this.context.lightBasis;
     this.rigidBucket?.update(this.sources, lightX.value, lightY.value);
   }
@@ -172,11 +185,17 @@ export class VSMDynamicLayer {
       nodes.push(...bucket.computeNodes);
     if (this.touchNode && this.jobsNode)
       nodes.push(this.touchNode, this.jobsNode);
+    if (this.useMovingPool.value > 0)
+      nodes.push(...this.movingPool.getComputeNodes());
     return nodes;
   }
 
   render() {
     if (!this.rigidBucket && this.deformedCasters.length === 0) return;
+    if (this.useMovingPool.value > 0) {
+      this.isReady.value = 1;
+      return;
+    }
     const previousTarget = this.renderer.getRenderTarget();
     const wasAutoClearEnabled = this.renderer.autoClear;
     this.renderer.autoClear = true;
@@ -195,7 +214,12 @@ export class VSMDynamicLayer {
       slot.mod(ATLAS_GRID_SIZE),
       slot.div(ATLAS_GRID_SIZE),
     ).mul(VSM_PAGE_TEXELS);
-    return textureLoad(this.depthTextureNode, tile.add(texel)).level(uint(0)).r;
+    return this.useMovingPool
+      .greaterThan(0)
+      .select(
+        this.movingPool.loadDepth(slot, texel),
+        textureLoad(this.depthTextureNode, tile.add(texel)).level(uint(0)).r,
+      );
   }
 
   compareDepth(
@@ -203,9 +227,14 @@ export class VSMDynamicLayer {
     pageUv: Node<"vec2">,
     receiverDepth: Node<"float">,
   ) {
-    return this.depthTextureNode
-      .sample(this.computeAtlasUv(slot, pageUv))
-      .compare(receiverDepth).r;
+    return this.useMovingPool
+      .greaterThan(0)
+      .select(
+        this.movingPool.compareDepth(slot, pageUv, receiverDepth),
+        this.depthTextureNode
+          .sample(this.computeAtlasUv(slot, pageUv))
+          .compare(receiverDepth).r,
+      );
   }
 
   private rebuildCasters() {
@@ -216,6 +245,7 @@ export class VSMDynamicLayer {
       bucket.dispose();
     }
     this.deformedCasters = [];
+    const instanceCasters: VSMRasterCaster[] = [];
     for (const caster of this.context.casters) {
       if (caster.gpuInstances) {
         const bucket = new DeformedCasterBucket(
@@ -223,6 +253,11 @@ export class VSMDynamicLayer {
           caster.mesh,
           caster.gpuInstances,
         );
+        instanceCasters.push({
+          source: new InstanceRasterSource(this.context, bucket, caster),
+          alphaTest: caster.alphaTest,
+          opacity: caster.opacity,
+        });
         const mesh = new Mesh(
           bucket.geometry,
           this.createDeformedCasterMaterial(bucket, caster),
@@ -235,6 +270,7 @@ export class VSMDynamicLayer {
       }
       if (caster.kind === "moving") this.sources.push(caster);
     }
+    this.movingPool.setInstanceCasters(instanceCasters);
     for (const mesh of this.casterMeshes) this.scene.remove(mesh);
     this.casterMeshes[0]?.material.dispose();
     this.casterMeshes = [];
@@ -787,6 +823,7 @@ class DeformedCasterBucket {
     new Uint32Array(MAX_DEFORMED_WORK_ITEMS * 4),
     4,
   );
+  readonly indirectAttribute: IndirectStorageBufferAttribute;
   readonly instances: VSMGpuInstances;
   private resetNode;
   private buildNode;
@@ -804,6 +841,7 @@ class DeformedCasterBucket {
         : new Uint32Array([position.count, 0, 0, 0]),
       1,
     );
+    this.indirectAttribute = indirect;
     this.geometry.setIndirect(indirect);
     this.geometry.setAttribute("shadowIndirect", indirect);
     this.geometry.setAttribute("shadowWorkItems", this.workItemsAttribute);
@@ -909,5 +947,129 @@ class DeformedCasterBucket {
     this.geometry.dispose();
     this.resetNode.dispose();
     this.buildNode.dispose();
+  }
+}
+
+class InstanceRasterSource implements VSMRasterSource {
+  readonly hasUvs: boolean;
+  private context: VSMContext;
+  private instances: VSMGpuInstances;
+  private depthBias: number;
+  private clusterCount: number;
+  private workCount;
+  private workItems;
+  private pageTable;
+  private positions;
+  private clusterTriangles;
+  private uvs;
+
+  constructor(
+    context: VSMContext,
+    bucket: DeformedCasterBucket,
+    caster: VSMCaster,
+  ) {
+    const { geometry } = bucket;
+    this.context = context;
+    this.instances = bucket.instances;
+    this.depthBias = caster.depthBias;
+    this.hasUvs = caster.opacity !== undefined;
+    const positions: number[] = [];
+    const uvs: number[] = [];
+    const clusterBounds: number[] = [];
+    const clusterTriangles: number[] = [];
+    const { clusterCount } = appendGeometryClusters(
+      geometry,
+      {
+        start: 0,
+        count: geometry.index
+          ? geometry.index.count
+          : geometry.getAttribute("position").count,
+      },
+      positions,
+      this.hasUvs ? uvs : undefined,
+      clusterBounds,
+      clusterTriangles,
+    );
+    this.clusterCount = clusterCount;
+    const positionsAttribute = new StorageBufferAttribute(
+      new Float32Array(positions),
+      4,
+    );
+    const clusterTrianglesAttribute = new StorageBufferAttribute(
+      new Uint32Array(clusterTriangles),
+      1,
+    );
+    this.positions = storage(
+      positionsAttribute,
+      "vec4",
+      positionsAttribute.count,
+    ).toReadOnly();
+    this.clusterTriangles = storage(
+      clusterTrianglesAttribute,
+      "uint",
+      clusterTrianglesAttribute.count,
+    ).toReadOnly();
+    this.uvs = this.hasUvs
+      ? storage(
+          new StorageBufferAttribute(new Float32Array(uvs), 2),
+          "vec2",
+          uvs.length / 2,
+        ).toReadOnly()
+      : undefined;
+    this.workCount = storage(
+      bucket.indirectAttribute,
+      "uint",
+      bucket.indirectAttribute.count,
+    ).toReadOnly();
+    this.workItems = storage(
+      bucket.workItemsAttribute,
+      "uvec4",
+      MAX_DEFORMED_WORK_ITEMS,
+    ).toReadOnly();
+    this.pageTable = storage(
+      context.pageTable,
+      "uvec4",
+      VSM_PAGE_COUNT,
+    ).toReadOnly();
+  }
+
+  getWorkCount() {
+    const count = this.workCount.element(1);
+    return count
+      .lessThan(MAX_DEFORMED_WORK_ITEMS)
+      .select(count, uint(MAX_DEFORMED_WORK_ITEMS))
+      .mul(this.clusterCount);
+  }
+
+  getWork(index: Node<"uint">): VSMRasterWork {
+    const cluster = index.mod(this.clusterCount).toVar();
+    const workItem = this.workItems
+      .element(index.div(this.clusterCount))
+      .toVar();
+    const page = this.pageTable.element(workItem.x).toVar();
+    return {
+      slot: page.z,
+      level: workItem.x.div(VSM_PAGES_PER_LEVEL),
+      pageCoordinate: workItem.zw,
+      firstVertex: cluster.mul(VSM_CLUSTER_VERTICES),
+      triangleCount: page.y
+        .equal(this.context.frame)
+        .select(this.clusterTriangles.element(cluster), uint(0)),
+      instance: workItem.y,
+    };
+  }
+
+  getCorner(work: VSMRasterWork, vertex: Node<"uint">) {
+    return vec4(
+      this.instances.worldPosition(
+        work.instance,
+        this.positions.element(vertex).xyz,
+      ),
+      this.depthBias,
+    );
+  }
+
+  getUv(vertex: Node<"uint">) {
+    return this.uvs ? this.uvs.element(vertex) : vec2(0);
   }
 }
