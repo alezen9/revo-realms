@@ -1,6 +1,7 @@
 import {
   Box3,
   Matrix4,
+  Quaternion,
   Vector2,
   Vector3,
   type BufferGeometry,
@@ -100,7 +101,8 @@ type LayerVersions = Record<VSMLayerKind, { roster: number; revision: number }>;
 
 type PreviousFrame = {
   camera?: Camera;
-  cameraMatrix: Matrix4;
+  cameraPosition: Vector3;
+  cameraQuaternion: Quaternion;
   projectionMatrix: Matrix4;
   drawingBufferSize: Vector2;
   sunDirection: Vector3;
@@ -111,25 +113,9 @@ type PreviousFrame = {
 
 const VSM_LAYER_KINDS: VSMLayerKind[] = ["static", "dynamic"];
 
-const CAMERA_MOVE_EPSILON = 0.002;
+const CAMERA_MOVE_EPSILON_SQUARED = 0.002 ** 2;
 const CAMERA_TURN_EPSILON = 0.0005;
-const ROTATION_ELEMENTS = [0, 1, 2, 4, 5, 6, 8, 9, 10];
-
-const hasCameraMoved = (previous: Matrix4, current: Matrix4) => {
-  const { elements: before } = previous;
-  const { elements: after } = current;
-  for (const index of ROTATION_ELEMENTS)
-    if (Math.abs(after[index] - before[index]) > CAMERA_TURN_EPSILON)
-      return true;
-  return (
-    Math.hypot(
-      after[12] - before[12],
-      after[13] - before[13],
-      after[14] - before[14],
-    ) > CAMERA_MOVE_EPSILON
-  );
-};
-
+const CAMERA_TURN_DOT_THRESHOLD = 1 - Math.cos(CAMERA_TURN_EPSILON / 2);
 const getLayerKind = (kind: VSMCasterKind): VSMLayerKind =>
   kind === "static" ? "static" : "dynamic";
 
@@ -148,6 +134,7 @@ export class VSMContext {
   readonly frame = uniform(0, "uint");
   readonly pageGeneration = uniform(1, "uint");
   readonly cameraWorldPosition = new Vector3();
+  private cameraWorldQuaternion = new Quaternion();
   readonly cameraPosition = uniform(this.cameraWorldPosition);
   readonly projectionMatrixInverse = uniform(new Matrix4());
   readonly cameraWorldMatrix = uniform(new Matrix4());
@@ -210,7 +197,8 @@ export class VSMContext {
     dynamic: { roster: 0, revision: 0 },
   };
   private previous: PreviousFrame = {
-    cameraMatrix: new Matrix4(),
+    cameraPosition: new Vector3(),
+    cameraQuaternion: new Quaternion(),
     projectionMatrix: new Matrix4(),
     drawingBufferSize: new Vector2(),
     sunDirection: new Vector3(),
@@ -235,9 +223,17 @@ export class VSMContext {
     const { previous, changes } = this;
     this.renderer.getDrawingBufferSize(this.drawingBufferSize);
     camera.getWorldPosition(this.cameraWorldPosition);
+    camera.getWorldQuaternion(this.cameraWorldQuaternion);
+    const hasCameraMoved =
+      this.cameraWorldPosition.distanceToSquared(previous.cameraPosition) >
+      CAMERA_MOVE_EPSILON_SQUARED;
+    const hasCameraTurned =
+      1 - Math.abs(this.cameraWorldQuaternion.dot(previous.cameraQuaternion)) >
+      CAMERA_TURN_DOT_THRESHOLD;
     const hasViewChanged =
       camera !== previous.camera ||
-      hasCameraMoved(previous.cameraMatrix, camera.matrixWorld) ||
+      hasCameraMoved ||
+      hasCameraTurned ||
       !previous.projectionMatrix.equals(camera.projectionMatrix) ||
       !previous.drawingBufferSize.equals(this.drawingBufferSize);
     const hasLevelBiasChanged =
@@ -276,7 +272,10 @@ export class VSMContext {
       changes.dynamic.hasRosterChanged;
 
     previous.camera = camera;
-    if (hasViewChanged) previous.cameraMatrix.copy(camera.matrixWorld);
+    if (hasViewChanged) {
+      previous.cameraPosition.copy(this.cameraWorldPosition);
+      previous.cameraQuaternion.copy(this.cameraWorldQuaternion);
+    }
     previous.projectionMatrix.copy(camera.projectionMatrix);
     previous.drawingBufferSize.copy(this.drawingBufferSize);
     previous.sunDirection.copy(sunDirection);

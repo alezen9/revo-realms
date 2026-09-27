@@ -485,13 +485,13 @@ export class VSMPages {
         );
         If(isPageInWindow(pageCoordinate, windowCenter), () => {
           const key = getPageKey(level, pageCoordinate);
-          const bit = uint(1).shiftLeft(key.mod(32)).toVar();
-          const word = this.atomicRequestBits.element(key.div(32));
-          If(atomicLoad(word).bitAnd(bit).equal(0), () => {
-            const previousWord = atomicOr(word, bit);
-            If(previousWord.bitAnd(bit).equal(0), () => {
-              atomicAdd(this.atomicRequestCounters.element(0), 1);
-            });
+          const bit = uint(1).shiftLeft(key.mod(32));
+          const previousWord = atomicOr(
+            this.atomicRequestBits.element(key.div(32)),
+            bit,
+          );
+          If(previousWord.bitAnd(bit).equal(0), () => {
+            atomicAdd(this.atomicRequestCounters.element(0), 1);
           });
         }).Else(() => {
           atomicAdd(this.atomicRequestCounters.element(1), 1);
