@@ -23,7 +23,7 @@ import {
   vsmSoftReceiverLevelBias,
 } from "./VSMMath";
 
-export const VSM_POOL_CAPACITY = 1024;
+export const VSM_POOL_CAPACITY = 512;
 export const VSM_DYNAMIC_CAPACITY = 400;
 export const VSM_INVALID_PAGE_KEY = 0xffffffff;
 export const VSM_JOBS_ALLOCATED = 0;
