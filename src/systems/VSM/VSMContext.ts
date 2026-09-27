@@ -4,7 +4,6 @@ import {
   Quaternion,
   Vector2,
   Vector3,
-  type BufferGeometry,
   type Camera,
   type Mesh,
 } from "three";
@@ -33,47 +32,33 @@ export const VSM_JOBS_DYNAMIC = VSM_POOL_CAPACITY * 2;
 export const VSM_JOB_COUNT = VSM_POOL_CAPACITY * 3;
 export const VSM_COUNTER_REQUESTED = 0;
 export const VSM_COUNTER_ALLOCATED = 1;
-export const VSM_COUNTER_EVICTED = 2;
-export const VSM_COUNTER_MISSING = 3;
-export const VSM_COUNTER_ACTIVE = 4;
-export const VSM_COUNTER_EMPTY = 5;
-export const VSM_COUNTER_REUSABLE = 6;
-export const VSM_COUNTER_LEVEL_MISSES = 7;
+export const VSM_COUNTER_MISSING = 2;
+export const VSM_COUNTER_ACTIVE = 3;
+export const VSM_COUNTER_EMPTY = 4;
+export const VSM_COUNTER_REUSABLE = 5;
+export const VSM_COUNTER_LEVEL_MISSES = 6;
 export const VSM_COUNTER_COUNT = VSM_COUNTER_LEVEL_MISSES + VSM_LEVEL_COUNT;
 export const VSM_DYNAMIC_COUNTER_TOTAL = 0;
-export const VSM_DYNAMIC_COUNTER_OVERFLOW = 1;
-export const VSM_DYNAMIC_COUNTER_LEVEL_COUNTS = 2;
+export const VSM_DYNAMIC_COUNTER_LEVEL_COUNTS = 1;
 export const VSM_DYNAMIC_COUNTER_LEVEL_CURSORS =
   VSM_DYNAMIC_COUNTER_LEVEL_COUNTS + VSM_LEVEL_COUNT;
 export const VSM_DYNAMIC_COUNTER_COUNT =
   VSM_DYNAMIC_COUNTER_LEVEL_CURSORS + VSM_LEVEL_COUNT;
 
-export type VSMCasterKind = "static" | "dynamic" | "deformed";
-
-export type VSMGpuInstances = {
-  count: number;
-  radiusMeters: number;
-  geometry?: BufferGeometry;
-  basePositionNode: Node<"vec3">;
-  heightNode: Node<"float">;
-  positionNode: Node<"vec3">;
-  isActiveNode: Node<"bool">;
-};
-
 export type VSMCasterOptions = {
-  type?: "static" | "dynamic";
+  type?: VSMLayerKind;
   depthBias?: number;
   opacityNode?: Node<"float">;
-  gpuInstances?: VSMGpuInstances;
+  positionNode?: Node<"vec3">;
 };
 
 export type VSMCaster = {
   mesh: Mesh;
-  kind: VSMCasterKind;
+  type: VSMLayerKind;
   depthBias: number;
   opacityNode?: Node<"float">;
+  positionNode?: Node<"vec3">;
   alphaTest: number;
-  gpuInstances?: VSMGpuInstances;
   worldMatrix: Matrix4;
   worldBounds: Box3;
 };
@@ -116,15 +101,12 @@ const VSM_LAYER_KINDS: VSMLayerKind[] = ["static", "dynamic"];
 const CAMERA_MOVE_EPSILON_SQUARED = 0.002 ** 2;
 const CAMERA_TURN_EPSILON = 0.0005;
 const CAMERA_TURN_DOT_THRESHOLD = 1 - Math.cos(CAMERA_TURN_EPSILON / 2);
-const getLayerKind = (kind: VSMCasterKind): VSMLayerKind =>
-  kind === "static" ? "static" : "dynamic";
 
 const initialMetadata = new Uint32Array(VSM_POOL_CAPACITY * 4);
 for (let slot = 0; slot < VSM_POOL_CAPACITY; slot++)
   initialMetadata[slot * 4] = VSM_INVALID_PAGE_KEY;
 
 export class VSMContext {
-  readonly casterCounts = { static: 0, dynamic: 0, deformed: 0 };
   readonly changes: VSMChanges = {
     hasSunChanged: true,
     shouldRequestPages: true,
@@ -241,12 +223,11 @@ export class VSMContext {
       previous.softReceiverLevelBias !== vsmSoftReceiverLevelBias.value;
     changes.hasSunChanged = !previous.sunDirection.equals(sunDirection);
     for (const entry of this.casterEntries.values()) {
-      if (entry.kind === "deformed") continue;
       const { mesh, worldMatrix, worldBounds } = entry;
       mesh.updateWorldMatrix(true, false);
       if (worldMatrix.equals(mesh.matrixWorld)) continue;
       worldMatrix.copy(mesh.matrixWorld);
-      if (entry.kind === "dynamic") {
+      if (entry.type === "dynamic") {
         this.versions.dynamic.revision++;
         continue;
       }
@@ -336,20 +317,15 @@ export class VSMContext {
       type = "static",
       depthBias = 0,
       opacityNode,
-      gpuInstances,
+      positionNode,
     } = options;
-    const kind = gpuInstances ? "deformed" : type;
     if (!Number.isFinite(depthBias) || depthBias < 0)
       throw new Error(`Invalid shadow depth bias: ${mesh.name}`);
-    if (
-      gpuInstances &&
-      (!Number.isInteger(gpuInstances.count) ||
-        gpuInstances.count <= 0 ||
-        !Number.isFinite(gpuInstances.radiusMeters) ||
-        gpuInstances.radiusMeters <= 0)
-    )
-      throw new Error(`Invalid shadow gpu instances: ${mesh.name}`);
-    if (kind !== "static" && mesh instanceof BatchedMesh)
+    if (positionNode && type !== "dynamic")
+      throw new Error(
+        `Shadow position node needs a dynamic caster: ${mesh.name}`,
+      );
+    if (type !== "static" && mesh instanceof BatchedMesh)
       throw new Error(`Batched shadow caster must be static: ${mesh.name}`);
 
     const { material } = mesh;
@@ -361,17 +337,16 @@ export class VSMContext {
     const worldBounds = new Box3().setFromObject(mesh);
     this.casterEntries.set(mesh, {
       mesh,
-      kind,
+      type,
       depthBias,
       opacityNode,
+      positionNode,
       alphaTest,
-      gpuInstances,
       worldMatrix: mesh.matrixWorld.clone(),
       worldBounds,
     });
-    if (kind === "static") this.staticBoundsToRedraw.push(worldBounds.clone());
-    this.casterCounts[kind]++;
-    this.versions[getLayerKind(kind)].roster++;
+    if (type === "static") this.staticBoundsToRedraw.push(worldBounds.clone());
+    this.versions[type].roster++;
   }
 
   unregisterCaster(mesh: Mesh) {
@@ -379,15 +354,14 @@ export class VSMContext {
     if (!entry) throw new Error(`Shadow caster not registered: ${mesh.name}`);
 
     this.casterEntries.delete(mesh);
-    if (entry.kind === "static")
+    if (entry.type === "static")
       this.staticBoundsToRedraw.push(entry.worldBounds);
-    this.casterCounts[entry.kind]--;
-    this.versions[getLayerKind(entry.kind)].roster++;
+    this.versions[entry.type].roster++;
   }
 
   setCasterDepthBias(mesh: Mesh, depthBias: number) {
     const entry = this.casterEntries.get(mesh);
-    if (!entry || entry.kind !== "static")
+    if (!entry || entry.type !== "static")
       throw new Error(`Static shadow caster not registered: ${mesh.name}`);
     if (!Number.isFinite(depthBias) || depthBias < 0)
       throw new Error(`Invalid shadow depth bias: ${mesh.name}`);

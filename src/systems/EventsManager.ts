@@ -75,26 +75,15 @@ export type MonitoringSnapshot = {
   sampleRateMs: number;
   sceneTriangles: number;
   grass: GrassMonitoringStats | null;
-  shadowCasters: ShadowCasterCounts | null;
   shadowPages: ShadowPageStats | null;
   device: DeviceMetrics | null;
 };
 
-export type ShadowCasterCounts = {
-  static: number;
-  dynamic: number;
-  deformed: number;
-};
-
 export type ShadowPageStats = {
   requested: number;
-  mapped: number;
   allocated: number;
   dynamic: number;
-  overflow: number;
-  evicted: number;
   missing: number;
-  outsideGrid: number;
 };
 
 export type GrassMonitoringStats = {

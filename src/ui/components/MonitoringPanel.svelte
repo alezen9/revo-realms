@@ -87,7 +87,6 @@
 	{@const device = snapshot.device}
 	{@const gpu = device?.gpu}
 	{@const grass = snapshot.grass}
-	{@const shadowCasters = snapshot.shadowCasters}
 	{@const shadowPages = snapshot.shadowPages}
 	{@const budgetMs = snapshot.frameBudgetMs}
 	{@const frame = snapshot.frame}
@@ -183,29 +182,17 @@
 			</section>
 		{/if}
 
-		{#if shadowCasters}
-			<section>
-				<span class="category">Shadow casters</span>
-				<div class="metrics">
-					<span class="cell"><span class="label">Static</span><span class="value">{integerFormat.format(shadowCasters.static)}</span></span>
-					<span class="cell"><span class="label">Dynamic</span><span class="value">{integerFormat.format(shadowCasters.dynamic)}</span></span>
-					<span class="cell"><span class="label">Deformed</span><span class="value">{integerFormat.format(shadowCasters.deformed)}</span></span>
-				</div>
-			</section>
-		{/if}
-
 		{#if shadowPages}
 			<section>
 				<span class="category">Shadow pages</span>
 				<div class="metrics">
-					<span class="cell"><span class="label">Requested</span><span class="value">{integerFormat.format(shadowPages.requested)}</span></span>
-					<span class="cell"><span class="label">Mapped</span><span class="value">{integerFormat.format(shadowPages.mapped)}</span></span>
-					<span class="cell"><span class="label">Missing</span><span class="value">{integerFormat.format(shadowPages.missing)}</span></span>
-					<span class="cell"><span class="label">Allocated</span><span class="value">{integerFormat.format(shadowPages.allocated)}</span></span>
-					<span class="cell"><span class="label">Evicted</span><span class="value">{integerFormat.format(shadowPages.evicted)}</span></span>
-					<span class="cell"><span class="label">Dynamic</span><span class="value">{integerFormat.format(shadowPages.dynamic)}</span></span>
-					<span class="cell"><span class="label">Overflow</span><span class="value">{integerFormat.format(shadowPages.overflow)}</span></span>
-					<span class="cell"><span class="label">Outside grid</span><span class="value">{integerFormat.format(shadowPages.outsideGrid)}</span></span>
+					<span class="cell"><span class="label">Needed</span><span class="value">{integerFormat.format(shadowPages.requested)}</span></span>
+					<span class="cell">
+						<span class="label">Missing</span>
+						<span class={["value", shadowPages.missing ? "warn" : "good"]}>{integerFormat.format(shadowPages.missing)}</span>
+					</span>
+					<span class="cell"><span class="label">Updated</span><span class="value">{integerFormat.format(shadowPages.allocated)}</span></span>
+					<span class="cell"><span class="label">Per frame</span><span class="value">{integerFormat.format(shadowPages.dynamic)}</span></span>
 				</div>
 			</section>
 		{/if}

@@ -1,4 +1,4 @@
-import { Box3, Mesh, Vector3, type BufferGeometry } from "three";
+import { Box3, Vector3 } from "three";
 import {
   StorageBufferAttribute,
   type ComputeNode,
@@ -9,21 +9,13 @@ import {
   atomicAdd,
   atomicLoad,
   atomicStore,
-  atomicSub,
-  float,
   Fn,
   If,
   instanceIndex,
   Loop,
-  positionGeometry,
-  positionLocal,
   storage,
   uint,
-  uvec2,
   uvec4,
-  vec2,
-  vec3,
-  vec4,
 } from "three/tsl";
 import {
   VSM_COUNTER_ACTIVE,
@@ -32,7 +24,6 @@ import {
   VSM_DYNAMIC_COUNTER_COUNT,
   VSM_DYNAMIC_COUNTER_LEVEL_COUNTS,
   VSM_DYNAMIC_COUNTER_LEVEL_CURSORS,
-  VSM_DYNAMIC_COUNTER_OVERFLOW,
   VSM_DYNAMIC_COUNTER_TOTAL,
   VSM_JOB_COUNT,
   VSM_JOBS_ACTIVE,
@@ -40,32 +31,13 @@ import {
   VSM_POOL_CAPACITY,
   type VSMCaster,
   type VSMContext,
-  type VSMGpuInstances,
 } from "./VSMContext";
-import {
-  VSMDepthPool,
-  type VSMRasterSource,
-  type VSMRasterWork,
-} from "./VSMDepthPool";
-import {
-  VSM_CLUSTER_VERTICES,
-  appendGeometryClusters,
-} from "./VSMClusterBucket";
+import { VSMDepthPool } from "./VSMDepthPool";
 import {
   VSM_LEVEL_COUNT,
-  VSM_PAGE_COUNT,
   VSM_PAGES_PER_LEVEL,
   computePageCoordinate,
-  getLightPosition,
-  getPageCoordinate,
-  getPageKey,
-  getPageSize,
-  getPageTag,
-  getReceiverLevel,
-  getSoftReceiverLevel,
 } from "./VSMMath";
-
-const MAX_INSTANCE_WORK_ITEMS = 262144;
 
 export class VSMDynamicLayer {
   readonly pool: VSMDepthPool;
@@ -73,8 +45,6 @@ export class VSMDynamicLayer {
   private pageJobsNode;
   private sources: VSMCaster[] = [];
   private casterRanges?: DynamicCasterRanges;
-  private instanceCasters = new Map<Mesh, InstanceCaster>();
-  private activeInstanceCasters: InstanceCaster[] = [];
   private prepareNode?: ComputeNode;
   private touchNode?: ComputeNode;
   private jobsNode?: ComputeNode;
@@ -107,8 +77,6 @@ export class VSMDynamicLayer {
 
   collectComputeNodes(nodes: ComputeNode[]) {
     if (this.prepareNode) nodes.push(this.prepareNode);
-    for (const caster of this.activeInstanceCasters)
-      caster.collectComputeNodes(nodes);
     if (this.touchNode && this.jobsNode)
       nodes.push(this.touchNode, this.jobsNode);
     this.pool.collectComputeNodes(nodes);
@@ -116,24 +84,8 @@ export class VSMDynamicLayer {
 
   private rebuildCasters() {
     this.sources = [];
-    this.activeInstanceCasters = [];
-    for (const caster of this.context.casters) {
-      if (caster.gpuInstances) {
-        let instanceCaster = this.instanceCasters.get(caster.mesh);
-        if (!instanceCaster) {
-          instanceCaster = new InstanceCaster(this.context, caster);
-          this.instanceCasters.set(caster.mesh, instanceCaster);
-        }
-        this.activeInstanceCasters.push(instanceCaster);
-        continue;
-      }
-      if (caster.kind === "dynamic") this.sources.push(caster);
-    }
-    this.pool.setInstanceCasters(
-      this.activeInstanceCasters.map((instanceCaster) =>
-        instanceCaster.toRasterCaster(),
-      ),
-    );
+    for (const caster of this.context.casters)
+      if (caster.type === "dynamic") this.sources.push(caster);
     this.casterRanges =
       this.sources.length > 0
         ? new DynamicCasterRanges(this.sources.length)
@@ -281,7 +233,6 @@ export class VSMDynamicLayer {
                 );
             },
           ).Else(() => {
-            atomicAdd(dynamicCounters.element(VSM_DYNAMIC_COUNTER_OVERFLOW), 1);
             context.pageTableNode
               .element(job.x)
               .assign(uvec4(job.y.add(1), 0, 0, context.frame));
@@ -378,225 +329,5 @@ class DynamicCasterRanges {
       }
     }
     this.pageRangesAttribute.needsUpdate = true;
-  }
-}
-
-class InstanceCaster implements VSMRasterSource {
-  readonly hasUvs: boolean;
-  private context: VSMContext;
-  private caster: VSMCaster;
-  private instances: VSMGpuInstances;
-  private clusterCount: number;
-  private workCount;
-  private workItems;
-  private pageTable;
-  private positions;
-  private clusterTriangles;
-  private uvs;
-  private resetNode;
-  private buildNode;
-
-  constructor(context: VSMContext, caster: VSMCaster) {
-    const { gpuInstances: instances, mesh } = caster;
-    if (!instances) throw new Error(`Missing gpu instances: ${mesh.name}`);
-    const geometry: BufferGeometry = instances.geometry ?? mesh.geometry;
-    this.context = context;
-    this.caster = caster;
-    this.instances = instances;
-    this.hasUvs = caster.opacityNode !== undefined;
-    const positions: number[] = [];
-    const uvs: number[] = [];
-    const clusterTriangles: number[] = [];
-    const { clusterCount } = appendGeometryClusters(
-      geometry,
-      {
-        start: 0,
-        count: geometry.index
-          ? geometry.index.count
-          : geometry.getAttribute("position").count,
-      },
-      positions,
-      this.hasUvs ? uvs : undefined,
-      [],
-      clusterTriangles,
-    );
-    this.clusterCount = clusterCount;
-    const positionsAttribute = new StorageBufferAttribute(
-      new Float32Array(positions),
-      4,
-    );
-    const clusterTrianglesAttribute = new StorageBufferAttribute(
-      new Uint32Array(clusterTriangles),
-      1,
-    );
-    const workCountAttribute = new StorageBufferAttribute(
-      new Uint32Array(1),
-      1,
-    );
-    const workItemsAttribute = new StorageBufferAttribute(
-      new Uint32Array(MAX_INSTANCE_WORK_ITEMS * 4),
-      4,
-    );
-    this.positions = storage(
-      positionsAttribute,
-      "vec4",
-      positionsAttribute.count,
-    ).toReadOnly();
-    this.clusterTriangles = storage(
-      clusterTrianglesAttribute,
-      "uint",
-      clusterTrianglesAttribute.count,
-    ).toReadOnly();
-    this.uvs = this.hasUvs
-      ? storage(
-          new StorageBufferAttribute(new Float32Array(uvs), 2),
-          "vec2",
-          uvs.length / 2,
-        ).toReadOnly()
-      : undefined;
-    this.workCount = storage(workCountAttribute, "uint", 1).toReadOnly();
-    this.workItems = storage(
-      workItemsAttribute,
-      "uvec4",
-      MAX_INSTANCE_WORK_ITEMS,
-    ).toReadOnly();
-    this.pageTable = storage(
-      context.pageTable,
-      "uvec4",
-      VSM_PAGE_COUNT,
-    ).toReadOnly();
-    const workCountNode = storage(workCountAttribute, "uint", 1).toAtomic();
-    const workItems = storage(
-      workItemsAttribute,
-      "uvec4",
-      MAX_INSTANCE_WORK_ITEMS,
-    );
-
-    this.resetNode = Fn(() => {
-      atomicStore(workCountNode.element(0), 0);
-    })().compute(1, [1]);
-
-    this.buildNode = Fn(() => {
-      If(instances.isActiveNode, () => {
-        const base = instances.basePositionNode.toVar();
-        const height = instances.heightNode.toVar();
-        const lightBase = getLightPosition(base, context.lightBasis);
-        const lightTop = getLightPosition(
-          base.add(vec3(0, height, 0)),
-          context.lightBasis,
-        );
-        const minimum = lightBase.min(lightTop).sub(instances.radiusMeters);
-        const maximum = lightBase.max(lightTop).add(instances.radiusMeters);
-        const distance = base.sub(context.cameraPosition).length();
-        const reach = height.add(instances.radiusMeters);
-        const firstLevel = getReceiverLevel(distance.sub(reach).max(0));
-        const lastLevel = uint(
-          getSoftReceiverLevel(distance.add(reach), float(1))
-            .floor()
-            .add(1)
-            .min(VSM_LEVEL_COUNT - 1),
-        );
-        Loop(
-          { start: firstLevel, end: lastLevel.add(1), type: "uint" },
-          ({ i: levelIndex }) => {
-            const level = levelIndex.toVar();
-            const pageSize = getPageSize(level);
-            const firstPage = getPageCoordinate(minimum.div(pageSize));
-            const lastPage = getPageCoordinate(maximum.div(pageSize));
-            const pageWidth = lastPage.x.sub(firstPage.x).add(1);
-            const pageCount = pageWidth.mul(lastPage.y.sub(firstPage.y).add(1));
-            Loop(
-              { start: 0, end: pageCount, type: "uint" },
-              ({ i: pageLoopIndex }) => {
-                const pageCoordinate = firstPage.add(
-                  uvec2(
-                    pageLoopIndex.mod(pageWidth),
-                    pageLoopIndex.div(pageWidth),
-                  ),
-                );
-                const pageKey = getPageKey(level, pageCoordinate);
-                const { slot, isResident } = context.resolvePage(
-                  pageKey,
-                  getPageTag(pageCoordinate),
-                );
-                const isActive = context.pageTableNode
-                  .element(pageKey)
-                  .w.equal(context.frame);
-                If(isResident.and(isActive), () => {
-                  const itemIndex = atomicAdd(workCountNode.element(0), 1);
-                  If(itemIndex.lessThan(MAX_INSTANCE_WORK_ITEMS), () => {
-                    workItems
-                      .element(itemIndex)
-                      .assign(uvec4(pageKey, instanceIndex, pageCoordinate));
-                    context.pageTableNode
-                      .element(pageKey)
-                      .assign(
-                        uvec4(slot.add(1), context.frame, 0, context.frame),
-                      );
-                  }).Else(() => {
-                    atomicSub(workCountNode.element(0), 1);
-                  });
-                });
-              },
-            );
-          },
-        );
-      });
-    })().compute(instances.count, [64]);
-    this.resetNode.name = "VSM instance reset";
-    this.buildNode.name = "VSM instance work";
-  }
-
-  collectComputeNodes(nodes: ComputeNode[]) {
-    nodes.push(this.resetNode, this.buildNode);
-  }
-
-  toRasterCaster() {
-    const { alphaTest, opacityNode } = this.caster;
-    return { source: this, alphaTest, opacityNode };
-  }
-
-  getWorkCount() {
-    const count = this.workCount.element(0);
-    return count
-      .lessThan(MAX_INSTANCE_WORK_ITEMS)
-      .select(count, uint(MAX_INSTANCE_WORK_ITEMS))
-      .mul(this.clusterCount);
-  }
-
-  getWork(index: Node<"uint">): VSMRasterWork {
-    const cluster = index.mod(this.clusterCount).toVar();
-    const workItem = this.workItems
-      .element(index.div(this.clusterCount))
-      .toVar();
-    const page = this.pageTable.element(workItem.x).toVar();
-    return {
-      slot: page.z,
-      level: workItem.x.div(VSM_PAGES_PER_LEVEL),
-      pageCoordinate: workItem.zw,
-      firstVertex: cluster.mul(VSM_CLUSTER_VERTICES),
-      triangleCount: page.y
-        .equal(this.context.frame)
-        .select(this.clusterTriangles.element(cluster), uint(0)),
-      instance: workItem.y,
-    };
-  }
-
-  getCorner(work: VSMRasterWork, vertex: Node<"uint">) {
-    const position = this.positions.element(vertex).xyz.toVar();
-    return vec4(
-      this.instances.positionNode.context({
-        overrideNodes: new Map<Node, () => Node>([
-          [instanceIndex, () => work.instance],
-          [positionLocal, () => position],
-          [positionGeometry, () => position],
-        ]),
-      }),
-      this.caster.depthBias,
-    );
-  }
-
-  getUv(vertex: Node<"uint">) {
-    return this.uvs ? this.uvs.element(vertex) : vec2(0);
   }
 }

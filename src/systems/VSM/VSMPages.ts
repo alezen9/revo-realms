@@ -33,12 +33,10 @@ import {
   VSM_COUNTER_ALLOCATED,
   VSM_COUNTER_COUNT,
   VSM_COUNTER_EMPTY,
-  VSM_COUNTER_EVICTED,
   VSM_COUNTER_LEVEL_MISSES,
   VSM_COUNTER_MISSING,
   VSM_COUNTER_REQUESTED,
   VSM_COUNTER_REUSABLE,
-  VSM_DYNAMIC_COUNTER_OVERFLOW,
   VSM_DYNAMIC_COUNTER_TOTAL,
   VSM_INVALID_PAGE_KEY,
   VSM_JOB_COUNT,
@@ -81,13 +79,9 @@ const LIST_SIZE = REUSABLE_LIST_OFFSET + VSM_POOL_CAPACITY;
 export class VSMPages {
   readonly stats: ShadowPageStats = {
     requested: 0,
-    mapped: 0,
     allocated: 0,
     dynamic: 0,
-    overflow: 0,
-    evicted: 0,
     missing: 0,
-    outsideGrid: 0,
   };
   private renderer: WebGPURenderer;
   private context: VSMContext;
@@ -96,16 +90,10 @@ export class VSMPages {
     new Uint32Array(REQUEST_WORD_COUNT),
     1,
   );
-  private requestCounters = new StorageBufferAttribute(new Uint32Array(4), 1);
   private atomicRequestBits = storage(
     this.requestBits,
     "uint",
     REQUEST_WORD_COUNT,
-  ).toAtomic();
-  private atomicRequestCounters = storage(
-    this.requestCounters,
-    "uint",
-    4,
   ).toAtomic();
   private depthNode: TextureNode;
   private softReceiverNode: TextureNode;
@@ -145,7 +133,7 @@ export class VSMPages {
     const { cameraPosition, lightBasis } = context;
     this.depthNode = texture(depthTexture);
     this.softReceiverNode = texture(softReceiverTexture);
-    const { atomicRequestBits, atomicRequestCounters } = this;
+    const { atomicRequestBits } = this;
     const atomicCounters = storage(
       context.counters,
       "uint",
@@ -160,9 +148,6 @@ export class VSMPages {
 
     this.requestResetNode = Fn(() => {
       atomicStore(atomicRequestBits.element(instanceIndex), 0);
-      If(instanceIndex.lessThan(4), () => {
-        atomicStore(atomicRequestCounters.element(instanceIndex), 0);
-      });
     })().compute(REQUEST_WORD_COUNT, [64]);
 
     this.requestNode = Fn(() => {
@@ -408,9 +393,6 @@ export class VSMPages {
             1,
           );
           pageJobsNode.element(activeIndex.add(VSM_JOBS_ACTIVE)).assign(job);
-          If(isEmpty.not(), () => {
-            atomicAdd(atomicCounters.element(VSM_COUNTER_EVICTED), 1);
-          });
         }).Else(() => {
           atomicAdd(atomicCounters.element(VSM_COUNTER_MISSING), 1);
         });
@@ -488,16 +470,10 @@ export class VSMPages {
         );
         If(isPageInWindow(pageCoordinate, windowCenter), () => {
           const key = getPageKey(level, pageCoordinate);
-          const bit = uint(1).shiftLeft(key.mod(32));
-          const previousWord = atomicOr(
+          atomicOr(
             this.atomicRequestBits.element(key.div(32)),
-            bit,
+            uint(1).shiftLeft(key.mod(32)),
           );
-          If(previousWord.bitAnd(bit).equal(0), () => {
-            atomicAdd(this.atomicRequestCounters.element(0), 1);
-          });
-        }).Else(() => {
-          atomicAdd(this.atomicRequestCounters.element(1), 1);
         });
       },
     );
@@ -593,30 +569,12 @@ export class VSMPages {
       const residency = new Uint32Array(
         await this.renderer.getArrayBufferAsync(context.counters),
       );
-      const requests = new Uint32Array(
-        await this.renderer.getArrayBufferAsync(this.requestCounters),
-      );
-      const metadata = new Uint32Array(
-        await this.renderer.getArrayBufferAsync(context.slotMetadata),
-      );
       const dynamicCounters = new Uint32Array(
         await this.renderer.getArrayBufferAsync(context.dynamicCounters),
       );
-      let mapped = 0;
-      for (let slot = 0; slot < VSM_POOL_CAPACITY; slot++) {
-        if (
-          metadata[slot * 4] !== VSM_INVALID_PAGE_KEY &&
-          metadata[slot * 4 + 3] === context.pageGeneration.value
-        )
-          mapped++;
-      }
       this.stats.requested = residency[VSM_COUNTER_REQUESTED];
-      this.stats.outsideGrid = requests[1];
-      this.stats.mapped = mapped;
       this.stats.allocated = residency[VSM_COUNTER_ALLOCATED];
       this.stats.dynamic = dynamicCounters[VSM_DYNAMIC_COUNTER_TOTAL];
-      this.stats.overflow = dynamicCounters[VSM_DYNAMIC_COUNTER_OVERFLOW];
-      this.stats.evicted = residency[VSM_COUNTER_EVICTED];
       let overflow = 0;
       for (let level = 0; level < VSM_LEVEL_COUNT; level++)
         overflow += Math.max(

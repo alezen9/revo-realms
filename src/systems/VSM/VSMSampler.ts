@@ -40,7 +40,6 @@ import {
 
 type FloatNode = Node<"float">;
 type Vec2Node = Node<"vec2">;
-type Vec4Node = Node<"vec4">;
 
 type Receiver = {
   worldY: FloatNode;

@@ -59,20 +59,6 @@ export type VSMRasterWork = {
   instance: Node<"uint">;
 };
 
-export type VSMRasterSource = {
-  readonly hasUvs: boolean;
-  getWorkCount: () => Node<"uint">;
-  getWork: (index: Node<"uint">) => VSMRasterWork;
-  getCorner: (work: VSMRasterWork, vertex: Node<"uint">) => Node<"vec4">;
-  getUv: (vertex: Node<"uint">) => Node<"vec2">;
-};
-
-export type VSMRasterCaster = {
-  source: VSMRasterSource;
-  alphaTest: number;
-  opacityNode?: Node<"float">;
-};
-
 type ClusterCaster = {
   bucket: VSMClusterBucket;
   rasterNode: ComputeNode;
@@ -98,7 +84,6 @@ export class VSMDepthPool {
   private jobCountNode;
   private clearNode;
   private clusterCasters = new Map<string, ClusterCaster>();
-  private instanceRasterNodes: ComputeNode[] = [];
 
   constructor(context: VSMContext, options: VSMDepthPoolOptions) {
     const { kind, capacity, jobs, depthBiasTexels } = options;
@@ -193,17 +178,7 @@ export class VSMDepthPool {
       bucket.collectComputeNodes(nodes);
       nodes.push(rasterNode);
     }
-    for (const rasterNode of this.instanceRasterNodes) nodes.push(rasterNode);
     this.isReady.value = 1;
-  }
-
-  setInstanceCasters(casters: VSMRasterCaster[]) {
-    for (const rasterNode of this.instanceRasterNodes) rasterNode.dispose();
-    this.instanceRasterNodes = [];
-    for (const { source, alphaTest, opacityNode } of casters)
-      this.instanceRasterNodes.push(
-        this.createRasterNode(source, alphaTest, opacityNode),
-      );
   }
 
   loadDepth(slot: Node<"uint">, texel: Node<"uvec2">) {
@@ -295,10 +270,11 @@ export class VSMDepthPool {
   }
 
   private rebuildClusterCasters() {
-    const groups = new Map<string, VSMCaster[]>([["opaque", []]]);
+    const groups = new Map<string, VSMCaster[]>();
     for (const caster of this.context.casters) {
-      if (caster.kind !== this.kind) continue;
-      const key = caster.opacityNode ? caster.mesh.uuid : "opaque";
+      if (caster.type !== this.kind) continue;
+      let key = "opaque";
+      if (caster.opacityNode || caster.positionNode) key = caster.mesh.uuid;
       const casters = groups.get(key);
       if (casters) casters.push(caster);
       else groups.set(key, [caster]);
@@ -314,7 +290,7 @@ export class VSMDepthPool {
       if (clusterCaster?.bucket.setCasters(casters)) continue;
       clusterCaster?.rasterNode.dispose();
       clusterCaster?.bucket.dispose();
-      const { opacityNode, alphaTest } = casters[0] ?? { alphaTest: 0 };
+      const [{ opacityNode, alphaTest }] = casters;
       const bucket = new VSMClusterBucket(
         this.context,
         this.jobs,
@@ -327,7 +303,7 @@ export class VSMDepthPool {
   }
 
   private createRasterNode(
-    source: VSMRasterSource,
+    source: VSMClusterBucket,
     alphaTest: number,
     opacityNode?: Node<"float">,
   ) {
@@ -353,7 +329,7 @@ export class VSMDepthPool {
             .sub(VSM_PAGE_OFFSET)
             .toVar();
           If(localId.x.lessThan(triangleCount), () => {
-            for (let corner = 0; corner < 3; corner++) {
+            Loop({ start: 0, end: 3, type: "uint" }, ({ i: corner }) => {
               const vertex = work.firstVertex
                 .add(localId.x.mul(3))
                 .add(corner)
@@ -376,7 +352,7 @@ export class VSMDepthPool {
                 triangleUvs
                   .element<"vec2">(cornerIndex)
                   .assign(source.getUv(vertex));
-            }
+            });
           });
           workgroupBarrier();
           const pageBase = work.slot.mul(PAGE_TEXEL_COUNT).toVar();

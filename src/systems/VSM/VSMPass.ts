@@ -83,7 +83,6 @@ export class VSMPass {
       this.dynamicLayer.pool,
     );
     monitoringManager.setShadowPageStats(this.pages.stats);
-    monitoringManager.setShadowCasterCounts(this.context.casterCounts);
   }
 
   setCamera(camera: Camera) {

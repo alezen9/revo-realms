@@ -4,7 +4,7 @@ import {
   IndirectStorageBufferAttribute,
   StorageBufferAttribute,
 } from "three/webgpu";
-import type { ComputeNode, Node } from "three/webgpu";
+import type { ComputeNode, Node, StorageBufferNode } from "three/webgpu";
 import {
   atomicAdd,
   atomicStore,
@@ -12,13 +12,16 @@ import {
   If,
   instanceIndex,
   Loop,
+  positionGeometry,
+  positionLocal,
   storage,
   uint,
   uvec2,
   vec2,
+  vec3,
   vec4,
 } from "three/tsl";
-import type { VSMRasterSource, VSMRasterWork } from "./VSMDepthPool";
+import type { VSMRasterWork } from "./VSMDepthPool";
 import {
   VSM_PAGES_PER_LEVEL,
   getLightPosition,
@@ -115,10 +118,25 @@ export const appendGeometryClusters = (
   return { firstCluster, clusterCount };
 };
 
+const getInstanceBatchIds = (caster: VSMCaster) => {
+  const { mesh, positionNode } = caster;
+  const batchIds: (number | undefined)[] = [];
+  if (mesh instanceof BatchedMesh) {
+    for (let id = 0; id < mesh.instanceCount; id++)
+      if (mesh.getVisibleAt(id)) batchIds.push(id);
+    return batchIds;
+  }
+  let instanceCount = 1;
+  if (positionNode) instanceCount = mesh.count;
+  for (let instance = 0; instance < instanceCount; instance++)
+    batchIds.push(undefined);
+  return batchIds;
+};
+
 const getCapacity = (length: number) =>
   2 ** Math.ceil(Math.log2(Math.max(length, 1)));
 
-export class VSMClusterBucket implements VSMRasterSource {
+export class VSMClusterBucket {
   readonly positionsAttribute: StorageBufferAttribute;
   readonly uvsAttribute?: StorageBufferAttribute;
   readonly matricesAttribute: StorageBufferAttribute;
@@ -155,6 +173,7 @@ export class VSMClusterBucket implements VSMRasterSource {
   private batchMatrix = new Matrix4();
   private worldMatrix = new Matrix4();
   private instanceBounds = new Box3();
+  private readonly positionNode?: Node<"vec3">;
 
   constructor(
     context: VSMContext,
@@ -163,6 +182,7 @@ export class VSMClusterBucket implements VSMRasterSource {
     hasUvs: boolean,
   ) {
     const { lightBasis } = context;
+    this.positionNode = casters[0].positionNode;
     this.hasUvs = hasUvs;
     this.jobs = jobs;
     const content = this.collectContent(casters);
@@ -272,31 +292,31 @@ export class VSMClusterBucket implements VSMRasterSource {
     ).toAtomic();
 
     this.boundsNode = Fn(() => {
-      const instanceCluster = instanceClustersNode.element(instanceIndex);
-      const matrixOffset = instanceCluster.x.mul(4);
-      const minimum = clusterBoundsNode.element(instanceCluster.z.mul(2)).xyz;
-      const maximum = clusterBoundsNode.element(
-        instanceCluster.z.mul(2).add(1),
-      ).xyz;
+      const instanceCluster = instanceClustersNode
+        .element(instanceIndex)
+        .toVar();
+      const minimum = clusterBoundsNode
+        .element(instanceCluster.z.mul(2))
+        .xyz.toVar();
+      const maximum = clusterBoundsNode
+        .element(instanceCluster.z.mul(2).add(1))
+        .xyz.toVar();
       const lightBounds = vec4(1e8, 1e8, -1e8, -1e8).toVar();
-      for (let corner = 0; corner < 8; corner++) {
-        const local = vec4(
-          corner & 1 ? maximum.x : minimum.x,
-          corner & 2 ? maximum.y : minimum.y,
-          corner & 4 ? maximum.z : minimum.z,
-          1,
+      Loop({ start: 0, end: 8, type: "uint" }, ({ i: corner }) => {
+        const cornerSide = vec3(
+          corner.bitAnd(1),
+          corner.shiftRight(1).bitAnd(1),
+          corner.shiftRight(2).bitAnd(1),
         );
-        const world = matricesNode
-          .element(matrixOffset)
-          .mul(local.x)
-          .add(matricesNode.element(matrixOffset.add(1)).mul(local.y))
-          .add(matricesNode.element(matrixOffset.add(2)).mul(local.z))
-          .add(matricesNode.element(matrixOffset.add(3))).xyz;
-        const light = getLightPosition(world, lightBasis);
+        const local = maximum.sub(minimum).mul(cornerSide).add(minimum).toVar();
+        const light = getLightPosition(
+          this.getWorldPosition(matricesNode, instanceCluster.x, local),
+          lightBasis,
+        );
         lightBounds.assign(
           vec4(lightBounds.xy.min(light), lightBounds.zw.max(light)),
         );
-      }
+      });
       lightBoundsNode.element(instanceIndex).assign(lightBounds);
     })().compute(1, [64]);
 
@@ -359,16 +379,38 @@ export class VSMClusterBucket implements VSMRasterSource {
   }
 
   getCorner(work: VSMRasterWork, vertex: Node<"uint">) {
-    const matrixOffset = work.instance.mul(4);
-    const translation = this.rasterMatrices.element(matrixOffset.add(3));
-    const local = this.rasterPositions.element(vertex).xyz;
-    const world = this.rasterMatrices
+    const local = this.rasterPositions.element(vertex).xyz.toVar();
+    const depthBias = this.rasterMatrices.element(
+      work.instance.mul(4).add(3),
+    ).w;
+    const world = this.getWorldPosition(
+      this.rasterMatrices,
+      work.instance,
+      local,
+    );
+    return vec4(world, depthBias);
+  }
+
+  private getWorldPosition(
+    matrices: StorageBufferNode<"vec4">,
+    instance: Node<"uint">,
+    local: Node<"vec3">,
+  ) {
+    if (this.positionNode)
+      return this.positionNode.context({
+        overrideNodes: new Map<Node, () => Node>([
+          [instanceIndex, () => instance],
+          [positionLocal, () => local],
+          [positionGeometry, () => local],
+        ]),
+      });
+    const matrixOffset = instance.mul(4);
+    return matrices
       .element(matrixOffset)
       .mul(local.x)
-      .add(this.rasterMatrices.element(matrixOffset.add(1)).mul(local.y))
-      .add(this.rasterMatrices.element(matrixOffset.add(2)).mul(local.z))
-      .add(vec4(translation.xyz, 0)).xyz;
-    return vec4(world, translation.w);
+      .add(matrices.element(matrixOffset.add(1)).mul(local.y))
+      .add(matrices.element(matrixOffset.add(2)).mul(local.z))
+      .add(matrices.element(matrixOffset.add(3))).xyz;
   }
 
   getUv(vertex: Node<"uint">) {
@@ -394,6 +436,7 @@ export class VSMClusterBucket implements VSMRasterSource {
 
   updateMatrices() {
     this.bounds.makeEmpty();
+    if (this.positionNode) this.bounds.setFromObject(this.instances[0].mesh);
     for (let index = 0; index < this.instances.length; index++) {
       const { mesh, batchInstanceId, depthBias } = this.instances[index];
       mesh.updateWorldMatrix(true, false);
@@ -404,6 +447,7 @@ export class VSMClusterBucket implements VSMRasterSource {
       }
       this.matrixValues.set(this.worldMatrix.elements, index * 16);
       this.matrixValues[index * 16 + 15] = depthBias;
+      if (this.positionNode) continue;
       const geometry = mesh.geometry;
       if (!geometry.boundingBox) geometry.computeBoundingBox();
       if (geometry.boundingBox)
@@ -418,7 +462,7 @@ export class VSMClusterBucket implements VSMRasterSource {
   }
 
   collectComputeNodes(nodes: ComputeNode[]) {
-    if (this.hasDirtyBounds) nodes.push(this.boundsNode);
+    if (this.hasDirtyBounds || this.positionNode) nodes.push(this.boundsNode);
     nodes.push(this.resetNode, this.buildNode);
     this.hasDirtyBounds = false;
   }
@@ -458,12 +502,7 @@ export class VSMClusterBucket implements VSMRasterSource {
     const range = { start: 0, count: 0 };
     for (const caster of casters) {
       const { mesh } = caster;
-      const batchIds: (number | undefined)[] = [];
-      if (mesh instanceof BatchedMesh) {
-        for (let id = 0; id < mesh.instanceCount; id++)
-          if (mesh.getVisibleAt(id)) batchIds.push(id);
-      } else batchIds.push(undefined);
-      for (const batchInstanceId of batchIds) {
+      for (const batchInstanceId of getInstanceBatchIds(caster)) {
         const geometryId =
           mesh instanceof BatchedMesh && batchInstanceId !== undefined
             ? mesh.getGeometryIdAt(batchInstanceId)
