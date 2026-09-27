@@ -111,6 +111,25 @@ type PreviousFrame = {
 
 const VSM_LAYER_KINDS: VSMLayerKind[] = ["static", "dynamic"];
 
+const CAMERA_MOVE_EPSILON = 0.002;
+const CAMERA_TURN_EPSILON = 0.0005;
+const ROTATION_ELEMENTS = [0, 1, 2, 4, 5, 6, 8, 9, 10];
+
+const hasCameraMoved = (previous: Matrix4, current: Matrix4) => {
+  const { elements: before } = previous;
+  const { elements: after } = current;
+  for (const index of ROTATION_ELEMENTS)
+    if (Math.abs(after[index] - before[index]) > CAMERA_TURN_EPSILON)
+      return true;
+  return (
+    Math.hypot(
+      after[12] - before[12],
+      after[13] - before[13],
+      after[14] - before[14],
+    ) > CAMERA_MOVE_EPSILON
+  );
+};
+
 const getLayerKind = (kind: VSMCasterKind): VSMLayerKind =>
   kind === "static" ? "static" : "dynamic";
 
@@ -218,7 +237,7 @@ export class VSMContext {
     camera.getWorldPosition(this.cameraWorldPosition);
     const hasViewChanged =
       camera !== previous.camera ||
-      !previous.cameraMatrix.equals(camera.matrixWorld) ||
+      hasCameraMoved(previous.cameraMatrix, camera.matrixWorld) ||
       !previous.projectionMatrix.equals(camera.projectionMatrix) ||
       !previous.drawingBufferSize.equals(this.drawingBufferSize);
     const hasLevelBiasChanged =
@@ -257,7 +276,7 @@ export class VSMContext {
       changes.dynamic.hasRosterChanged;
 
     previous.camera = camera;
-    previous.cameraMatrix.copy(camera.matrixWorld);
+    if (hasViewChanged) previous.cameraMatrix.copy(camera.matrixWorld);
     previous.projectionMatrix.copy(camera.projectionMatrix);
     previous.drawingBufferSize.copy(this.drawingBufferSize);
     previous.sunDirection.copy(sunDirection);
