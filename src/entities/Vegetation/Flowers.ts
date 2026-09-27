@@ -572,5 +572,6 @@ class FlowerMaterial extends MeshBasicNodeMaterial {
     // Opacity
     this.opacityNode = flower.a;
     this.alphaTest = 0.15;
+    this.alphaToCoverage = true;
   }
 }

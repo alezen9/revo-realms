@@ -41,6 +41,7 @@ class PineTreeCanopyMaterial extends VSMReceiverLambertMaterial {
     this.colorNode = diffuse.rgb.mul(uniforms.uCanopyDiffuseScale);
     this.opacityNode = diffuse.a;
     this.alphaTest = 0.35;
+    this.alphaToCoverage = true;
 
     const random = uv().x.mul(uv().y).mul(4);
     const profile = windWeight.mul(windWeight);
