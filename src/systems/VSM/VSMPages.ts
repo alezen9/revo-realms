@@ -438,12 +438,10 @@ export class VSMPages {
     const worldPosition = context.cameraWorldMatrix.mul(
       vec4(viewPosition, 1),
     ).xyz;
-    const isSoftReceiver = textureLoad(this.softReceiverNode, pixel)
-      .level(uint(0))
-      .r.greaterThan(0.5);
+    const softness = textureLoad(this.softReceiverNode, pixel).level(uint(0)).r;
     return {
       isValid: isInside.and(depth.lessThan(1)),
-      level: getReceiverLevel(viewPosition.length(), isSoftReceiver),
+      level: getReceiverLevel(viewPosition.length(), softness),
       lightPosition: getLightPosition(worldPosition, context.lightBasis),
     };
   }

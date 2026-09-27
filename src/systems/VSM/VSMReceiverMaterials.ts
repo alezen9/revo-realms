@@ -5,6 +5,7 @@ import {
   PhongLightingModel,
   PhysicalLightingModel,
   type LightingModel,
+  type Node,
 } from "three/webgpu";
 import { mrt, vec3, vec4 } from "three/tsl";
 
@@ -45,9 +46,21 @@ class DirectSunPhongLightingModel extends PhongLightingModel {
 }
 
 export class VSMReceiverLambertMaterial extends MeshLambertNodeMaterial {
+  softShadowNode?: Node<"float">;
+  extraDirectSun?: Node<"vec3">;
+  declare emissiveNode: Node<"vec3"> | null;
+
   setupLightingModel() {
     const lightingModel = new DirectSunPhongLightingModel();
-    this.mrtNode = mrt({ directSun: vec4(lightingModel.directSun, 1) });
+    const directSun = vec4(
+      this.extraDirectSun
+        ? lightingModel.directSun.add(this.extraDirectSun)
+        : lightingModel.directSun,
+      1,
+    );
+    this.mrtNode = this.softShadowNode
+      ? mrt({ directSun, softShadow: vec4(this.softShadowNode) })
+      : mrt({ directSun });
     return lightingModel;
   }
 }

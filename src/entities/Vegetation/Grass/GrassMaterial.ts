@@ -7,7 +7,6 @@ import {
   instanceIndex,
   mix,
   mrt,
-  saturate,
   sin,
   smoothstep,
   uv,
@@ -16,9 +15,14 @@ import {
   vec4,
 } from "three/tsl";
 import { SpriteNodeMaterial } from "three/webgpu";
-import { lightingManager } from "../../../systems";
 import { config, uniforms } from "./config";
 import type { GrassCompute } from "./GrassCompute";
+import {
+  getGrassAlbedo,
+  getGrassColor,
+  getGrassLight,
+  shadeGrassSurface,
+} from "./GrassShading";
 import {
   getBladeLocalOffset,
   getBend,
@@ -142,41 +146,12 @@ export class GrassMaterial extends SpriteNodeMaterial {
       .mul(nearDetailMask);
 
     // COLOR
-    const colorVariation = mix(
-      1,
-      positionNoise,
-      uniforms.uColorVariationStrength,
-    );
-
-    const greenColor = mix(
-      uniforms.uBaseColorDark,
-      uniforms.uBaseColor,
-      colorVariation,
-    );
-
-    const rustMask = positionNoise
-      .mul(float(1).sub(positionNoise))
-      .mul(4)
-      .mul(uniforms.uRustVariationStrength);
-
-    const warmMask = positionNoise
-      .sub(0.6)
-      .mul(2.5)
-      .clamp()
-      .mul(uniforms.uWarmVariationStrength);
-
-    const variedColor = mix(
-      mix(greenColor, uniforms.uRustColor, rustMask),
-      uniforms.uWarmColor,
-      warmMask,
-    );
+    const variedColor = getGrassColor(positionNoise);
 
     // LIGHTING
     const lightingAngle = bladeHash.mul(53.3).fract().mul(TWO_PI);
 
     const flatNormal = vec3(cos(lightingAngle), 0, sin(lightingAngle));
-
-    const lightDirection = lightingManager.uSunDir.negate();
 
     const viewOffset = cameraPosition.sub(worldPosition);
     const viewDirection = viewOffset.normalize();
@@ -204,51 +179,28 @@ export class GrassMaterial extends SpriteNodeMaterial {
       uniforms.uFluffiness,
     ).normalize();
 
-    const signedNdotL = lightingNormal.dot(lightDirection);
-
-    const twoSidedNdotL = signedNdotL.abs();
-
-    const grazing = float(1).sub(
-      lightingNormal.dot(viewDirection).abs().clamp(),
-    );
-
-    const backlight = saturate(signedNdotL.negate());
-
-    const viewSunAlignment = viewDirectionXZ
-      .dot(lightingManager.uSunDirXZ)
-      .mul(0.5)
-      .add(0.5)
-      .clamp();
-
-    const diffuseFacing = mix(0.65, twoSidedNdotL, uniforms.uDiffuseContrast);
-
-    const sunDiffuse = lightingManager.uSunRadiance.mul(
-      mix(0.35, 1, diffuseFacing),
-    );
-
-    const skyFacing = mix(
-      bladeHeight.mul(0.5),
-      lightingNormal.y.mul(0.5).add(0.5),
-      uniforms.uFluffiness,
-    );
-
-    const hemisphereLight = mix(
-      lightingManager.uHemiGroundColor,
-      lightingManager.uHemiSkyColor,
-      skyFacing,
-    ).mul(lightingManager.uHemiIntensity);
-
-    const sceneLight = hemisphereLight
-      .add(sunDiffuse)
-      .mul(uniforms.uLightExposure);
+    const light = getGrassLight({
+      normal: lightingNormal,
+      viewDirection,
+      viewDirectionXZ,
+      height: bladeHeight,
+    });
 
     // PACK VARYINGS
-    const bladeColor = varying(variedColor);
+    const bladeSurface = varying(
+      vec4(variedColor, scaleY.div(uniforms.uBladeMaxScale).clamp()),
+    );
+    const bladeColor = bladeSurface.rgb;
 
-    const lightingGrazing = varying(vec4(sceneLight, grazing));
+    const lightingGrazing = varying(vec4(light.sceneLight, light.grazing));
 
     const viewLightingDetail = varying(
-      vec4(backlight, viewSunAlignment, nearDetailOcclusionValue, skyFacing),
+      vec4(
+        light.backlight,
+        light.viewSunAlignment,
+        nearDetailOcclusionValue,
+        light.skyFacing,
+      ),
     );
 
     const sceneLighting = lightingGrazing.rgb;
@@ -276,53 +228,23 @@ export class GrassMaterial extends SpriteNodeMaterial {
 
     const detailOcclusion = float(1).sub(occlusionAmount);
 
-    const tipColorFactor = smoothstep(0.25, 1, bladeHeight).mul(
-      uniforms.uColorMixFactor,
-    );
+    const shaded = shadeGrassSurface({
+      albedo: getGrassAlbedo(bladeColor, bladeHeight),
+      occlusion: detailOcclusion,
+      height: bladeHeight,
+      sceneLight: sceneLighting,
+      skyFacing: bladeSkyFacing,
+      grazing: bladeGrazing,
+      backlight: bladeBacklight,
+      viewSunAlignment: bladeViewSunAlignment,
+    });
 
-    const albedo = mix(bladeColor, uniforms.uTipColor, tipColorFactor);
-
-    // SHEEN / TRANSMISSION
-    const grazingSheen = bladeGrazing
-      .mul(bladeGrazing)
-      .mul(mix(0.25, 1, bladeViewSunAlignment))
-      .mul(uniforms.uHighlightStrength);
-
-    const transmission = bladeViewSunAlignment
-      .mul(mix(0.35, 1, bladeBacklight))
-      .mul(uniforms.uBacklightStrength);
-
-    const detailStrength = smoothstep(0.1, 0.9, bladeHeight);
-
-    const diffuseColor = albedo.mul(detailOcclusion).mul(sceneLighting);
-
-    const sheenColor = lightingManager.uSunRadiance.mul(
-      grazingSheen.mul(detailStrength),
-    );
-
-    const transmittedColor = mix(albedo, lightingManager.uSunColor, 0.55).mul(
-      transmission.mul(detailStrength),
-    );
-
-    const shadedColor = diffuseColor.add(sheenColor).add(transmittedColor);
-
-    const bladeHemisphereLight = mix(
-      lightingManager.uHemiGroundColor,
-      lightingManager.uHemiSkyColor,
-      bladeSkyFacing,
-    ).mul(lightingManager.uHemiIntensity);
-
-    const sunLighting = sceneLighting.sub(
-      bladeHemisphereLight.mul(uniforms.uLightExposure),
-    );
-    const directSun = albedo
-      .mul(detailOcclusion)
-      .mul(sunLighting)
-      .add(sheenColor)
-      .add(transmittedColor);
     this.mrtNode = mrt({
-      directSun: vec4(mix(directSun, vec3(0), uniforms.uLodDebugEnabled), 1),
-      softShadow: vec4(1),
+      directSun: vec4(
+        mix(shaded.directSun, vec3(0), uniforms.uLodDebugEnabled),
+        1,
+      ),
+      softShadow: vec4(bladeSurface.a),
     });
 
     // LOD DEBUG
@@ -330,6 +252,10 @@ export class GrassMaterial extends SpriteNodeMaterial {
 
     const lodDebugColor = uniforms.uLodDebugColors.element(lodIndex);
 
-    this.colorNode = mix(shadedColor, lodDebugColor, uniforms.uLodDebugEnabled);
+    this.colorNode = mix(
+      shaded.color,
+      lodDebugColor,
+      uniforms.uLodDebugEnabled,
+    );
   }
 }

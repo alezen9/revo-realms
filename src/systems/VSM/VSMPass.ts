@@ -207,8 +207,8 @@ export class VSMPass {
   private getDebugPage() {
     const { depth, worldPosition, viewDistance } =
       this.sampler.getReceiver(screenUV);
-    const isSoftReceiver = this.sampler.isSoftReceiver(screenUV);
-    const level = getReceiverLevel(viewDistance, isSoftReceiver);
+    const softness = this.sampler.getSoftness(screenUV);
+    const level = getReceiverLevel(viewDistance, softness);
     const pagePosition = getLightPosition(
       worldPosition,
       this.context.lightBasis,

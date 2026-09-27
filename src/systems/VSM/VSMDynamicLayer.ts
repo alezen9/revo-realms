@@ -10,7 +10,7 @@ import {
   atomicLoad,
   atomicStore,
   atomicSub,
-  bool,
+  float,
   Fn,
   If,
   instanceIndex,
@@ -489,9 +489,9 @@ class InstanceCaster implements VSMRasterSource {
         const reach = height.add(instances.radiusMeters);
         const firstLevel = getReceiverLevel(
           distance.sub(reach).max(0),
-          bool(false),
+          float(0),
         );
-        const lastLevel = getReceiverLevel(distance.add(reach), bool(true));
+        const lastLevel = getReceiverLevel(distance.add(reach), float(1));
         Loop(
           { start: firstLevel, end: lastLevel.add(1), type: "uint" },
           ({ i: levelIndex }) => {

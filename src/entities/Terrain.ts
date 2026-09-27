@@ -1,9 +1,12 @@
 import {
+  cameraPosition,
   float,
   Fn,
   If,
   mix,
   normalMap,
+  normalWorld,
+  normalWorldGeometry,
   positionWorld,
   smoothstep,
   texture,
@@ -11,6 +14,7 @@ import {
   varying,
   vec2,
   vec3,
+  vec4,
 } from "three/tsl";
 import {
   Color,
@@ -33,11 +37,20 @@ import {
 import { type State } from "../Game";
 import { realmConfig } from "../realm/config";
 import { VSMReceiverLambertMaterial } from "../systems/VSM/VSMReceiverMaterials";
+import {
+  getGrassAlbedo,
+  getGrassColor,
+  getGrassLight,
+  getGrassNoiseUv,
+  shadeGrassSurface,
+} from "./Vegetation/Grass/GrassShading";
+import { uniforms as grassUniforms } from "./Vegetation/Grass/config";
 import { RevoColliderType } from "../types";
 import {
   assetManager,
   debugManager,
   eventsManager,
+  lightingManager,
   physicsManager,
   sceneManager,
   rendererManager,
@@ -46,13 +59,21 @@ import { gameTime } from "../utils/GameTime";
 import { srgbColorTarget } from "../utils/TweakpaneColor";
 import { TSLUtils } from "../utils/TSLUtils";
 
+const BED_WIDTH_SAMPLES = [-1, 0, 1];
+
 const uniforms = {
-  uGrassColor: uniform(new Color(0.59, 0.64, 0.43).convertSRGBToLinear()),
+  uGrassBedIntensity: uniform(1),
+  uGrassBedHeight: uniform(0.7),
+  uGrassBedNormalStrength: uniform(0.75),
+  uGrassBlendStart: uniform(0.05),
+  uGrassBlendEnd: uniform(0.35),
+  uGrassBedTint: uniform(new Color(0.25, 0.27, 0.18).convertSRGBToLinear()),
+  uGrassBedTintAmount: uniform(0.75),
   uUnderwaterSandColor: uniform(
     new Color(0.95, 0.87, 0.68).convertSRGBToLinear(),
   ),
   uSandColor: uniform(new Color(0.9, 0.82, 0.65).convertSRGBToLinear()),
-  uGrassNormalScale: uniform(3.5),
+  uGrassNormalScale: uniform(1),
   uSandNormalScale: uniform(1),
   uWaterNormalScale: uniform(0.35),
   uCausticsHighlightScale: uniform(0.4),
@@ -124,14 +145,6 @@ class TerrainMaterial extends VSMReceiverLambertMaterial {
   private createMaterial() {
     const worldUv = TSLUtils.computeMapUvByPosition(positionWorld.xz);
 
-    const grassNoiseUv = TSLUtils.computeAtlasUv(
-      vec2(0.5),
-      vec2(0, 0),
-      worldUv.mul(6).fract(),
-    );
-
-    const grassNoise = texture(assetManager.resources.noiseAtlas, grassNoiseUv);
-
     const mapUv = varying(worldUv);
 
     const terrainMapSample = texture(assetManager.resources.terrainMaps, mapUv);
@@ -139,11 +152,13 @@ class TerrainMaterial extends VSMReceiverLambertMaterial {
     // LAND
     const grassMask = terrainMapSample.g;
 
-    const grassBlend = smoothstep(0.05, 0.35, grassMask);
+    const grassBlend = smoothstep(
+      uniforms.uGrassBlendStart,
+      uniforms.uGrassBlendEnd,
+      grassMask,
+    );
 
-    const grassColor = uniforms.uGrassColor.mul(mix(0.86, 1.12, grassNoise.b));
-
-    const landColor = mix(uniforms.uSandColor, grassColor, grassBlend);
+    this.softShadowNode = grassBlend.mul(grassMask.sub(0.25).div(0.75).clamp());
 
     // WATER
     const waterMask = terrainMapSample.b;
@@ -167,9 +182,7 @@ class TerrainMaterial extends VSMReceiverLambertMaterial {
 
     const waterColor = waterBaseColor.add(causticsColor);
 
-    const surfaceColor = mix(landColor, waterColor, waterMask);
-
-    this.colorNode = surfaceColor;
+    const surfaceColor = mix(uniforms.uSandColor, waterColor, waterMask);
 
     // NORMAL
     const normalAoSample = texture(
@@ -192,6 +205,81 @@ class TerrainMaterial extends VSMReceiverLambertMaterial {
     this.normalNode = normalMap(normalAoSample.rgb, normalScale);
 
     this.aoNode = normalAoSample.a;
+
+    // GRASS BED
+    const bedWeight = grassBlend.mul(float(1).sub(waterMask));
+
+    const bedHeight = uniforms.uGrassBedHeight;
+
+    const grassColorNoise = texture(
+      assetManager.resources.noiseAtlas,
+      getGrassNoiseUv(positionWorld.xz),
+    ).g;
+
+    const bedAlbedo = mix(
+      getGrassAlbedo(getGrassColor(grassColorNoise), bedHeight),
+      uniforms.uGrassBedTint,
+      uniforms.uGrassBedTintAmount,
+    ).mul(uniforms.uGrassBedIntensity);
+
+    const viewOffset = cameraPosition.sub(positionWorld);
+    const viewDirection = viewOffset.normalize();
+    const viewDirectionXZ = viewOffset.xz.normalize();
+
+    const viewSide = vec3(viewDirectionXZ.y, 0, viewDirectionXZ.x.negate());
+
+    const bedNormal = vec3(0, bedHeight.add(0.5), 0);
+
+    let sceneLight: Node<"vec3"> = vec3(0);
+    let skyFacing: Node<"float"> = float(0);
+    let grazing: Node<"float"> = float(0);
+    let backlight: Node<"float"> = float(0);
+    let viewSunAlignment: Node<"float"> = float(0);
+    for (const widthCoordinate of BED_WIDTH_SAMPLES) {
+      const light = getGrassLight({
+        normal: bedNormal
+          .add(viewSide.mul(grassUniforms.uWidthRoundness.mul(widthCoordinate)))
+          .normalize(),
+        viewDirection,
+        viewDirectionXZ,
+        height: bedHeight,
+      });
+      sceneLight = sceneLight.add(light.sceneLight);
+      skyFacing = skyFacing.add(light.skyFacing);
+      grazing = grazing.add(light.grazing);
+      backlight = backlight.add(light.backlight);
+      viewSunAlignment = viewSunAlignment.add(light.viewSunAlignment);
+    }
+    const sampleWeight = 1 / BED_WIDTH_SAMPLES.length;
+
+    const bed = shadeGrassSurface({
+      albedo: bedAlbedo,
+      occlusion: float(1),
+      height: bedHeight,
+      sceneLight: sceneLight.mul(sampleWeight),
+      skyFacing: skyFacing.mul(sampleWeight),
+      grazing: grazing.mul(sampleWeight),
+      backlight: backlight.mul(sampleWeight),
+      viewSunAlignment: viewSunAlignment.mul(sampleWeight),
+    });
+
+    this.colorNode = surfaceColor.mul(float(1).sub(bedWeight));
+
+    const sunDirection = lightingManager.uSunDir.negate();
+
+    const bedRelief = mix(
+      1,
+      normalWorld
+        .dot(sunDirection)
+        .max(0)
+        .div(normalWorldGeometry.dot(sunDirection).max(0.05))
+        .clamp(0, 2),
+      uniforms.uGrassBedNormalStrength,
+    ).mul(bedWeight);
+
+    this.emissiveNode = bed.color.mul(bedRelief);
+
+    this.extraDirectSun = bed.directSun.mul(bedRelief);
   }
 
   private debugTerrain() {
@@ -204,14 +292,56 @@ class TerrainMaterial extends VSMReceiverLambertMaterial {
       title: "Color",
     });
 
-    color.addBinding(srgbColorTarget(uniforms.uSandColor.value), "value", {
-      label: "Sand",
+    color.addBinding(uniforms.uGrassBedHeight, "value", {
+      label: "Grass bed height",
+      min: 0,
+      max: 1,
+      step: 0.01,
+    });
+
+    color.addBinding(uniforms.uGrassBedNormalStrength, "value", {
+      label: "Grass bed normal strength",
+      min: 0,
+      max: 1,
+      step: 0.01,
+    });
+
+    color.addBinding(uniforms.uGrassBlendStart, "value", {
+      label: "Grass blend start",
+      min: 0,
+      max: 1,
+      step: 0.01,
+    });
+
+    color.addBinding(uniforms.uGrassBlendEnd, "value", {
+      label: "Grass blend end",
+      min: 0,
+      max: 1,
+      step: 0.01,
+    });
+
+    color.addBinding(uniforms.uGrassBedIntensity, "value", {
+      label: "Grass bed intensity",
+      min: 0,
+      max: 3,
+      step: 0.01,
+    });
+
+    color.addBinding(srgbColorTarget(uniforms.uGrassBedTint.value), "value", {
+      label: "Grass bed tint",
       view: "color",
       color: { type: "float" },
     });
 
-    color.addBinding(srgbColorTarget(uniforms.uGrassColor.value), "value", {
-      label: "Grass",
+    color.addBinding(uniforms.uGrassBedTintAmount, "value", {
+      label: "Grass bed tint amount",
+      min: 0,
+      max: 1,
+      step: 0.01,
+    });
+
+    color.addBinding(srgbColorTarget(uniforms.uSandColor.value), "value", {
+      label: "Sand",
       view: "color",
       color: { type: "float" },
     });

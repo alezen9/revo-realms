@@ -45,12 +45,12 @@ export const getLightPosition = (
 
 export const getReceiverLevel = (
   viewDistance: Node<"float">,
-  isSoftReceiver: Node<"bool">,
+  softness: Node<"float">,
 ) =>
   uint(
     ceil(log2(viewDistance.max(0.0001)))
       .add(vsmResolutionBias)
-      .add(isSoftReceiver.select(vsmSoftReceiverLevelBias, float(0)))
+      .add(softness.mul(vsmSoftReceiverLevelBias).round())
       .sub(VSM_FIRST_LEVEL)
       .clamp(0, VSM_LEVEL_COUNT - 1),
   );

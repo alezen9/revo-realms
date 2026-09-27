@@ -33,6 +33,7 @@ import {
 import { IndirectStorageBufferAttribute, type Node } from "three/webgpu";
 import { assetManager, sceneManager, windManager } from "../../../systems";
 import { TSLUtils } from "../../../utils/TSLUtils";
+import { getGrassNoiseUv } from "./GrassShading";
 import { gameDeltaTime, gameTime } from "../../../utils/GameTime";
 import { config, uniforms } from "./config";
 import {
@@ -167,6 +168,10 @@ export class GrassCompute {
 
         const noiseUv = normalizedBladeOffset.abs().fract();
         const noiseSample = texture(assetManager.resources.noiseAtlas, noiseUv);
+        const colorNoise = texture(
+          assetManager.resources.noiseAtlas,
+          getGrassNoiseUv(bladeOffset.add(uniforms.uPlayerPosition.xz)),
+        ).g;
 
         const scaleNoise = noiseSample.b;
         const shapedScaleNoise = scaleNoise.mul(scaleNoise);
@@ -184,7 +189,7 @@ export class GrassCompute {
         bladeState.assign(setOriginalScale(bladeState, randomScale));
         bladeState.assign(setVisibility(bladeState, 0));
         bladeState.assign(setBend(bladeState, vec2(0)));
-        bladeState.assign(setPositionNoise(bladeState, noiseSample.g));
+        bladeState.assign(setPositionNoise(bladeState, colorNoise));
       },
     );
   })().compute(config.CLUMP_COUNT, [config.WORKGROUP_SIZE]);
@@ -274,6 +279,21 @@ export class GrassCompute {
       clumpState.z = terrainGrassScale;
       clumpState.assign(setYOffset(clumpState, terrainYOffset));
       clumpState.assign(setTerrainCacheValidity(clumpState, 1));
+
+      const colorNoise = texture(
+        assetManager.resources.noiseAtlas,
+        getGrassNoiseUv(clumpWorldPos.xz),
+      ).g.toVar();
+
+      Loop(
+        { start: 0, end: config.BLADES_PER_CLUMP, type: "uint" },
+        ({ i: bladeSlot }) => {
+          const bladeState = this.bladeState.element(
+            bladeSlot.mul(config.CLUMP_COUNT).add(instanceIndex),
+          );
+          bladeState.assign(setPositionNoise(bladeState, colorNoise));
+        },
+      );
     });
 
     const hasGrass = step(

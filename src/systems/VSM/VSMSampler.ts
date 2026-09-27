@@ -1,6 +1,5 @@
 import type { Node } from "three/webgpu";
 import {
-  bool,
   cos,
   dFdx,
   dFdy,
@@ -72,6 +71,7 @@ const BLOCKER_DIRECTIONS = [
 const MAX_RECEIVER_SLOPE = 4;
 const GOLDEN_ANGLE = 2.399963;
 const SURFACE_SPLIT_RATIO = 0.01;
+const SOFT_RECEIVER_THRESHOLD = 0.02;
 
 const getReceiverSlope = (lightPosition: Vec2Node, worldHeight: FloatNode) => {
   const lightDx = dFdx(lightPosition);
@@ -125,23 +125,24 @@ export class VSMSampler {
     const receiverDepth = depth.toVar();
     const receiverWorldPosition = worldPosition.toVar();
     const receiverViewDistance = viewDistance.toVar();
+    const softness = this.getSoftness(uv).toVar();
     const visibility = float(1).toVar();
-    If(this.isSoftReceiver(uv), () => {
-      visibility.assign(this.resolveSoftSurfaces(uv));
+    If(softness.greaterThan(SOFT_RECEIVER_THRESHOLD), () => {
+      visibility.assign(this.resolveSoftSurfaces(uv, softness));
     }).Else(() => {
       visibility.assign(
         this.computeVisibility(
           receiverWorldPosition,
           receiverDepth,
           receiverViewDistance,
-          bool(false),
+          float(0),
         ),
       );
     });
     return visibility;
   });
 
-  private resolveSoftSurfaces(uv: Vec2Node) {
+  private resolveSoftSurfaces(uv: Vec2Node, softness: FloatNode) {
     const pixel = uvec2(uv.mul(screenSize).floor()).toVar();
     const depths: FloatNode[] = [];
     for (let sampleIndex = 0; sampleIndex < SCENE_PASS_SAMPLES; sampleIndex++)
@@ -171,7 +172,7 @@ export class VSMSampler {
       nearWorldPosition,
       nearDepth,
       nearViewDistance,
-      bool(true),
+      softness,
     ).toVar();
     If(
       farViewDistance
@@ -185,7 +186,7 @@ export class VSMSampler {
               farWorldPosition,
               farDepth,
               farViewDistance,
-              bool(true),
+              softness,
             ),
             farCoverage,
           ),
@@ -211,18 +212,21 @@ export class VSMSampler {
     return { depth, worldPosition, viewDistance: viewPosition.length() };
   }
 
-  isSoftReceiver(uv: Vec2Node) {
-    return this.scene.softShadow.sample(uv).r.greaterThan(0.5);
+  getSoftness(uv: Vec2Node) {
+    return this.scene.softShadow.sample(uv).r;
   }
 
   private computeVisibility(
     worldPosition: Node<"vec3">,
     sceneDepth: FloatNode,
     viewDistance: FloatNode,
-    isSoftReceiver: Node<"bool">,
+    softness: FloatNode,
   ) {
     const { sunDirection } = this.context;
-    const level = getReceiverLevel(viewDistance, isSoftReceiver).toVar();
+    const isSoftReceiver = softness
+      .greaterThan(SOFT_RECEIVER_THRESHOLD)
+      .toVar();
+    const level = getReceiverLevel(viewDistance, softness).toVar();
     const pageSize = getPageSize(level).toVar();
     const lightPosition = getLightPosition(
       worldPosition,
@@ -231,7 +235,7 @@ export class VSMSampler {
     const pagePosition = lightPosition.div(pageSize).toVar();
     const receiver = {
       worldY: worldPosition.y.toVar(),
-      texelMeters: getPageSize(getReceiverLevel(viewDistance, bool(false)))
+      texelMeters: getPageSize(getReceiverLevel(viewDistance, float(0)))
         .div(VSM_PAGE_TEXELS)
         .toVar(),
       heightPerPage: isSoftReceiver
