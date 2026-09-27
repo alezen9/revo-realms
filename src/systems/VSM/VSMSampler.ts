@@ -1,4 +1,4 @@
-import type { Node, UniformNode } from "three/webgpu";
+import type { Node } from "three/webgpu";
 import {
   bool,
   cos,
@@ -26,7 +26,6 @@ import {
 } from "../RendererManager/ScenePass";
 import type { VSMContext } from "./VSMContext";
 import type { VSMDepthPool } from "./VSMDepthPool";
-import type { VSMDynamicLayer } from "./VSMDynamicLayer";
 import {
   VSM_PAGE_TEXELS,
   getLightPosition,
@@ -40,24 +39,10 @@ import {
 type FloatNode = Node<"float">;
 type Vec2Node = Node<"vec2">;
 type Vec4Node = Node<"vec4">;
-type FloatUniform = UniformNode<"float", number>;
-
-export type VSMDepthLayer = {
-  readonly minimumY: FloatUniform;
-  readonly maximumY: FloatUniform;
-  readonly isReady: FloatUniform;
-  readonly depthBiasTexels: number;
-  loadDepth: (slot: Node<"uint">, texel: Node<"uvec2">) => FloatNode;
-  compareDepth: (
-    slot: Node<"uint">,
-    pageUv: Vec2Node,
-    receiverDepth: FloatNode,
-  ) => FloatNode;
-};
 
 type SampledLayers = {
-  staticCache?: VSMDepthPool;
-  dynamicLayer?: VSMDynamicLayer;
+  staticPool?: VSMDepthPool;
+  dynamicPool?: VSMDepthPool;
 };
 
 type Receiver = {
@@ -125,19 +110,19 @@ export class VSMSampler {
   };
   private context: VSMContext;
   private scene: ScenePass;
-  private staticCache: VSMDepthPool;
-  private dynamicLayer: VSMDynamicLayer;
+  private staticPool: VSMDepthPool;
+  private dynamicPool: VSMDepthPool;
 
   constructor(
     context: VSMContext,
     scene: ScenePass,
-    staticCache: VSMDepthPool,
-    dynamicLayer: VSMDynamicLayer,
+    staticPool: VSMDepthPool,
+    dynamicPool: VSMDepthPool,
   ) {
     this.context = context;
     this.scene = scene;
-    this.staticCache = staticCache;
-    this.dynamicLayer = dynamicLayer;
+    this.staticPool = staticPool;
+    this.dynamicPool = dynamicPool;
   }
 
   resolveVisibility = Fn<[uv: Vec2Node], FloatNode>(([uv]) => {
@@ -155,7 +140,7 @@ export class VSMSampler {
           receiverDepth,
           receiverViewDistance,
           bool(false),
-          { staticCache: this.staticCache, dynamicLayer: this.dynamicLayer },
+          { staticPool: this.staticPool, dynamicPool: this.dynamicPool },
         ),
       );
     });
@@ -169,7 +154,7 @@ export class VSMSampler {
       depth,
       viewDistance,
       this.isSoftReceiver(uv),
-      { staticCache: this.staticCache },
+      { staticPool: this.staticPool },
     );
   });
 
@@ -180,15 +165,15 @@ export class VSMSampler {
       depth,
       viewDistance,
       this.isSoftReceiver(uv),
-      { dynamicLayer: this.dynamicLayer },
+      { dynamicPool: this.dynamicPool },
     );
   });
 
   private resolveSoftSurfaces(uv: Vec2Node) {
     const pixel = uvec2(uv.mul(screenSize).floor()).toVar();
     const layers = {
-      staticCache: this.staticCache,
-      dynamicLayer: this.dynamicLayer,
+      staticPool: this.staticPool,
+      dynamicPool: this.dynamicPool,
     };
     const depths: FloatNode[] = [];
     for (let sampleIndex = 0; sampleIndex < SCENE_PASS_SAMPLES; sampleIndex++)
@@ -271,7 +256,7 @@ export class VSMSampler {
     isSoftReceiver: Node<"bool">,
     layers: SampledLayers,
   ) {
-    const { staticCache, dynamicLayer } = layers;
+    const { staticPool, dynamicPool } = layers;
     const { sunDirection } = this.context;
     const level = getReceiverLevel(viewDistance, isSoftReceiver).toVar();
     const pageSize = getPageSize(level).toVar();
@@ -292,7 +277,7 @@ export class VSMSampler {
         )
         .toVar(),
     };
-    const readyLayer = staticCache ?? dynamicLayer;
+    const readyLayer = staticPool ?? dynamicPool;
     const isReady = readyLayer
       ? readyLayer.isReady.greaterThan(0)
       : bool(false);
@@ -317,7 +302,7 @@ export class VSMSampler {
         .and(tentOrigin.y.greaterThanEqual(0))
         .and(tentOrigin.x.lessThanEqual(VSM_PAGE_TEXELS - 3))
         .and(tentOrigin.y.lessThanEqual(VSM_PAGE_TEXELS - 3))
-        .and(staticCache ? centerPage.isResident : bool(false))
+        .and(staticPool ? centerPage.isResident : bool(false))
         .toVar();
       If(isSoftReceiver, () => {
         If(isTentAvailable, () => {
@@ -408,7 +393,7 @@ export class VSMSampler {
     receiver: Receiver,
     layers: SampledLayers,
   ) {
-    const { staticCache, dynamicLayer } = layers;
+    const { staticPool, dynamicPool } = layers;
     const halfTexel = 0.5 / VSM_PAGE_TEXELS;
     const tapPosition = pagePosition.add(pageOffset).toVar();
     const pageCoordinate = getPageCoordinate(tapPosition).toVar();
@@ -433,15 +418,15 @@ export class VSMSampler {
     );
     const pageUv = tapPosition.fract().clamp(halfTexel, 1 - halfTexel);
     const visibility = float(1).toVar();
-    if (staticCache)
+    if (staticPool)
       visibility.assign(
-        this.sampleDepth(staticCache, slot, pageUv, pageOffset, receiver),
+        this.sampleDepth(staticPool, slot, pageUv, pageOffset, receiver),
       );
-    if (dynamicLayer)
+    if (dynamicPool)
       If(hasDynamic, () => {
         visibility.mulAssign(
           this.sampleDepth(
-            dynamicLayer,
+            dynamicPool,
             dynamicSlot,
             pageUv,
             pageOffset,
@@ -449,7 +434,7 @@ export class VSMSampler {
           ),
         );
       });
-    const isSampled = staticCache ? isResident : hasDynamic;
+    const isSampled = staticPool ? isResident : hasDynamic;
     const weight = isSampled.select(float(1), float(0));
     return { visibility: visibility.mul(weight), weight };
   }
@@ -460,14 +445,14 @@ export class VSMSampler {
     receiver: Receiver,
     layers: SampledLayers,
   ) {
-    const { staticCache, dynamicLayer } = layers;
+    const { staticPool, dynamicPool } = layers;
     const pageUv = pagePosition.fract();
     const heightSum = float(0).toVar();
     const count = float(0).toVar();
-    if (staticCache)
+    if (staticPool)
       If(centerPage.isResident, () => {
         const blockers = this.searchBlockers(
-          staticCache,
+          staticPool,
           centerPage.slot,
           pageUv,
           receiver,
@@ -475,10 +460,10 @@ export class VSMSampler {
         heightSum.addAssign(blockers.heightSum);
         count.addAssign(blockers.count);
       });
-    if (dynamicLayer)
+    if (dynamicPool)
       If(centerPage.hasDynamic, () => {
         const blockers = this.searchBlockers(
-          dynamicLayer,
+          dynamicPool,
           centerPage.dynamicSlot,
           pageUv,
           receiver,
@@ -498,7 +483,7 @@ export class VSMSampler {
   }
 
   private searchBlockers(
-    layer: VSMDepthLayer,
+    layer: VSMDepthPool,
     slot: Node<"uint">,
     pageUv: Vec2Node,
     receiver: Receiver,
@@ -528,7 +513,7 @@ export class VSMSampler {
   }
 
   private sampleDepth(
-    layer: VSMDepthLayer,
+    layer: VSMDepthPool,
     slot: Node<"uint">,
     pageUv: Vec2Node,
     pageOffset: Vec2Node,
@@ -553,53 +538,43 @@ export class VSMSampler {
     receiver: Receiver,
     layers: SampledLayers,
   ) {
-    const { staticCache, dynamicLayer } = layers;
+    const { staticPool, dynamicPool } = layers;
+    const pageUv = pagePosition.fract().toVar();
     const visibility = float(1).toVar();
-    if (staticCache)
+    if (staticPool)
       visibility.assign(
-        this.sampleStaticTent(
-          staticCache,
-          centerPage.slot,
-          pagePosition.fract(),
-          receiver,
-        ),
+        this.sampleLayerTent(staticPool, centerPage.slot, pageUv, receiver),
       );
-    if (dynamicLayer)
+    if (dynamicPool)
       If(centerPage.hasDynamic, () => {
-        const dynamicSum = float(0).toVar();
-        for (const direction of SOFT_TAP_DIRECTIONS) {
-          const pageOffset = direction.div(VSM_PAGE_TEXELS);
-          dynamicSum.addAssign(
-            this.sampleDepth(
-              dynamicLayer,
-              centerPage.dynamicSlot,
-              pagePosition.add(pageOffset).fract(),
-              pageOffset,
-              receiver,
-            ),
-          );
-        }
-        visibility.mulAssign(dynamicSum.mul(0.25));
+        visibility.mulAssign(
+          this.sampleLayerTent(
+            dynamicPool,
+            centerPage.dynamicSlot,
+            pageUv,
+            receiver,
+          ),
+        );
       });
     return visibility;
   }
 
-  private sampleStaticTent(
-    staticCache: VSMDepthPool,
+  private sampleLayerTent(
+    pool: VSMDepthPool,
     slot: Node<"uint">,
     pageUv: Vec2Node,
     receiver: Receiver,
   ) {
-    const depthRange = staticCache.maximumY.sub(staticCache.minimumY);
-    const receiverDepth = staticCache.maximumY
+    const depthRange = pool.maximumY.sub(pool.minimumY);
+    const receiverDepth = pool.maximumY
       .sub(receiver.worldY)
-      .sub(this.getReceiverBias(staticCache, receiver))
+      .sub(this.getReceiverBias(pool, receiver))
       .div(depthRange);
     const isInRange = receiver.worldY
-      .greaterThanEqual(staticCache.minimumY)
-      .and(receiver.worldY.lessThanEqual(staticCache.maximumY));
+      .greaterThanEqual(pool.minimumY)
+      .and(receiver.worldY.lessThanEqual(pool.maximumY));
     return isInRange.select(
-      staticCache.compareDepthTent(
+      pool.compareDepthTent(
         slot,
         pageUv,
         receiverDepth,
@@ -613,7 +588,7 @@ export class VSMSampler {
     return receiver.worldY.add(receiver.heightPerPage.dot(pageOffset));
   }
 
-  private getReceiverBias(layer: VSMDepthLayer, receiver: Receiver) {
+  private getReceiverBias(layer: VSMDepthPool, receiver: Receiver) {
     return receiver.texelMeters
       .mul(layer.depthBiasTexels)
       .add(receiver.heightPerPage.length().div(VSM_PAGE_TEXELS));

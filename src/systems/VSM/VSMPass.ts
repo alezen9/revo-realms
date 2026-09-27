@@ -33,7 +33,7 @@ import {
   vsmSoftReceiverLevelBias,
 } from "./VSMMath";
 import { VSMPages } from "./VSMPages";
-import { VSMSampler, type VSMDepthLayer } from "./VSMSampler";
+import { VSMSampler } from "./VSMSampler";
 
 export class VSMPass {
   private renderer: WebGPURenderer;
@@ -65,12 +65,12 @@ export class VSMPass {
       jobs: this.context.allocatedJobs,
       depthBiasTexels: 3,
     });
-    this.dynamicLayer = new VSMDynamicLayer(renderer, this.context);
+    this.dynamicLayer = new VSMDynamicLayer(this.context);
     this.sampler = new VSMSampler(
       this.context,
       scene,
       this.staticCache,
-      this.dynamicLayer,
+      this.dynamicLayer.pool,
     );
     monitoringManager.setShadowPageStats(this.pages.stats);
     monitoringManager.setShadowCasterCounts(this.context.casterCounts);
@@ -120,7 +120,6 @@ export class VSMPass {
       ...staticNodes,
       ...this.dynamicLayer.getComputeNodes(),
     ]);
-    this.dynamicLayer.render();
   }
 
   sampleShadowedColor(uv: Node<"vec2">) {
@@ -158,10 +157,6 @@ export class VSMPass {
       max: 16,
       step: 0.5,
     });
-    folder.addBinding(this.dynamicLayer.useMovingPool, "value", {
-      label: "Moving casters compute",
-      options: { Off: 0, On: 1 },
-    });
     folder.addBinding(vsmSoftReceiverLevelBias, "value", {
       label: "Soft receiver blur level",
       min: 0,
@@ -184,7 +179,7 @@ export class VSMPass {
       ),
       Pages: this.makePageOutput(),
       "Fixed depth": this.makeDepthOutput(this.staticCache, false),
-      "Moving depth": this.makeDepthOutput(this.dynamicLayer, true),
+      "Moving depth": this.makeDepthOutput(this.dynamicLayer.pool, true),
       "Fixed shadow": this.makeVisibilityOutput(
         this.sampler.resolveStaticVisibility(screenUV),
       ),
@@ -261,7 +256,7 @@ export class VSMPass {
     return renderOutput(vec4(color, 1), NoToneMapping);
   }
 
-  private makeDepthOutput(layer: VSMDepthLayer, isDynamic: boolean) {
+  private makeDepthOutput(layer: VSMDepthPool, isDynamic: boolean) {
     const { depth, pagePosition, pageKey, pageTag } = this.getDebugPage();
     const { slot, dynamicSlot, isResident, hasDynamic } =
       this.context.resolvePage(pageKey, pageTag);
