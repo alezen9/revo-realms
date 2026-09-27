@@ -135,7 +135,6 @@ export const uniforms = {
   uLightExposure: uniform(1.15),
   uHighlightStrength: uniform(0.02),
   uBacklightStrength: uniform(0.13),
-  uFluffiness: uniform(1),
   uTuftRoundness: uniform(0.6),
   uWidthRoundness: uniform(0.8),
 

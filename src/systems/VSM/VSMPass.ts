@@ -6,6 +6,7 @@ import {
   renderOutput,
   screenUV,
   step,
+  uint,
   uniform,
   uvec2,
   vec3,
@@ -28,7 +29,9 @@ import {
   getPageKey,
   getPageSize,
   getPageTag,
+  VSM_SOFT_RECEIVER_THRESHOLD,
   getReceiverLevel,
+  getSoftReceiverLevel,
   vsmResolutionBias,
   vsmSoftReceiverLevelBias,
 } from "./VSMMath";
@@ -208,7 +211,12 @@ export class VSMPass {
     const { depth, worldPosition, viewDistance } =
       this.sampler.getReceiver(screenUV);
     const softness = this.sampler.getSoftness(screenUV);
-    const level = getReceiverLevel(viewDistance, softness);
+    const level = softness
+      .greaterThan(VSM_SOFT_RECEIVER_THRESHOLD)
+      .select(
+        uint(getSoftReceiverLevel(viewDistance, softness).floor()),
+        getReceiverLevel(viewDistance),
+      );
     const pagePosition = getLightPosition(
       worldPosition,
       this.context.lightBasis,

@@ -33,7 +33,7 @@ import {
 import { IndirectStorageBufferAttribute, type Node } from "three/webgpu";
 import { assetManager, sceneManager, windManager } from "../../../systems";
 import { TSLUtils } from "../../../utils/TSLUtils";
-import { getGrassNoiseUv } from "./GrassShading";
+import { getGrassHeightFromMask, getGrassNoiseUv } from "./GrassShading";
 import { gameDeltaTime, gameTime } from "../../../utils/GameTime";
 import { config, uniforms } from "./config";
 import {
@@ -264,10 +264,7 @@ export class GrassCompute {
         terrainMapUv,
       );
 
-      const terrainGrassScale = terrainSample.g
-        .sub(0.25)
-        .div(1 - 0.25)
-        .clamp();
+      const terrainGrassScale = getGrassHeightFromMask(terrainSample.g);
 
       const heightmapUv = vec2(terrainMapUv.x, float(1).sub(terrainMapUv.y));
 

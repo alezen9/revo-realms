@@ -87,12 +87,6 @@ export const debugGrass = (uniforms: GrassUniforms, config: GrassConfig) => {
     step: 0.01,
   });
 
-  lighting.addBinding(uniforms.uFluffiness, "value", {
-    label: "Fluffiness",
-    min: 0,
-    max: 1,
-    step: 0.01,
-  });
   lighting.addBinding(uniforms.uTuftRoundness, "value", {
     label: "Tuft roundness",
     min: 0,

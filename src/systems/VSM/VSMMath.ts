@@ -43,17 +43,26 @@ export const getLightPosition = (
   lightBasis: VSMLightBasis,
 ) => vec2(worldPosition.dot(lightBasis.x), worldPosition.dot(lightBasis.y));
 
-export const getReceiverLevel = (
-  viewDistance: Node<"float">,
-  softness: Node<"float">,
-) =>
+export const VSM_SOFT_RECEIVER_THRESHOLD = 0.02;
+
+export const getReceiverLevel = (viewDistance: Node<"float">) =>
   uint(
     ceil(log2(viewDistance.max(0.0001)))
       .add(vsmResolutionBias)
-      .add(softness.mul(vsmSoftReceiverLevelBias).round())
       .sub(VSM_FIRST_LEVEL)
       .clamp(0, VSM_LEVEL_COUNT - 1),
   );
+
+export const getSoftReceiverLevel = (
+  viewDistance: Node<"float">,
+  softness: Node<"float">,
+) =>
+  log2(viewDistance.max(0.0001))
+    .add(0.5)
+    .add(vsmResolutionBias)
+    .add(softness.mul(vsmSoftReceiverLevelBias))
+    .sub(VSM_FIRST_LEVEL)
+    .clamp(0, VSM_LEVEL_COUNT - 1);
 
 export const getPageSize = (level: Node<"uint">) =>
   float(uint(1).shiftLeft(level)).mul(FIRST_PAGE_SIZE);

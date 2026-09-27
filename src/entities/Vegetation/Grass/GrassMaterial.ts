@@ -1,13 +1,10 @@
 import {
-  TWO_PI,
   cameraPosition,
-  cos,
   float,
   hash,
   instanceIndex,
   mix,
   mrt,
-  sin,
   smoothstep,
   uv,
   varying,
@@ -21,6 +18,8 @@ import {
   getGrassAlbedo,
   getGrassColor,
   getGrassLight,
+  getGrassNormal,
+  getGrassViewSide,
   shadeGrassSurface,
 } from "./GrassShading";
 import {
@@ -149,41 +148,19 @@ export class GrassMaterial extends SpriteNodeMaterial {
     const variedColor = getGrassColor(positionNoise);
 
     // LIGHTING
-    const lightingAngle = bladeHash.mul(53.3).fract().mul(TWO_PI);
-
-    const flatNormal = vec3(cos(lightingAngle), 0, sin(lightingAngle));
-
     const viewOffset = cameraPosition.sub(worldPosition);
     const viewDirection = viewOffset.normalize();
     const viewDirectionXZ = viewOffset.xz.normalize();
 
-    const clumpRadial = bladeLocalOffset.div(config.CLUMP_LOCAL_RADIUS);
-
-    const domeNormal = vec3(
-      clumpRadial.x.mul(uniforms.uTuftRoundness),
-      bladeHeight.add(0.5),
-      clumpRadial.y.mul(uniforms.uTuftRoundness),
-    ).normalize();
-
-    const viewSide = vec3(viewDirectionXZ.y, 0, viewDirectionXZ.x.negate());
-
-    const widthCoordinate = bladeUv.x.mul(2).sub(1);
-
-    const roundedNormal = domeNormal
-      .add(viewSide.mul(widthCoordinate.mul(uniforms.uWidthRoundness)))
-      .normalize();
-
-    const lightingNormal = mix(
-      flatNormal,
-      roundedNormal,
-      uniforms.uFluffiness,
-    ).normalize();
-
     const light = getGrassLight({
-      normal: lightingNormal,
+      normal: getGrassNormal({
+        clumpRadial: bladeLocalOffset.div(config.CLUMP_LOCAL_RADIUS),
+        height: bladeHeight,
+        widthCoordinate: bladeUv.x.mul(2).sub(1),
+        viewSide: getGrassViewSide(viewDirectionXZ),
+      }),
       viewDirection,
       viewDirectionXZ,
-      height: bladeHeight,
     });
 
     // PACK VARYINGS

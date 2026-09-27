@@ -51,6 +51,7 @@ import {
   VSM_PAGE_COUNT,
   VSM_PAGE_TEXELS,
   VSM_PAGES_PER_LEVEL,
+  VSM_SOFT_RECEIVER_THRESHOLD,
   computePageCoordinate,
   getLightPosition,
   getPageCoordinate,
@@ -58,6 +59,7 @@ import {
   getPageSize,
   getPageTag,
   getReceiverLevel,
+  getSoftReceiverLevel,
   getWindowCenter,
   getWindowPage,
   isPageInWindow,
@@ -180,6 +182,7 @@ export class VSMPages {
             const localX = localXIndex.toVar();
             const receiver = this.loadReceiver(tile, localX, localY);
             const level = receiver.level.toVar();
+            const upperLevel = receiver.upperLevel.toVar();
             const lightPosition = receiver.lightPosition.toVar();
             const expandedBounds = vec4(lightPosition, lightPosition);
             for (
@@ -188,7 +191,9 @@ export class VSMPages {
               levelIndex++
             ) {
               const bounds = levelBounds[levelIndex];
-              const isHit = receiver.isValid.and(level.equal(levelIndex));
+              const isHit = receiver.isValid.and(
+                level.equal(levelIndex).or(upperLevel.equal(levelIndex)),
+              );
               bounds.assign(
                 isHit.select(
                   vec4(
@@ -439,9 +444,20 @@ export class VSMPages {
       vec4(viewPosition, 1),
     ).xyz;
     const softness = textureLoad(this.softReceiverNode, pixel).level(uint(0)).r;
+    const viewDistance = viewPosition.length();
+    const isSoftReceiver = softness.greaterThan(VSM_SOFT_RECEIVER_THRESHOLD);
+    const softLevel = getSoftReceiverLevel(viewDistance, softness).floor();
+    const level = isSoftReceiver.select(
+      uint(softLevel),
+      getReceiverLevel(viewDistance),
+    );
     return {
       isValid: isInside.and(depth.lessThan(1)),
-      level: getReceiverLevel(viewPosition.length(), softness),
+      level,
+      upperLevel: isSoftReceiver.select(
+        uint(softLevel.add(1).min(VSM_LEVEL_COUNT - 1)),
+        level,
+      ),
       lightPosition: getLightPosition(worldPosition, context.lightBasis),
     };
   }

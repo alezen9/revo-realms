@@ -60,6 +60,7 @@ import {
   getPageSize,
   getPageTag,
   getReceiverLevel,
+  getSoftReceiverLevel,
 } from "./VSMMath";
 
 const MAX_INSTANCE_WORK_ITEMS = 262144;
@@ -487,11 +488,13 @@ class InstanceCaster implements VSMRasterSource {
         const maximum = lightBase.max(lightTop).add(instances.radiusMeters);
         const distance = base.sub(context.cameraPosition).length();
         const reach = height.add(instances.radiusMeters);
-        const firstLevel = getReceiverLevel(
-          distance.sub(reach).max(0),
-          float(0),
+        const firstLevel = getReceiverLevel(distance.sub(reach).max(0));
+        const lastLevel = uint(
+          getSoftReceiverLevel(distance.add(reach), float(1))
+            .floor()
+            .add(1)
+            .min(VSM_LEVEL_COUNT - 1),
         );
-        const lastLevel = getReceiverLevel(distance.add(reach), float(1));
         Loop(
           { start: firstLevel, end: lastLevel.add(1), type: "uint" },
           ({ i: levelIndex }) => {

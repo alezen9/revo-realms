@@ -26,13 +26,16 @@ import {
 import type { VSMContext } from "./VSMContext";
 import type { VSMDepthPool } from "./VSMDepthPool";
 import {
+  VSM_LEVEL_COUNT,
   VSM_PAGE_TEXELS,
+  VSM_SOFT_RECEIVER_THRESHOLD,
   getLightPosition,
   getPageCoordinate,
   getPageKey,
   getPageSize,
   getPageTag,
   getReceiverLevel,
+  getSoftReceiverLevel,
 } from "./VSMMath";
 
 type FloatNode = Node<"float">;
@@ -71,7 +74,6 @@ const BLOCKER_DIRECTIONS = [
 const MAX_RECEIVER_SLOPE = 4;
 const GOLDEN_ANGLE = 2.399963;
 const SURFACE_SPLIT_RATIO = 0.01;
-const SOFT_RECEIVER_THRESHOLD = 0.02;
 
 const getReceiverSlope = (lightPosition: Vec2Node, worldHeight: FloatNode) => {
   const lightDx = dFdx(lightPosition);
@@ -96,6 +98,14 @@ const getReceiverSlope = (lightPosition: Vec2Node, worldHeight: FloatNode) => {
 
 const getInterleavedGradientNoise = (pixel: Vec2Node) =>
   fract(pixel.dot(vec2(0.06711056, 0.00583715)).fract().mul(52.9829189));
+
+const getDitheredSoftLevel = (viewDistance: FloatNode, softness: FloatNode) =>
+  uint(
+    getSoftReceiverLevel(viewDistance, softness)
+      .add(getInterleavedGradientNoise(screenCoordinate.xy))
+      .floor()
+      .min(VSM_LEVEL_COUNT - 1),
+  );
 
 export class VSMSampler {
   readonly filter = {
@@ -127,7 +137,7 @@ export class VSMSampler {
     const receiverViewDistance = viewDistance.toVar();
     const softness = this.getSoftness(uv).toVar();
     const visibility = float(1).toVar();
-    If(softness.greaterThan(SOFT_RECEIVER_THRESHOLD), () => {
+    If(softness.greaterThan(VSM_SOFT_RECEIVER_THRESHOLD), () => {
       visibility.assign(this.resolveSoftSurfaces(uv, softness));
     }).Else(() => {
       visibility.assign(
@@ -135,7 +145,8 @@ export class VSMSampler {
           receiverWorldPosition,
           receiverDepth,
           receiverViewDistance,
-          float(0),
+          getReceiverLevel(receiverViewDistance),
+          false,
         ),
       );
     });
@@ -172,7 +183,8 @@ export class VSMSampler {
       nearWorldPosition,
       nearDepth,
       nearViewDistance,
-      softness,
+      getDitheredSoftLevel(nearViewDistance, softness),
+      true,
     ).toVar();
     If(
       farViewDistance
@@ -186,7 +198,8 @@ export class VSMSampler {
               farWorldPosition,
               farDepth,
               farViewDistance,
-              softness,
+              getDitheredSoftLevel(farViewDistance, softness),
+              true,
             ),
             farCoverage,
           ),
@@ -220,13 +233,11 @@ export class VSMSampler {
     worldPosition: Node<"vec3">,
     sceneDepth: FloatNode,
     viewDistance: FloatNode,
-    softness: FloatNode,
+    receiverLevel: Node<"uint">,
+    isSoftReceiver: boolean,
   ) {
     const { sunDirection } = this.context;
-    const isSoftReceiver = softness
-      .greaterThan(SOFT_RECEIVER_THRESHOLD)
-      .toVar();
-    const level = getReceiverLevel(viewDistance, softness).toVar();
+    const level = receiverLevel.toVar();
     const pageSize = getPageSize(level).toVar();
     const lightPosition = getLightPosition(
       worldPosition,
@@ -235,15 +246,14 @@ export class VSMSampler {
     const pagePosition = lightPosition.div(pageSize).toVar();
     const receiver = {
       worldY: worldPosition.y.toVar(),
-      texelMeters: getPageSize(getReceiverLevel(viewDistance, float(0)))
+      texelMeters: getPageSize(getReceiverLevel(viewDistance))
         .div(VSM_PAGE_TEXELS)
         .toVar(),
       heightPerPage: isSoftReceiver
-        .select(
-          vec2(0),
-          getReceiverSlope(lightPosition, worldPosition.y).mul(pageSize),
-        )
-        .toVar(),
+        ? vec2(0).toVar()
+        : getReceiverSlope(lightPosition, worldPosition.y)
+            .mul(pageSize)
+            .toVar(),
     };
     const isInside = this.staticPool.isReady
       .greaterThan(0)
@@ -269,7 +279,7 @@ export class VSMSampler {
         .and(tentOrigin.y.lessThanEqual(VSM_PAGE_TEXELS - 3))
         .and(centerPage.isResident)
         .toVar();
-      If(isSoftReceiver, () => {
+      if (isSoftReceiver) {
         If(isTentAvailable, () => {
           visibilitySum.assign(
             this.sampleTent(pagePosition, centerPage, receiver),
@@ -288,7 +298,7 @@ export class VSMSampler {
             weight.addAssign(tap.weight);
           }
         });
-      }).Else(() => {
+      } else {
         const radius = this.computePenumbraTexels(
           pagePosition,
           centerPage,
@@ -322,7 +332,7 @@ export class VSMSampler {
             weight.addAssign(tap.weight);
           }
         });
-      });
+      }
       If(weight.greaterThan(0), () => {
         visibility.assign(visibilitySum.div(weight));
       });
