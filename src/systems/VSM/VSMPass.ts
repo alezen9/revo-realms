@@ -173,25 +173,14 @@ export class VSMPass {
 
   createDebugOutputs() {
     return {
-      "Direct sun": renderOutput(
-        vec4(this.scene.directSun.sample(screenUV).rgb, 1),
+      Pages: this.makePageOutput(),
+      "Page heat": this.makePageHeatOutput(),
+      Shadow: renderOutput(
+        vec4(vec3(this.sampler.resolveVisibility(screenUV)), 1),
         NoToneMapping,
       ),
-      Pages: this.makePageOutput(),
       "Fixed depth": this.makeDepthOutput(this.staticCache, false),
       "Moving depth": this.makeDepthOutput(this.dynamicLayer.pool, true),
-      "Fixed shadow": this.makeVisibilityOutput(
-        this.sampler.resolveStaticVisibility(screenUV),
-      ),
-      "Moving shadow": this.makeVisibilityOutput(
-        this.sampler.resolveDynamicVisibility(screenUV),
-      ),
-      Shadow: this.makeVisibilityOutput(
-        this.sampler.resolveVisibility(screenUV),
-      ),
-      Receivers: this.makeReceiverOutput(),
-      "Dynamic pages": this.makeDynamicPageOutput(),
-      "Page heat": this.makePageHeatOutput(),
     };
   }
 
@@ -273,32 +262,6 @@ export class VSMPass {
     const color = depth
       .greaterThanEqual(1)
       .select(vec3(0), hasPage.select(vec3(visualDepth), vec3(1, 0, 0)));
-    return renderOutput(vec4(color, 1), NoToneMapping);
-  }
-
-  private makeVisibilityOutput(visibility: Node<"float">) {
-    return renderOutput(vec4(vec3(visibility), 1), NoToneMapping);
-  }
-
-  private makeReceiverOutput() {
-    const depth = this.scene.depth.sample(screenUV).r;
-    const directSun = this.scene.directSun.sample(screenUV).rgb;
-    const receiverColor = this.sampler
-      .isSoftReceiver(screenUV)
-      .select(vec3(0.2, 0.45, 1), vec3(0.2, 0.85, 0.3));
-    const isReceiver = directSun.dot(vec3(1)).greaterThan(0);
-    const color = depth
-      .greaterThanEqual(1)
-      .select(vec3(0.15), isReceiver.select(receiverColor, vec3(0)));
-    return renderOutput(vec4(color, 1), NoToneMapping);
-  }
-
-  private makeDynamicPageOutput() {
-    const { depth, pageKey, pageTag } = this.getDebugPage();
-    const { hasDynamic } = this.context.resolvePage(pageKey, pageTag);
-    const color = depth
-      .greaterThanEqual(1)
-      .select(vec3(0), hasDynamic.select(vec3(1, 0.8, 0.1), vec3(0.25)));
     return renderOutput(vec4(color, 1), NoToneMapping);
   }
 

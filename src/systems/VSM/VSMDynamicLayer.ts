@@ -93,14 +93,10 @@ export class VSMDynamicLayer {
 
   sync(terrainBounds: { min: number; max: number }) {
     const { changes } = this.context;
-    if (
-      !changes.hasDynamicRosterChanged &&
-      !changes.hasSunChanged &&
-      !changes.hasDynamicCasterMoved
-    )
-      return;
+    const { hasRosterChanged, hasCasterMoved } = changes.moving;
+    if (!hasRosterChanged && !hasCasterMoved && !changes.hasSunChanged) return;
 
-    if (changes.hasDynamicRosterChanged) this.rebuildCasters();
+    if (hasRosterChanged) this.rebuildCasters();
     this.pool.sync(terrainBounds);
     const { x: lightX, y: lightY } = this.context.lightBasis;
     this.movingRanges?.update(this.sources, lightX.value, lightY.value);

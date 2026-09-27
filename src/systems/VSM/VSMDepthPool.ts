@@ -28,6 +28,7 @@ import {
   type VSMCaster,
   type VSMContext,
   type VSMJobSource,
+  type VSMLayerKind,
 } from "./VSMContext";
 import {
   VSM_PAGE_OFFSET,
@@ -43,7 +44,7 @@ const CLEAR_WORKGROUPS = 128;
 const RASTER_WORKGROUPS = 512;
 
 type VSMDepthPoolOptions = {
-  kind: "fixed" | "moving";
+  kind: VSMLayerKind;
   capacity: number;
   jobs: VSMJobSource;
   depthBiasTexels: number;
@@ -164,18 +165,11 @@ export class VSMDepthPool {
 
   sync(terrainBounds: { min: number; max: number }) {
     const { changes } = this.context;
-    const isFixed = this.kind === "fixed";
-    const hasRosterChange = isFixed
-      ? changes.hasStaticRosterChanged
-      : changes.hasDynamicRosterChanged;
-    const hasMatrixChange =
-      hasRosterChange ||
-      (isFixed
-        ? changes.hasStaticCasterMoved || changes.hasStaticBiasChanged
-        : changes.hasDynamicCasterMoved);
+    const { hasRosterChanged, hasCasterMoved } = changes[this.kind];
+    const hasMatrixChange = hasRosterChanged || hasCasterMoved;
     if (!hasMatrixChange && !changes.hasSunChanged) return;
 
-    if (hasRosterChange) this.rebuildClusterCasters();
+    if (hasRosterChanged) this.rebuildClusterCasters();
     let minimumY = terrainBounds.min - 8;
     let maximumY = terrainBounds.max + 64;
     for (const { bucket } of this.clusterCasters.values()) {
@@ -189,7 +183,8 @@ export class VSMDepthPool {
       this.maximumY.value !== Math.ceil(maximumY);
     this.minimumY.value = Math.floor(minimumY);
     this.maximumY.value = Math.ceil(maximumY);
-    if (isFixed && hasDepthRangeChange) this.context.invalidateAllPages();
+    if (this.kind === "fixed" && hasDepthRangeChange)
+      this.context.invalidateAllPages();
   }
 
   getComputeNodes() {

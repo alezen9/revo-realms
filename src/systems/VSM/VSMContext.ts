@@ -84,17 +84,19 @@ export type VSMJobSource = {
   countLength: number;
 };
 
-export type VSMChanges = {
-  hasViewChanged: boolean;
+export type VSMLayerKind = "fixed" | "moving";
+
+export type VSMLayerChanges = {
+  hasRosterChanged: boolean;
+  hasCasterMoved: boolean;
+};
+
+export type VSMChanges = Record<VSMLayerKind, VSMLayerChanges> & {
   hasSunChanged: boolean;
-  hasLevelBiasChanged: boolean;
-  hasStaticRosterChanged: boolean;
-  hasStaticCasterMoved: boolean;
-  hasStaticBiasChanged: boolean;
-  hasDynamicRosterChanged: boolean;
-  hasDynamicCasterMoved: boolean;
   shouldRequestPages: boolean;
 };
+
+type LayerVersions = Record<VSMLayerKind, { roster: number; revision: number }>;
 
 type PreviousFrame = {
   camera?: Camera;
@@ -104,12 +106,13 @@ type PreviousFrame = {
   sunDirection: Vector3;
   resolutionBias: number;
   softReceiverLevelBias: number;
-  staticVersion: number;
-  staticRevision: number;
-  staticBiasVersion: number;
-  dynamicVersion: number;
-  dynamicRevision: number;
+  versions: LayerVersions;
 };
+
+const VSM_LAYER_KINDS: VSMLayerKind[] = ["fixed", "moving"];
+
+const getLayerKind = (kind: VSMCasterKind): VSMLayerKind =>
+  kind === "fixed" ? "fixed" : "moving";
 
 const initialMetadata = new Uint32Array(VSM_POOL_CAPACITY * 4);
 for (let slot = 0; slot < VSM_POOL_CAPACITY; slot++)
@@ -118,15 +121,10 @@ for (let slot = 0; slot < VSM_POOL_CAPACITY; slot++)
 export class VSMContext {
   readonly casterCounts = { fixed: 0, moving: 0, deformed: 0 };
   readonly changes: VSMChanges = {
-    hasViewChanged: true,
     hasSunChanged: true,
-    hasLevelBiasChanged: true,
-    hasStaticRosterChanged: true,
-    hasStaticCasterMoved: true,
-    hasStaticBiasChanged: true,
-    hasDynamicRosterChanged: true,
-    hasDynamicCasterMoved: true,
     shouldRequestPages: true,
+    fixed: { hasRosterChanged: true, hasCasterMoved: true },
+    moving: { hasRosterChanged: true, hasCasterMoved: true },
   };
   readonly frame = uniform(0, "uint");
   readonly pageGeneration = uniform(1, "uint");
@@ -188,11 +186,10 @@ export class VSMContext {
   private casterEntries = new Map<Mesh, VSMCaster>();
   private dirtyStaticBounds: Box3[] = [];
   private hasPageInvalidation = true;
-  private staticVersion = 0;
-  private staticRevision = 0;
-  private staticBiasVersion = 0;
-  private dynamicVersion = 0;
-  private dynamicRevision = 0;
+  private versions: LayerVersions = {
+    fixed: { roster: 0, revision: 0 },
+    moving: { roster: 0, revision: 0 },
+  };
   private previous: PreviousFrame = {
     cameraMatrix: new Matrix4(),
     projectionMatrix: new Matrix4(),
@@ -200,11 +197,10 @@ export class VSMContext {
     sunDirection: new Vector3(),
     resolutionBias: -1,
     softReceiverLevelBias: -1,
-    staticVersion: -1,
-    staticRevision: -1,
-    staticBiasVersion: -1,
-    dynamicVersion: -1,
-    dynamicRevision: -1,
+    versions: {
+      fixed: { roster: -1, revision: -1 },
+      moving: { roster: -1, revision: -1 },
+    },
   };
 
   constructor(renderer: WebGPURenderer, sunDirection: Node<"vec3">) {
@@ -220,32 +216,30 @@ export class VSMContext {
     const { previous, changes } = this;
     this.renderer.getDrawingBufferSize(this.drawingBufferSize);
     camera.getWorldPosition(this.cameraWorldPosition);
-    changes.hasViewChanged =
+    const hasViewChanged =
       camera !== previous.camera ||
       !previous.cameraMatrix.equals(camera.matrixWorld) ||
       !previous.projectionMatrix.equals(camera.projectionMatrix) ||
       !previous.drawingBufferSize.equals(this.drawingBufferSize);
-    changes.hasSunChanged = !previous.sunDirection.equals(sunDirection);
-    changes.hasLevelBiasChanged =
+    const hasLevelBiasChanged =
       previous.resolutionBias !== vsmResolutionBias.value ||
       previous.softReceiverLevelBias !== vsmSoftReceiverLevelBias.value;
-    changes.hasStaticRosterChanged =
-      previous.staticVersion !== this.staticVersion;
-    changes.hasStaticCasterMoved =
-      previous.staticRevision !== this.staticRevision;
-    changes.hasStaticBiasChanged =
-      previous.staticBiasVersion !== this.staticBiasVersion;
-    changes.hasDynamicRosterChanged =
-      previous.dynamicVersion !== this.dynamicVersion;
-    changes.hasDynamicCasterMoved =
-      previous.dynamicRevision !== this.dynamicRevision;
+    changes.hasSunChanged = !previous.sunDirection.equals(sunDirection);
+    for (const kind of VSM_LAYER_KINDS) {
+      const current = this.versions[kind];
+      const last = previous.versions[kind];
+      changes[kind].hasRosterChanged = last.roster !== current.roster;
+      changes[kind].hasCasterMoved = last.revision !== current.revision;
+      last.roster = current.roster;
+      last.revision = current.revision;
+    }
     changes.shouldRequestPages =
-      changes.hasViewChanged ||
+      hasViewChanged ||
       changes.hasSunChanged ||
-      changes.hasLevelBiasChanged ||
-      changes.hasStaticRosterChanged ||
-      changes.hasStaticCasterMoved ||
-      changes.hasDynamicRosterChanged;
+      hasLevelBiasChanged ||
+      changes.fixed.hasRosterChanged ||
+      changes.fixed.hasCasterMoved ||
+      changes.moving.hasRosterChanged;
 
     previous.camera = camera;
     previous.cameraMatrix.copy(camera.matrixWorld);
@@ -260,11 +254,6 @@ export class VSMContext {
       );
     previous.resolutionBias = vsmResolutionBias.value;
     previous.softReceiverLevelBias = vsmSoftReceiverLevelBias.value;
-    previous.staticVersion = this.staticVersion;
-    previous.staticRevision = this.staticRevision;
-    previous.staticBiasVersion = this.staticBiasVersion;
-    previous.dynamicVersion = this.dynamicVersion;
-    previous.dynamicRevision = this.dynamicRevision;
 
     this.frame.value = (this.frame.value + 1) >>> 0;
     if (changes.hasSunChanged) this.invalidateAllPages();
@@ -346,7 +335,7 @@ export class VSMContext {
     });
     if (kind === "fixed") this.dirtyStaticBounds.push(worldBounds.clone());
     this.casterCounts[kind]++;
-    this.bumpRosterVersion(kind);
+    this.versions[getLayerKind(kind)].roster++;
   }
 
   unregisterCaster(mesh: Mesh) {
@@ -356,7 +345,7 @@ export class VSMContext {
     this.casterEntries.delete(mesh);
     if (entry.kind === "fixed") this.dirtyStaticBounds.push(entry.worldBounds);
     this.casterCounts[entry.kind]--;
-    this.bumpRosterVersion(entry.kind);
+    this.versions[getLayerKind(entry.kind)].roster++;
   }
 
   setCasterDepthBias(mesh: Mesh, depthBias: number) {
@@ -368,7 +357,7 @@ export class VSMContext {
     if (entry.depthBias === depthBias) return;
     entry.depthBias = depthBias;
     this.dirtyStaticBounds.push(entry.worldBounds.clone());
-    this.staticBiasVersion++;
+    this.versions.fixed.revision++;
   }
 
   markCasterMoved(mesh: Mesh) {
@@ -381,13 +370,8 @@ export class VSMContext {
       this.dirtyStaticBounds.push(entry.worldBounds.clone());
       entry.worldBounds.setFromObject(mesh);
       this.dirtyStaticBounds.push(entry.worldBounds.clone());
-      this.staticRevision++;
+      this.versions.fixed.revision++;
     }
-    if (entry.kind === "moving") this.dynamicRevision++;
-  }
-
-  private bumpRosterVersion(kind: VSMCasterKind) {
-    if (kind === "fixed") this.staticVersion++;
-    else this.dynamicVersion++;
+    if (entry.kind === "moving") this.versions.moving.revision++;
   }
 }

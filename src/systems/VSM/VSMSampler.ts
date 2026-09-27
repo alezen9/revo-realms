@@ -40,11 +40,6 @@ type FloatNode = Node<"float">;
 type Vec2Node = Node<"vec2">;
 type Vec4Node = Node<"vec4">;
 
-type SampledLayers = {
-  staticPool?: VSMDepthPool;
-  dynamicPool?: VSMDepthPool;
-};
-
 type Receiver = {
   worldY: FloatNode;
   texelMeters: FloatNode;
@@ -140,41 +135,14 @@ export class VSMSampler {
           receiverDepth,
           receiverViewDistance,
           bool(false),
-          { staticPool: this.staticPool, dynamicPool: this.dynamicPool },
         ),
       );
     });
     return visibility;
   });
 
-  resolveStaticVisibility = Fn<[uv: Vec2Node], FloatNode>(([uv]) => {
-    const { depth, worldPosition, viewDistance } = this.getReceiver(uv);
-    return this.computeVisibility(
-      worldPosition,
-      depth,
-      viewDistance,
-      this.isSoftReceiver(uv),
-      { staticPool: this.staticPool },
-    );
-  });
-
-  resolveDynamicVisibility = Fn<[uv: Vec2Node], FloatNode>(([uv]) => {
-    const { depth, worldPosition, viewDistance } = this.getReceiver(uv);
-    return this.computeVisibility(
-      worldPosition,
-      depth,
-      viewDistance,
-      this.isSoftReceiver(uv),
-      { dynamicPool: this.dynamicPool },
-    );
-  });
-
   private resolveSoftSurfaces(uv: Vec2Node) {
     const pixel = uvec2(uv.mul(screenSize).floor()).toVar();
-    const layers = {
-      staticPool: this.staticPool,
-      dynamicPool: this.dynamicPool,
-    };
     const depths: FloatNode[] = [];
     for (let sampleIndex = 0; sampleIndex < SCENE_PASS_SAMPLES; sampleIndex++)
       depths.push(
@@ -204,7 +172,6 @@ export class VSMSampler {
       nearDepth,
       nearViewDistance,
       bool(true),
-      layers,
     ).toVar();
     If(
       farViewDistance
@@ -219,7 +186,6 @@ export class VSMSampler {
               farDepth,
               farViewDistance,
               bool(true),
-              layers,
             ),
             farCoverage,
           ),
@@ -254,9 +220,7 @@ export class VSMSampler {
     sceneDepth: FloatNode,
     viewDistance: FloatNode,
     isSoftReceiver: Node<"bool">,
-    layers: SampledLayers,
   ) {
-    const { staticPool, dynamicPool } = layers;
     const { sunDirection } = this.context;
     const level = getReceiverLevel(viewDistance, isSoftReceiver).toVar();
     const pageSize = getPageSize(level).toVar();
@@ -277,11 +241,8 @@ export class VSMSampler {
         )
         .toVar(),
     };
-    const readyLayer = staticPool ?? dynamicPool;
-    const isReady = readyLayer
-      ? readyLayer.isReady.greaterThan(0)
-      : bool(false);
-    const isInside = isReady
+    const isInside = this.staticPool.isReady
+      .greaterThan(0)
       .and(sceneDepth.lessThan(1))
       .and(sunDirection.y.lessThan(-0.25));
     const visibility = float(1).toVar();
@@ -302,12 +263,12 @@ export class VSMSampler {
         .and(tentOrigin.y.greaterThanEqual(0))
         .and(tentOrigin.x.lessThanEqual(VSM_PAGE_TEXELS - 3))
         .and(tentOrigin.y.lessThanEqual(VSM_PAGE_TEXELS - 3))
-        .and(staticPool ? centerPage.isResident : bool(false))
+        .and(centerPage.isResident)
         .toVar();
       If(isSoftReceiver, () => {
         If(isTentAvailable, () => {
           visibilitySum.assign(
-            this.sampleTent(pagePosition, centerPage, receiver, layers),
+            this.sampleTent(pagePosition, centerPage, receiver),
           );
           weight.assign(1);
         }).Else(() => {
@@ -318,7 +279,6 @@ export class VSMSampler {
               level,
               centerPage,
               receiver,
-              layers,
             );
             visibilitySum.addAssign(tap.visibility);
             weight.addAssign(tap.weight);
@@ -329,13 +289,12 @@ export class VSMSampler {
           pagePosition,
           centerPage,
           receiver,
-          layers,
         );
         If(
           isTentAvailable.and(radius.lessThanEqual(TENT_RADIUS_TEXELS)),
           () => {
             visibilitySum.assign(
-              this.sampleTent(pagePosition, centerPage, receiver, layers),
+              this.sampleTent(pagePosition, centerPage, receiver),
             );
             weight.assign(1);
           },
@@ -354,7 +313,6 @@ export class VSMSampler {
               level,
               centerPage,
               receiver,
-              layers,
             );
             visibilitySum.addAssign(tap.visibility);
             weight.addAssign(tap.weight);
@@ -391,9 +349,7 @@ export class VSMSampler {
     level: Node<"uint">,
     centerPage: PageLookup,
     receiver: Receiver,
-    layers: SampledLayers,
   ) {
-    const { staticPool, dynamicPool } = layers;
     const halfTexel = 0.5 / VSM_PAGE_TEXELS;
     const tapPosition = pagePosition.add(pageOffset).toVar();
     const pageCoordinate = getPageCoordinate(tapPosition).toVar();
@@ -417,25 +373,25 @@ export class VSMSampler {
       },
     );
     const pageUv = tapPosition.fract().clamp(halfTexel, 1 - halfTexel);
-    const visibility = float(1).toVar();
-    if (staticPool)
-      visibility.assign(
-        this.sampleDepth(staticPool, slot, pageUv, pageOffset, receiver),
+    const visibility = this.sampleDepth(
+      this.staticPool,
+      slot,
+      pageUv,
+      pageOffset,
+      receiver,
+    ).toVar();
+    If(hasDynamic, () => {
+      visibility.mulAssign(
+        this.sampleDepth(
+          this.dynamicPool,
+          dynamicSlot,
+          pageUv,
+          pageOffset,
+          receiver,
+        ),
       );
-    if (dynamicPool)
-      If(hasDynamic, () => {
-        visibility.mulAssign(
-          this.sampleDepth(
-            dynamicPool,
-            dynamicSlot,
-            pageUv,
-            pageOffset,
-            receiver,
-          ),
-        );
-      });
-    const isSampled = staticPool ? isResident : hasDynamic;
-    const weight = isSampled.select(float(1), float(0));
+    });
+    const weight = isResident.select(float(1), float(0));
     return { visibility: visibility.mul(weight), weight };
   }
 
@@ -443,34 +399,30 @@ export class VSMSampler {
     pagePosition: Vec2Node,
     centerPage: PageLookup,
     receiver: Receiver,
-    layers: SampledLayers,
   ) {
-    const { staticPool, dynamicPool } = layers;
     const pageUv = pagePosition.fract();
     const heightSum = float(0).toVar();
     const count = float(0).toVar();
-    if (staticPool)
-      If(centerPage.isResident, () => {
-        const blockers = this.searchBlockers(
-          staticPool,
-          centerPage.slot,
-          pageUv,
-          receiver,
-        );
-        heightSum.addAssign(blockers.heightSum);
-        count.addAssign(blockers.count);
-      });
-    if (dynamicPool)
-      If(centerPage.hasDynamic, () => {
-        const blockers = this.searchBlockers(
-          dynamicPool,
-          centerPage.dynamicSlot,
-          pageUv,
-          receiver,
-        );
-        heightSum.addAssign(blockers.heightSum);
-        count.addAssign(blockers.count);
-      });
+    If(centerPage.isResident, () => {
+      const blockers = this.searchBlockers(
+        this.staticPool,
+        centerPage.slot,
+        pageUv,
+        receiver,
+      );
+      heightSum.addAssign(blockers.heightSum);
+      count.addAssign(blockers.count);
+    });
+    If(centerPage.hasDynamic, () => {
+      const blockers = this.searchBlockers(
+        this.dynamicPool,
+        centerPage.dynamicSlot,
+        pageUv,
+        receiver,
+      );
+      heightSum.addAssign(blockers.heightSum);
+      count.addAssign(blockers.count);
+    });
     const { filter } = this;
     const rayDistance = heightSum
       .div(count.max(1))
@@ -536,26 +488,24 @@ export class VSMSampler {
     pagePosition: Vec2Node,
     centerPage: PageLookup,
     receiver: Receiver,
-    layers: SampledLayers,
   ) {
-    const { staticPool, dynamicPool } = layers;
     const pageUv = pagePosition.fract().toVar();
-    const visibility = float(1).toVar();
-    if (staticPool)
-      visibility.assign(
-        this.sampleLayerTent(staticPool, centerPage.slot, pageUv, receiver),
+    const visibility = this.sampleLayerTent(
+      this.staticPool,
+      centerPage.slot,
+      pageUv,
+      receiver,
+    ).toVar();
+    If(centerPage.hasDynamic, () => {
+      visibility.mulAssign(
+        this.sampleLayerTent(
+          this.dynamicPool,
+          centerPage.dynamicSlot,
+          pageUv,
+          receiver,
+        ),
       );
-    if (dynamicPool)
-      If(centerPage.hasDynamic, () => {
-        visibility.mulAssign(
-          this.sampleLayerTent(
-            dynamicPool,
-            centerPage.dynamicSlot,
-            pageUv,
-            receiver,
-          ),
-        );
-      });
+    });
     return visibility;
   }
 
