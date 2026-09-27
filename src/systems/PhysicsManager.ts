@@ -83,9 +83,9 @@ export class PhysicsManager {
   }
 
   private onCollisionWithWood(playerCollider: Collider) {
-    const linvel = playerCollider.parent()?.linvel();
-    if (!linvel) return;
-    this.dummyVectorLinVel.copy(linvel);
+    const body = playerCollider.parent();
+    if (!body) return;
+    body.linvel(this.dummyVectorLinVel);
     const intensity = this.dummyVectorLinVel.lengthSq();
     if (intensity < config.minImpactSq) return;
     const volume = this.impactToVolume(intensity);
@@ -94,9 +94,9 @@ export class PhysicsManager {
   }
 
   private onCollisionWithStone(playerCollider: Collider) {
-    const linvel = playerCollider.parent()?.linvel();
-    if (!linvel) return;
-    this.dummyVectorLinVel.copy(linvel);
+    const body = playerCollider.parent();
+    if (!body) return;
+    body.linvel(this.dummyVectorLinVel);
     const intensity = this.dummyVectorLinVel.lengthSq();
     if (intensity < config.minImpactSq) return;
     const volume = this.impactToVolume(intensity);
@@ -105,42 +105,48 @@ export class PhysicsManager {
   }
 
   private handleCollisionSounds() {
-    this.eventQueue.drainCollisionEvents((handle1, handle2, started) => {
-      if (this.audioManager.isMute) return;
-      if (!started) return;
-
-      const collider1 = this.world.getCollider(handle1);
-      const collider2 = this.world.getCollider(handle2);
-      if (!collider1 || !collider2) return;
-
-      const collider1Type = this.getColliderName(collider1);
-      const collider2Type = this.getColliderName(collider2);
-
-      let playerCollider: Collider | null = null;
-      let collidedWith: RevoColliderType | undefined;
-
-      if (collider1Type === RevoColliderType.Player) {
-        playerCollider = collider1;
-        collidedWith = collider2Type;
-      } else if (collider2Type === RevoColliderType.Player) {
-        playerCollider = collider2;
-        collidedWith = collider1Type;
-      }
-
-      if (!playerCollider) return;
-
-      switch (collidedWith) {
-        case RevoColliderType.Wood:
-          this.onCollisionWithWood(playerCollider);
-          break;
-        case RevoColliderType.Stone:
-          this.onCollisionWithStone(playerCollider);
-          break;
-        default:
-          break;
-      }
-    });
+    this.eventQueue.drainCollisionEvents(this.onCollisionEvent);
   }
+
+  private onCollisionEvent = (
+    handle1: number,
+    handle2: number,
+    started: boolean,
+  ) => {
+    if (this.audioManager.isMute) return;
+    if (!started) return;
+
+    const collider1 = this.world.getCollider(handle1);
+    const collider2 = this.world.getCollider(handle2);
+    if (!collider1 || !collider2) return;
+
+    const collider1Type = this.getColliderName(collider1);
+    const collider2Type = this.getColliderName(collider2);
+
+    let playerCollider: Collider | null = null;
+    let collidedWith: RevoColliderType | undefined;
+
+    if (collider1Type === RevoColliderType.Player) {
+      playerCollider = collider1;
+      collidedWith = collider2Type;
+    } else if (collider2Type === RevoColliderType.Player) {
+      playerCollider = collider2;
+      collidedWith = collider1Type;
+    }
+
+    if (!playerCollider) return;
+
+    switch (collidedWith) {
+      case RevoColliderType.Wood:
+        this.onCollisionWithWood(playerCollider);
+        break;
+      case RevoColliderType.Stone:
+        this.onCollisionWithStone(playerCollider);
+        break;
+      default:
+        break;
+    }
+  };
 
   private createDebugMesh(positions: Float32Array) {
     const geometry = new LineSegmentsGeometry();

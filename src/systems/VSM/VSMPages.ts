@@ -1,6 +1,7 @@
 import { Vector2, Vector3, type Box3, type Texture } from "three";
 import {
   StorageBufferAttribute,
+  type ComputeNode,
   type Node,
   type TextureNode,
   type WebGPURenderer,
@@ -126,6 +127,7 @@ export class VSMPages {
   private nextReadbackTime = 0;
   private requestResetNode;
   private requestNode;
+  private requestDispatchSize = [1, 1, 1];
   private resetNode;
   private invalidateNode;
   private collectNode;
@@ -417,6 +419,7 @@ export class VSMPages {
 
     this.requestResetNode.name = "VSM page request reset";
     this.requestNode.name = "VSM page requests";
+    this.requestNode.dispatchSize = this.requestDispatchSize;
     this.resetNode.name = "VSM page reset";
     this.invalidateNode.name = "VSM page invalidate";
     this.collectNode.name = "VSM page collect";
@@ -500,26 +503,28 @@ export class VSMPages {
     );
   }
 
-  getRequestNodes() {
+  collectRequestNodes(nodes: ComputeNode[]) {
     const { changes, drawingBufferSize } = this.context;
-    if (!changes.shouldRequestPages) return [];
+    if (!changes.shouldRequestPages) return;
     const width = Math.max(1, Math.floor(drawingBufferSize.x));
     const height = Math.max(1, Math.floor(drawingBufferSize.y));
     this.depthSize.value.set(width, height);
-    this.requestNode.dispatchSize = [
-      Math.ceil(width / (REQUEST_WORKGROUP_SIZE * TILE_SIZE)),
-      Math.ceil(height / (REQUEST_WORKGROUP_SIZE * TILE_SIZE)),
-      1,
-    ];
-    return [this.requestResetNode, this.requestNode];
+    this.requestDispatchSize[0] = Math.ceil(
+      width / (REQUEST_WORKGROUP_SIZE * TILE_SIZE),
+    );
+    this.requestDispatchSize[1] = Math.ceil(
+      height / (REQUEST_WORKGROUP_SIZE * TILE_SIZE),
+    );
+    nodes.push(this.requestResetNode, this.requestNode);
   }
 
-  getResidencyNodes() {
-    const { changes } = this.context;
+  collectResidencyNodes(nodes: ComputeNode[]) {
+    const { changes, staticBoundsToRedraw } = this.context;
     const hasFullInvalidation = this.context.takePageInvalidation();
-    const dirtyBounds = this.context.takeDirtyStaticBounds();
     if (hasFullInvalidation) this.hasPendingWork = true;
-    else if (dirtyBounds.length > 0) this.writeInvalidationRects(dirtyBounds);
+    else if (staticBoundsToRedraw.length > 0)
+      this.writeInvalidationRects(staticBoundsToRedraw);
+    this.context.clearStaticBoundsToRedraw();
 
     if (this.hasDispatchedResidency) this.refreshStatsOnInterval();
     if (
@@ -527,14 +532,14 @@ export class VSMPages {
       !this.hasPendingWork &&
       this.stats.missing === 0
     )
-      return [];
+      return false;
     this.hasPendingWork = false;
     this.hasDispatchedResidency = true;
-    const nodes = [this.resetNode];
+    nodes.push(this.resetNode);
     if (this.hasPendingInvalidation) nodes.push(this.invalidateNode);
     this.hasPendingInvalidation = false;
     nodes.push(this.collectNode, this.freeNode, this.allocateNode);
-    return nodes;
+    return true;
   }
 
   private writeInvalidationRects(boxes: Box3[]) {

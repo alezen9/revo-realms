@@ -107,15 +107,15 @@ export type GrassMonitoringStats = {
 };
 
 const throttleLanes = [
-  { interval: 2, offset: 0 },
-  { interval: 4, offset: 1 },
-  { interval: 16, offset: 5 },
-  { interval: 64, offset: 17 },
+  { interval: 2, offset: 0, event: "engine-render-update-throttle-2x" },
+  { interval: 4, offset: 1, event: "engine-render-update-throttle-4x" },
+  { interval: 16, offset: 5, event: "engine-render-update-throttle-16x" },
+  { interval: 64, offset: 17, event: "engine-render-update-throttle-64x" },
 ] as const;
 
 type ThrottleInterval = (typeof throttleLanes)[number]["interval"];
 type ThrottledEvents = {
-  [T in ThrottleInterval as `engine-render-update-throttle-${T}x`]: UpdateEvent;
+  [L in (typeof throttleLanes)[number] as L["event"]]: UpdateEvent;
 };
 
 type EngineEvents = {
@@ -155,6 +155,7 @@ export class EventsManager {
   private emitter = new EventEmitter<Events>();
   private frameIndex = 0;
   private throttledDeltaByInterval = new Map<ThrottleInterval, number>();
+  private throttledState?: State;
 
   constructor() {
     this.updateThrottled();
@@ -169,7 +170,7 @@ export class EventsManager {
       this.frameIndex++;
 
       for (const lane of throttleLanes) {
-        const { interval, offset } = lane;
+        const { interval, offset, event } = lane;
         const accDelta =
           (this.throttledDeltaByInterval.get(interval) ?? 0) + delta;
         this.throttledDeltaByInterval.set(interval, accDelta);
@@ -178,10 +179,10 @@ export class EventsManager {
         if (!canEmit) continue;
         if ((this.frameIndex - offset) % interval !== 0) continue;
 
-        this.emit(`engine-render-update-throttle-${interval}x`, {
-          player,
-          delta: accDelta,
-        } as State);
+        if (!this.throttledState) this.throttledState = { player, delta: 0 };
+        this.throttledState.player = player;
+        this.throttledState.delta = accDelta;
+        this.emit(event, this.throttledState);
         this.throttledDeltaByInterval.set(interval, 0);
       }
     });

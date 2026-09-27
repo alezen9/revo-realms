@@ -187,13 +187,14 @@ export class VSMDepthPool {
       this.context.invalidateAllPages();
   }
 
-  getComputeNodes() {
-    const nodes = [this.clearNode];
-    for (const { bucket, rasterNode } of this.clusterCasters.values())
-      nodes.push(...bucket.takeComputeNodes(), rasterNode);
-    nodes.push(...this.instanceRasterNodes);
+  collectComputeNodes(nodes: ComputeNode[]) {
+    nodes.push(this.clearNode);
+    for (const { bucket, rasterNode } of this.clusterCasters.values()) {
+      bucket.collectComputeNodes(nodes);
+      nodes.push(rasterNode);
+    }
+    for (const rasterNode of this.instanceRasterNodes) nodes.push(rasterNode);
     this.isReady.value = 1;
-    return nodes;
   }
 
   setInstanceCasters(casters: VSMRasterCaster[]) {
@@ -437,29 +438,30 @@ export class VSMDepthPool {
                     .greaterThanEqual(0)
                     .and(secondWeight.greaterThanEqual(0))
                     .and(thirdWeight.greaterThanEqual(0));
-                  const isOpaque =
-                    hasOpacity && opacityNode
-                      ? opacityNode
-                          .context({
-                            forceUVContext: true,
-                            getUV: () =>
-                              triangleUvs
-                                .element<"vec2">(cornerBase)
-                                .mul(firstWeight)
-                                .add(
-                                  triangleUvs
-                                    .element<"vec2">(cornerBase.add(1))
-                                    .mul(secondWeight),
-                                )
-                                .add(
-                                  triangleUvs
-                                    .element<"vec2">(cornerBase.add(2))
-                                    .mul(thirdWeight),
-                                ),
-                          })
-                          .greaterThanEqual(alphaTest)
-                      : isInside;
-                  If(isInside.and(isOpaque), () => {
+                  let isCovered = isInside;
+                  if (hasOpacity && opacityNode) {
+                    const texelUv = triangleUvs
+                      .element<"vec2">(cornerBase)
+                      .mul(firstWeight)
+                      .add(
+                        triangleUvs
+                          .element<"vec2">(cornerBase.add(1))
+                          .mul(secondWeight),
+                      )
+                      .add(
+                        triangleUvs
+                          .element<"vec2">(cornerBase.add(2))
+                          .mul(thirdWeight),
+                      );
+                    const opacity = opacityNode.context({
+                      forceUVContext: true,
+                      getUV: () => texelUv,
+                    });
+                    isCovered = isInside.and(
+                      opacity.greaterThanEqual(alphaTest),
+                    );
+                  }
+                  If(isCovered, () => {
                     const depth = first.z
                       .mul(firstWeight)
                       .add(second.z.mul(secondWeight))

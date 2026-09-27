@@ -16,6 +16,7 @@ export class PlayerVisual {
   private bodyQuaternion = new Quaternion();
 
   private previousVelocity = new Vector3();
+  private velocity = new Vector3();
   private velocityDelta = new Vector3();
   private horizontalVelocity = new Vector3();
   private deformationDirection = new Vector3(0, 0, -1);
@@ -34,8 +35,8 @@ export class PlayerVisual {
     this.mesh = mesh;
     this.rigidBody = rigidBody;
 
-    this.prevPosition.copy(rigidBody.translation());
-    this.prevQuaternion.copy(rigidBody.rotation());
+    rigidBody.translation(this.prevPosition);
+    rigidBody.rotation(this.prevQuaternion);
     this.targetPosition.copy(this.prevPosition);
     this.targetQuaternion.copy(this.prevQuaternion);
   }
@@ -50,7 +51,8 @@ export class PlayerVisual {
     isInWater: boolean,
     forwardDirection: Vector3,
   ) {
-    const velocity = this.rigidBody.linvel();
+    const { velocity } = this;
+    this.rigidBody.linvel(velocity);
     this.velocityDelta.subVectors(velocity, this.previousVelocity);
     this.horizontalVelocity.set(velocity.x, 0, velocity.z);
 
@@ -69,8 +71,8 @@ export class PlayerVisual {
 
     this.prevPosition.copy(this.targetPosition);
     this.prevQuaternion.copy(this.targetQuaternion);
-    this.targetPosition.copy(this.rigidBody.translation());
-    this.targetQuaternion.copy(this.rigidBody.rotation());
+    this.rigidBody.translation(this.targetPosition);
+    this.rigidBody.rotation(this.targetQuaternion);
   }
 
   interpolate(delta: number) {

@@ -46,6 +46,8 @@ export default class Player {
   private yawQuaternion = new Quaternion();
   private newLinVel = new Vector3();
   private newAngVel = new Vector3();
+  private linearVelocity = new Vector3();
+  private angularVelocity = new Vector3();
   private forwardVec = new Vector3();
   private jumpImpulse = new Vector3();
   private bodyPosition = new Vector3();
@@ -123,7 +125,7 @@ export default class Player {
   private onBeforePhysics = (state: State) => {
     const { delta } = state;
 
-    this.bodyPosition.copy(this.rigidBody.translation());
+    this.rigidBody.translation(this.bodyPosition);
     this.water.update(delta, this.bodyPosition);
     this.updateYaw(delta);
     this.updateVerticalMovement(delta);
@@ -159,8 +161,8 @@ export default class Player {
       this.previousYawInRadians + shortestYawOffset * physicsScheduler.alpha;
     this.camera.update(delta, this.visualRoot.position, interpolatedYaw);
 
-    const { x, y, z } = this.rigidBody.angvel();
-    const spinRate = Math.hypot(x, y, z);
+    this.rigidBody.angvel(this.angularVelocity);
+    const spinRate = this.angularVelocity.length();
     playerUniforms.uSpinFactor.value = MathUtils.smoothstep(
       spinRate,
       blurStart,
@@ -209,28 +211,33 @@ export default class Player {
   }
 
   private updateVerticalVelocity(delta: number, isJumpKeyPressed: boolean) {
-    const velocity = this.rigidBody.linvel();
-    const initialVelocityY = velocity.y;
+    const { linearVelocity } = this;
+    this.rigidBody.linvel(linearVelocity);
+    const initialVelocityY = linearVelocity.y;
 
-    this.handleJumpCut(isJumpKeyPressed, velocity);
+    this.handleJumpCut(isJumpKeyPressed, linearVelocity);
     if (!this.isOnGround) {
-      this.handleFastFall(delta, velocity, physicsManager.world.gravity.y);
+      this.handleFastFall(
+        delta,
+        linearVelocity,
+        physicsManager.world.gravity.y,
+      );
     }
 
     const isSlowBounce =
-      Math.abs(velocity.y) <
+      Math.abs(linearVelocity.y) <
       config.BOUNCE_SETTLE_VERTICAL_SPEED_IN_METERS_PER_SECOND;
     const shouldSettleBounce =
       this.isOnGround && !isJumpKeyPressed && isSlowBounce;
-    if (shouldSettleBounce) velocity.y = 0;
+    if (shouldSettleBounce) linearVelocity.y = 0;
 
-    if (velocity.y === initialVelocityY) return;
-    this.rigidBody.setLinvel(velocity, true);
+    if (linearVelocity.y === initialVelocityY) return;
+    this.rigidBody.setLinvel(linearVelocity, true);
   }
 
   private checkIfGrounded(): boolean {
     // Cast from just above the sphere's bottom for stable grounding.
-    this.rayOrigin.copy(this.rigidBody.translation());
+    this.rigidBody.translation(this.rayOrigin);
     this.rayOrigin.y -=
       config.RADIUS_IN_METERS - config.GROUND_RAY_START_ABOVE_BOTTOM_IN_METERS;
     const hit = physicsManager.world.castRay(
@@ -258,10 +265,8 @@ export default class Player {
     let jumpVelocity = config.DOUBLE_JUMP_VELOCITY_IN_METERS_PER_SECOND;
     if (isGroundJump) jumpVelocity = config.JUMP_VELOCITY_IN_METERS_PER_SECOND;
 
-    const velocityChange = Math.max(
-      0,
-      jumpVelocity - this.rigidBody.linvel().y,
-    );
+    this.rigidBody.linvel(this.linearVelocity);
+    const velocityChange = Math.max(0, jumpVelocity - this.linearVelocity.y);
     this.jumpImpulse.set(0, velocityChange * config.MASS_IN_KILOGRAMS, 0);
     this.rigidBody.applyImpulse(this.jumpImpulse, true);
 
@@ -313,7 +318,7 @@ export default class Player {
     const driveSign = Number(isForward) - Number(isBackward);
     const linVelScale = acceleration * delta * this.getMovementMultiplier();
 
-    this.newLinVel.copy(this.rigidBody.linvel());
+    this.rigidBody.linvel(this.newLinVel);
     this.newLinVel.addScaledVector(this.forwardVec, linVelScale * driveSign);
 
     const horizontalSpeed = Math.hypot(this.newLinVel.x, this.newLinVel.z);

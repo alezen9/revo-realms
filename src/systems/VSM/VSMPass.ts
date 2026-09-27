@@ -1,5 +1,10 @@
 import { NoToneMapping, type Camera, type Mesh } from "three";
-import type { Node, TextureNode, WebGPURenderer } from "three/webgpu";
+import type {
+  ComputeNode,
+  Node,
+  TextureNode,
+  WebGPURenderer,
+} from "three/webgpu";
 import {
   float,
   mix,
@@ -49,6 +54,8 @@ export class VSMPass {
   private sampler: VSMSampler;
   private uSunVisibility = uniform(1);
   private uShadowIntensity = uniform(0.7);
+  private terrainBounds = { min: 0, max: 0 };
+  private computeNodes: ComputeNode[] = [];
 
   constructor(renderer: WebGPURenderer, scene: ScenePass, camera: Camera) {
     this.renderer = renderer;
@@ -105,20 +112,17 @@ export class VSMPass {
     const { min, max } = assetManager.resources.heightmap.userData;
     if (typeof min !== "number" || typeof max !== "number")
       throw new Error("Shadows require terrain height bounds");
-    this.staticCache.sync({ min, max });
-    this.dynamicLayer.sync({ min, max });
-    const requestNodes = this.pages.getRequestNodes();
-    const residencyNodes = this.pages.getResidencyNodes();
-    const hasAllocations = residencyNodes.length > 0;
-    const staticNodes = hasAllocations
-      ? this.staticCache.getComputeNodes()
-      : [];
-    this.renderer.compute([
-      ...requestNodes,
-      ...residencyNodes,
-      ...staticNodes,
-      ...this.dynamicLayer.getComputeNodes(),
-    ]);
+    const { terrainBounds, computeNodes } = this;
+    terrainBounds.min = min;
+    terrainBounds.max = max;
+    this.staticCache.sync(terrainBounds);
+    this.dynamicLayer.sync(terrainBounds);
+    computeNodes.length = 0;
+    this.pages.collectRequestNodes(computeNodes);
+    const hasResidencyWork = this.pages.collectResidencyNodes(computeNodes);
+    if (hasResidencyWork) this.staticCache.collectComputeNodes(computeNodes);
+    this.dynamicLayer.collectComputeNodes(computeNodes);
+    this.renderer.compute(computeNodes);
   }
 
   sampleShadowedColor(uv: Node<"vec2">) {

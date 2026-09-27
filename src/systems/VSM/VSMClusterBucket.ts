@@ -4,7 +4,7 @@ import {
   IndirectStorageBufferAttribute,
   StorageBufferAttribute,
 } from "three/webgpu";
-import type { Node } from "three/webgpu";
+import type { ComputeNode, Node } from "three/webgpu";
 import {
   atomicAdd,
   atomicStore,
@@ -417,12 +417,10 @@ export class VSMClusterBucket implements VSMRasterSource {
     this.hasDirtyBounds = true;
   }
 
-  takeComputeNodes() {
-    const nodes = this.hasDirtyBounds
-      ? [this.boundsNode, this.resetNode, this.buildNode]
-      : [this.resetNode, this.buildNode];
+  collectComputeNodes(nodes: ComputeNode[]) {
+    if (this.hasDirtyBounds) nodes.push(this.boundsNode);
+    nodes.push(this.resetNode, this.buildNode);
     this.hasDirtyBounds = false;
-    return nodes;
   }
 
   dispose() {

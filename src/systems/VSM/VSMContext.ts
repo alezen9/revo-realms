@@ -190,7 +190,7 @@ export class VSMContext {
   };
   private renderer: WebGPURenderer;
   private casterEntries = new Map<Mesh, VSMCaster>();
-  private dirtyStaticBounds: Box3[] = [];
+  readonly staticBoundsToRedraw: Box3[] = [];
   private hasPageInvalidation = true;
   private versions: LayerVersions = {
     static: { roster: 0, revision: 0 },
@@ -250,9 +250,9 @@ export class VSMContext {
         this.versions.dynamic.revision++;
         continue;
       }
-      this.dirtyStaticBounds.push(worldBounds.clone());
+      this.staticBoundsToRedraw.push(worldBounds.clone());
       worldBounds.setFromObject(mesh);
-      this.dirtyStaticBounds.push(worldBounds.clone());
+      this.staticBoundsToRedraw.push(worldBounds.clone());
       this.versions.static.revision++;
     }
     for (const kind of VSM_LAYER_KINDS) {
@@ -309,10 +309,8 @@ export class VSMContext {
     return hasPageInvalidation;
   }
 
-  takeDirtyStaticBounds() {
-    const bounds = this.dirtyStaticBounds;
-    this.dirtyStaticBounds = [];
-    return bounds;
+  clearStaticBoundsToRedraw() {
+    this.staticBoundsToRedraw.length = 0;
   }
 
   resolvePage(pageKey: Node<"uint">, pageTag: Node<"uint">) {
@@ -371,7 +369,7 @@ export class VSMContext {
       worldMatrix: mesh.matrixWorld.clone(),
       worldBounds,
     });
-    if (kind === "static") this.dirtyStaticBounds.push(worldBounds.clone());
+    if (kind === "static") this.staticBoundsToRedraw.push(worldBounds.clone());
     this.casterCounts[kind]++;
     this.versions[getLayerKind(kind)].roster++;
   }
@@ -381,7 +379,8 @@ export class VSMContext {
     if (!entry) throw new Error(`Shadow caster not registered: ${mesh.name}`);
 
     this.casterEntries.delete(mesh);
-    if (entry.kind === "static") this.dirtyStaticBounds.push(entry.worldBounds);
+    if (entry.kind === "static")
+      this.staticBoundsToRedraw.push(entry.worldBounds);
     this.casterCounts[entry.kind]--;
     this.versions[getLayerKind(entry.kind)].roster++;
   }
@@ -394,7 +393,7 @@ export class VSMContext {
       throw new Error(`Invalid shadow depth bias: ${mesh.name}`);
     if (entry.depthBias === depthBias) return;
     entry.depthBias = depthBias;
-    this.dirtyStaticBounds.push(entry.worldBounds.clone());
+    this.staticBoundsToRedraw.push(entry.worldBounds.clone());
     this.versions.static.revision++;
   }
 }

@@ -15,6 +15,7 @@ export class PlayerWater {
   private rigidBody: RigidBody;
   private mask: WaterMask | null;
   private impulse = new Vector3();
+  private velocity = new Vector3();
   private bobTime = 0;
 
   constructor(rigidBody: RigidBody) {
@@ -87,8 +88,8 @@ export class PlayerWater {
     const edgeFade = Math.min(submergedDepth / edgeFadeDepth, 1);
 
     const buoyancy = submersionRatio * buoyancyForce * edgeFade;
-    const verticalSpeed = this.rigidBody.linvel().y;
-    const verticalDamping = verticalSpeed * -verticalDampingRate * edgeFade;
+    this.rigidBody.linvel(this.velocity);
+    const verticalDamping = this.velocity.y * -verticalDampingRate * edgeFade;
     const bob = Math.sin(this.bobTime * bobFrequency) * bobForce * edgeFade;
 
     this.impulse.set(0, (buoyancy + verticalDamping + bob) * delta, 0);

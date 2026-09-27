@@ -105,15 +105,13 @@ export class VSMDynamicLayer {
     this.casterRanges?.update(this.sources, lightX.value, lightY.value);
   }
 
-  getComputeNodes() {
-    const nodes: ComputeNode[] = [];
+  collectComputeNodes(nodes: ComputeNode[]) {
     if (this.prepareNode) nodes.push(this.prepareNode);
     for (const caster of this.activeInstanceCasters)
-      nodes.push(...caster.computeNodes);
+      caster.collectComputeNodes(nodes);
     if (this.touchNode && this.jobsNode)
       nodes.push(this.touchNode, this.jobsNode);
-    nodes.push(...this.pool.getComputeNodes());
-    return nodes;
+    this.pool.collectComputeNodes(nodes);
   }
 
   private rebuildCasters() {
@@ -372,10 +370,11 @@ class DynamicCasterRanges {
           maxX = Math.max(maxX, page.x);
           maxY = Math.max(maxY, page.y);
         }
-        this.rangeValues.set(
-          [minX, minY, maxX, maxY],
-          (casterIndex * VSM_LEVEL_COUNT + level) * 4,
-        );
+        const rangeOffset = (casterIndex * VSM_LEVEL_COUNT + level) * 4;
+        this.rangeValues[rangeOffset] = minX;
+        this.rangeValues[rangeOffset + 1] = minY;
+        this.rangeValues[rangeOffset + 2] = maxX;
+        this.rangeValues[rangeOffset + 3] = maxY;
       }
     }
     this.pageRangesAttribute.needsUpdate = true;
@@ -548,8 +547,8 @@ class InstanceCaster implements VSMRasterSource {
     this.buildNode.name = "VSM instance work";
   }
 
-  get computeNodes() {
-    return [this.resetNode, this.buildNode];
+  collectComputeNodes(nodes: ComputeNode[]) {
+    nodes.push(this.resetNode, this.buildNode);
   }
 
   toRasterCaster() {
