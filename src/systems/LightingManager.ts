@@ -1,7 +1,6 @@
 import {
   Color,
   DirectionalLight,
-  FogExp2,
   HemisphereLight,
   Object3D,
   Vector2,
@@ -12,8 +11,18 @@ import { type DebugManager } from "./DebugManager";
 import { type EventsManager } from "./EventsManager";
 import type { AssetManager } from "./AssetManager/AssetManager";
 import { type State } from "../Game";
-import { uniform } from "three/tsl";
+import type { Node } from "three/webgpu";
+import { exp, float, mix, texture, uniform, vec2 } from "three/tsl";
 import { srgbColorTarget } from "../utils/TweakpaneColor";
+import { TSLUtils } from "../utils/TSLUtils";
+import { gameTime } from "../utils/GameTime";
+import { windManager } from ".";
+
+const WISP_SCALE = 0.025;
+const WISP_SPEED = 0.8;
+const WISP_STRENGTH = 0.85;
+const SUN_GLOW_SHARPNESS = 6;
+const SUN_GLOW_STRENGTH = 0.5;
 
 const config = {
   LIGHT_POSITION_OFFSET: new Vector3(10, 5, 10),
@@ -30,6 +39,8 @@ const config = {
   // fogDensity: 0.009, // Dark
   fogColor: new Color(0.64, 0.6, 0.48).convertSRGBToLinear(), // Light
   fogDensity: 0.0044, // Light
+  mistDensity: 0.06,
+  mistHeight: 0.6,
   fogEnabled: true,
   backgroundEnabled: false,
 };
@@ -37,7 +48,6 @@ const config = {
 export class LightingManager {
   private directionalLight: DirectionalLight;
   private hemisphereLight: HemisphereLight;
-  private fog: FogExp2;
   private eventsManager: EventsManager;
   private assetManager: AssetManager;
 
@@ -56,6 +66,11 @@ export class LightingManager {
   uHemiSkyColor = uniform(config.hemiSkyColor.clone());
   uHemiGroundColor = uniform(config.hemiGroundColor.clone());
   uHemiIntensity = uniform(config.hemiIntensity);
+  uFogColor = uniform(config.fogColor.clone());
+  uFogDensity = uniform(config.fogDensity);
+  uMistDensity = uniform(config.mistDensity);
+  uMistHeight = uniform(config.mistHeight);
+  uFogAmount = uniform(1);
 
   constructor(
     sceneManager: SceneManager,
@@ -71,7 +86,6 @@ export class LightingManager {
     this.hemisphereLight = this.setupHemisphereLight();
     sceneManager.mainScene.add(this.hemisphereLight);
 
-    this.fog = this.setupFog();
     this.syncFog(sceneManager);
 
     eventsManager.on("engine-camera-change", () => this.syncFog(sceneManager));
@@ -83,11 +97,56 @@ export class LightingManager {
     return this.uSunColor.value;
   }
 
+  getFogVisibility(worldPosition: Node<"vec3">, viewerPosition: Node<"vec3">) {
+    const { heightmap, noiseAtlas } = this.assetManager.resources;
+    const mapUv = TSLUtils.computeMapUvByPosition(worldPosition.xz);
+    const groundHeight = texture(
+      heightmap,
+      vec2(mapUv.x, float(1).sub(mapUv.y)),
+    ).r;
+    const pointHeight = worldPosition.y.sub(groundHeight).max(0);
+    const viewerHeight = viewerPosition.y.sub(groundHeight).max(0);
+    const distance = worldPosition.sub(viewerPosition).length();
+
+    const falloff = float(1).div(this.uMistHeight);
+    const viewerMist = exp(falloff.mul(viewerHeight).negate());
+    const pointMist = exp(falloff.mul(pointHeight).negate());
+    const heightDelta = pointHeight.sub(viewerHeight);
+    const isLevelRay = heightDelta.abs().lessThan(0.001);
+    const averageMist = isLevelRay.select(
+      viewerMist,
+      viewerMist.sub(pointMist).div(falloff.mul(heightDelta)),
+    );
+
+    const windOffset = windManager.uDirection.mul(gameTime.mul(WISP_SPEED));
+    const wispUv = worldPosition.xz.add(windOffset).mul(WISP_SCALE).fract();
+    const wispNoise = texture(noiseAtlas, wispUv, 2).rg;
+    const wisps = wispNoise.x.mul(0.7).add(wispNoise.y.mul(0.3));
+    const mistDensity = this.uMistDensity.mul(
+      mix(1 - WISP_STRENGTH, 1 + WISP_STRENGTH, wisps),
+    );
+
+    const mistDepth = mistDensity.mul(averageMist).mul(distance);
+    const hazeDepth = this.uFogDensity.mul(distance);
+    const opticalDepth = mistDepth.add(hazeDepth.mul(hazeDepth));
+    return mix(float(1), exp(opticalDepth.negate()), this.uFogAmount);
+  }
+
+  getFogColor(worldPosition: Node<"vec3">, viewerPosition: Node<"vec3">) {
+    const viewDirection = worldPosition.sub(viewerPosition).normalize();
+    const sunGlow = viewDirection
+      .dot(this.uSunDir.negate())
+      .max(0)
+      .pow(SUN_GLOW_SHARPNESS)
+      .mul(SUN_GLOW_STRENGTH);
+    return mix(this.uFogColor, this.uSunColor, sunGlow);
+  }
+
   private syncFog(sceneManager: SceneManager) {
     const isPlayerCamera =
       sceneManager.renderCamera === sceneManager.playerCamera;
-    sceneManager.mainScene.fog =
-      config.fogEnabled && isPlayerCamera ? this.fog : null;
+    const isFogVisible = config.fogEnabled && isPlayerCamera;
+    this.uFogAmount.value = Number(isFogVisible);
   }
 
   private syncSunDirection() {
@@ -121,11 +180,6 @@ export class LightingManager {
     directionalLight.target = new Object3D();
 
     return directionalLight;
-  }
-
-  private setupFog() {
-    const fog = new FogExp2(config.fogColor, config.fogDensity);
-    return fog;
   }
 
   private onEngineUpdate = ({ player }: State) => {
@@ -174,16 +228,28 @@ export class LightingManager {
         this.directionalLight.intensity = value;
         this.syncSunRadiance();
       });
-    lightFolder.addBinding(srgbColorTarget(this.fog.color), "value", {
+    lightFolder.addBinding(srgbColorTarget(this.uFogColor.value), "value", {
       label: "Fog Color",
       view: "color",
       color: { type: "float" },
     });
-    lightFolder.addBinding(this.fog, "density", {
+    lightFolder.addBinding(this.uFogDensity, "value", {
       label: "Fog Density",
       min: 0,
       max: 0.025,
       step: 0.0001,
+    });
+    lightFolder.addBinding(this.uMistDensity, "value", {
+      label: "Mist density",
+      min: 0,
+      max: 0.5,
+      step: 0.005,
+    });
+    lightFolder.addBinding(this.uMistHeight, "value", {
+      label: "Mist height",
+      min: 0.1,
+      max: 5,
+      step: 0.05,
     });
     lightFolder
       .addBinding(config, "fogEnabled", {

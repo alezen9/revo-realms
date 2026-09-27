@@ -11,6 +11,7 @@ import { ScenePass } from "./ScenePass";
 import { TexturePass } from "./TexturePass";
 import { ACESToneMappingPass } from "./ACESToneMappingPass";
 import { WaterPass } from "./WaterPass";
+import { FogPass } from "./FogPass";
 
 const BLOOM_OPTIONS = {
   strength: 0.8,
@@ -23,6 +24,7 @@ export class PostprocessingManager extends RenderPipeline {
   private scenePass: ScenePass;
   readonly vsmPass: VSMPass;
   private waterPass: WaterPass;
+  private fogPass: FogPass;
   private hdrPass: TexturePass;
   private dualKawaseBloomPass: DualKawaseBloomPass;
   private acesToneMappingPass: ACESToneMappingPass;
@@ -59,6 +61,7 @@ export class PostprocessingManager extends RenderPipeline {
     const camera = this.sceneManager.renderCamera;
     this.scenePass = new ScenePass(renderer, sceneManager.mainScene, camera);
     this.vsmPass = new VSMPass(renderer, this.scenePass, camera);
+    this.fogPass = new FogPass(this.scenePass, camera);
     this.waterPass = new WaterPass(renderer, sceneManager.waterScene, camera);
     this.hdrPass = new TexturePass(renderer, "Scene HDR");
     this.dualKawaseBloomPass = new DualKawaseBloomPass(renderer, BLOOM_OPTIONS);
@@ -66,6 +69,7 @@ export class PostprocessingManager extends RenderPipeline {
 
     this.chain = PostChain.from(this.scenePass)
       .pipe(this.vsmPass)
+      .pipe(this.fogPass)
       .pipe(this.waterPass)
       .pipe(this.hdrPass)
       .pipe(this.dualKawaseBloomPass)
@@ -87,6 +91,7 @@ export class PostprocessingManager extends RenderPipeline {
     const camera = this.sceneManager.renderCamera;
     this.scenePass.setCamera(camera);
     this.vsmPass.setCamera(camera);
+    this.fogPass.setCamera(camera);
     this.waterPass.setCamera(camera);
   };
 
