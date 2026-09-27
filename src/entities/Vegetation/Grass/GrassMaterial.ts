@@ -174,13 +174,35 @@ export class GrassMaterial extends SpriteNodeMaterial {
     // LIGHTING
     const lightingAngle = bladeHash.mul(53.3).fract().mul(TWO_PI);
 
-    const lightingNormal = vec3(cos(lightingAngle), 0, sin(lightingAngle));
+    const flatNormal = vec3(cos(lightingAngle), 0, sin(lightingAngle));
 
     const lightDirection = lightingManager.uSunDir.negate();
 
     const viewOffset = cameraPosition.sub(worldPosition);
     const viewDirection = viewOffset.normalize();
     const viewDirectionXZ = viewOffset.xz.normalize();
+
+    const clumpRadial = bladeLocalOffset.div(config.CLUMP_LOCAL_RADIUS);
+
+    const domeNormal = vec3(
+      clumpRadial.x.mul(uniforms.uTuftRoundness),
+      bladeHeight.add(0.5),
+      clumpRadial.y.mul(uniforms.uTuftRoundness),
+    ).normalize();
+
+    const viewSide = vec3(viewDirectionXZ.y, 0, viewDirectionXZ.x.negate());
+
+    const widthCoordinate = bladeUv.x.mul(2).sub(1);
+
+    const roundedNormal = domeNormal
+      .add(viewSide.mul(widthCoordinate.mul(uniforms.uWidthRoundness)))
+      .normalize();
+
+    const lightingNormal = mix(
+      flatNormal,
+      roundedNormal,
+      uniforms.uFluffiness,
+    ).normalize();
 
     const signedNdotL = lightingNormal.dot(lightDirection);
 
@@ -204,10 +226,16 @@ export class GrassMaterial extends SpriteNodeMaterial {
       mix(0.35, 1, diffuseFacing),
     );
 
+    const skyFacing = mix(
+      bladeHeight.mul(0.5),
+      lightingNormal.y.mul(0.5).add(0.5),
+      uniforms.uFluffiness,
+    );
+
     const hemisphereLight = mix(
       lightingManager.uHemiGroundColor,
       lightingManager.uHemiSkyColor,
-      bladeHeight.mul(0.5),
+      skyFacing,
     ).mul(lightingManager.uHemiIntensity);
 
     const sceneLight = hemisphereLight
@@ -220,7 +248,7 @@ export class GrassMaterial extends SpriteNodeMaterial {
     const lightingGrazing = varying(vec4(sceneLight, grazing));
 
     const viewLightingDetail = varying(
-      vec3(backlight, viewSunAlignment, nearDetailOcclusionValue),
+      vec4(backlight, viewSunAlignment, nearDetailOcclusionValue, skyFacing),
     );
 
     const sceneLighting = lightingGrazing.rgb;
@@ -229,6 +257,7 @@ export class GrassMaterial extends SpriteNodeMaterial {
     const bladeBacklight = viewLightingDetail.x;
     const bladeViewSunAlignment = viewLightingDetail.y;
     const nearDetailOcclusion = viewLightingDetail.z;
+    const bladeSkyFacing = viewLightingDetail.w;
 
     // FRAGMENT DETAIL
     const bladeEdgeDistance = bladeUv.x.mul(2).sub(1).abs();
@@ -277,8 +306,14 @@ export class GrassMaterial extends SpriteNodeMaterial {
 
     const shadedColor = diffuseColor.add(sheenColor).add(transmittedColor);
 
+    const bladeHemisphereLight = mix(
+      lightingManager.uHemiGroundColor,
+      lightingManager.uHemiSkyColor,
+      bladeSkyFacing,
+    ).mul(lightingManager.uHemiIntensity);
+
     const sunLighting = sceneLighting.sub(
-      hemisphereLight.mul(uniforms.uLightExposure),
+      bladeHemisphereLight.mul(uniforms.uLightExposure),
     );
     const directSun = albedo
       .mul(detailOcclusion)
