@@ -19,7 +19,7 @@ const uniforms = {
   uAoScale: uniform(0.75),
   uMetalnessScale: uniform(1),
   uRoughnessScale: uniform(1.5),
-  uEmissionScale: uniform(42),
+  uEmissionScale: uniform(20),
 };
 
 class LeviathanAxeMaterial extends DirectSunStandardNodeMaterial {

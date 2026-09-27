@@ -123,7 +123,7 @@ export class ShadowPass {
   private shadowFilter = {
     softness: uniform(0.5),
     lightSize: uniform(0.02),
-    maxSoftness: uniform(6),
+    maxSoftness: uniform(4.5),
   };
   private uProjectionMatrixInverse = uniform(new Matrix4());
   private uCameraWorldMatrix = uniform(new Matrix4());

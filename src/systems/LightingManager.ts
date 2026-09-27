@@ -16,14 +16,14 @@ import { uniform } from "three/tsl";
 import { srgbColorTarget } from "../utils/TweakpaneColor";
 
 const config = {
-  LIGHT_POSITION_OFFSET: new Vector3(10, 10, 10),
+  LIGHT_POSITION_OFFSET: new Vector3(10, 5, 10),
   // directionalColor: new Color(0.53, 0.65, 0.79), // Dark
   // directionalIntensity: 0.16, // Dark
-  directionalColor: new Color(1, 0.79, 0.58).convertSRGBToLinear(), // Light
+  directionalColor: new Color(0.94, 0.62, 0.4).convertSRGBToLinear(), // Light
   directionalIntensity: 0.62, // Light
   // hemiSkyColor: new Color(0.4, 0.45, 0.6), // Dark
   // hemiGroundColor: new Color(0.3, 0.2, 0.2), // Dark
-  hemiSkyColor: new Color(0.7, 0.59, 0.52).convertSRGBToLinear(), // Light
+  hemiSkyColor: new Color(0.82, 0.64, 0.53).convertSRGBToLinear(), // Light
   hemiGroundColor: new Color(0.36, 0.31, 0.19).convertSRGBToLinear(), // Light
   hemiIntensity: 0.38,
   // fogColor: new Color(0.05, 0.12, 0.24), // Dark

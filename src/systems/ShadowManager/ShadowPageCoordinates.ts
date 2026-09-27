@@ -15,7 +15,7 @@ const TAG_MASK = 0x3fff;
 const FIRST_PAGE_SIZE = 2 ** (SHADOW_FIRST_LEVEL + 1) / SHADOW_PAGE_GRID_SIZE;
 
 export const shadowResolutionBias = uniform(2);
-export const shadowSoftReceiverLevelBias = uniform(2);
+export const shadowSoftReceiverLevelBias = uniform(4);
 
 export const getShadowLightBasis = (sunDirection: Node<"vec3">) => {
   const horizontalLength = sunDirection.xz.length();
