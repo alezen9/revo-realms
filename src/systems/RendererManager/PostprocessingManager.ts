@@ -4,12 +4,12 @@ import type { renderOutput } from "three/tsl";
 import type { DebugFolder, DebugManager } from "../DebugManager";
 import type { EventsManager } from "../EventsManager";
 import type { SceneManager } from "../SceneManager";
-import { ShadowPass } from "../ShadowManager/ShadowPass";
+import { VSMPass } from "../VSM/VSMPass";
 import { DualKawaseBloomPass } from "./DualKawaseBloomPass";
 import { PostChain } from "./PostChain";
 import { ScenePass } from "./ScenePass";
 import { TexturePass } from "./TexturePass";
-import { ToneMappingPass } from "./ToneMappingPass";
+import { ACESToneMappingPass } from "./ACESToneMappingPass";
 import { WaterPass } from "./WaterPass";
 
 const BLOOM_OPTIONS = {
@@ -21,11 +21,11 @@ const BLOOM_OPTIONS = {
 
 export class PostprocessingManager extends RenderPipeline {
   private scenePass: ScenePass;
-  private shadowPass: ShadowPass;
+  readonly vsmPass: VSMPass;
   private waterPass: WaterPass;
   private hdrPass: TexturePass;
-  private bloomPass: DualKawaseBloomPass;
-  private toneMappingPass: ToneMappingPass;
+  private dualKawaseBloomPass: DualKawaseBloomPass;
+  private acesToneMappingPass: ACESToneMappingPass;
   private chain: PostChain<ReturnType<typeof renderOutput>>;
   private saturationTarget = 1;
   private saturationLerpSpeed = 14;
@@ -58,22 +58,22 @@ export class PostprocessingManager extends RenderPipeline {
 
     const camera = this.sceneManager.renderCamera;
     this.scenePass = new ScenePass(renderer, sceneManager.mainScene, camera);
-    this.shadowPass = new ShadowPass(renderer, this.scenePass, camera);
+    this.vsmPass = new VSMPass(renderer, this.scenePass, camera);
     this.waterPass = new WaterPass(renderer, sceneManager.waterScene, camera);
     this.hdrPass = new TexturePass(renderer, "Scene HDR");
-    this.bloomPass = new DualKawaseBloomPass(renderer, BLOOM_OPTIONS);
-    this.toneMappingPass = new ToneMappingPass();
+    this.dualKawaseBloomPass = new DualKawaseBloomPass(renderer, BLOOM_OPTIONS);
+    this.acesToneMappingPass = new ACESToneMappingPass();
 
     this.chain = PostChain.from(this.scenePass)
-      .pipe(this.shadowPass)
+      .pipe(this.vsmPass)
       .pipe(this.waterPass)
       .pipe(this.hdrPass)
-      .pipe(this.bloomPass)
-      .pipe(this.toneMappingPass);
+      .pipe(this.dualKawaseBloomPass)
+      .pipe(this.acesToneMappingPass);
 
     this.debugOutputs = {
       Scene: this.chain.output,
-      ...this.shadowPass.createDebugOutputs(),
+      ...this.vsmPass.createDebugOutputs(),
     };
     this.addBindings();
     this.selectDebugView();
@@ -86,7 +86,7 @@ export class PostprocessingManager extends RenderPipeline {
   private onCameraChange = () => {
     const camera = this.sceneManager.renderCamera;
     this.scenePass.setCamera(camera);
-    this.shadowPass.setCamera(camera);
+    this.vsmPass.setCamera(camera);
     this.waterPass.setCamera(camera);
   };
 
@@ -95,21 +95,21 @@ export class PostprocessingManager extends RenderPipeline {
   };
 
   private onEngineUpdate = ({ delta }: { delta: number }) => {
-    const { saturation } = this.toneMappingPass;
+    const { saturation } = this.acesToneMappingPass;
     if (saturation.value === this.saturationTarget) return;
     const t = 1 - Math.exp(-this.saturationLerpSpeed * delta);
     saturation.value += (this.saturationTarget - saturation.value) * t;
   };
 
   private addBindings() {
-    this.bloomPass.addBindings(this.debugFolder);
+    this.dualKawaseBloomPass.addBindings(this.debugFolder);
     this.debugFolder.addBinding(this.renderer, "toneMappingExposure", {
       label: "Exposure",
       min: 0,
       max: 10,
       step: 0.01,
     });
-    this.shadowPass.addBindings(this.debugFolder);
+    this.vsmPass.addBindings(this.debugFolder);
     const viewOptions: Record<string, string> = {};
     for (const view of Object.keys(this.debugOutputs)) viewOptions[view] = view;
     this.debugFolder
@@ -127,7 +127,7 @@ export class PostprocessingManager extends RenderPipeline {
   };
 
   sampleMainSceneColor(uv: Node<"vec2">) {
-    return this.shadowPass.sampleShadowedColor(uv);
+    return this.vsmPass.sampleShadowedColor(uv);
   }
 
   get mainSceneDepthNode() {

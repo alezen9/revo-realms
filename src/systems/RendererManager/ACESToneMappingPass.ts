@@ -11,7 +11,7 @@ import {
 
 const LUMINANCE_WEIGHTS = vec3(0.2126, 0.7152, 0.0722);
 
-export class ToneMappingPass {
+export class ACESToneMappingPass {
   readonly saturation = uniform(1);
 
   apply(color: Node<"vec4">) {

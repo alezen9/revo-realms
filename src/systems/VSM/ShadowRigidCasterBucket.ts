@@ -3,12 +3,9 @@ import {
   IndirectStorageBufferAttribute,
   StorageBufferAttribute,
 } from "three/webgpu";
-import type { ShadowCasterEntry } from "./ShadowCasterRegistry";
-import {
-  SHADOW_LEVEL_COUNT,
-  ShadowPageCoordinates,
-} from "./ShadowPageCoordinates";
-import type { ShadowResidency } from "./ShadowResidency";
+import type { VSMCaster } from "./VSMContext";
+import { VSM_LEVEL_COUNT, computePageCoordinate } from "./VSMMath";
+import type { VSMContext } from "./VSMContext";
 
 export class ShadowRigidCasterBucket {
   readonly geometries: BufferGeometry[] = [];
@@ -26,11 +23,10 @@ export class ShadowRigidCasterBucket {
   private depthBiasValues: Float32Array;
   private bounds = new Box3();
   private corner = new Vector3();
-  private coordinates = new ShadowPageCoordinates();
 
-  constructor(residency: ShadowResidency, sources: ShadowCasterEntry[]) {
+  constructor(context: VSMContext, sources: VSMCaster[]) {
     this.casterCount = sources.length;
-    const capacity = residency.dynamicCapacity;
+    const capacity = context.dynamicCapacity;
     const groupIndices = new Map<BufferGeometry, number>();
     const casterGroups = new Uint32Array(this.casterCount);
     const groupCasterCounts: number[] = [];
@@ -90,9 +86,7 @@ export class ShadowRigidCasterBucket {
       this.matrixValues,
       4,
     );
-    this.rangeValues = new Uint32Array(
-      this.casterCount * SHADOW_LEVEL_COUNT * 4,
-    );
+    this.rangeValues = new Uint32Array(this.casterCount * VSM_LEVEL_COUNT * 4);
     this.pageRangesAttribute = new StorageBufferAttribute(this.rangeValues, 4);
     this.depthBiasValues = new Float32Array(this.casterCount);
     this.depthBiasAttribute = new StorageBufferAttribute(
@@ -111,7 +105,7 @@ export class ShadowRigidCasterBucket {
     }
   }
 
-  update(sources: ShadowCasterEntry[], sunDirection: Vector3) {
+  update(sources: VSMCaster[], sunDirection: Vector3) {
     if (sources.length !== this.casterCount)
       throw new Error(
         "Rigid caster count changed without rebuilding the bucket",
@@ -123,7 +117,7 @@ export class ShadowRigidCasterBucket {
       source.updateWorldMatrix(true, false);
       this.matrixValues.set(source.matrixWorld.elements, casterIndex * 16);
       this.bounds.setFromObject(source);
-      for (let level = 0; level < SHADOW_LEVEL_COUNT; level++) {
+      for (let level = 0; level < VSM_LEVEL_COUNT; level++) {
         let minX = Infinity;
         let minY = Infinity;
         let maxX = -Infinity;
@@ -136,7 +130,7 @@ export class ShadowRigidCasterBucket {
                 y === 0 ? this.bounds.min.y : this.bounds.max.y,
                 z === 0 ? this.bounds.min.z : this.bounds.max.z,
               );
-              const page = this.coordinates.getPageCoordinate(
+              const page = computePageCoordinate(
                 this.corner,
                 sunDirection,
                 level,
@@ -150,7 +144,7 @@ export class ShadowRigidCasterBucket {
         }
         this.rangeValues.set(
           [minX, minY, maxX, maxY],
-          (casterIndex * SHADOW_LEVEL_COUNT + level) * 4,
+          (casterIndex * VSM_LEVEL_COUNT + level) * 4,
         );
       }
     }
@@ -159,7 +153,7 @@ export class ShadowRigidCasterBucket {
     this.depthBiasAttribute.needsUpdate = true;
   }
 
-  updateBiases(sources: ShadowCasterEntry[]) {
+  updateBiases(sources: VSMCaster[]) {
     if (sources.length !== this.casterCount)
       throw new Error(
         "Rigid caster count changed without rebuilding the bucket",

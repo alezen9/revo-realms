@@ -10,7 +10,7 @@ import {
 } from "three/tsl";
 import { Vector3 } from "three/webgpu";
 import { assetManager, lightingManager } from "../../systems";
-import { DirectSunLambertNodeMaterial } from "../../systems/ShadowManager/DirectSunMaterials";
+import { VSMReceiverLambertMaterial } from "../../systems/VSM/VSMReceiverMaterials";
 import { playerConfig as config } from "./config";
 
 export const playerUniforms = {
@@ -22,7 +22,7 @@ export const playerUniforms = {
   uSunTintStrength: uniform(0.22),
 };
 
-export class PlayerMaterial extends DirectSunLambertNodeMaterial {
+export class PlayerMaterial extends VSMReceiverLambertMaterial {
   constructor() {
     super();
     this.createMaterial();

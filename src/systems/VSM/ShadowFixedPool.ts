@@ -19,20 +19,20 @@ import {
   workgroupId,
 } from "three/tsl";
 import {
-  SHADOW_CLUSTER_MAX_WORK_ITEMS,
-  SHADOW_CLUSTER_TRIANGLES,
+  VSM_CLUSTER_MAX_WORK_ITEMS,
+  VSM_CLUSTER_TRIANGLES,
   type ShadowClusterBucket,
 } from "./ShadowClusterBucket";
 import {
-  SHADOW_PAGE_OFFSET,
-  SHADOW_PAGE_TEXELS,
-  SHADOW_PAGES_PER_LEVEL,
-  getShadowLightPosition,
-  getShadowPageSize,
-} from "./ShadowPageCoordinates";
-import type { ShadowResidency } from "./ShadowResidency";
+  VSM_PAGE_OFFSET,
+  VSM_PAGE_TEXELS,
+  VSM_PAGES_PER_LEVEL,
+  getLightPosition,
+  getPageSize,
+} from "./VSMMath";
+import type { VSMContext } from "./VSMContext";
 
-const PAGE_TEXEL_COUNT = SHADOW_PAGE_TEXELS * SHADOW_PAGE_TEXELS;
+const PAGE_TEXEL_COUNT = VSM_PAGE_TEXELS * VSM_PAGE_TEXELS;
 const DEPTH_SCALE = 16777215;
 const CLEAR_WORKGROUP_SIZE = 256;
 const CLEAR_WORKGROUPS = 128;
@@ -58,8 +58,8 @@ export class ShadowFixedPool {
   private pageJobsNode;
   private clearNode;
 
-  constructor(residency: ShadowResidency) {
-    const texelCount = residency.capacity * PAGE_TEXEL_COUNT;
+  constructor(context: VSMContext) {
+    const texelCount = context.capacity * PAGE_TEXEL_COUNT;
     const depthAttribute = new StorageBufferAttribute(
       new Uint32Array(texelCount),
       1,
@@ -71,14 +71,14 @@ export class ShadowFixedPool {
       texelCount,
     ).toReadOnly();
     this.pageJobsNode = storage(
-      residency.pageJobsAttribute,
+      context.pageJobsAttribute,
       "uvec4",
-      residency.capacity * 3,
+      context.capacity * 3,
     ).toReadOnly();
     const atlasIndirect = storage(
-      residency.atlasIndirectAttribute,
+      context.atlasIndirectAttribute,
       "uint",
-      residency.atlasIndirectAttribute.count,
+      context.atlasIndirectAttribute.count,
     ).toReadOnly();
 
     this.clearNode = Fn(() => {
@@ -130,7 +130,7 @@ export class ShadowFixedPool {
     const workItems = storage(
       bucket.workItemsAttribute,
       "uvec2",
-      SHADOW_CLUSTER_MAX_WORK_ITEMS,
+      VSM_CLUSTER_MAX_WORK_ITEMS,
     ).toReadOnly();
     const instanceClusters = storage(
       bucket.instanceClustersAttribute,
@@ -151,17 +151,14 @@ export class ShadowFixedPool {
     const uvs = uvsAttribute
       ? storage(uvsAttribute, "vec2", uvsAttribute.count).toReadOnly()
       : undefined;
-    const triangleCorners = workgroupArray(
-      "vec3",
-      SHADOW_CLUSTER_TRIANGLES * 3,
-    );
-    const triangleUvs = workgroupArray("vec2", SHADOW_CLUSTER_TRIANGLES * 3);
+    const triangleCorners = workgroupArray("vec3", VSM_CLUSTER_TRIANGLES * 3);
+    const triangleUvs = workgroupArray("vec2", VSM_CLUSTER_TRIANGLES * 3);
 
     const rasterNode = Fn(() => {
       const count = workCount.element(1);
       const itemCount = count
-        .lessThan(SHADOW_CLUSTER_MAX_WORK_ITEMS)
-        .select(count, uint(SHADOW_CLUSTER_MAX_WORK_ITEMS));
+        .lessThan(VSM_CLUSTER_MAX_WORK_ITEMS)
+        .select(count, uint(VSM_CLUSTER_MAX_WORK_ITEMS));
       Loop(
         {
           start: workgroupId.x,
@@ -173,10 +170,8 @@ export class ShadowFixedPool {
           const workItem = workItems.element(itemLoopIndex).toVar();
           const job = this.pageJobsNode.element(workItem.x).toVar();
           const instanceCluster = instanceClusters.element(workItem.y).toVar();
-          const pageSize = getShadowPageSize(
-            job.x.div(SHADOW_PAGES_PER_LEVEL),
-          ).toVar();
-          const pageOrigin = vec2(job.zw).sub(SHADOW_PAGE_OFFSET).toVar();
+          const pageSize = getPageSize(job.x.div(VSM_PAGES_PER_LEVEL)).toVar();
+          const pageOrigin = vec2(job.zw).sub(VSM_PAGE_OFFSET).toVar();
           If(localId.x.lessThan(instanceCluster.w), () => {
             const matrixOffset = instanceCluster.x.mul(4);
             const translation = matrices.element(matrixOffset.add(3));
@@ -191,10 +186,10 @@ export class ShadowFixedPool {
                 .add(matrices.element(matrixOffset.add(1)).mul(local.y))
                 .add(matrices.element(matrixOffset.add(2)).mul(local.z))
                 .add(vec4(translation.xyz, 0)).xyz;
-              const texel = getShadowLightPosition(world, sunDirection)
+              const texel = getLightPosition(world, sunDirection)
                 .div(pageSize)
                 .sub(pageOrigin)
-                .mul(SHADOW_PAGE_TEXELS);
+                .mul(VSM_PAGE_TEXELS);
               const depth = maximumY
                 .sub(world.y)
                 .add(translation.w)
@@ -228,14 +223,14 @@ export class ShadowFixedPool {
               const isOnPage = maximum.x
                 .greaterThanEqual(0)
                 .and(maximum.y.greaterThanEqual(0))
-                .and(minimum.x.lessThan(SHADOW_PAGE_TEXELS))
-                .and(minimum.y.lessThan(SHADOW_PAGE_TEXELS))
+                .and(minimum.x.lessThan(VSM_PAGE_TEXELS))
+                .and(minimum.y.lessThan(VSM_PAGE_TEXELS))
                 .and(area.abs().greaterThan(1e-8));
               const firstTexel = uvec2(
-                minimum.ceil().clamp(0, SHADOW_PAGE_TEXELS - 1),
+                minimum.ceil().clamp(0, VSM_PAGE_TEXELS - 1),
               ).toVar();
               const lastTexel = uvec2(
-                maximum.floor().clamp(0, SHADOW_PAGE_TEXELS - 1),
+                maximum.floor().clamp(0, VSM_PAGE_TEXELS - 1),
               ).toVar();
               const width = lastTexel.x.sub(firstTexel.x).add(1).toVar();
               const texelCount = isOnPage
@@ -250,7 +245,7 @@ export class ShadowFixedPool {
                   start: localId.x,
                   end: texelCount,
                   type: "uint",
-                  update: SHADOW_CLUSTER_TRIANGLES,
+                  update: VSM_CLUSTER_TRIANGLES,
                 },
                 ({ i: texelIndex }) => {
                   const x = firstTexel.x.add(texelIndex.mod(width)).toVar();
@@ -295,7 +290,7 @@ export class ShadowFixedPool {
                       .clamp(0, 1);
                     atomicMin(
                       this.depthNode.element(
-                        pageBase.add(y.mul(SHADOW_PAGE_TEXELS)).add(x),
+                        pageBase.add(y.mul(VSM_PAGE_TEXELS)).add(x),
                       ),
                       uint(depth.mul(DEPTH_SCALE)),
                     );
@@ -307,8 +302,8 @@ export class ShadowFixedPool {
           workgroupBarrier();
         },
       );
-    })().compute(RASTER_WORKGROUPS * SHADOW_CLUSTER_TRIANGLES, [
-      SHADOW_CLUSTER_TRIANGLES,
+    })().compute(RASTER_WORKGROUPS * VSM_CLUSTER_TRIANGLES, [
+      VSM_CLUSTER_TRIANGLES,
     ]);
     rasterNode.name = "V2 shadow pool raster";
     return rasterNode;
@@ -319,7 +314,7 @@ export class ShadowFixedPool {
       this.readDepthNode.element(
         slot
           .mul(PAGE_TEXEL_COUNT)
-          .add(texel.y.mul(SHADOW_PAGE_TEXELS))
+          .add(texel.y.mul(VSM_PAGE_TEXELS))
           .add(texel.x),
       ),
     ).div(DEPTH_SCALE);
@@ -330,11 +325,11 @@ export class ShadowFixedPool {
     pageUv: Node<"vec2">,
     receiverDepth: Node<"float">,
   ) {
-    const position = pageUv.mul(SHADOW_PAGE_TEXELS).sub(0.5);
+    const position = pageUv.mul(VSM_PAGE_TEXELS).sub(0.5);
     const origin = position.floor();
     const weight = position.sub(origin);
-    const first = uvec2(origin.clamp(0, SHADOW_PAGE_TEXELS - 1));
-    const last = uvec2(origin.add(1).clamp(0, SHADOW_PAGE_TEXELS - 1));
+    const first = uvec2(origin.clamp(0, VSM_PAGE_TEXELS - 1));
+    const last = uvec2(origin.add(1).clamp(0, VSM_PAGE_TEXELS - 1));
     return mix(
       mix(
         this.getLit(slot, uvec2(first.x, first.y), receiverDepth),
@@ -356,7 +351,7 @@ export class ShadowFixedPool {
     receiverDepth: Node<"float">,
     receiverDepthSlope: Node<"vec2">,
   ) {
-    const position = pageUv.mul(SHADOW_PAGE_TEXELS).sub(1);
+    const position = pageUv.mul(VSM_PAGE_TEXELS).sub(1);
     const origin = position.floor();
     const fraction = position.sub(origin);
     const base = uvec2(origin);
@@ -377,7 +372,7 @@ export class ShadowFixedPool {
         const texel = base.add(uvec2(column, row));
         const pageOffset = vec2(texel)
           .add(0.5)
-          .div(SHADOW_PAGE_TEXELS)
+          .div(VSM_PAGE_TEXELS)
           .sub(pageUv);
         rowVisibility = rowVisibility.add(
           this.getLit(

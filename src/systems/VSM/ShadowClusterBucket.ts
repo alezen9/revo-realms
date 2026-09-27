@@ -16,18 +16,18 @@ import {
   uvec2,
   vec4,
 } from "three/tsl";
-import type { ShadowCasterEntry } from "./ShadowCasterRegistry";
+import type { VSMCaster } from "./VSMContext";
 import {
-  SHADOW_PAGES_PER_LEVEL,
-  getShadowLightPosition,
-  getShadowPageCoordinate,
-  getShadowPageSize,
-} from "./ShadowPageCoordinates";
-import type { ShadowResidency } from "./ShadowResidency";
+  VSM_PAGES_PER_LEVEL,
+  getLightPosition,
+  getPageCoordinate,
+  getPageSize,
+} from "./VSMMath";
+import type { VSMContext } from "./VSMContext";
 
-export const SHADOW_CLUSTER_TRIANGLES = 64;
-export const SHADOW_CLUSTER_VERTICES = SHADOW_CLUSTER_TRIANGLES * 3;
-export const SHADOW_CLUSTER_MAX_WORK_ITEMS = 262144;
+export const VSM_CLUSTER_TRIANGLES = 64;
+export const VSM_CLUSTER_VERTICES = VSM_CLUSTER_TRIANGLES * 3;
+export const VSM_CLUSTER_MAX_WORK_ITEMS = 262144;
 
 type ClusterInstance = {
   mesh: Mesh;
@@ -59,11 +59,11 @@ export class ShadowClusterBucket {
   readonly matricesAttribute: StorageBufferAttribute;
   readonly instanceClustersAttribute: StorageBufferAttribute;
   readonly workIndirectAttribute = new IndirectStorageBufferAttribute(
-    new Uint32Array([SHADOW_CLUSTER_VERTICES, 0, 0, 0]),
+    new Uint32Array([VSM_CLUSTER_VERTICES, 0, 0, 0]),
     1,
   );
   readonly workItemsAttribute = new StorageBufferAttribute(
-    new Uint32Array(SHADOW_CLUSTER_MAX_WORK_ITEMS * 2),
+    new Uint32Array(VSM_CLUSTER_MAX_WORK_ITEMS * 2),
     2,
   );
   readonly bounds = new Box3();
@@ -84,8 +84,8 @@ export class ShadowClusterBucket {
   private instanceBounds = new Box3();
 
   constructor(
-    residency: ShadowResidency,
-    entries: ShadowCasterEntry[],
+    context: VSMContext,
+    entries: VSMCaster[],
     sunDirection: Node<"vec3">,
     hasUvs: boolean,
   ) {
@@ -149,17 +149,17 @@ export class ShadowClusterBucket {
     const workItems = storage(
       this.workItemsAttribute,
       "uvec2",
-      SHADOW_CLUSTER_MAX_WORK_ITEMS,
+      VSM_CLUSTER_MAX_WORK_ITEMS,
     );
     const pageJobs = storage(
-      residency.pageJobsAttribute,
+      context.pageJobsAttribute,
       "uvec4",
-      residency.capacity * 3,
+      context.capacity * 3,
     );
     const atlasIndirect = storage(
-      residency.atlasIndirectAttribute,
+      context.atlasIndirectAttribute,
       "uint",
-      residency.atlasIndirectAttribute.count,
+      context.atlasIndirectAttribute.count,
     );
     const indirectNode = storage(
       this.workIndirectAttribute,
@@ -188,7 +188,7 @@ export class ShadowClusterBucket {
           .add(matricesNode.element(matrixOffset.add(1)).mul(local.y))
           .add(matricesNode.element(matrixOffset.add(2)).mul(local.z))
           .add(matricesNode.element(matrixOffset.add(3))).xyz;
-        const light = getShadowLightPosition(world, sunDirection);
+        const light = getLightPosition(world, sunDirection);
         lightBounds.assign(
           vec4(lightBounds.xy.min(light), lightBounds.zw.max(light)),
         );
@@ -206,9 +206,9 @@ export class ShadowClusterBucket {
       Loop({ start: 0, end: jobCount, type: "uint" }, ({ i: jobLoopIndex }) => {
         const jobIndex = jobLoopIndex.toVar();
         const job = pageJobs.element(jobIndex);
-        const pageSize = getShadowPageSize(job.x.div(SHADOW_PAGES_PER_LEVEL));
-        const firstPage = getShadowPageCoordinate(lightBounds.xy.div(pageSize));
-        const lastPage = getShadowPageCoordinate(lightBounds.zw.div(pageSize));
+        const pageSize = getPageSize(job.x.div(VSM_PAGES_PER_LEVEL));
+        const firstPage = getPageCoordinate(lightBounds.xy.div(pageSize));
+        const lastPage = getPageCoordinate(lightBounds.zw.div(pageSize));
         const overlaps = job.z
           .greaterThanEqual(firstPage.x)
           .and(job.w.greaterThanEqual(firstPage.y))
@@ -216,7 +216,7 @@ export class ShadowClusterBucket {
           .and(job.w.lessThanEqual(lastPage.y));
         If(overlaps, () => {
           const itemIndex = atomicAdd(indirectNode.element(1), 1);
-          If(itemIndex.lessThan(SHADOW_CLUSTER_MAX_WORK_ITEMS), () => {
+          If(itemIndex.lessThan(VSM_CLUSTER_MAX_WORK_ITEMS), () => {
             workItems.element(itemIndex).assign(uvec2(jobIndex, instanceIndex));
           });
         });
@@ -229,7 +229,7 @@ export class ShadowClusterBucket {
     this.writeContent(content);
   }
 
-  setEntries(entries: ShadowCasterEntry[]) {
+  setEntries(entries: VSMCaster[]) {
     const content = this.collectContent(entries);
     const hasRoom =
       content.positions.length <= this.positionValues.length &&
@@ -301,7 +301,7 @@ export class ShadowClusterBucket {
     this.updateMatrices();
   }
 
-  private collectContent(entries: ShadowCasterEntry[]): ClusterContent {
+  private collectContent(entries: VSMCaster[]): ClusterContent {
     const geometries = new Map<string, ClusterGeometry>();
     const content: ClusterContent = {
       instances: [],
@@ -363,7 +363,7 @@ export class ShadowClusterBucket {
       for (let cluster = 0; cluster < clusterCount; cluster++)
         content.instanceClusters.push(
           index,
-          (firstCluster + cluster) * SHADOW_CLUSTER_VERTICES,
+          (firstCluster + cluster) * VSM_CLUSTER_VERTICES,
           firstCluster + cluster,
           clusterTriangles[firstCluster + cluster],
         );
@@ -384,20 +384,20 @@ export class ShadowClusterBucket {
     const index = geometry.index;
     const firstCluster = clusterBounds.length / 8;
     const triangleCount = Math.floor(range.count / 3);
-    const clusterCount = Math.ceil(triangleCount / SHADOW_CLUSTER_TRIANGLES);
+    const clusterCount = Math.ceil(triangleCount / VSM_CLUSTER_TRIANGLES);
     const minimum = new Vector3();
     const maximum = new Vector3();
     const vertex = new Vector3();
     for (let cluster = 0; cluster < clusterCount; cluster++) {
       minimum.setScalar(Infinity);
       maximum.setScalar(-Infinity);
-      for (let corner = 0; corner < SHADOW_CLUSTER_VERTICES; corner++) {
+      for (let corner = 0; corner < VSM_CLUSTER_VERTICES; corner++) {
         const triangle = Math.min(
-          cluster * SHADOW_CLUSTER_TRIANGLES + Math.floor(corner / 3),
+          cluster * VSM_CLUSTER_TRIANGLES + Math.floor(corner / 3),
           triangleCount - 1,
         );
         const isPadding =
-          cluster * SHADOW_CLUSTER_TRIANGLES + Math.floor(corner / 3) >=
+          cluster * VSM_CLUSTER_TRIANGLES + Math.floor(corner / 3) >=
           triangleCount;
         const element =
           range.start +
@@ -415,8 +415,8 @@ export class ShadowClusterBucket {
       }
       clusterTriangles.push(
         Math.min(
-          SHADOW_CLUSTER_TRIANGLES,
-          triangleCount - cluster * SHADOW_CLUSTER_TRIANGLES,
+          VSM_CLUSTER_TRIANGLES,
+          triangleCount - cluster * VSM_CLUSTER_TRIANGLES,
         ),
       );
       clusterBounds.push(

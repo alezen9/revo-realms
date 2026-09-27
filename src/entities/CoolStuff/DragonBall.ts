@@ -3,10 +3,10 @@ import {
   debugManager,
   landmarkManager,
   windManager,
-  shadowCasterRegistry,
+  rendererManager,
 } from "../../systems";
 import { Mesh } from "three";
-import { DirectSunStandardNodeMaterial } from "../../systems/ShadowManager/DirectSunMaterials";
+import { VSMReceiverStandardMaterial } from "../../systems/VSM/VSMReceiverMaterials";
 import { ColliderDesc } from "@dimforge/rapier3d";
 import { physicsManager, sceneManager } from "../../systems";
 import { RevoColliderType } from "../../types";
@@ -18,7 +18,7 @@ const uniforms = {
   uUvScale: uniform(4.75),
 };
 
-class GokuStatueMaterial extends DirectSunStandardNodeMaterial {
+class GokuStatueMaterial extends VSMReceiverStandardMaterial {
   constructor() {
     super();
 
@@ -43,7 +43,7 @@ export default class DragonBall {
     this.gokuStatue = gokuStatue;
     gokuStatue.material = new GokuStatueMaterial();
     sceneManager.mainScene.add(gokuStatue);
-    shadowCasterRegistry.register(gokuStatue, this.shadowSettings);
+    rendererManager.vsmPass.registerCaster(gokuStatue, this.shadowSettings);
 
     // Physics
     const collider = assetManager.resources.worldModel.scene.getObjectByName(
@@ -104,7 +104,7 @@ export default class DragonBall {
         step: 0.005,
       })
       .on("change", ({ value }) => {
-        shadowCasterRegistry.setDepthBias(this.gokuStatue, value);
+        rendererManager.vsmPass.setCasterDepthBias(this.gokuStatue, value);
       });
   }
 }

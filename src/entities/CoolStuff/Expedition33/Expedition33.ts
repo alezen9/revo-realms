@@ -6,7 +6,7 @@ import {
   Sphere,
   Vector3,
 } from "three";
-import { DirectSunStandardNodeMaterial } from "../../../systems/ShadowManager/DirectSunMaterials";
+import { VSMReceiverStandardMaterial } from "../../../systems/VSM/VSMReceiverMaterials";
 import { ColliderDesc } from "@dimforge/rapier3d";
 import { type State } from "../../../Game";
 import {
@@ -85,7 +85,7 @@ export default class Expedition33 {
       config.STAFF_HEIGHT,
       10,
     );
-    const material = new DirectSunStandardNodeMaterial({
+    const material = new VSMReceiverStandardMaterial({
       color: 0x8a8f98,
       metalness: 0.9,
       roughness: 0.35,

@@ -5,11 +5,11 @@ import {
   physicsManager,
   windManager,
   sceneManager,
-  shadowCasterRegistry,
+  rendererManager,
 } from "../../systems";
 import { ColliderDesc } from "@dimforge/rapier3d";
 import { Mesh, Vector3 } from "three";
-import { DirectSunStandardNodeMaterial } from "../../systems/ShadowManager/DirectSunMaterials";
+import { VSMReceiverStandardMaterial } from "../../systems/VSM/VSMReceiverMaterials";
 import { normalMap, texture, uniform, uv } from "three/tsl";
 import { RevoColliderType } from "../../types";
 
@@ -20,7 +20,7 @@ const uniforms = {
   uMetalnessScale: uniform(1),
   uRoughnessScale: uniform(1.5),
 };
-class DragonSlayerMaterial extends DirectSunStandardNodeMaterial {
+class DragonSlayerMaterial extends VSMReceiverStandardMaterial {
   constructor() {
     super();
     const diffuse = texture(
@@ -49,7 +49,7 @@ export default class Berserk {
     ) as Mesh;
     sword.material = new DragonSlayerMaterial();
     sceneManager.mainScene.add(sword);
-    shadowCasterRegistry.register(sword);
+    rendererManager.vsmPass.registerCaster(sword);
 
     // Physics
     sword.geometry.computeBoundingBox();

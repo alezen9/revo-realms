@@ -86,6 +86,10 @@ export class RendererManager {
     return this.postprocessingManager.mainSceneDepthNode;
   }
 
+  get vsmPass() {
+    return this.postprocessingManager.vsmPass;
+  }
+
   async compileScenesOnceAsync() {
     const { scenes, renderCamera } = this.sceneManager;
     for (const scene of scenes)

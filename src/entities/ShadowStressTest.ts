@@ -39,10 +39,9 @@ import {
   eventsManager,
   rendererManager,
   sceneManager,
-  shadowCasterRegistry,
 } from "../systems";
-import { DirectSunLambertNodeMaterial } from "../systems/ShadowManager/DirectSunMaterials";
-import type { ShadowGpuInstances } from "../systems/ShadowManager/ShadowCasterRegistry";
+import { VSMReceiverLambertMaterial } from "../systems/VSM/VSMReceiverMaterials";
+import type { VSMGpuInstances } from "../systems/VSM/VSMContext";
 import type { ComputeTask } from "../systems/RendererManager/ComputeTask";
 import { realmConfig } from "../realm/config";
 import { gameTime } from "../utils/GameTime";
@@ -121,7 +120,7 @@ const createGpuPositionsNode = (positions: StorageBufferNode<"vec4">) =>
 
 const randomSpread = () => (Math.random() * 2 - 1) * realmConfig.HALF_MAP_SIZE;
 
-class StressMaterial extends DirectSunLambertNodeMaterial {
+class StressMaterial extends VSMReceiverLambertMaterial {
   constructor(color: Color, positionNode?: Node<"vec3">) {
     super();
     this.colorNode = vec3(color.r, color.g, color.b);
@@ -204,7 +203,7 @@ export default class ShadowStressTest {
       batch.setMatrixAt(instanceId, matrix.compose(position, rotation, scale));
     }
     sceneManager.mainScene.add(batch);
-    shadowCasterRegistry.register(batch);
+    rendererManager.vsmPass.registerCaster(batch);
     this.staticBatch = batch;
     this.materials.push(material);
   }
@@ -219,7 +218,7 @@ export default class ShadowStressTest {
       this.movingPhases.push(Math.random() * Math.PI * 2);
       this.movingMeshes.push(mesh);
       sceneManager.mainScene.add(mesh);
-      shadowCasterRegistry.register(mesh, { motion: "moving" });
+      rendererManager.vsmPass.registerCaster(mesh, { motion: "moving" });
     }
     this.materials.push(material);
   }
@@ -252,7 +251,7 @@ export default class ShadowStressTest {
     const mesh = new InstancedMesh(geometry, material, config.DEFORMING_COUNT);
     mesh.frustumCulled = false;
     const shadowGeometry = geometry.toNonIndexed();
-    const gpuInstances: ShadowGpuInstances = {
+    const gpuInstances: VSMGpuInstances = {
       count: config.DEFORMING_COUNT,
       radiusMeters: 2.4,
       geometry: shadowGeometry,
@@ -269,7 +268,7 @@ export default class ShadowStressTest {
         getDeformedPosition(instances.element(index), index, position),
     };
     sceneManager.mainScene.add(mesh);
-    shadowCasterRegistry.register(mesh, { gpuInstances });
+    rendererManager.vsmPass.registerCaster(mesh, { gpuInstances });
     this.deformingMesh = mesh;
     this.shadowGeometries.push(shadowGeometry);
     this.materials.push(material);
@@ -286,7 +285,7 @@ export default class ShadowStressTest {
     const mesh = new InstancedMesh(geometry, material, config.GPU_COUNT);
     mesh.frustumCulled = false;
     const shadowGeometry = geometry.toNonIndexed();
-    const gpuInstances: ShadowGpuInstances = {
+    const gpuInstances: VSMGpuInstances = {
       count: config.GPU_COUNT,
       radiusMeters: 0.6,
       geometry: shadowGeometry,
@@ -302,7 +301,7 @@ export default class ShadowStressTest {
           .xyz.add(sourcePosition.mul(positions.element(index).w)),
     };
     sceneManager.mainScene.add(mesh);
-    shadowCasterRegistry.register(mesh, { gpuInstances });
+    rendererManager.vsmPass.registerCaster(mesh, { gpuInstances });
     this.gpuMesh = mesh;
     this.shadowGeometries.push(shadowGeometry);
     this.materials.push(material);
@@ -331,7 +330,7 @@ export default class ShadowStressTest {
     for (const mesh of meshes) {
       if (!mesh) continue;
       sceneManager.mainScene.remove(mesh);
-      shadowCasterRegistry.unregister(mesh);
+      rendererManager.vsmPass.unregisterCaster(mesh);
     }
     this.staticBatch?.dispose();
     this.deformingMesh?.dispose();
@@ -363,7 +362,7 @@ export default class ShadowStressTest {
       const z = anchor.z + Math.sin(angle) * config.MOVING_ORBIT_RADIUS;
       mesh.position.set(x, sampleTerrainHeight(x, z) + mesh.scale.x, z);
       mesh.rotation.set(angle, angle * 0.5, 0);
-      shadowCasterRegistry.markMoved(mesh);
+      rendererManager.vsmPass.markCasterMoved(mesh);
     }
   };
 

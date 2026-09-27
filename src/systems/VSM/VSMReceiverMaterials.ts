@@ -44,7 +44,7 @@ class DirectSunPhongLightingModel extends PhongLightingModel {
   }
 }
 
-export class DirectSunLambertNodeMaterial extends MeshLambertNodeMaterial {
+export class VSMReceiverLambertMaterial extends MeshLambertNodeMaterial {
   setupLightingModel() {
     const lightingModel = new DirectSunPhongLightingModel();
     this.mrtNode = mrt({ directSun: vec4(lightingModel.directSun, 1) });
@@ -76,7 +76,7 @@ class DirectSunPhysicalLightingModel extends PhysicalLightingModel {
   }
 }
 
-export class DirectSunStandardNodeMaterial extends MeshStandardNodeMaterial {
+export class VSMReceiverStandardMaterial extends MeshStandardNodeMaterial {
   setupLightingModel() {
     const lightingModel = new DirectSunPhysicalLightingModel();
     this.mrtNode = mrt({ directSun: vec4(lightingModel.directSun, 1) });

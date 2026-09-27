@@ -4,10 +4,10 @@ import {
   debugManager,
   physicsManager,
   sceneManager,
-  shadowCasterRegistry,
+  rendererManager,
 } from "../../systems";
 import { BatchedMesh } from "three/webgpu";
-import { DirectSunLambertNodeMaterial } from "../../systems/ShadowManager/DirectSunMaterials";
+import { VSMReceiverLambertMaterial } from "../../systems/VSM/VSMReceiverMaterials";
 import {
   attribute,
   normalMap,
@@ -30,7 +30,7 @@ const uniforms = {
   uBarkUvScale: uniform(3),
 };
 
-class PineTreeCanopyMaterial extends DirectSunLambertNodeMaterial {
+class PineTreeCanopyMaterial extends VSMReceiverLambertMaterial {
   constructor() {
     super();
     this.forceSinglePass = true;
@@ -50,7 +50,7 @@ class PineTreeCanopyMaterial extends DirectSunLambertNodeMaterial {
   }
 }
 
-class PineTreeBarkMaterial extends DirectSunLambertNodeMaterial {
+class PineTreeBarkMaterial extends VSMReceiverLambertMaterial {
   constructor() {
     super();
     this.forceSinglePass = true;
@@ -112,8 +112,8 @@ export default class PineTrees {
     }
 
     sceneManager.mainScene.add(barkBatch, canopyBatch);
-    shadowCasterRegistry.register(barkBatch);
-    shadowCasterRegistry.register(canopyBatch, {
+    rendererManager.vsmPass.registerCaster(barkBatch);
+    rendererManager.vsmPass.registerCaster(canopyBatch, {
       opacity: (canopyUv) =>
         texture(assetManager.resources.pineTreeDiffuse, canopyUv).a,
     });

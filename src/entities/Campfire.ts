@@ -7,13 +7,13 @@ import {
   physicsManager,
   landmarkManager,
   windManager,
-  shadowCasterRegistry,
+  rendererManager,
 } from "../systems";
 import { ColliderDesc } from "@dimforge/rapier3d";
-import { DirectSunStandardNodeMaterial } from "../systems/ShadowManager/DirectSunMaterials";
+import { VSMReceiverStandardMaterial } from "../systems/VSM/VSMReceiverMaterials";
 import { normalMap, texture, uv } from "three/tsl";
 
-class CampfireMaterial extends DirectSunStandardNodeMaterial {
+class CampfireMaterial extends VSMReceiverStandardMaterial {
   constructor() {
     super();
     const diffuse = texture(assetManager.resources.campfireDiffuse, uv());
@@ -49,7 +49,7 @@ export class Campfire {
     fire.position.copy(campfire.position).setY(-0.15);
 
     sceneManager.mainScene.add(campfire, fire);
-    shadowCasterRegistry.register(campfire);
+    rendererManager.vsmPass.registerCaster(campfire);
 
     // Physics
     const fireColliderMesh =

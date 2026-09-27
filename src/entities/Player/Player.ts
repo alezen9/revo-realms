@@ -19,7 +19,7 @@ import {
   physicsManager,
   physicsScheduler,
   sceneManager,
-  shadowCasterRegistry,
+  rendererManager,
 } from "../../systems";
 import { playerConfig as config } from "./config";
 import { DOWN, FORWARD, UP } from "../../utils/axes";
@@ -62,7 +62,7 @@ export default class Player {
     this.mesh = this.createCharacterMesh();
     this.visualRoot = this.createVisualRoot(this.mesh);
     sceneManager.mainScene.add(this.visualRoot);
-    shadowCasterRegistry.register(this.mesh, { motion: "moving" });
+    rendererManager.vsmPass.registerCaster(this.mesh, { motion: "moving" });
 
     const rigidBodyDesc = this.createRigidBodyDesc();
     this.rigidBody = physicsManager.world.createRigidBody(rigidBodyDesc);
@@ -150,7 +150,7 @@ export default class Player {
     } = config;
 
     this.visual.interpolate(delta);
-    shadowCasterRegistry.markMoved(this.mesh);
+    rendererManager.vsmPass.markCasterMoved(this.mesh);
     const yawOffset = this.yawInRadians - this.previousYawInRadians;
     const shortestYawOffset = Math.atan2(
       Math.sin(yawOffset),

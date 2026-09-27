@@ -1,4 +1,4 @@
-import { Matrix4, NoToneMapping, Vector3, type Camera } from "three";
+import { NoToneMapping, type Camera, type Mesh } from "three";
 import type { Node, TextureNode, WebGPURenderer } from "three/webgpu";
 import {
   Fn,
@@ -19,26 +19,21 @@ import {
 import type { DebugFolder } from "../DebugManager";
 import type { ScenePass } from "../RendererManager/ScenePass";
 import { TexturePass } from "../RendererManager/TexturePass";
+import { assetManager, lightingManager, monitoringManager } from "..";
 import {
-  assetManager,
-  lightingManager,
-  monitoringManager,
-  shadowCasterRegistry,
-} from "..";
-import {
-  SHADOW_PAGE_TEXELS,
-  getShadowReceiverLevel,
-  getShadowLightPosition,
-  getShadowPageCoordinate,
-  getShadowPageKey,
-  getShadowPageSize,
-  getShadowPageTag,
-  shadowResolutionBias,
-  shadowSoftReceiverLevelBias,
-} from "./ShadowPageCoordinates";
-import { ShadowPageRequests } from "./ShadowPageRequests";
-import { ShadowResidency } from "./ShadowResidency";
+  VSM_PAGE_TEXELS,
+  getReceiverLevel,
+  getLightPosition,
+  getPageCoordinate,
+  getPageKey,
+  getPageSize,
+  getPageTag,
+  vsmResolutionBias,
+  vsmSoftReceiverLevelBias,
+} from "./VSMMath";
 import { ShadowRigidAtlas } from "./ShadowRigidAtlas";
+import { VSMContext, type VSMCasterOptions } from "./VSMContext";
+import { VSMPages } from "./VSMPages";
 
 type FloatNode = Node<"float">;
 type Vec2Node = Node<"vec2">;
@@ -109,13 +104,12 @@ const upsampleSoftVisibility = Fn<SoftUpsampleArgs, FloatNode>(
   },
 );
 
-export class ShadowPass {
+export class VSMPass {
   private renderer: WebGPURenderer;
   private scene: ScenePass;
   private camera: Camera;
-  private cameraWorldPosition = new Vector3();
-  private shadowPageRequests: ShadowPageRequests;
-  private shadowResidency: ShadowResidency;
+  private context: VSMContext;
+  private pages: VSMPages;
   private shadowFixedAtlas: ShadowRigidAtlas;
   private shadowMovingAtlas: ShadowRigidAtlas;
   private uSunVisibility = uniform(1);
@@ -125,9 +119,6 @@ export class ShadowPass {
     lightSize: uniform(0.02),
     maxSoftness: uniform(4.5),
   };
-  private uProjectionMatrixInverse = uniform(new Matrix4());
-  private uCameraWorldMatrix = uniform(new Matrix4());
-  private uCameraWorldPosition = uniform(this.cameraWorldPosition);
   private softVisibilityPass: TexturePass;
   private softVisibility: TextureNode;
   private uSoftVisibilitySize: Node<"vec2">;
@@ -136,38 +127,30 @@ export class ShadowPass {
     this.renderer = renderer;
     this.scene = scene;
     this.camera = camera;
-    this.setCamera(camera);
-
-    this.shadowPageRequests = new ShadowPageRequests(
+    this.context = new VSMContext(renderer, lightingManager.uSunDir);
+    this.context.setCamera(camera);
+    this.pages = new VSMPages(
       renderer,
+      this.context,
       scene.depthTexture,
-      this.uProjectionMatrixInverse,
-      this.uCameraWorldMatrix,
       scene.softShadow.value,
-      this.uCameraWorldPosition,
-      lightingManager.uSunDir,
-    );
-    this.shadowResidency = new ShadowResidency(
-      renderer,
-      this.shadowPageRequests,
-      this.uCameraWorldPosition,
-      lightingManager.uSunDir,
     );
     this.shadowFixedAtlas = new ShadowRigidAtlas(
       renderer,
-      this.shadowResidency,
+      this.context,
       lightingManager.uSunDir,
       this.shadowFilter,
       "fixed",
     );
     this.shadowMovingAtlas = new ShadowRigidAtlas(
       renderer,
-      this.shadowResidency,
+      this.context,
       lightingManager.uSunDir,
       this.shadowFilter,
       "moving",
     );
-    monitoringManager.setShadowPageStats(this.shadowResidency.stats);
+    monitoringManager.setShadowPageStats(this.pages.stats);
+    monitoringManager.setShadowCasterCounts(this.context.casterCounts);
 
     this.softVisibilityPass = new TexturePass(
       renderer,
@@ -182,8 +165,23 @@ export class ShadowPass {
 
   setCamera(camera: Camera) {
     this.camera = camera;
-    this.uProjectionMatrixInverse.value = camera.projectionMatrixInverse;
-    this.uCameraWorldMatrix.value = camera.matrixWorld;
+    this.context.setCamera(camera);
+  }
+
+  registerCaster(mesh: Mesh, options?: VSMCasterOptions) {
+    this.context.registerCaster(mesh, options);
+  }
+
+  unregisterCaster(mesh: Mesh) {
+    this.context.unregisterCaster(mesh);
+  }
+
+  markCasterMoved(mesh: Mesh) {
+    this.context.markCasterMoved(mesh);
+  }
+
+  setCasterDepthBias(mesh: Mesh, depthBias: number) {
+    this.context.setCasterDepthBias(mesh, depthBias);
   }
 
   apply(sceneColor: TextureNode) {
@@ -191,32 +189,14 @@ export class ShadowPass {
   }
 
   render() {
-    this.camera.getWorldPosition(this.cameraWorldPosition);
-    const requestNodes = this.shadowPageRequests.takeComputeNodes(
-      this.camera,
-      lightingManager.sunDirection,
-      shadowCasterRegistry.fixedVersion +
-        shadowCasterRegistry.fixedRevision +
-        shadowCasterRegistry.movingVersion +
-        shadowCasterRegistry.deformedVersion,
-    );
+    this.context.beginFrame(this.camera, lightingManager.sunDirection);
     const { min, max } = assetManager.resources.heightmap.userData;
     if (typeof min !== "number" || typeof max !== "number")
       throw new Error("Shadows require terrain height bounds");
-    this.shadowFixedAtlas.syncCasters(
-      shadowCasterRegistry,
-      lightingManager.sunDirection,
-      { min, max },
-    );
-    this.shadowMovingAtlas.syncCasters(
-      shadowCasterRegistry,
-      lightingManager.sunDirection,
-      { min, max },
-    );
-    const residencyNodes = this.shadowResidency.takeComputeNodes(
-      lightingManager.sunDirection,
-      requestNodes.length > 0,
-    );
+    this.shadowFixedAtlas.sync({ min, max });
+    this.shadowMovingAtlas.sync({ min, max });
+    const requestNodes = this.pages.getRequestNodes();
+    const residencyNodes = this.pages.getResidencyNodes();
     const hasPageWork = residencyNodes.length > 0;
     const computeNodes = [
       ...requestNodes,
@@ -264,13 +244,13 @@ export class ShadowPass {
       max: 16,
       step: 0.5,
     });
-    folder.addBinding(shadowSoftReceiverLevelBias, "value", {
+    folder.addBinding(vsmSoftReceiverLevelBias, "value", {
       label: "Soft receiver blur level",
       min: 0,
       max: 4,
       step: 1,
     });
-    folder.addBinding(shadowResolutionBias, "value", {
+    folder.addBinding(vsmResolutionBias, "value", {
       label: "Shadow resolution bias",
       min: 0,
       max: 4,
@@ -367,9 +347,9 @@ export class ShadowPass {
     const viewPosition = getViewPosition(
       uv,
       depth,
-      this.uProjectionMatrixInverse,
+      this.context.projectionMatrixInverse,
     );
-    const worldPosition = this.uCameraWorldMatrix.mul(
+    const worldPosition = this.context.cameraWorldMatrix.mul(
       vec4(viewPosition, 1),
     ).xyz;
     return {
@@ -382,25 +362,25 @@ export class ShadowPass {
   private getDebugPage() {
     const { depth, worldPosition, viewDistance } = this.getReceiver(screenUV);
     const isSoftReceiver = this.isSoftShadowReceiver(screenUV);
-    const level = getShadowReceiverLevel(viewDistance, isSoftReceiver);
-    const pagePosition = getShadowLightPosition(
+    const level = getReceiverLevel(viewDistance, isSoftReceiver);
+    const pagePosition = getLightPosition(
       worldPosition,
       lightingManager.uSunDir,
-    ).div(getShadowPageSize(level));
-    const pageCoordinate = getShadowPageCoordinate(pagePosition);
+    ).div(getPageSize(level));
+    const pageCoordinate = getPageCoordinate(pagePosition);
     return {
       depth,
       level,
       pagePosition,
-      pageKey: getShadowPageKey(level, pageCoordinate),
-      pageTag: getShadowPageTag(pageCoordinate),
+      pageKey: getPageKey(level, pageCoordinate),
+      pageTag: getPageTag(pageCoordinate),
     };
   }
 
   private makePageOutput() {
     const { depth, level, pagePosition, pageKey, pageTag } =
       this.getDebugPage();
-    const { isResident } = this.shadowResidency.resolvePage(pageKey, pageTag);
+    const { isResident } = this.context.resolvePage(pageKey, pageTag);
     const pageUv = pagePosition.fract();
     const pageColor = vec3(
       float(level).mul(0.37).fract().mul(0.6).add(0.3),
@@ -422,10 +402,10 @@ export class ShadowPass {
   private makeRigidDepthOutput(atlas: ShadowRigidAtlas, isDynamic: boolean) {
     const { depth, pagePosition, pageKey, pageTag } = this.getDebugPage();
     const { slot, dynamicSlot, isResident, hasDynamic } =
-      this.shadowResidency.resolvePage(pageKey, pageTag);
+      this.context.resolvePage(pageKey, pageTag);
     const pageUv = pagePosition
       .fract()
-      .clamp(0.5 / SHADOW_PAGE_TEXELS, 1 - 0.5 / SHADOW_PAGE_TEXELS);
+      .clamp(0.5 / VSM_PAGE_TEXELS, 1 - 0.5 / VSM_PAGE_TEXELS);
     const atlasDepth = atlas.sampleDebugDepth(
       isDynamic ? dynamicSlot : slot,
       pageUv,
@@ -470,7 +450,7 @@ export class ShadowPass {
 
   private makeDynamicPageOutput() {
     const { depth, pageKey, pageTag } = this.getDebugPage();
-    const { hasDynamic } = this.shadowResidency.resolvePage(pageKey, pageTag);
+    const { hasDynamic } = this.context.resolvePage(pageKey, pageTag);
     const color = depth
       .greaterThanEqual(1)
       .select(vec3(0), hasDynamic.select(vec3(1, 0.8, 0.1), vec3(0.25)));
@@ -479,12 +459,9 @@ export class ShadowPass {
 
   private makePageHeatOutput() {
     const { depth, pageKey, pageTag } = this.getDebugPage();
-    const { slot, isResident } = this.shadowResidency.resolvePage(
-      pageKey,
-      pageTag,
-    );
-    const age = this.shadowResidency.frame.sub(
-      this.shadowResidency.slotRenderFramesNode.element(slot),
+    const { slot, isResident } = this.context.resolvePage(pageKey, pageTag);
+    const age = this.context.frame.sub(
+      this.context.slotRenderFramesNode.element(slot),
     );
     const heatColor = age
       .lessThan(2)

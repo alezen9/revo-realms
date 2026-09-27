@@ -5,11 +5,11 @@ import {
   physicsManager,
   windManager,
   sceneManager,
-  shadowCasterRegistry,
+  rendererManager,
 } from "../../systems";
 import { ColliderDesc } from "@dimforge/rapier3d";
 import { Mesh, Quaternion, Vector3 } from "three";
-import { DirectSunStandardNodeMaterial } from "../../systems/ShadowManager/DirectSunMaterials";
+import { VSMReceiverStandardMaterial } from "../../systems/VSM/VSMReceiverMaterials";
 import { color, normalMap, texture, uniform, uv } from "three/tsl";
 import { RevoColliderType } from "../../types";
 
@@ -22,7 +22,7 @@ const uniforms = {
   uEmissionScale: uniform(20),
 };
 
-class LeviathanAxeMaterial extends DirectSunStandardNodeMaterial {
+class LeviathanAxeMaterial extends VSMReceiverStandardMaterial {
   constructor() {
     super();
 
@@ -56,7 +56,7 @@ export default class GodOfWar {
     axe.material = new LeviathanAxeMaterial();
 
     sceneManager.mainScene.add(axe);
-    shadowCasterRegistry.register(axe);
+    rendererManager.vsmPass.registerCaster(axe);
 
     // Physics
     const scale = axe.scale.x;

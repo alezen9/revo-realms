@@ -32,7 +32,7 @@ import {
 } from "@dimforge/rapier3d";
 import { type State } from "../Game";
 import { realmConfig } from "../realm/config";
-import { DirectSunLambertNodeMaterial } from "../systems/ShadowManager/DirectSunMaterials";
+import { VSMReceiverLambertMaterial } from "../systems/VSM/VSMReceiverMaterials";
 import { RevoColliderType } from "../types";
 import {
   assetManager,
@@ -40,7 +40,7 @@ import {
   eventsManager,
   physicsManager,
   sceneManager,
-  shadowCasterRegistry,
+  rendererManager,
 } from "../systems";
 import { gameTime } from "../utils/GameTime";
 import { srgbColorTarget } from "../utils/TweakpaneColor";
@@ -113,7 +113,7 @@ const computeCausticsColor = Fn<CausticsArgs, Node<"vec3">>(
   },
 );
 
-class TerrainMaterial extends DirectSunLambertNodeMaterial {
+class TerrainMaterial extends VSMReceiverLambertMaterial {
   constructor() {
     super();
 
@@ -295,7 +295,7 @@ class InnerTerrain {
         mesh.geometry.computeBoundingBox();
 
         innerTerrain.add(mesh);
-        shadowCasterRegistry.register(mesh);
+        rendererManager.vsmPass.registerCaster(mesh);
       }
     }
 

@@ -13,7 +13,6 @@ import { SceneManager } from "./SceneManager";
 import { TimeManager } from "./TimeManager";
 import { WindManager } from "./WindManager";
 import { PrewarmManager } from "./PrewarmManager";
-import { ShadowCasterRegistry } from "./ShadowManager/ShadowCasterRegistry";
 import {
   createDebugManager,
   createMonitoringManager,
@@ -26,7 +25,6 @@ const init = () => {
   const sceneManager = new SceneManager(eventsManager);
   const cullingManager = new CullingManager(eventsManager, sceneManager);
   const debugManager = createDebugManager();
-  const shadowCasterRegistry = new ShadowCasterRegistry();
 
   const rendererManager = new RendererManager(
     sceneManager,
@@ -54,7 +52,6 @@ const init = () => {
     physicsScheduler,
     timeManager,
   );
-  monitoringManager.setShadowCasterCounts(shadowCasterRegistry.counts);
   const landmarkManager = new LandmarkManager(eventsManager);
   const lightingManager = new LightingManager(
     sceneManager,
@@ -81,7 +78,6 @@ const init = () => {
     timeManager,
     landmarkManager,
     windManager,
-    shadowCasterRegistry,
   };
 };
 
@@ -103,5 +99,4 @@ export const {
   timeManager,
   landmarkManager,
   windManager,
-  shadowCasterRegistry,
 } = init();

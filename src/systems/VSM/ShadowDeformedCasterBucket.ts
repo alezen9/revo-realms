@@ -18,18 +18,17 @@ import {
   uvec4,
   vec3,
 } from "three/tsl";
-import type { ShadowGpuInstances } from "./ShadowCasterRegistry";
+import type { VSMGpuInstances } from "./VSMContext";
 import {
-  getShadowLevel,
-  getShadowReceiverLevel,
-  getShadowLightPosition,
-  getShadowPageCoordinate,
-  getShadowPageKey,
-  getShadowPageSize,
-  getShadowPageTag,
-  SHADOW_PAGES_PER_LEVEL,
-} from "./ShadowPageCoordinates";
-import type { ShadowResidency } from "./ShadowResidency";
+  getReceiverLevel,
+  getLightPosition,
+  getPageCoordinate,
+  getPageKey,
+  getPageSize,
+  getPageTag,
+  VSM_PAGES_PER_LEVEL,
+} from "./VSMMath";
+import type { VSMContext } from "./VSMContext";
 
 const MAX_WORK_ITEMS = 262144;
 
@@ -39,14 +38,14 @@ export class ShadowDeformedCasterBucket {
     new Uint32Array(MAX_WORK_ITEMS * 4),
     4,
   );
-  readonly instances: ShadowGpuInstances;
+  readonly instances: VSMGpuInstances;
   private resetNode;
   private buildNode;
 
   constructor(
-    residency: ShadowResidency,
+    context: VSMContext,
     source: Mesh,
-    instances: ShadowGpuInstances,
+    instances: VSMGpuInstances,
     sunDirection: Node<"vec3">,
   ) {
     this.instances = instances;
@@ -75,27 +74,27 @@ export class ShadowDeformedCasterBucket {
       If(instances.isActive(instanceIndex), () => {
         const base = instances.baseWorldPosition(instanceIndex);
         const height = instances.height(instanceIndex);
-        const lightBase = getShadowLightPosition(base, sunDirection);
-        const lightTop = getShadowLightPosition(
+        const lightBase = getLightPosition(base, sunDirection);
+        const lightTop = getLightPosition(
           base.add(vec3(0, height, 0)),
           sunDirection,
         );
         const minimum = lightBase.min(lightTop).sub(instances.radiusMeters);
         const maximum = lightBase.max(lightTop).add(instances.radiusMeters);
-        const distance = base.sub(residency.cameraPosition).length();
+        const distance = base.sub(context.cameraPosition).length();
         const reach = height.add(instances.radiusMeters);
-        const firstLevel = getShadowLevel(distance.sub(reach).max(0));
-        const lastLevel = getShadowReceiverLevel(
-          distance.add(reach),
-          bool(true),
+        const firstLevel = getReceiverLevel(
+          distance.sub(reach).max(0),
+          bool(false),
         );
+        const lastLevel = getReceiverLevel(distance.add(reach), bool(true));
         Loop(
           { start: firstLevel, end: lastLevel.add(1), type: "uint" },
           ({ i: levelIndex }) => {
             const level = levelIndex.toVar();
-            const pageSize = getShadowPageSize(level);
-            const firstPage = getShadowPageCoordinate(minimum.div(pageSize));
-            const lastPage = getShadowPageCoordinate(maximum.div(pageSize));
+            const pageSize = getPageSize(level);
+            const firstPage = getPageCoordinate(minimum.div(pageSize));
+            const lastPage = getPageCoordinate(maximum.div(pageSize));
             const pageWidth = lastPage.x.sub(firstPage.x).add(1);
             const pageCount = pageWidth.mul(lastPage.y.sub(firstPage.y).add(1));
             Loop(
@@ -107,24 +106,24 @@ export class ShadowDeformedCasterBucket {
                     pageLoopIndex.div(pageWidth),
                   ),
                 );
-                const pageKey = getShadowPageKey(level, pageCoordinate);
-                const { slot, isResident } = residency.resolvePage(
+                const pageKey = getPageKey(level, pageCoordinate);
+                const { slot, isResident } = context.resolvePage(
                   pageKey,
-                  getShadowPageTag(pageCoordinate),
+                  getPageTag(pageCoordinate),
                 );
-                const isActive = residency.pageTableNode
+                const isActive = context.pageTableNode
                   .element(pageKey)
-                  .w.equal(residency.frame);
+                  .w.equal(context.frame);
                 If(isResident.and(isActive), () => {
                   const itemIndex = atomicAdd(indirectNode.element(1), 1);
                   If(itemIndex.lessThan(MAX_WORK_ITEMS), () => {
                     workItems
                       .element(itemIndex)
                       .assign(uvec4(pageKey, instanceIndex, pageCoordinate));
-                    residency.pageTableNode
+                    context.pageTableNode
                       .element(pageKey)
                       .assign(
-                        uvec4(slot.add(1), residency.frame, 0, residency.frame),
+                        uvec4(slot.add(1), context.frame, 0, context.frame),
                       );
                   }).Else(() => {
                     atomicSub(indirectNode.element(1), 1);
@@ -148,7 +147,7 @@ export class ShadowDeformedCasterBucket {
     ).element(index);
     return {
       pageKey: workItem.x,
-      level: workItem.x.div(SHADOW_PAGES_PER_LEVEL),
+      level: workItem.x.div(VSM_PAGES_PER_LEVEL),
       instance: workItem.y,
       pageCoordinate: workItem.zw.toVec2(),
     };
