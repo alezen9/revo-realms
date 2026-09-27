@@ -6,7 +6,6 @@ import WindAmbianceStreaks from "../entities/WindAmbiance/WindAmbianceStreaks";
 import { LakeSurface } from "../entities/LakeSurface";
 import { Campfire } from "../entities/Campfire";
 import { FootballPitch } from "../entities/FootballPitch";
-import ShadowStressTest from "../entities/ShadowStressTest";
 export { realmConfig } from "./config";
 
 export default class PortfolioRealm {
@@ -19,6 +18,5 @@ export default class PortfolioRealm {
     new LakeSurface();
     new Campfire();
     new FootballPitch();
-    new ShadowStressTest();
   }
 }
