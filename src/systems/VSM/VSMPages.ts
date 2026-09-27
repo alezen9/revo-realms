@@ -35,8 +35,10 @@ import {
   VSM_COUNTER_EMPTY,
   VSM_COUNTER_LEVEL_MISSES,
   VSM_COUNTER_MISSING,
+  VSM_COUNTER_REDRAWS,
   VSM_COUNTER_REQUESTED,
   VSM_COUNTER_REUSABLE,
+  VSM_DYNAMIC_CAPACITY,
   VSM_DYNAMIC_COUNTER_TOTAL,
   VSM_INVALID_PAGE_KEY,
   VSM_JOB_COUNT,
@@ -78,11 +80,15 @@ const LIST_SIZE = REUSABLE_LIST_OFFSET + VSM_POOL_CAPACITY;
 
 export class VSMPages {
   readonly stats: ShadowPageStats = {
-    requested: 0,
-    allocated: 0,
-    dynamic: 0,
+    needed: 0,
+    capacity: VSM_POOL_CAPACITY,
     missing: 0,
+    redrawsPerSecond: 0,
+    dynamic: 0,
+    dynamicCapacity: VSM_DYNAMIC_CAPACITY,
   };
+  private redrawTotal = 0;
+  private redrawReadbackTime = 0;
   private renderer: WebGPURenderer;
   private context: VSMContext;
   private depthSize = uniform(new Vector2(1, 1));
@@ -205,7 +211,7 @@ export class VSMPages {
 
     this.resetNode = Fn(() => {
       Loop(
-        { start: 0, end: VSM_COUNTER_COUNT, type: "uint" },
+        { start: 0, end: VSM_COUNTER_REDRAWS, type: "uint" },
         ({ i: index }) => {
           atomicStore(atomicCounters.element(index), 0);
         },
@@ -388,6 +394,7 @@ export class VSMPages {
             1,
           );
           pageJobsNode.element(jobIndex.add(VSM_JOBS_ALLOCATED)).assign(job);
+          atomicAdd(atomicCounters.element(VSM_COUNTER_REDRAWS), 1);
           const activeIndex = atomicAdd(
             atomicCounters.element(VSM_COUNTER_ACTIVE),
             1,
@@ -572,9 +579,16 @@ export class VSMPages {
       const dynamicCounters = new Uint32Array(
         await this.renderer.getArrayBufferAsync(context.dynamicCounters),
       );
-      this.stats.requested = residency[VSM_COUNTER_REQUESTED];
-      this.stats.allocated = residency[VSM_COUNTER_ALLOCATED];
+      const now = performance.now();
+      const redrawTotal = residency[VSM_COUNTER_REDRAWS];
+      const elapsedSeconds = (now - this.redrawReadbackTime) / 1000;
+      this.stats.needed = residency[VSM_COUNTER_REQUESTED];
+      this.stats.redrawsPerSecond = Math.round(
+        (redrawTotal - this.redrawTotal) / elapsedSeconds,
+      );
       this.stats.dynamic = dynamicCounters[VSM_DYNAMIC_COUNTER_TOTAL];
+      this.redrawTotal = redrawTotal;
+      this.redrawReadbackTime = now;
       let overflow = 0;
       for (let level = 0; level < VSM_LEVEL_COUNT; level++)
         overflow += Math.max(

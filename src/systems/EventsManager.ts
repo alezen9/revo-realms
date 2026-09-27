@@ -80,10 +80,12 @@ export type MonitoringSnapshot = {
 };
 
 export type ShadowPageStats = {
-  requested: number;
-  allocated: number;
-  dynamic: number;
+  needed: number;
+  capacity: number;
   missing: number;
+  redrawsPerSecond: number;
+  dynamic: number;
+  dynamicCapacity: number;
 };
 
 export type GrassMonitoringStats = {

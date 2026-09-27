@@ -184,15 +184,35 @@
 
 		{#if shadowPages}
 			<section>
-				<span class="category">Shadow pages</span>
+				<span class="category">Shadows</span>
 				<div class="metrics">
-					<span class="cell"><span class="label">Needed</span><span class="value">{integerFormat.format(shadowPages.requested)}</span></span>
+					<span class="cell">
+						<span class="label">Pages</span>
+						<span class={["value", headroomClass(shadowPages.needed, shadowPages.capacity)]}>
+							{integerFormat.format(shadowPages.needed)}
+							<span class="aside">/{integerFormat.format(shadowPages.capacity)}</span>
+						</span>
+					</span>
 					<span class="cell">
 						<span class="label">Missing</span>
-						<span class={["value", shadowPages.missing ? "warn" : "good"]}>{integerFormat.format(shadowPages.missing)}</span>
+						<span class={["value", shadowPages.missing ? "bad" : "good"]}>
+							{integerFormat.format(shadowPages.missing)}
+						</span>
 					</span>
-					<span class="cell"><span class="label">Updated</span><span class="value">{integerFormat.format(shadowPages.allocated)}</span></span>
-					<span class="cell"><span class="label">Per frame</span><span class="value">{integerFormat.format(shadowPages.dynamic)}</span></span>
+					<span class="cell">
+						<span class="label">Redraws</span>
+						<span class="value">
+							{integerFormat.format(shadowPages.redrawsPerSecond)}
+							<span class="aside">/s</span>
+						</span>
+					</span>
+					<span class="cell">
+						<span class="label">Dynamic</span>
+						<span class={["value", headroomClass(shadowPages.dynamic, shadowPages.dynamicCapacity)]}>
+							{integerFormat.format(shadowPages.dynamic)}
+							<span class="aside">/{integerFormat.format(shadowPages.dynamicCapacity)}</span>
+						</span>
+					</span>
 				</div>
 			</section>
 		{/if}
