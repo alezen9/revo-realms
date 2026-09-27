@@ -92,10 +92,6 @@ export class VSMPass {
     this.context.unregisterCaster(mesh);
   }
 
-  markCasterMoved(mesh: Mesh) {
-    this.context.markCasterMoved(mesh);
-  }
-
   setCasterDepthBias(mesh: Mesh, depthBias: number) {
     this.context.setCasterDepthBias(mesh, depthBias);
   }

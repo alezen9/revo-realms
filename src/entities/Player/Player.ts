@@ -150,7 +150,6 @@ export default class Player {
     } = config;
 
     this.visual.interpolate(delta);
-    rendererManager.vsmPass.markCasterMoved(this.mesh);
     const yawOffset = this.yawInRadians - this.previousYawInRadians;
     const shortestYawOffset = Math.atan2(
       Math.sin(yawOffset),

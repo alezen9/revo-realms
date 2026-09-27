@@ -15,6 +15,8 @@ import {
   If,
   instanceIndex,
   Loop,
+  positionGeometry,
+  positionLocal,
   storage,
   uint,
   uvec2,
@@ -402,7 +404,7 @@ class InstanceCaster implements VSMRasterSource {
     this.context = context;
     this.caster = caster;
     this.instances = instances;
-    this.hasUvs = caster.opacity !== undefined;
+    this.hasUvs = caster.opacityNode !== undefined;
     const positions: number[] = [];
     const uvs: number[] = [];
     const clusterTriangles: number[] = [];
@@ -476,9 +478,9 @@ class InstanceCaster implements VSMRasterSource {
     })().compute(1, [1]);
 
     this.buildNode = Fn(() => {
-      If(instances.isActive(instanceIndex), () => {
-        const base = instances.baseWorldPosition(instanceIndex);
-        const height = instances.height(instanceIndex);
+      If(instances.isActiveNode, () => {
+        const base = instances.basePositionNode.toVar();
+        const height = instances.heightNode.toVar();
         const lightBase = getLightPosition(base, context.lightBasis);
         const lightTop = getLightPosition(
           base.add(vec3(0, height, 0)),
@@ -551,8 +553,8 @@ class InstanceCaster implements VSMRasterSource {
   }
 
   toRasterCaster() {
-    const { alphaTest, opacity } = this.caster;
-    return { source: this, alphaTest, opacity };
+    const { alphaTest, opacityNode } = this.caster;
+    return { source: this, alphaTest, opacityNode };
   }
 
   getWorkCount() {
@@ -582,11 +584,15 @@ class InstanceCaster implements VSMRasterSource {
   }
 
   getCorner(work: VSMRasterWork, vertex: Node<"uint">) {
+    const position = this.positions.element(vertex).xyz.toVar();
     return vec4(
-      this.instances.worldPosition(
-        work.instance,
-        this.positions.element(vertex).xyz,
-      ),
+      this.instances.positionNode.context({
+        overrideNodes: new Map<Node, () => Node>([
+          [instanceIndex, () => work.instance],
+          [positionLocal, () => position],
+          [positionGeometry, () => position],
+        ]),
+      }),
       this.caster.depthBias,
     );
   }

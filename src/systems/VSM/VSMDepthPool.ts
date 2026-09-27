@@ -70,7 +70,7 @@ export type VSMRasterSource = {
 export type VSMRasterCaster = {
   source: VSMRasterSource;
   alphaTest: number;
-  opacity?: (uv: Node<"vec2">) => Node<"float">;
+  opacityNode?: Node<"float">;
 };
 
 type ClusterCaster = {
@@ -199,9 +199,9 @@ export class VSMDepthPool {
   setInstanceCasters(casters: VSMRasterCaster[]) {
     for (const rasterNode of this.instanceRasterNodes) rasterNode.dispose();
     this.instanceRasterNodes = [];
-    for (const { source, alphaTest, opacity } of casters)
+    for (const { source, alphaTest, opacityNode } of casters)
       this.instanceRasterNodes.push(
-        this.createRasterNode(source, alphaTest, opacity),
+        this.createRasterNode(source, alphaTest, opacityNode),
       );
   }
 
@@ -297,7 +297,7 @@ export class VSMDepthPool {
     const groups = new Map<string, VSMCaster[]>([["opaque", []]]);
     for (const caster of this.context.casters) {
       if (caster.kind !== this.kind) continue;
-      const key = caster.opacity ? caster.mesh.uuid : "opaque";
+      const key = caster.opacityNode ? caster.mesh.uuid : "opaque";
       const casters = groups.get(key);
       if (casters) casters.push(caster);
       else groups.set(key, [caster]);
@@ -313,14 +313,14 @@ export class VSMDepthPool {
       if (clusterCaster?.bucket.setCasters(casters)) continue;
       clusterCaster?.rasterNode.dispose();
       clusterCaster?.bucket.dispose();
-      const { opacity, alphaTest } = casters[0] ?? { alphaTest: 0 };
+      const { opacityNode, alphaTest } = casters[0] ?? { alphaTest: 0 };
       const bucket = new VSMClusterBucket(
         this.context,
         this.jobs,
         casters,
-        opacity !== undefined,
+        opacityNode !== undefined,
       );
-      const rasterNode = this.createRasterNode(bucket, alphaTest, opacity);
+      const rasterNode = this.createRasterNode(bucket, alphaTest, opacityNode);
       this.clusterCasters.set(key, { bucket, rasterNode });
     }
   }
@@ -328,11 +328,11 @@ export class VSMDepthPool {
   private createRasterNode(
     source: VSMRasterSource,
     alphaTest: number,
-    opacity?: (uv: Node<"vec2">) => Node<"float">,
+    opacityNode?: Node<"float">,
   ) {
     const { lightBasis } = this.context;
     const { minimumY, maximumY } = this;
-    const hasOpacity = source.hasUvs && opacity !== undefined;
+    const hasOpacity = source.hasUvs && opacityNode !== undefined;
     const triangleCorners = workgroupArray("vec3", VSM_CLUSTER_TRIANGLES * 3);
     const triangleUvs = workgroupArray("vec2", VSM_CLUSTER_TRIANGLES * 3);
 
@@ -438,22 +438,26 @@ export class VSMDepthPool {
                     .and(secondWeight.greaterThanEqual(0))
                     .and(thirdWeight.greaterThanEqual(0));
                   const isOpaque =
-                    hasOpacity && opacity
-                      ? opacity(
-                          triangleUvs
-                            .element<"vec2">(cornerBase)
-                            .mul(firstWeight)
-                            .add(
+                    hasOpacity && opacityNode
+                      ? opacityNode
+                          .context({
+                            forceUVContext: true,
+                            getUV: () =>
                               triangleUvs
-                                .element<"vec2">(cornerBase.add(1))
-                                .mul(secondWeight),
-                            )
-                            .add(
-                              triangleUvs
-                                .element<"vec2">(cornerBase.add(2))
-                                .mul(thirdWeight),
-                            ),
-                        ).greaterThanEqual(alphaTest)
+                                .element<"vec2">(cornerBase)
+                                .mul(firstWeight)
+                                .add(
+                                  triangleUvs
+                                    .element<"vec2">(cornerBase.add(1))
+                                    .mul(secondWeight),
+                                )
+                                .add(
+                                  triangleUvs
+                                    .element<"vec2">(cornerBase.add(2))
+                                    .mul(thirdWeight),
+                                ),
+                          })
+                          .greaterThanEqual(alphaTest)
                       : isInside;
                   If(isInside.and(isOpaque), () => {
                     const depth = first.z

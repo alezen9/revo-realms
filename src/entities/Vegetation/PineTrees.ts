@@ -115,8 +115,7 @@ export default class PineTrees {
     sceneManager.mainScene.add(barkBatch, canopyBatch);
     rendererManager.vsmPass.registerCaster(barkBatch);
     rendererManager.vsmPass.registerCaster(canopyBatch, {
-      opacity: (canopyUv) =>
-        texture(assetManager.resources.pineTreeDiffuse, canopyUv).a,
+      opacityNode: texture(assetManager.resources.pineTreeDiffuse).a,
     });
     this.debug();
   }

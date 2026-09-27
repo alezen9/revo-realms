@@ -53,16 +53,16 @@ export type VSMGpuInstances = {
   count: number;
   radiusMeters: number;
   geometry?: BufferGeometry;
-  baseWorldPosition: (index: Node<"uint">) => Node<"vec3">;
-  height: (index: Node<"uint">) => Node<"float">;
-  worldPosition: (index: Node<"uint">, position: Node<"vec3">) => Node<"vec3">;
-  isActive: (index: Node<"uint">) => Node<"bool">;
+  basePositionNode: Node<"vec3">;
+  heightNode: Node<"float">;
+  positionNode: Node<"vec3">;
+  isActiveNode: Node<"bool">;
 };
 
 export type VSMCasterOptions = {
   type?: "static" | "dynamic";
   depthBias?: number;
-  opacity?: (uv: Node<"vec2">) => Node<"float">;
+  opacityNode?: Node<"float">;
   gpuInstances?: VSMGpuInstances;
 };
 
@@ -70,7 +70,7 @@ export type VSMCaster = {
   mesh: Mesh;
   kind: VSMCasterKind;
   depthBias: number;
-  opacity?: (uv: Node<"vec2">) => Node<"float">;
+  opacityNode?: Node<"float">;
   alphaTest: number;
   gpuInstances?: VSMGpuInstances;
   worldMatrix: Matrix4;
@@ -225,6 +225,21 @@ export class VSMContext {
       previous.resolutionBias !== vsmResolutionBias.value ||
       previous.softReceiverLevelBias !== vsmSoftReceiverLevelBias.value;
     changes.hasSunChanged = !previous.sunDirection.equals(sunDirection);
+    for (const entry of this.casterEntries.values()) {
+      if (entry.kind === "deformed") continue;
+      const { mesh, worldMatrix, worldBounds } = entry;
+      mesh.updateWorldMatrix(true, false);
+      if (worldMatrix.equals(mesh.matrixWorld)) continue;
+      worldMatrix.copy(mesh.matrixWorld);
+      if (entry.kind === "dynamic") {
+        this.versions.dynamic.revision++;
+        continue;
+      }
+      this.dirtyStaticBounds.push(worldBounds.clone());
+      worldBounds.setFromObject(mesh);
+      this.dirtyStaticBounds.push(worldBounds.clone());
+      this.versions.static.revision++;
+    }
     for (const kind of VSM_LAYER_KINDS) {
       const current = this.versions[kind];
       const last = previous.versions[kind];
@@ -301,7 +316,12 @@ export class VSMContext {
   registerCaster(mesh: Mesh, options: VSMCasterOptions = {}) {
     if (this.casterEntries.has(mesh))
       throw new Error(`Shadow caster already registered: ${mesh.name}`);
-    const { type = "static", depthBias = 0, opacity, gpuInstances } = options;
+    const {
+      type = "static",
+      depthBias = 0,
+      opacityNode,
+      gpuInstances,
+    } = options;
     const kind = gpuInstances ? "deformed" : type;
     if (!Number.isFinite(depthBias) || depthBias < 0)
       throw new Error(`Invalid shadow depth bias: ${mesh.name}`);
@@ -318,7 +338,7 @@ export class VSMContext {
 
     const { material } = mesh;
     const alphaTest = material instanceof NodeMaterial ? material.alphaTest : 0;
-    if (opacity && alphaTest <= 0)
+    if (opacityNode && alphaTest <= 0)
       throw new Error(`Shadow opacity needs material alphaTest: ${mesh.name}`);
 
     mesh.updateWorldMatrix(true, false);
@@ -327,7 +347,7 @@ export class VSMContext {
       mesh,
       kind,
       depthBias,
-      opacity,
+      opacityNode,
       alphaTest,
       gpuInstances,
       worldMatrix: mesh.matrixWorld.clone(),
@@ -358,20 +378,5 @@ export class VSMContext {
     entry.depthBias = depthBias;
     this.dirtyStaticBounds.push(entry.worldBounds.clone());
     this.versions.static.revision++;
-  }
-
-  markCasterMoved(mesh: Mesh) {
-    const entry = this.casterEntries.get(mesh);
-    if (!entry) throw new Error(`Shadow caster not registered: ${mesh.name}`);
-    mesh.updateWorldMatrix(true, false);
-    if (entry.worldMatrix.equals(mesh.matrixWorld)) return;
-    entry.worldMatrix.copy(mesh.matrixWorld);
-    if (entry.kind === "static") {
-      this.dirtyStaticBounds.push(entry.worldBounds.clone());
-      entry.worldBounds.setFromObject(mesh);
-      this.dirtyStaticBounds.push(entry.worldBounds.clone());
-      this.versions.static.revision++;
-    }
-    if (entry.kind === "dynamic") this.versions.dynamic.revision++;
   }
 }
