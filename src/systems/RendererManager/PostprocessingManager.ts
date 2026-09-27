@@ -1,85 +1,32 @@
-import {
-  ACESFilmicToneMapping,
-  ColorManagement,
-  Matrix4,
-  NoToneMapping,
-  Vector3,
-} from "three";
-import {
-  NodeFrame,
-  RedFormat,
-  RenderPipeline,
-  RGBFormat,
-  UnsignedByteType,
-  UnsignedInt101111Type,
-  WebGPURenderer,
-  type Node,
-} from "three/webgpu";
-import {
-  float,
-  getViewPosition,
-  mix,
-  mrt,
-  output,
-  pass,
-  renderOutput,
-  screenUV,
-  step,
-  texture,
-  toneMapping,
-  toneMappingExposure,
-  uniform,
-  vec3,
-  vec4,
-} from "three/tsl";
-import { bloom } from "three/addons/tsl/display/BloomNode.js";
+import { ColorManagement, NoToneMapping } from "three";
+import { RenderPipeline, WebGPURenderer, type Node } from "three/webgpu";
+import type { renderOutput } from "three/tsl";
 import type { DebugFolder, DebugManager } from "../DebugManager";
 import type { EventsManager } from "../EventsManager";
 import type { SceneManager } from "../SceneManager";
-import {
-  assetManager,
-  lightingManager,
-  monitoringManager,
-  shadowCasterRegistry,
-} from "..";
-import {
-  SHADOW_PAGE_TEXELS,
-  getShadowReceiverLevel,
-  getShadowLightPosition,
-  getShadowPageCoordinate,
-  getShadowPageKey,
-  getShadowPageSize,
-  getShadowPageTag,
-  shadowResolutionBias,
-  shadowSoftReceiverLevelBias,
-} from "../ShadowManager/ShadowPageCoordinates";
-import { ShadowPageRequests } from "../ShadowManager/ShadowPageRequests";
-import { ShadowResidency } from "../ShadowManager/ShadowResidency";
-import { ShadowRigidAtlas } from "../ShadowManager/ShadowRigidAtlas";
+import { ShadowPass } from "../ShadowManager/ShadowPass";
+import { DualKawaseBloomPass } from "./DualKawaseBloomPass";
+import { PostChain } from "./PostChain";
+import { ScenePass } from "./ScenePass";
+import { TexturePass } from "./TexturePass";
+import { ToneMappingPass } from "./ToneMappingPass";
+import { WaterPass } from "./WaterPass";
 
-const MAIN_SCENE_PASS_SAMPLES = 4;
-const LUMINANCE_WEIGHTS = vec3(0.2126, 0.7152, 0.0722);
+const BLOOM_OPTIONS = {
+  strength: 0.8,
+  threshold: 1,
+  smoothWidth: 0.04,
+  spread: 2,
+};
 
 export class PostprocessingManager extends RenderPipeline {
-  private mainScenePass: ReturnType<typeof pass>;
-  private waterPass: ReturnType<typeof pass>;
-  private mainSceneFrame = new NodeFrame();
-  private cameraWorldPosition = new Vector3();
-  private shadowPageRequests: ShadowPageRequests;
-  private shadowResidency: ShadowResidency;
-  private shadowFixedAtlas: ShadowRigidAtlas;
-  private shadowMovingAtlas: ShadowRigidAtlas;
-  private uSaturation = uniform(1);
-  private uSunVisibility = uniform(1);
-  private uShadowIntensity = uniform(0.7);
-  private shadowFilter = {
-    softness: uniform(0.5),
-    lightSize: uniform(0.02),
-    maxSoftness: uniform(6),
-  };
-  private uProjectionMatrixInverse = uniform(new Matrix4());
-  private uCameraWorldMatrix = uniform(new Matrix4());
-  private uCameraWorldPosition = uniform(this.cameraWorldPosition);
+  private scenePass: ScenePass;
+  private shadowPass: ShadowPass;
+  private waterPass: WaterPass;
+  private hdrPass: TexturePass;
+  private bloomPass: DualKawaseBloomPass;
+  private toneMappingPass: ToneMappingPass;
+  private chain: PostChain<ReturnType<typeof renderOutput>>;
   private saturationTarget = 1;
   private saturationLerpSpeed = 14;
   private sceneManager: SceneManager;
@@ -87,7 +34,7 @@ export class PostprocessingManager extends RenderPipeline {
   private debugManager: DebugManager;
   private debugFolder: DebugFolder;
   private debugView = {
-    target: "scene",
+    target: "Scene",
   };
   private debugOutputs: Record<string, ReturnType<typeof renderOutput>>;
 
@@ -99,6 +46,7 @@ export class PostprocessingManager extends RenderPipeline {
   ) {
     super(renderer);
     renderer.toneMappingExposure = 2;
+    this.outputColorTransform = false;
     this.sceneManager = sceneManager;
     this.eventsManager = eventsManager;
     this.debugManager = debugManager;
@@ -107,421 +55,83 @@ export class PostprocessingManager extends RenderPipeline {
       title: "⭐️ Postprocessing",
       expanded: false,
     });
-    this.mainScenePass = pass(
-      this.sceneManager.mainScene,
-      this.sceneManager.renderCamera,
-      { samples: MAIN_SCENE_PASS_SAMPLES },
-    );
-    this.mainScenePass.setMRT(
-      mrt({ output, directSun: vec4(0), softShadow: vec4(0) }),
-    );
-    const directSunTexture = this.mainScenePass.getTexture("directSun");
-    directSunTexture.format = RGBFormat;
-    directSunTexture.type = UnsignedInt101111Type;
-    const softShadowTexture = this.mainScenePass.getTexture("softShadow");
-    softShadowTexture.format = RedFormat;
-    softShadowTexture.type = UnsignedByteType;
-    this.waterPass = pass(
-      this.sceneManager.waterScene,
-      this.sceneManager.renderCamera,
-      { samples: 0, depthBuffer: false },
-    );
-    this.mainScenePass.name = "Main scene";
-    this.waterPass.name = "Water";
-    const depthTexture = this.mainScenePass.renderTarget.depthTexture;
-    if (!depthTexture) throw new Error("Shadows require scene depth");
-    depthTexture.renderTarget = this.mainScenePass.renderTarget;
 
-    this.syncCameraUniforms();
+    const camera = this.sceneManager.renderCamera;
+    this.scenePass = new ScenePass(renderer, sceneManager.mainScene, camera);
+    this.shadowPass = new ShadowPass(renderer, this.scenePass, camera);
+    this.waterPass = new WaterPass(renderer, sceneManager.waterScene, camera);
+    this.hdrPass = new TexturePass(renderer, "Scene HDR");
+    this.bloomPass = new DualKawaseBloomPass(renderer, BLOOM_OPTIONS);
+    this.toneMappingPass = new ToneMappingPass();
 
-    this.shadowPageRequests = new ShadowPageRequests(
-      renderer,
-      depthTexture,
-      this.uProjectionMatrixInverse,
-      this.uCameraWorldMatrix,
-      softShadowTexture,
-      this.uCameraWorldPosition,
-      lightingManager.uSunDir,
-    );
-    this.shadowResidency = new ShadowResidency(
-      renderer,
-      this.shadowPageRequests,
-      this.uCameraWorldPosition,
-      lightingManager.uSunDir,
-    );
-    this.shadowFixedAtlas = new ShadowRigidAtlas(
-      renderer,
-      this.shadowResidency,
-      lightingManager.uSunDir,
-      this.shadowFilter,
-      "fixed",
-    );
-    this.shadowMovingAtlas = new ShadowRigidAtlas(
-      renderer,
-      this.shadowResidency,
-      lightingManager.uSunDir,
-      this.shadowFilter,
-      "moving",
-    );
-    monitoringManager.setShadowPageStats(this.shadowResidency.stats);
+    this.chain = PostChain.from(this.scenePass)
+      .pipe(this.shadowPass)
+      .pipe(this.waterPass)
+      .pipe(this.hdrPass)
+      .pipe(this.bloomPass)
+      .pipe(this.toneMappingPass);
 
     this.debugOutputs = {
-      scene: this.makeGraph(),
-      directSun: renderOutput(
-        vec4(this.getMainSceneTextureNode("directSun").sample(screenUV).rgb, 1),
-        NoToneMapping,
-      ),
-      pages: this.makePageOutput(),
-      fixedDepth: this.makeRigidDepthOutput(this.shadowFixedAtlas, false),
-      movingDepth: this.makeRigidDepthOutput(this.shadowMovingAtlas, true),
-      fixedShadow: this.makeRigidShadowOutput(this.shadowFixedAtlas),
-      movingShadow: this.makeRigidShadowOutput(this.shadowMovingAtlas),
-      shadow: this.makeRigidShadowOutput(
-        this.shadowFixedAtlas,
-        this.shadowMovingAtlas,
-      ),
-      receivers: this.makeReceiverOutput(),
-      dynamicPages: this.makeDynamicPageOutput(),
-      pageHeat: this.makePageHeatOutput(),
+      Scene: this.chain.output,
+      ...this.shadowPass.createDebugOutputs(),
     };
-    this.addShadowBindings();
-    this.debugFolder
-      .addBinding(this.debugView, "target", {
-        label: "View",
-        options: {
-          Scene: "scene",
-          "Direct sun": "directSun",
-          Pages: "pages",
-          "Fixed depth": "fixedDepth",
-          "Moving depth": "movingDepth",
-          "Fixed shadow": "fixedShadow",
-          "Moving shadow": "movingShadow",
-          Shadow: "shadow",
-          Receivers: "receivers",
-          "Dynamic pages": "dynamicPages",
-          "Page heat": "pageHeat",
-        },
-      })
-      .on("change", this.selectDebugView);
+    this.addBindings();
     this.selectDebugView();
 
-    this.eventsManager.on("engine-camera-change", () => {
-      this.mainScenePass.camera = this.sceneManager.renderCamera;
-      this.mainScenePass.needsUpdate = true;
-      this.waterPass.camera = this.sceneManager.renderCamera;
-      this.waterPass.needsUpdate = true;
-      this.syncCameraUniforms();
-    });
-
-    this.eventsManager.on("engine-slowmo-change", (enabled: boolean) => {
-      this.saturationTarget = enabled ? 0 : 1;
-    });
-
-    this.eventsManager.on("engine-render-update", ({ delta }) => {
-      if (this.uSaturation.value === this.saturationTarget) return;
-      const t = 1 - Math.exp(-this.saturationLerpSpeed * delta);
-      this.uSaturation.value +=
-        (this.saturationTarget - this.uSaturation.value) * t;
-    });
+    this.eventsManager.on("engine-camera-change", this.onCameraChange);
+    this.eventsManager.on("engine-slowmo-change", this.onSlowmoChange);
+    this.eventsManager.on("engine-render-update", this.onEngineUpdate);
   }
 
-  private addShadowBindings() {
-    this.debugFolder.addBinding(this.uSunVisibility, "value", {
-      label: "Sun visibility",
-      min: 0,
-      max: 1,
-      step: 0.05,
-    });
-    this.debugFolder.addBinding(this.uShadowIntensity, "value", {
-      label: "Shadow intensity",
-      min: 0,
-      max: 1,
-      step: 0.05,
-    });
-    this.debugFolder.addBinding(this.shadowFilter.softness, "value", {
-      label: "Shadow softness",
-      min: 0,
-      max: 3,
-      step: 0.05,
-    });
-    this.debugFolder.addBinding(this.shadowFilter.lightSize, "value", {
-      label: "Shadow light size",
-      min: 0,
-      max: 0.1,
-      step: 0.001,
-    });
-    this.debugFolder.addBinding(this.shadowFilter.maxSoftness, "value", {
-      label: "Shadow max softness",
-      min: 0,
-      max: 16,
-      step: 0.5,
-    });
-    this.debugFolder.addBinding(shadowSoftReceiverLevelBias, "value", {
-      label: "Soft receiver blur level",
-      min: 0,
-      max: 4,
-      step: 1,
-    });
-    this.debugFolder.addBinding(shadowResolutionBias, "value", {
-      label: "Shadow resolution bias",
-      min: 0,
-      max: 4,
-      step: 1,
-    });
-  }
-
-  private syncCameraUniforms() {
+  private onCameraChange = () => {
     const camera = this.sceneManager.renderCamera;
-    this.uProjectionMatrixInverse.value = camera.projectionMatrixInverse;
-    this.uCameraWorldMatrix.value = camera.matrixWorld;
-  }
-
-  private selectDebugView = () => {
-    this.outputNode =
-      this.debugOutputs[this.debugView.target] ?? this.debugOutputs.scene;
-    this.needsUpdate = true;
+    this.scenePass.setCamera(camera);
+    this.shadowPass.setCamera(camera);
+    this.waterPass.setCamera(camera);
   };
 
-  private getReceiver(uv: Node<"vec2">) {
-    const depth = this.getMainSceneTextureNode("depth").sample(uv).r;
-    const viewPosition = getViewPosition(
-      uv,
-      depth,
-      this.uProjectionMatrixInverse,
-    );
-    const worldPosition = this.uCameraWorldMatrix.mul(
-      vec4(viewPosition, 1),
-    ).xyz;
-    return {
-      depth,
-      worldPosition,
-      viewDistance: viewPosition.length(),
-      isSoftReceiver: this.isSoftShadowReceiver(uv),
-    };
-  }
+  private onSlowmoChange = (isEnabled: boolean) => {
+    this.saturationTarget = isEnabled ? 0 : 1;
+  };
 
-  private getDebugPage() {
-    const { depth, worldPosition, viewDistance, isSoftReceiver } =
-      this.getReceiver(screenUV);
-    const level = getShadowReceiverLevel(viewDistance, isSoftReceiver);
-    const pagePosition = getShadowLightPosition(
-      worldPosition,
-      lightingManager.uSunDir,
-    ).div(getShadowPageSize(level));
-    const pageCoordinate = getShadowPageCoordinate(pagePosition);
-    return {
-      depth,
-      level,
-      pagePosition,
-      pageKey: getShadowPageKey(level, pageCoordinate),
-      pageTag: getShadowPageTag(pageCoordinate),
-    };
-  }
+  private onEngineUpdate = ({ delta }: { delta: number }) => {
+    const { saturation } = this.toneMappingPass;
+    if (saturation.value === this.saturationTarget) return;
+    const t = 1 - Math.exp(-this.saturationLerpSpeed * delta);
+    saturation.value += (this.saturationTarget - saturation.value) * t;
+  };
 
-  private makePageOutput() {
-    const { depth, level, pagePosition, pageKey, pageTag } =
-      this.getDebugPage();
-    const { isResident } = this.shadowResidency.resolvePage(pageKey, pageTag);
-    const pageUv = pagePosition.fract();
-    const pageColor = vec3(
-      float(level).mul(0.37).fract().mul(0.6).add(0.3),
-      float(level).mul(0.61).fract().mul(0.6).add(0.3),
-      float(level).mul(0.83).fract().mul(0.6).add(0.3),
-    );
-    const edgeDistance = pageUv.x
-      .min(float(1).sub(pageUv.x))
-      .min(pageUv.y)
-      .min(float(1).sub(pageUv.y));
-    const pageCoverage = isResident.select(
-      mix(pageColor, vec3(1), step(edgeDistance, 0.025).mul(0.7)),
-      vec3(1, 0, 0),
-    );
-    const color = depth.greaterThanEqual(1).select(vec3(0), pageCoverage);
-    return renderOutput(vec4(color, 1), NoToneMapping);
-  }
-
-  private makeRigidDepthOutput(atlas: ShadowRigidAtlas, isDynamic: boolean) {
-    const { depth, pagePosition, pageKey, pageTag } = this.getDebugPage();
-    const { slot, dynamicSlot, isResident, hasDynamic } =
-      this.shadowResidency.resolvePage(pageKey, pageTag);
-    const pageUv = pagePosition
-      .fract()
-      .clamp(0.5 / SHADOW_PAGE_TEXELS, 1 - 0.5 / SHADOW_PAGE_TEXELS);
-    const atlasDepth = atlas.sampleDebugDepth(
-      isDynamic ? dynamicSlot : slot,
-      pageUv,
-    );
-    const visualDepth = atlasDepth.sub(0.65).mul(5).clamp();
-    const color = depth
-      .greaterThanEqual(1)
-      .select(
-        vec3(0),
-        (isDynamic ? hasDynamic : isResident).select(
-          vec3(visualDepth),
-          vec3(1, 0, 0),
-        ),
-      );
-    return renderOutput(vec4(color, 1), NoToneMapping);
-  }
-
-  private makeRigidShadowOutput(
-    atlas: ShadowRigidAtlas,
-    secondary?: ShadowRigidAtlas,
-  ) {
-    const visibility = this.computeShadowVisibility(screenUV, atlas, secondary);
-    return renderOutput(vec4(vec3(visibility), 1), NoToneMapping);
-  }
-
-  private makeReceiverOutput() {
-    const depth = this.getMainSceneTextureNode("depth").sample(screenUV).r;
-    const directSun =
-      this.getMainSceneTextureNode("directSun").sample(screenUV).rgb;
-    const receiverColor = this.isSoftShadowReceiver(screenUV).select(
-      vec3(0.2, 0.45, 1),
-      vec3(0.2, 0.85, 0.3),
-    );
-    const isReceiver = directSun.dot(vec3(1)).greaterThan(0);
-    const color = depth
-      .greaterThanEqual(1)
-      .select(vec3(0.15), isReceiver.select(receiverColor, vec3(0)));
-    return renderOutput(vec4(color, 1), NoToneMapping);
-  }
-
-  private makeDynamicPageOutput() {
-    const { depth, pageKey, pageTag } = this.getDebugPage();
-    const { hasDynamic } = this.shadowResidency.resolvePage(pageKey, pageTag);
-    const color = depth
-      .greaterThanEqual(1)
-      .select(vec3(0), hasDynamic.select(vec3(1, 0.8, 0.1), vec3(0.25)));
-    return renderOutput(vec4(color, 1), NoToneMapping);
-  }
-
-  private makePageHeatOutput() {
-    const { depth, pageKey, pageTag } = this.getDebugPage();
-    const { slot, isResident } = this.shadowResidency.resolvePage(
-      pageKey,
-      pageTag,
-    );
-    const age = this.shadowResidency.frame.sub(
-      this.shadowResidency.slotRenderFramesNode.element(slot),
-    );
-    const heatColor = age
-      .lessThan(2)
-      .select(
-        vec3(1, 0.1, 0.05),
-        age
-          .lessThan(30)
-          .select(
-            vec3(1, 0.5, 0.05),
-            age
-              .lessThan(120)
-              .select(
-                vec3(0.95, 0.85, 0.1),
-                age
-                  .lessThan(600)
-                  .select(vec3(0.2, 0.6, 0.3), vec3(0.12, 0.16, 0.3)),
-              ),
-          ),
-      );
-    const color = depth
-      .greaterThanEqual(1)
-      .select(vec3(0), isResident.select(heatColor, vec3(1, 0, 1)));
-    return renderOutput(vec4(color, 1), NoToneMapping);
-  }
-
-  private computeShadowVisibility(
-    uv: Node<"vec2">,
-    atlas: ShadowRigidAtlas,
-    secondary?: ShadowRigidAtlas,
-  ) {
-    const { depth, worldPosition, viewDistance, isSoftReceiver } =
-      this.getReceiver(uv);
-    return atlas.computeVisibility(
-      worldPosition,
-      depth,
-      viewDistance,
-      isSoftReceiver,
-      secondary,
-    );
-  }
-
-  sampleMainSceneColor(uv: Node<"vec2">) {
-    const sceneColor = this.getMainSceneTextureNode().sample(uv);
-    const visibility = this.computeShadowVisibility(
-      uv,
-      this.shadowFixedAtlas,
-      this.shadowMovingAtlas,
-    );
-    return sceneColor
-      .sub(
-        vec4(
-          this.getMainSceneTextureNode("directSun")
-            .sample(uv)
-            .rgb.mul(
-              float(1).sub(
-                this.uSunVisibility.mul(
-                  mix(float(1), visibility, this.uShadowIntensity),
-                ),
-              ),
-            ),
-          0,
-        ),
-      )
-      .max(0);
-  }
-
-  private isSoftShadowReceiver(uv: Node<"vec2">) {
-    return this.getMainSceneTextureNode("softShadow")
-      .sample(uv)
-      .r.greaterThan(0.5);
-  }
-
-  get mainSceneDepthNode() {
-    return this.getMainSceneTextureNode("depth");
-  }
-
-  private getMainSceneTextureNode(name = "output") {
-    if (name === "depth") {
-      const depthTexture = this.mainScenePass.renderTarget.depthTexture;
-      if (!depthTexture) throw new Error("Shadows require scene depth");
-      return texture(depthTexture);
-    }
-    return texture(this.mainScenePass.getTexture(name));
-  }
-
-  private makeGraph() {
-    this.outputColorTransform = false;
-    const resolvedSceneColor = this.sampleMainSceneColor(screenUV);
-    const water = this.waterPass.getTextureNode();
-    const colorHDR = mix(resolvedSceneColor, vec4(water.rgb, 1), water.a);
-
-    const bloomPass = bloom(colorHDR, 0.25, 0.15, 1);
-    bloomPass.smoothWidth.value = 0.04;
-    // @ts-expect-error I know its private but looks good enough and reduces workload
-    bloomPass._nMips = 2;
-
-    this.debugFolder.addBinding(bloomPass.strength, "value", {
-      label: "Bloom strength",
-    });
-    this.debugFolder.addBinding(bloomPass.threshold, "value", {
-      label: "Bloom threshold",
-    });
+  private addBindings() {
+    this.bloomPass.addBindings(this.debugFolder);
     this.debugFolder.addBinding(this.renderer, "toneMappingExposure", {
       label: "Exposure",
       min: 0,
       max: 10,
       step: 0.01,
     });
+    this.shadowPass.addBindings(this.debugFolder);
+    const viewOptions: Record<string, string> = {};
+    for (const view of Object.keys(this.debugOutputs)) viewOptions[view] = view;
+    this.debugFolder
+      .addBinding(this.debugView, "target", {
+        label: "View",
+        options: viewOptions,
+      })
+      .on("change", this.selectDebugView);
+  }
 
-    const toneMapped = toneMapping(
-      ACESFilmicToneMapping,
-      toneMappingExposure,
-      colorHDR.add(bloomPass),
-    ).rgb;
-    const luminance = toneMapped.dot(LUMINANCE_WEIGHTS);
-    const desaturated = mix(vec3(luminance), toneMapped, this.uSaturation);
+  private selectDebugView = () => {
+    this.outputNode =
+      this.debugOutputs[this.debugView.target] ?? this.debugOutputs.Scene;
+    this.needsUpdate = true;
+  };
 
-    return renderOutput(desaturated, NoToneMapping);
+  sampleMainSceneColor(uv: Node<"vec2">) {
+    return this.shadowPass.sampleShadowedColor(uv);
+  }
+
+  get mainSceneDepthNode() {
+    return this.scenePass.depth;
   }
 
   render() {
@@ -530,43 +140,7 @@ export class PostprocessingManager extends RenderPipeline {
     this.renderer.toneMapping = NoToneMapping;
     this.renderer.outputColorSpace = ColorManagement.workingColorSpace;
     try {
-      this.mainSceneFrame.renderer = this.renderer;
-      this.mainScenePass.updateBefore(this.mainSceneFrame);
-      this.sceneManager.renderCamera.getWorldPosition(this.cameraWorldPosition);
-      const requestNodes = this.shadowPageRequests.takeComputeNodes(
-        this.sceneManager.renderCamera,
-        lightingManager.sunDirection,
-        shadowCasterRegistry.fixedVersion +
-          shadowCasterRegistry.fixedRevision +
-          shadowCasterRegistry.movingVersion +
-          shadowCasterRegistry.deformedVersion,
-      );
-      const { min, max } = assetManager.resources.heightmap.userData;
-      if (typeof min !== "number" || typeof max !== "number")
-        throw new Error("Shadows require terrain height bounds");
-      this.shadowFixedAtlas.syncCasters(
-        shadowCasterRegistry,
-        lightingManager.sunDirection,
-        { min, max },
-      );
-      this.shadowMovingAtlas.syncCasters(
-        shadowCasterRegistry,
-        lightingManager.sunDirection,
-        { min, max },
-      );
-      const residencyNodes = this.shadowResidency.takeComputeNodes(
-        lightingManager.sunDirection,
-        requestNodes.length > 0,
-      );
-      const hasPageWork = residencyNodes.length > 0;
-      const computeNodes = [
-        ...requestNodes,
-        ...residencyNodes,
-        ...(hasPageWork ? this.shadowFixedAtlas.takeComputeNodes() : []),
-        ...this.shadowMovingAtlas.takeComputeNodes(),
-      ];
-      if (computeNodes.length > 0) this.renderer.compute(computeNodes);
-      this.shadowMovingAtlas.render();
+      this.chain.render();
     } finally {
       this.renderer.toneMapping = toneMapping;
       this.renderer.outputColorSpace = outputColorSpace;
