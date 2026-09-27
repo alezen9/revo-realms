@@ -63,7 +63,7 @@ export class VSMPass {
       scene.softShadow.value,
     );
     this.staticCache = new VSMDepthPool(this.context, {
-      kind: "fixed",
+      kind: "static",
       capacity: VSM_POOL_CAPACITY,
       jobs: this.context.allocatedJobs,
       depthBiasTexels: 3,
@@ -182,8 +182,8 @@ export class VSMPass {
         vec4(vec3(this.sampler.resolveVisibility(screenUV)), 1),
         NoToneMapping,
       ),
-      "Fixed depth": this.makeDepthOutput(this.staticCache, false),
-      "Moving depth": this.makeDepthOutput(this.dynamicLayer.pool, true),
+      "Static depth": this.makeDepthOutput(this.staticCache, false),
+      "Dynamic depth": this.makeDepthOutput(this.dynamicLayer.pool, true),
     };
   }
 

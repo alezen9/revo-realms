@@ -47,7 +47,7 @@ export const VSM_DYNAMIC_COUNTER_LEVEL_CURSORS =
 export const VSM_DYNAMIC_COUNTER_COUNT =
   VSM_DYNAMIC_COUNTER_LEVEL_CURSORS + VSM_LEVEL_COUNT;
 
-export type VSMCasterKind = "fixed" | "moving" | "deformed";
+export type VSMCasterKind = "static" | "dynamic" | "deformed";
 
 export type VSMGpuInstances = {
   count: number;
@@ -60,7 +60,7 @@ export type VSMGpuInstances = {
 };
 
 export type VSMCasterOptions = {
-  motion?: "fixed" | "moving";
+  type?: "static" | "dynamic";
   depthBias?: number;
   opacity?: (uv: Node<"vec2">) => Node<"float">;
   gpuInstances?: VSMGpuInstances;
@@ -84,7 +84,7 @@ export type VSMJobSource = {
   countLength: number;
 };
 
-export type VSMLayerKind = "fixed" | "moving";
+export type VSMLayerKind = "static" | "dynamic";
 
 export type VSMLayerChanges = {
   hasRosterChanged: boolean;
@@ -109,22 +109,22 @@ type PreviousFrame = {
   versions: LayerVersions;
 };
 
-const VSM_LAYER_KINDS: VSMLayerKind[] = ["fixed", "moving"];
+const VSM_LAYER_KINDS: VSMLayerKind[] = ["static", "dynamic"];
 
 const getLayerKind = (kind: VSMCasterKind): VSMLayerKind =>
-  kind === "fixed" ? "fixed" : "moving";
+  kind === "static" ? "static" : "dynamic";
 
 const initialMetadata = new Uint32Array(VSM_POOL_CAPACITY * 4);
 for (let slot = 0; slot < VSM_POOL_CAPACITY; slot++)
   initialMetadata[slot * 4] = VSM_INVALID_PAGE_KEY;
 
 export class VSMContext {
-  readonly casterCounts = { fixed: 0, moving: 0, deformed: 0 };
+  readonly casterCounts = { static: 0, dynamic: 0, deformed: 0 };
   readonly changes: VSMChanges = {
     hasSunChanged: true,
     shouldRequestPages: true,
-    fixed: { hasRosterChanged: true, hasCasterMoved: true },
-    moving: { hasRosterChanged: true, hasCasterMoved: true },
+    static: { hasRosterChanged: true, hasCasterMoved: true },
+    dynamic: { hasRosterChanged: true, hasCasterMoved: true },
   };
   readonly frame = uniform(0, "uint");
   readonly pageGeneration = uniform(1, "uint");
@@ -187,8 +187,8 @@ export class VSMContext {
   private dirtyStaticBounds: Box3[] = [];
   private hasPageInvalidation = true;
   private versions: LayerVersions = {
-    fixed: { roster: 0, revision: 0 },
-    moving: { roster: 0, revision: 0 },
+    static: { roster: 0, revision: 0 },
+    dynamic: { roster: 0, revision: 0 },
   };
   private previous: PreviousFrame = {
     cameraMatrix: new Matrix4(),
@@ -198,8 +198,8 @@ export class VSMContext {
     resolutionBias: -1,
     softReceiverLevelBias: -1,
     versions: {
-      fixed: { roster: -1, revision: -1 },
-      moving: { roster: -1, revision: -1 },
+      static: { roster: -1, revision: -1 },
+      dynamic: { roster: -1, revision: -1 },
     },
   };
 
@@ -237,9 +237,9 @@ export class VSMContext {
       hasViewChanged ||
       changes.hasSunChanged ||
       hasLevelBiasChanged ||
-      changes.fixed.hasRosterChanged ||
-      changes.fixed.hasCasterMoved ||
-      changes.moving.hasRosterChanged;
+      changes.static.hasRosterChanged ||
+      changes.static.hasCasterMoved ||
+      changes.dynamic.hasRosterChanged;
 
     previous.camera = camera;
     previous.cameraMatrix.copy(camera.matrixWorld);
@@ -301,8 +301,8 @@ export class VSMContext {
   registerCaster(mesh: Mesh, options: VSMCasterOptions = {}) {
     if (this.casterEntries.has(mesh))
       throw new Error(`Shadow caster already registered: ${mesh.name}`);
-    const { motion = "fixed", depthBias = 0, opacity, gpuInstances } = options;
-    const kind = gpuInstances ? "deformed" : motion;
+    const { type = "static", depthBias = 0, opacity, gpuInstances } = options;
+    const kind = gpuInstances ? "deformed" : type;
     if (!Number.isFinite(depthBias) || depthBias < 0)
       throw new Error(`Invalid shadow depth bias: ${mesh.name}`);
     if (
@@ -313,8 +313,8 @@ export class VSMContext {
         gpuInstances.radiusMeters <= 0)
     )
       throw new Error(`Invalid shadow gpu instances: ${mesh.name}`);
-    if (kind !== "fixed" && mesh instanceof BatchedMesh)
-      throw new Error(`Batched shadow caster must be fixed: ${mesh.name}`);
+    if (kind !== "static" && mesh instanceof BatchedMesh)
+      throw new Error(`Batched shadow caster must be static: ${mesh.name}`);
 
     const { material } = mesh;
     const alphaTest = material instanceof NodeMaterial ? material.alphaTest : 0;
@@ -333,7 +333,7 @@ export class VSMContext {
       worldMatrix: mesh.matrixWorld.clone(),
       worldBounds,
     });
-    if (kind === "fixed") this.dirtyStaticBounds.push(worldBounds.clone());
+    if (kind === "static") this.dirtyStaticBounds.push(worldBounds.clone());
     this.casterCounts[kind]++;
     this.versions[getLayerKind(kind)].roster++;
   }
@@ -343,21 +343,21 @@ export class VSMContext {
     if (!entry) throw new Error(`Shadow caster not registered: ${mesh.name}`);
 
     this.casterEntries.delete(mesh);
-    if (entry.kind === "fixed") this.dirtyStaticBounds.push(entry.worldBounds);
+    if (entry.kind === "static") this.dirtyStaticBounds.push(entry.worldBounds);
     this.casterCounts[entry.kind]--;
     this.versions[getLayerKind(entry.kind)].roster++;
   }
 
   setCasterDepthBias(mesh: Mesh, depthBias: number) {
     const entry = this.casterEntries.get(mesh);
-    if (!entry || entry.kind !== "fixed")
-      throw new Error(`Fixed shadow caster not registered: ${mesh.name}`);
+    if (!entry || entry.kind !== "static")
+      throw new Error(`Static shadow caster not registered: ${mesh.name}`);
     if (!Number.isFinite(depthBias) || depthBias < 0)
       throw new Error(`Invalid shadow depth bias: ${mesh.name}`);
     if (entry.depthBias === depthBias) return;
     entry.depthBias = depthBias;
     this.dirtyStaticBounds.push(entry.worldBounds.clone());
-    this.versions.fixed.revision++;
+    this.versions.static.revision++;
   }
 
   markCasterMoved(mesh: Mesh) {
@@ -366,12 +366,12 @@ export class VSMContext {
     mesh.updateWorldMatrix(true, false);
     if (entry.worldMatrix.equals(mesh.matrixWorld)) return;
     entry.worldMatrix.copy(mesh.matrixWorld);
-    if (entry.kind === "fixed") {
+    if (entry.kind === "static") {
       this.dirtyStaticBounds.push(entry.worldBounds.clone());
       entry.worldBounds.setFromObject(mesh);
       this.dirtyStaticBounds.push(entry.worldBounds.clone());
-      this.versions.fixed.revision++;
+      this.versions.static.revision++;
     }
-    if (entry.kind === "moving") this.versions.moving.revision++;
+    if (entry.kind === "dynamic") this.versions.dynamic.revision++;
   }
 }

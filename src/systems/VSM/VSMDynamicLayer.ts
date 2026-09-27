@@ -70,7 +70,7 @@ export class VSMDynamicLayer {
   private context: VSMContext;
   private pageJobsNode;
   private sources: VSMCaster[] = [];
-  private movingRanges?: MovingCasterRanges;
+  private casterRanges?: DynamicCasterRanges;
   private instanceCasters = new Map<Mesh, InstanceCaster>();
   private activeInstanceCasters: InstanceCaster[] = [];
   private prepareNode?: ComputeNode;
@@ -85,7 +85,7 @@ export class VSMDynamicLayer {
     this.context = context;
     this.pageJobsNode = storage(context.pageJobs, "uvec4", VSM_JOB_COUNT);
     this.pool = new VSMDepthPool(context, {
-      kind: "moving",
+      kind: "dynamic",
       capacity: VSM_DYNAMIC_CAPACITY,
       jobs: context.dynamicJobs,
       depthBiasTexels: 3,
@@ -94,13 +94,13 @@ export class VSMDynamicLayer {
 
   sync(terrainBounds: { min: number; max: number }) {
     const { changes } = this.context;
-    const { hasRosterChanged, hasCasterMoved } = changes.moving;
+    const { hasRosterChanged, hasCasterMoved } = changes.dynamic;
     if (!hasRosterChanged && !hasCasterMoved && !changes.hasSunChanged) return;
 
     if (hasRosterChanged) this.rebuildCasters();
     this.pool.sync(terrainBounds);
     const { x: lightX, y: lightY } = this.context.lightBasis;
-    this.movingRanges?.update(this.sources, lightX.value, lightY.value);
+    this.casterRanges?.update(this.sources, lightX.value, lightY.value);
   }
 
   getComputeNodes() {
@@ -127,23 +127,23 @@ export class VSMDynamicLayer {
         this.activeInstanceCasters.push(instanceCaster);
         continue;
       }
-      if (caster.kind === "moving") this.sources.push(caster);
+      if (caster.kind === "dynamic") this.sources.push(caster);
     }
     this.pool.setInstanceCasters(
       this.activeInstanceCasters.map((instanceCaster) =>
         instanceCaster.toRasterCaster(),
       ),
     );
-    this.movingRanges =
+    this.casterRanges =
       this.sources.length > 0
-        ? new MovingCasterRanges(this.sources.length)
+        ? new DynamicCasterRanges(this.sources.length)
         : undefined;
     this.prepareNode?.dispose();
     this.touchNode?.dispose();
     this.jobsNode?.dispose();
     this.prepareNode = this.createPrepareNode();
-    this.touchNode = this.createTouchNode(this.movingRanges);
-    this.jobsNode = this.createJobsNode(this.movingRanges);
+    this.touchNode = this.createTouchNode(this.casterRanges);
+    this.jobsNode = this.createJobsNode(this.casterRanges);
   }
 
   private createPrepareNode() {
@@ -176,7 +176,7 @@ export class VSMDynamicLayer {
     return node;
   }
 
-  private createTouchNode(ranges?: MovingCasterRanges) {
+  private createTouchNode(ranges?: DynamicCasterRanges) {
     const rangesAttribute =
       ranges?.pageRangesAttribute ?? this.emptyRangesAttribute;
     const rangesNode = storage(rangesAttribute, "uvec4", rangesAttribute.count);
@@ -212,7 +212,7 @@ export class VSMDynamicLayer {
     return node;
   }
 
-  private createJobsNode(ranges?: MovingCasterRanges) {
+  private createJobsNode(ranges?: DynamicCasterRanges) {
     const { context } = this;
     const rangesAttribute =
       ranges?.pageRangesAttribute ?? this.emptyRangesAttribute;
@@ -325,7 +325,7 @@ export class VSMDynamicLayer {
   }
 }
 
-class MovingCasterRanges {
+class DynamicCasterRanges {
   readonly pageRangesAttribute: StorageBufferAttribute;
   readonly casterCount: number;
   private rangeValues: Uint32Array;
@@ -341,7 +341,7 @@ class MovingCasterRanges {
   update(sources: VSMCaster[], lightX: Vector3, lightY: Vector3) {
     if (sources.length !== this.casterCount)
       throw new Error(
-        "Moving caster count changed without rebuilding the ranges",
+        "Dynamic caster count changed without rebuilding the ranges",
       );
 
     for (let casterIndex = 0; casterIndex < sources.length; casterIndex++) {

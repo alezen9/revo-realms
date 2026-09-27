@@ -183,7 +183,7 @@ export class VSMDepthPool {
       this.maximumY.value !== Math.ceil(maximumY);
     this.minimumY.value = Math.floor(minimumY);
     this.maximumY.value = Math.ceil(maximumY);
-    if (this.kind === "fixed" && hasDepthRangeChange)
+    if (this.kind === "static" && hasDepthRangeChange)
       this.context.invalidateAllPages();
   }
 

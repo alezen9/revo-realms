@@ -62,7 +62,7 @@ export default class Player {
     this.mesh = this.createCharacterMesh();
     this.visualRoot = this.createVisualRoot(this.mesh);
     sceneManager.mainScene.add(this.visualRoot);
-    rendererManager.vsmPass.registerCaster(this.mesh, { motion: "moving" });
+    rendererManager.vsmPass.registerCaster(this.mesh, { type: "dynamic" });
 
     const rigidBodyDesc = this.createRigidBodyDesc();
     this.rigidBody = physicsManager.world.createRigidBody(rigidBodyDesc);

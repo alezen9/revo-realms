@@ -81,8 +81,8 @@ export type MonitoringSnapshot = {
 };
 
 export type ShadowCasterCounts = {
-  fixed: number;
-  moving: number;
+  static: number;
+  dynamic: number;
   deformed: number;
 };
 

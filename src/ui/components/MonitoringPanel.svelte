@@ -187,8 +187,8 @@
 			<section>
 				<span class="category">Shadow casters</span>
 				<div class="metrics">
-					<span class="cell"><span class="label">Fixed</span><span class="value">{integerFormat.format(shadowCasters.fixed)}</span></span>
-					<span class="cell"><span class="label">Moving</span><span class="value">{integerFormat.format(shadowCasters.moving)}</span></span>
+					<span class="cell"><span class="label">Static</span><span class="value">{integerFormat.format(shadowCasters.static)}</span></span>
+					<span class="cell"><span class="label">Dynamic</span><span class="value">{integerFormat.format(shadowCasters.dynamic)}</span></span>
 					<span class="cell"><span class="label">Deformed</span><span class="value">{integerFormat.format(shadowCasters.deformed)}</span></span>
 				</div>
 			</section>
