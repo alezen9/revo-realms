@@ -46,11 +46,10 @@ export class Campfire {
     graphics.vsmPass.registerCaster(campfire);
 
     const fireColliderMesh = assets.getMesh("fire_collider");
-    if (!fireColliderMesh.geometry.boundingBox) {
-      fireColliderMesh.geometry.computeBoundingBox();
-    }
-    const { min: fireMin, max: fireMax } =
-      fireColliderMesh.geometry.boundingBox!;
+    const fireColliderBounds = fireColliderMesh.geometry.boundingBox;
+    if (!fireColliderBounds)
+      throw new Error("fire_collider has no bounding box");
+    const { min: fireMin, max: fireMax } = fireColliderBounds;
     const fireRadius =
       0.5 * (fireMax.x - fireMin.x) * Math.abs(fireColliderMesh.scale.x);
     const fireColliderDesc = ColliderDesc.ball(fireRadius)
@@ -62,11 +61,10 @@ export class Campfire {
     };
 
     const shortLogColliderMesh = assets.getMesh("log_short_collider");
-    if (!shortLogColliderMesh.geometry.boundingBox) {
-      shortLogColliderMesh.geometry.computeBoundingBox();
-    }
-    const { min: shortLogMin, max: shortLogMax } =
-      shortLogColliderMesh.geometry.boundingBox!;
+    const shortLogColliderBounds = shortLogColliderMesh.geometry.boundingBox;
+    if (!shortLogColliderBounds)
+      throw new Error("log_short_collider has no bounding box");
+    const { min: shortLogMin, max: shortLogMax } = shortLogColliderBounds;
     const shortLogRadius =
       0.5 *
       Math.max(
@@ -91,11 +89,10 @@ export class Campfire {
     };
 
     const longLogColliderMesh = assets.getMesh("log_long_collider");
-    if (!longLogColliderMesh.geometry.boundingBox) {
-      longLogColliderMesh.geometry.computeBoundingBox();
-    }
-    const { min: longLogMin, max: longLogMax } =
-      longLogColliderMesh.geometry.boundingBox!;
+    const longLogColliderBounds = longLogColliderMesh.geometry.boundingBox;
+    if (!longLogColliderBounds)
+      throw new Error("log_long_collider has no bounding box");
+    const { min: longLogMin, max: longLogMax } = longLogColliderBounds;
     const longLogRadius =
       0.5 *
       Math.max(

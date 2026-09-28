@@ -2,7 +2,7 @@ import { Mesh } from "three";
 import { assets, sound, stage, eventBus, landmarks } from "../../systems";
 import { WaterMaterial } from "./WaterMaterial";
 
-export class LakeSurface {
+export class Water {
   private lakeSurface: Mesh;
   private unsubscribeAudioProgress?: VoidFunction;
 
@@ -12,9 +12,9 @@ export class LakeSurface {
 
     lakeSurface.material = new WaterMaterial(lakeSurface.matrixWorld);
 
-    const geom = lakeSurface.geometry;
-    const bsLocal = geom.boundingSphere!;
-    bsLocal.radius = bsLocal.radius * 0.75;
+    const { boundingSphere } = lakeSurface.geometry;
+    if (!boundingSphere) throw new Error("Lake surface has no bounding sphere");
+    boundingSphere.radius *= 0.75;
 
     stage.waterScene.add(lakeSurface);
 

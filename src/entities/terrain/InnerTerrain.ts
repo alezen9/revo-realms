@@ -53,7 +53,8 @@ export class InnerTerrain {
     const displacement = mesh.geometry.attributes._displacement.array[0];
     const positionAttribute = mesh.geometry.attributes.position;
     mesh.geometry.computeBoundingBox();
-    const boundingBox = mesh.geometry.boundingBox!;
+    const { boundingBox } = mesh.geometry;
+    if (!boundingBox) throw new Error("Terrain mesh has no bounding box");
     const vertexCount = positionAttribute.count;
     const gridSize = Math.sqrt(vertexCount);
 

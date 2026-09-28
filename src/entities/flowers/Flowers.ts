@@ -14,6 +14,8 @@ import { FlowersCompute } from "./FlowersCompute";
 import { FlowerMaterial } from "./FlowerMaterial";
 import { debugFlowers } from "./debug";
 
+const FLOWER_INDICES = new Uint8Array([0, 2, 1, 0, 3, 2, 0, 4, 3, 0, 1, 4]);
+
 export class Flowers {
   private mesh: Mesh;
   private computeTask: ComputeTask;
@@ -23,7 +25,7 @@ export class Flowers {
     geometry.rotateX(-Math.PI / 2);
     geometry.instanceCount = config.COUNT;
 
-    const indexCount = geometry.index!.count;
+    const indexCount = FLOWER_INDICES.length;
     const indirectDrawAttribute = new IndirectStorageBufferAttribute(
       new Uint32Array([
         indexCount, // indexCount
@@ -117,11 +119,9 @@ export class Flowers {
       0,
     ]);
 
-    const indices = new Uint8Array([0, 2, 1, 0, 3, 2, 0, 4, 3, 0, 1, 4]);
-
     geometry.setAttribute("position", new BufferAttribute(positions, 3));
     geometry.setAttribute("uv", new BufferAttribute(uvs, 2));
-    geometry.setIndex(new BufferAttribute(indices, 1));
+    geometry.setIndex(new BufferAttribute(FLOWER_INDICES, 1));
 
     return geometry;
   }

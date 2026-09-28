@@ -8,7 +8,7 @@ import { LeviathanAxe } from "./landmarks/LeviathanAxe";
 import { DragonSlayerSword } from "./landmarks/DragonSlayerSword";
 import { GokuStatue } from "./landmarks/GokuStatue";
 // import { Expedition33Flag } from "./landmarks/expedition33Flag/Expedition33Flag";
-import { LakeSurface } from "./lake/LakeSurface";
+import { Water } from "./water/Water";
 import { Campfire } from "./landmarks/campfire/Campfire";
 import { FootballPitch } from "./landmarks/FootballPitch";
 
@@ -24,7 +24,7 @@ export class RevoRealm {
     new DragonSlayerSword();
     new GokuStatue();
     // new Expedition33Flag();
-    new LakeSurface();
+    new Water();
     new Campfire();
     new FootballPitch();
   }

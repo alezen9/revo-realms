@@ -89,7 +89,8 @@ export class PineTrees {
     );
 
     const baseCollider = colliders[0];
-    const boundingBox = baseCollider.geometry.boundingBox!;
+    const { boundingBox } = baseCollider.geometry;
+    if (!boundingBox) throw new Error("Pine collider has no bounding box");
     const baseRadius = boundingBox.max.x;
     const baseHalfHeight = boundingBox.max.y / 2;
 
