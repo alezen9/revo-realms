@@ -8,7 +8,7 @@
 	} from "../../systems/monitoring/monitoringTypes"
 
 	const REVEAL = { duration: 220 }
-	const RANK_ROWS = [0, 1, 2] as const
+	const SLOWEST_PASS_COUNT = 3
 
 	let snapshot = $state<MonitoringSnapshot | null>(null)
 
@@ -46,10 +46,6 @@
 	})
 	const integerFormat = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 })
 
-	const formatMs = (value: number) => msFormat.format(value)
-
-	const formatCount = (value: number) => countFormat.format(value)
-
 	const formatBytes = (value: number) => {
 		const megabytes = value / 1024 ** 2
 		if (megabytes < 1) return kilobyteFormat.format(value / 1024)
@@ -57,10 +53,12 @@
 	}
 
 	const describeEntry = (entry: ResourceEntry) => {
-		const samples = entry.sampleCount && entry.sampleCount > 1 ? ` x${entry.sampleCount}` : ""
-		if (entry.label) return `${entry.label}${samples}`
-		if (entry.kind === "buffer") return "unlabelled buffer"
-		return `${entry.format} ${entry.width}x${entry.height}${samples}`
+		const { label, kind, format, width, height, sampleCount = 1 } = entry
+		let samples = ""
+		if (sampleCount > 1) samples = ` x${sampleCount}`
+		if (label) return `${label}${samples}`
+		if (kind === "buffer") return "unlabelled buffer"
+		return `${format} ${width}x${height}${samples}`
 	}
 
 	const paceClass = (value: number, budget: number) => {
@@ -75,27 +73,22 @@
 		return "bad"
 	}
 
-	onMount(() => {
-		const unsubscribe = eventBus.on("engine-monitoring-update", value => {
+	onMount(() =>
+		eventBus.on("engine-monitoring-update", value => {
 			snapshot = value
-		})
-
-		return () => {
-			unsubscribe()
-		}
-	})
+		}),
+	)
 </script>
 
 {#if snapshot}
 	{@const device = snapshot.device}
-	{@const gpu = device?.gpu}
+	{@const gpu = device && device.gpu}
 	{@const grass = snapshot.grass}
 	{@const shadowPages = snapshot.shadowPages}
 	{@const budgetMs = snapshot.frameBudgetMs}
 	{@const frame = snapshot.frame}
 	{@const physics = snapshot.physics}
 	{@const output = snapshot.output}
-	{@const gpuElapsedMs = gpu ? gpu.averageMs + gpu.gapAverageMs : null}
 	{@const isOnTarget = snapshot.fps.live >= snapshot.fps.target * 0.95}
 	<div class="revo-monitor" transition:fade={REVEAL}>
 		<header>
@@ -119,7 +112,7 @@
 				<span class="cell">
 					<span class="label">P99</span>
 					<span class={["value", paceClass(frame.intervalP99Ms, budgetMs)]}>
-						{formatMs(frame.intervalP99Ms)}
+						{msFormat.format(frame.intervalP99Ms)}
 					</span>
 				</span>
 				<span class="cell">
@@ -131,31 +124,31 @@
 			</div>
 		</section>
 
-		<section>
-			<span class="category">GPU</span>
-			<div class="metrics">
-				<span class="cell">
-					<span class="label">Elapsed</span>
-					<span class={["value", gpuElapsedMs != null && headroomClass(gpuElapsedMs, budgetMs)]}>
-						{gpuElapsedMs != null ? formatMs(gpuElapsedMs) : "-"}
+		{#if gpu}
+			{@const gpuElapsedMs = gpu.averageMs + gpu.gapAverageMs}
+			{@const gpuClass = headroomClass(gpuElapsedMs, budgetMs)}
+			<section>
+				<span class="category">GPU</span>
+				<div class="metrics">
+					<span class="cell">
+						<span class="label">Elapsed</span>
+						<span class={["value", gpuClass]}>{msFormat.format(gpuElapsedMs)}</span>
 					</span>
-				</span>
-				<span class="cell">
-					<span class="label">Headroom</span>
-					<span class={["value", gpuElapsedMs != null && headroomClass(gpuElapsedMs, budgetMs)]}>
-						{gpuElapsedMs != null ? formatMs(budgetMs - gpuElapsedMs) : "-"}
+					<span class="cell">
+						<span class="label">Headroom</span>
+						<span class={["value", gpuClass]}>{msFormat.format(budgetMs - gpuElapsedMs)}</span>
 					</span>
-				</span>
-				<span class="cell">
-					<span class="label">Render</span>
-					<span class="value">{gpu ? formatMs(gpu.renderAverageMs) : "-"}</span>
-				</span>
-				<span class="cell">
-					<span class="label">Compute</span>
-					<span class="value">{gpu ? formatMs(gpu.computeAverageMs) : "-"}</span>
-				</span>
-			</div>
-		</section>
+					<span class="cell">
+						<span class="label">Render</span>
+						<span class="value">{msFormat.format(gpu.renderAverageMs)}</span>
+					</span>
+					<span class="cell">
+						<span class="label">Compute</span>
+						<span class="value">{msFormat.format(gpu.computeAverageMs)}</span>
+					</span>
+				</div>
+			</section>
+		{/if}
 
 		{#if grass}
 			<section>
@@ -165,15 +158,15 @@
 						<span class="label">Drawn</span>
 						<span class="value">
 							{shortCountFormat.format(grass.rendered)}
-							<span class="aside">/{formatCount(grass.total)}</span>
+							<span class="aside">/{countFormat.format(grass.total)}</span>
 						</span>
 					</span>
-					<span class="cell">
-						<span class="label">Compute</span>
-						<span class="value">
-							{gpu?.grassComputeAverageMs != null ? formatMs(gpu.grassComputeAverageMs) : "-"}
+					{#if gpu && gpu.grassComputeAverageMs !== null}
+						<span class="cell">
+							<span class="label">Compute</span>
+							<span class="value">{msFormat.format(gpu.grassComputeAverageMs)}</span>
 						</span>
-					</span>
+					{/if}
 					<span class="cell wide">
 						<span class="label">Levels</span>
 						<span class="value">
@@ -243,7 +236,7 @@
 				<span class="cell">
 					<span class="label">Dropped</span>
 					<span class={["value", physics.discardedMs > 0 && "warn"]}>
-						{formatMs(physics.discardedMs)}
+						{msFormat.format(physics.discardedMs)}
 					</span>
 				</span>
 			</div>
@@ -259,16 +252,18 @@
 						<span class="aside">@{ratioFormat.format(output.pixelRatio)}</span>
 					</span>
 				</span>
-				<span class="cell">
-					<span class="label">Draws</span>
-					<span class="value">{device ? integerFormat.format(device.drawCallCount) : "-"}</span>
-				</span>
-				<span class="cell">
-					<span class="label">Passes</span>
-					<span class="value">
-						{device ? integerFormat.format(device.renderPassCount + device.computePassCount) : "-"}
+				{#if device}
+					<span class="cell">
+						<span class="label">Draws</span>
+						<span class="value">{integerFormat.format(device.drawCallCount)}</span>
 					</span>
-				</span>
+					<span class="cell">
+						<span class="label">Passes</span>
+						<span class="value">
+							{integerFormat.format(device.renderPassCount + device.computePassCount)}
+						</span>
+					</span>
+				{/if}
 			</div>
 		</section>
 
@@ -296,18 +291,15 @@
 			</section>
 		{/if}
 
-		{#if (gpu?.slowestPasses.length ?? 0) > 0}
+		{#if gpu && gpu.slowestPasses.length > 0}
 			<section class="ranked">
 				<span class="category">Slowest</span>
 				<div class="rows">
-					{#each RANK_ROWS as rank (rank)}
-						{@const pass = gpu?.slowestPasses[rank]}
-						{#if pass}
-							<div class="row">
-								<span class="name">{pass.label}</span>
-								<span class="value">{formatMs(pass.averageMs)}</span>
-							</div>
-						{/if}
+					{#each gpu.slowestPasses.slice(0, SLOWEST_PASS_COUNT) as pass (pass.label)}
+						<div class="row">
+							<span class="name">{pass.label}</span>
+							<span class="value">{msFormat.format(pass.averageMs)}</span>
+						</div>
 					{/each}
 				</div>
 			</section>
