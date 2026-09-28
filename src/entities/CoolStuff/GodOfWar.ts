@@ -102,7 +102,6 @@ export default class GodOfWar {
       name: "Leviathan Axe",
       icon: "axe",
       position: axe.position,
-      discoveryRadius: 80,
       arrivalRadius: 20,
     });
 

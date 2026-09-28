@@ -76,7 +76,6 @@ export class LakeSurface {
       name: "Lake",
       icon: "water",
       position: lakeSurface.position,
-      discoveryRadius: 150,
       arrivalRadius: 90,
     });
 

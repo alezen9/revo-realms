@@ -21,7 +21,6 @@ export class TimeManager {
   };
   private pendingRenderDelta = 0;
   private timeScale = 1;
-  private lastPauseState = false;
   private lastSlowMoState = false;
   delta = 0;
   discardedDelta = 0;
@@ -106,16 +105,7 @@ export class TimeManager {
   }
 
   private applyTimeScale() {
-    const nextScale = this.computeTimeScale();
-    if (this.timeScale !== nextScale) {
-      this.timeScale = nextScale;
-      this.eventsManager.emit("engine-time-scale", this.timeScale);
-    }
-
-    if (this.lastPauseState !== this.state.isPaused) {
-      this.lastPauseState = this.state.isPaused;
-      this.eventsManager.emit("engine-pause-change", this.state.isPaused);
-    }
+    this.timeScale = this.computeTimeScale();
 
     if (this.lastSlowMoState !== this.state.isSlowMotion) {
       this.lastSlowMoState = this.state.isSlowMotion;
@@ -125,10 +115,7 @@ export class TimeManager {
 
   private emitInitialState() {
     this.timeScale = this.computeTimeScale();
-    this.lastPauseState = this.state.isPaused;
     this.lastSlowMoState = this.state.isSlowMotion;
-    this.eventsManager.emit("engine-time-scale", this.timeScale);
-    this.eventsManager.emit("engine-pause-change", this.state.isPaused);
     this.eventsManager.emit("engine-slowmo-change", this.state.isSlowMotion);
   }
 

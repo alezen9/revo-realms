@@ -3,11 +3,11 @@ import type { Node } from "three/webgpu";
 import { ceil, float, log2, uint, uniform, uvec2, vec2 } from "three/tsl";
 
 export const VSM_PAGE_TEXELS = 128;
-export const VSM_PAGE_GRID_SIZE = 128;
-export const VSM_PAGE_WINDOW_HALF = VSM_PAGE_GRID_SIZE / 2;
+const VSM_PAGE_GRID_SIZE = 128;
+const VSM_PAGE_WINDOW_HALF = VSM_PAGE_GRID_SIZE / 2;
 export const VSM_PAGES_PER_LEVEL = VSM_PAGE_GRID_SIZE ** 2;
-export const VSM_FIRST_LEVEL = 5;
-export const VSM_LAST_LEVEL = 11;
+const VSM_FIRST_LEVEL = 5;
+const VSM_LAST_LEVEL = 11;
 export const VSM_LEVEL_COUNT = VSM_LAST_LEVEL - VSM_FIRST_LEVEL + 1;
 export const VSM_PAGE_COUNT = VSM_PAGES_PER_LEVEL * VSM_LEVEL_COUNT;
 export const VSM_PAGE_OFFSET = 1 << 20;
@@ -17,7 +17,7 @@ const FIRST_PAGE_SIZE = 2 ** (VSM_FIRST_LEVEL + 1) / VSM_PAGE_GRID_SIZE;
 export const vsmResolutionBias = uniform(2);
 export const vsmSoftReceiverLevelBias = uniform(4);
 
-export type VSMLightBasis = {
+type VSMLightBasis = {
   x: Node<"vec3">;
   y: Node<"vec3">;
 };

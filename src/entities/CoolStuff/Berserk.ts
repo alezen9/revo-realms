@@ -81,7 +81,6 @@ export default class Berserk {
       name: "Dragon Slayer",
       icon: "sword",
       position: sword.position,
-      discoveryRadius: 80,
       arrivalRadius: 20,
     });
 

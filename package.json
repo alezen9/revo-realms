@@ -7,8 +7,7 @@
     "dev": "vite --host",
     "build": "tsc && tsc -p tsconfig.node.json && npm run check && vite build",
     "check": "svelte-check --tsconfig ./tsconfig.json",
-    "preview": "vite preview --host",
-    "textures:atlases:process": "node src/atlases/combine-atlases.mjs"
+    "preview": "vite preview --host"
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^7.3.0",

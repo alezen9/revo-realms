@@ -1,9 +1,7 @@
-import { ConeGeometry, MathUtils, Mesh, Vector2, Vector3 } from "three";
-import { atan, positionLocal, rotate, uniform, vec3 } from "three/tsl";
-import { MeshLambertNodeMaterial } from "three/webgpu";
+import { MathUtils, Vector2, Vector3 } from "three";
+import { uniform } from "three/tsl";
 import { type State } from "../Game";
 import type { EventsManager } from "./EventsManager";
-import type { SceneManager } from "./SceneManager";
 
 type WindTarget = {
   id: string;
@@ -14,15 +12,9 @@ type WindTarget = {
 
 type Phase = "idle" | "direction" | "start" | "ramp" | "hold" | "end" | "decay";
 
-const ENABLE_DEBUGGING = false;
-
 export class WindManager {
-  private readonly IS_DEBUGGING_ENABLED =
-    import.meta.env.DEV && ENABLE_DEBUGGING;
-
   // uniforms
   readonly uDirection = uniform(new Vector2(0, -1));
-  readonly uIntensityBase = uniform(0.1);
   readonly uIntensityDirectional = uniform(0);
 
   private phase: Phase = "idle";
@@ -43,12 +35,9 @@ export class WindManager {
   private HOLD_INTENSITY_TIME_S = 3;
   private accTimer = 0;
   private eventsManager: EventsManager;
-  private sceneManager: SceneManager;
 
-  constructor(eventsManager: EventsManager, sceneManager: SceneManager) {
+  constructor(eventsManager: EventsManager) {
     this.eventsManager = eventsManager;
-    this.sceneManager = sceneManager;
-    this.IS_DEBUGGING_ENABLED && this.debug();
 
     this.eventsManager.on("swipe-up", this.handleSwipeUp);
     this.eventsManager.on(
@@ -146,22 +135,6 @@ export class WindManager {
     if (this.phase === "decay") return this.decayPhase(delta);
   };
 
-  private debug = () => {
-    const material = new MeshLambertNodeMaterial();
-    material.colorNode = vec3(this.uIntensityDirectional);
-    const angle = atan(this.uDirection.x, this.uDirection.y.negate());
-    material.positionNode = rotate(positionLocal, vec3(0, angle, 0));
-    const geom = new ConeGeometry(1, 3);
-    geom.rotateX(-Math.PI / 2);
-    const mesh = new Mesh(geom, material);
-
-    this.sceneManager.mainScene.add(mesh);
-
-    this.eventsManager.on("engine-render-update", ({ player }) => {
-      mesh.position.copy(player.position).setY(5);
-    });
-  };
-
   registerTarget = (label: string, position: Vector3, radius: number) => {
     const targetId = `windTarget-${++this.idCounter}`;
     this.targets.set(targetId, {
@@ -171,7 +144,6 @@ export class WindManager {
       radiusSq: radius * radius,
     });
 
-    // Debug buttons removed - wind targets are now selected via RadialMenu
     return targetId;
   };
 

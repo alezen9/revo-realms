@@ -7,7 +7,6 @@ import {
   sub,
   clamp,
   max,
-  PI2,
   round,
   step,
   vec3,
@@ -45,19 +44,6 @@ type PackUnitArgs = [
 type UnpackUnitArgs = [src: FloatNode, offset: FloatNode, bits: FloatNode];
 type PackFlagArgs = [dest: FloatNode, offset: FloatNode, value: FloatNode];
 type UnpackFlagArgs = [src: FloatNode, offset: FloatNode];
-type PackSignedArgs = [
-  packed: FloatNode,
-  offset: FloatNode,
-  bits: FloatNode,
-  value: FloatNode,
-  maxAbs: FloatNode,
-];
-type UnpackSignedArgs = [
-  packed: FloatNode,
-  offset: FloatNode,
-  bits: FloatNode,
-  maxAbs: FloatNode,
-];
 type PackUnitsArgs = [
   dest: FloatNode,
   offset: FloatNode,
@@ -73,7 +59,6 @@ type UnpackUnitsArgs = [
   minV: FloatNode,
   maxV: FloatNode,
 ];
-type AtlasUvArgs = [scale: Vec2Node, offset: Vec2Node, uv: Vec2Node];
 type BlendNormalsArgs = [n1: Vec3Node, n2: Vec3Node];
 type FrustumVisibilityArgs = [
   clipPosition: Vec4Node,
@@ -174,50 +159,6 @@ export class TSLUtils {
   );
 
   /**
-   * @description Packs an angle in radians [0..2π)
-   * @param dest [float] destination data
-   * @param offset [int] location of starting bit index
-   * @param value [float] angle to be stored in radians
-   */
-  static packAngle = Fn<PackUnitArgs, FloatNode>(
-    ([dest, offset, bits, value]) => {
-      const levels = sub(pow(2, bits), 1);
-      const lsb = PI2.div(levels); // 2π/(2^bits-1)
-      // wrap into [0,2π)
-      const a = value.sub(PI2.mul(floor(value.div(PI2))));
-      return this.packF32(dest, offset, bits, a, lsb, float(0));
-    },
-  );
-
-  /**
-   * @description Unpacks an angle in radians [0..2π)
-   * @param src [float] source data
-   * @param offset [int] location of starting bit index
-   * @param bits [int] how many bits it occupies
-   */
-  static unpackAngle = Fn<UnpackUnitArgs, FloatNode>(([src, offset, bits]) => {
-    const lsb = PI2.div(sub(pow(2, bits), 1));
-    return this.unpackF32(src, offset, bits, lsb, float(0));
-  });
-
-  // Signed range [-A..+A]
-  static packSigned = Fn<PackSignedArgs, FloatNode>(
-    ([packed, offset, bits, value, maxAbs]) => {
-      const levels = sub(pow(2, bits), 1);
-      const lsb = maxAbs.mul(2).div(levels); // step
-      const bias = maxAbs.negate();
-      return this.packF32(packed, offset, bits, value, lsb, bias);
-    },
-  );
-  static unpackSigned = Fn<UnpackSignedArgs, FloatNode>(
-    ([packed, offset, bits, maxAbs]) => {
-      const lsb = maxAbs.mul(2).div(sub(pow(2, bits), 1));
-      const bias = maxAbs.negate();
-      return this.unpackF32(packed, offset, bits, lsb, bias);
-    },
-  );
-
-  /**
    * @description Packs a value with a range min..max both ends included
    * @param dest [float] destination data
    * @param offset [int] location of starting bit index
@@ -273,10 +214,6 @@ export class TSLUtils {
     },
   );
 
-  static computeAtlasUv = Fn<AtlasUvArgs, Vec2Node>(([scale, offset, uv]) => {
-    return uv.mul(scale).add(offset);
-  });
-
   // Inputs n1, n2 are tangent-space normals already unpacked to [-1..1] and normalized.
   // (If you sampled from texture, do: n = tex.rgb * 2 - 1; normalize(n);)
   static blendRNM = Fn<BlendNormalsArgs, Vec3Node>(([n1, n2]) => {
@@ -286,10 +223,5 @@ export class TSLUtils {
       n1.z.mul(n2.z).sub(n1.x.mul(n2.x).add(n1.y.mul(n2.y))),
     );
     return r.normalize();
-  });
-
-  // partial derivatives, inputs n1, n2 are tangent-space normals already unpacked to [-1..1] and normalized.
-  static blendUDN = Fn<BlendNormalsArgs, Vec3Node>(([n1, n2]) => {
-    return vec3(n1.xy.add(n2.xy), n1.z.mul(n2.z)).normalize();
   });
 }

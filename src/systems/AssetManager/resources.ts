@@ -49,12 +49,9 @@ import edelweissUrl from "/textures/new-world/flowers/edelweiss_128.ktx2?url";
 import pineTreeDiffuseUrl from "/textures/new-world/pine-tree/diffuse_2k.ktx2?url";
 
 // Tree
-import _treeCanopyDiffuseUrl from "/textures/new-world/tree/canopy_diffuse_512_uastc.ktx2?url";
-import _treeCanopyNormalUrl from "/textures/new-world/tree/canopy_normal_512_uastc.ktx2?url";
 import _treeBarkDiffuseUrl from "/textures/new-world/tree/bark_diffuse_512_uastc.ktx2?url";
 import _treeBarkNormalUrl from "/textures/new-world/tree/bark_normal_512_uastc.ktx2?url";
 
-import uvCheckerUrl from "/textures/new-world/debug/uvChecker_1k_uastc.ktx2?url";
 import noiseAtlasUrl from "/textures/new-world/noise/noise_atlas.ktx2?url";
 
 type ResourceType = {
@@ -108,8 +105,6 @@ export type ResourceRaw =
   | CompressedTextureResourceRaw
   | BinaryResourceRaw;
 
-const isDev = import.meta.env.DEV;
-
 export const manifest = [
   // -----------------------------------------------
   // Core
@@ -127,17 +122,6 @@ export const manifest = [
     type: "cubeTexture",
     colorSpace: SRGBColorSpace,
   },
-  ...(isDev
-    ? ([
-        {
-          name: "uvChecker", // only for debug
-          url: uvCheckerUrl,
-          type: "ktx2",
-          wrap: true,
-          colorSpace: SRGBColorSpace,
-        },
-      ] as const)
-    : []),
 
   // -----------------------------------------------
   // Terrain
@@ -297,13 +281,6 @@ export const manifest = [
     wrap: true,
     colorSpace: SRGBColorSpace,
   },
-  // {
-  //   name: "treeCanopyDiffuse",
-  //   url: _treeCanopyDiffuseUrl,
-  //   type: "ktx2",
-  //   flipY: false,
-  //   colorSpace: SRGBColorSpace,
-  // },
   {
     name: "treeBarkNormal",
     url: _treeBarkNormalUrl,
@@ -311,12 +288,6 @@ export const manifest = [
     flipY: false,
     wrap: true,
   },
-  // {
-  //   name: "treeCanopyNormal",
-  //   url: _treeCanopyNormalUrl,
-  //   type: "ktx2",
-  //   flipY: false,
-  // },
 
   // -----------------------------------------------
   // Pine Tree

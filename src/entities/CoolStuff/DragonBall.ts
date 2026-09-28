@@ -65,7 +65,6 @@ export default class DragonBall {
       name: "Goku Statue",
       icon: "dragonball",
       position: gokuStatue.position,
-      discoveryRadius: 80,
       arrivalRadius: 20,
     });
 

@@ -4,7 +4,7 @@ import type { SceneManager } from "./SceneManager";
 
 const PREWARM_TIMEOUT_MS = 2500;
 
-export type StartupPrewarmResult = {
+type StartupPrewarmResult = {
   completed: boolean;
   timedOut: boolean;
   error?: unknown;

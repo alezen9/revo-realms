@@ -10,7 +10,6 @@ export class FootballPitch {
       name: "Football Pitch",
       icon: "football",
       position: POSITION,
-      discoveryRadius: 100,
       arrivalRadius: ARRIVAL_RADIUS,
     });
     const windTargetId = windManager.registerTarget(

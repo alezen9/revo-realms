@@ -9,8 +9,6 @@ import {
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { DRACOLoader } from "three/addons/loaders/DRACOLoader.js";
 import { KTX2Loader } from "three/addons/loaders/KTX2Loader.js";
-import atlasesCoords from "../../atlases/atlases.json";
-import { type Atlases } from "../../atlases/types";
 import {
   manifest,
   type ResourceRaw,
@@ -34,8 +32,6 @@ const MAX_RETRIES = 3;
 const RETRY_BACKOFF_MS = 250;
 
 export class AssetManager {
-  readonly atlasesCoords = atlasesCoords as Atlases;
-
   private textureLoader = new TextureLoader();
   private cubeTextureLoader = new CubeTextureLoader();
   private dracoLoader = new DRACOLoader();

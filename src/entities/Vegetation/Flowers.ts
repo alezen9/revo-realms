@@ -94,7 +94,7 @@ const uniforms = {
   uMaxScale: uniform(config.MAX_SCALE),
 };
 
-export class FlowersSsbo {
+class FlowersSsbo {
   // x -> offsetX (0 unused)
   // y -> offsetZ (0 unused)
   // z -> 0/12 offsetY - 12/1 visibility - 13/6 grass scale (5 unused)
@@ -277,7 +277,7 @@ export class FlowersSsbo {
   })().compute(1, [1]); // one counter only needs one thread
 }
 
-export const getFlowerLocalPosition = (
+const getFlowerLocalPosition = (
   ssbo: FlowersSsbo,
   flowerIndex: Node<"uint">,
   sourcePosition: Node<"vec3">,

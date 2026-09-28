@@ -11,7 +11,7 @@ import { type EventsManager } from "./EventsManager";
 import type { DebugManager } from "./DebugManager";
 import { playerCameraConfig } from "../entities/Player/PlayerCamera";
 import { uniform } from "three/tsl";
-import { TOOLING_FLAGS } from "@systems-tooling-runtime";
+import { TOOLING_FLAGS } from "./runtime/ToolingFlags";
 
 export class SceneManager {
   mainScene: Scene;

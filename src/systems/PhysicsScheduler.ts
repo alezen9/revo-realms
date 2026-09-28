@@ -11,10 +11,6 @@ export class PhysicsScheduler {
     return this.accumulator / this.fixedDelta;
   }
 
-  get didStep() {
-    return this.pendingSteps > 0;
-  }
-
   update(delta: number) {
     this.accumulator += delta;
     this.pendingSteps = Math.min(

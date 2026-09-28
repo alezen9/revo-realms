@@ -6,7 +6,6 @@ import WindAmbianceStreaks from "../entities/WindAmbiance/WindAmbianceStreaks";
 import { LakeSurface } from "../entities/LakeSurface";
 import { Campfire } from "../entities/Campfire";
 import { FootballPitch } from "../entities/FootballPitch";
-export { realmConfig } from "./config";
 
 export default class PortfolioRealm {
   constructor() {

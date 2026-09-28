@@ -24,12 +24,7 @@
     "noFallthroughCasesInSwitch": true,
     "noUncheckedSideEffectImports": true,
 
-    "types": ["svelte"],
-    "paths": {
-      "@systems-tooling-runtime": [
-        "./src/systems/runtime/ToolingRuntime.prod.ts"
-      ]
-    }
+    "types": ["svelte"]
   },
   "include": ["src/**/*.ts", "src/**/*.svelte", "src/**/*.d.ts", "types"]
 }

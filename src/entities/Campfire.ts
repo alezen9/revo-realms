@@ -138,7 +138,6 @@ export class Campfire {
       name: "Campfire",
       icon: "fire",
       position: campfire.position,
-      discoveryRadius: 100,
       arrivalRadius: 15,
     });
 

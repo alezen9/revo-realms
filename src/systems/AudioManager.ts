@@ -24,7 +24,6 @@ export class AudioManager {
   isMute = true;
   private files: Array<Audio | PositionalAudio> = [];
 
-  ambient!: Audio;
   lake!: PositionalAudio;
   hitWood!: Audio;
   hitStone!: Audio;
@@ -90,7 +89,7 @@ export class AudioManager {
       this.audioLoader.loadAsync(hitStoneUrl),
     ]);
 
-    this.ambient = this.newAudio(res[0], 0.05, true);
+    this.newAudio(res[0], 0.05, true);
     this.lake = this.newPositionalAudio(res[1], 1, true, 50);
     this.hitWood = this.newAudio(res[2], 0, false);
     this.hitStone = this.newAudio(res[3], 0, false);

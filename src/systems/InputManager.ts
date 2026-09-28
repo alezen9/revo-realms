@@ -3,14 +3,12 @@ import type { EventsManager } from "./EventsManager";
 class KeyboardManager {
   private keysPressed = new Set<string>();
   private keyDownListeners = new Map<string, VoidFunction>();
-  private keyUpListeners = new Map<string, VoidFunction>();
   private eventsManager: EventsManager;
 
   constructor(eventsManager: EventsManager) {
     this.eventsManager = eventsManager;
     this.keysPressed = new Set();
     this.keyDownListeners = new Map();
-    this.keyUpListeners = new Map();
 
     this.handleKeyDown = this.handleKeyDown.bind(this);
     this.handleKeyUp = this.handleKeyUp.bind(this);
@@ -45,7 +43,6 @@ class KeyboardManager {
   private handleKeyUp(event: KeyboardEvent) {
     const code = event.code;
     this.keysPressed.delete(code);
-    this.keyUpListeners.get(code)?.();
   }
 
   isKeyPressed(code: string): boolean {
@@ -55,10 +52,6 @@ class KeyboardManager {
 
   onKeyDown(code: string, callback: VoidFunction) {
     this.keyDownListeners.set(code, callback);
-  }
-
-  onKeyUp(code: string, callback: VoidFunction) {
-    this.keyUpListeners.set(code, callback);
   }
 
   dispose() {
@@ -112,15 +105,7 @@ export class InputManager {
     return this.keyboardManager.isKeyPressed("Space");
   }
 
-  isKeyPressed(code: string): boolean {
-    return this.keyboardManager.isKeyPressed(code);
-  }
-
   onKeyDown(code: string, callback: VoidFunction) {
     this.keyboardManager.onKeyDown(code, callback);
-  }
-
-  onKeyUp(code: string, callback: VoidFunction) {
-    this.keyboardManager.onKeyUp(code, callback);
   }
 }

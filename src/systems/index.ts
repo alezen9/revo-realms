@@ -13,10 +13,8 @@ import { SceneManager } from "./SceneManager";
 import { TimeManager } from "./TimeManager";
 import { WindManager } from "./WindManager";
 import { PrewarmManager } from "./PrewarmManager";
-import {
-  createDebugManager,
-  createMonitoringManager,
-} from "@systems-tooling-runtime";
+import { DebugManager } from "./DebugManager";
+import { MonitoringManager } from "./RendererManager/MonitoringManager";
 
 const init = () => {
   const eventsManager = new EventsManager();
@@ -24,7 +22,7 @@ const init = () => {
   const assetManager = new AssetManager(eventsManager);
   const sceneManager = new SceneManager(eventsManager);
   const cullingManager = new CullingManager(eventsManager, sceneManager);
-  const debugManager = createDebugManager();
+  const debugManager = new DebugManager();
 
   const rendererManager = new RendererManager(
     sceneManager,
@@ -45,21 +43,21 @@ const init = () => {
     inputManager,
     debugManager,
   );
-  const monitoringManager = createMonitoringManager(
+  const monitoringManager = new MonitoringManager(
     eventsManager,
     rendererManager,
     frameScheduler,
     physicsScheduler,
     timeManager,
   );
-  const landmarkManager = new LandmarkManager(eventsManager);
+  const landmarkManager = new LandmarkManager();
   const lightingManager = new LightingManager(
     sceneManager,
     debugManager,
     eventsManager,
     assetManager,
   );
-  const windManager = new WindManager(eventsManager, sceneManager);
+  const windManager = new WindManager(eventsManager);
   return {
     eventsManager,
     frameScheduler,

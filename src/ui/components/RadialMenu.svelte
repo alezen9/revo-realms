@@ -25,9 +25,9 @@
 	const svgSize = 400
 	const center = svgSize / 2
 	const labelRadius = (innerRadius + outerRadius) / 2
-	const discoveredIconX = -13
-	const discoveredIconY = -20
-	const discoveredIconBoxSize = 26
+	const iconOffsetX = -13
+	const iconOffsetY = -20
+	const iconBoxSize = 26
 	let menuEl = $state.raw<HTMLDivElement | null>(null)
 	const landmarkIconComponents = {
 		fire: IconFire,
@@ -99,17 +99,13 @@
 		)
 
 	const handleSlotClick = (landmark: Landmark) => {
-		if (!landmark.hasBeenDiscovered || !landmark.windTargetId) return
+		if (!landmark.windTargetId) return
 		const isActivated = windManager.activateTargetById(landmark.windTargetId)
 		if (!isActivated) return
-		eventsManager.emit("landmark-selected", landmark.id)
 		isVisible = false
 	}
 
 	onMount(() => {
-		const unsubscribeDiscovery = eventsManager.on("landmark-discovered", () => {
-			landmarks = landmarkManager.getAll()
-		})
 		const unsubscribeWindTarget = eventsManager.on(
 			"wind-target-change",
 			(targetId: string | null) => {
@@ -159,7 +155,6 @@
 		activeWindTargetId = windManager.activeTargetId
 
 		return () => {
-			unsubscribeDiscovery()
 			unsubscribeWindTarget()
 			window.removeEventListener("keydown", handleKeyDown)
 			window.removeEventListener("pointerdown", handlePointerDown)
@@ -196,60 +191,43 @@
 		>
 			{#each slots as slot (slot.landmark.id)}
 				{@const landmark = slot.landmark}
+				{@const IconComponent = landmarkIconComponents[landmark.icon]}
 				<g
 					class="radial-menu__slot"
-					class:discovered={landmark.hasBeenDiscovered}
 					class:selected={selectedId === landmark.id}
 					style="--delay: {slot.delay}"
 					onclick={() => handleSlotClick(landmark)}
 					onkeydown={event =>
 						event.key === "Enter" && handleSlotClick(landmark)}
 					role="button"
-					tabindex={menuVisible && landmark.hasBeenDiscovered ? 0 : -1}
+					tabindex={menuVisible ? 0 : -1}
 					data-landmark-id={landmark.id}
-					aria-label={landmark.hasBeenDiscovered
-						? landmark.name
-						: "Undiscovered landmark"}
+					aria-label={landmark.name}
 				>
 					<path class="radial-menu__arc" d={slot.path} />
 
-					{#if landmark.hasBeenDiscovered}
-						{@const IconComponent = landmarkIconComponents[landmark.icon]}
-						<foreignObject
-							class="radial-menu__icon"
-							x={slot.labelX + discoveredIconX}
-							y={slot.labelY + discoveredIconY}
-							width={discoveredIconBoxSize}
-							height={discoveredIconBoxSize}
-							aria-hidden="true"
-						>
-							<div class="radial-menu__icon-box">
-								<IconComponent size="1em" />
-							</div>
-						</foreignObject>
-					{:else}
-						<text
-							class="radial-menu__icon radial-menu__icon--unknown"
-							x={slot.labelX}
-							y={slot.labelY - 6}
-							text-anchor="middle"
-							dominant-baseline="middle"
-						>
-							?
-						</text>
-					{/if}
+					<foreignObject
+						class="radial-menu__icon"
+						x={slot.labelX + iconOffsetX}
+						y={slot.labelY + iconOffsetY}
+						width={iconBoxSize}
+						height={iconBoxSize}
+						aria-hidden="true"
+					>
+						<div class="radial-menu__icon-box">
+							<IconComponent size="1em" />
+						</div>
+					</foreignObject>
 
-					{#if landmark.hasBeenDiscovered}
-						<text
-							class="radial-menu__label"
-							x={slot.labelX}
-							y={slot.labelY + 16}
-							text-anchor="middle"
-							dominant-baseline="middle"
-						>
-							{landmark.name}
-						</text>
-					{/if}
+					<text
+						class="radial-menu__label"
+						x={slot.labelX}
+						y={slot.labelY + 16}
+						text-anchor="middle"
+						dominant-baseline="middle"
+					>
+						{landmark.name}
+					</text>
 				</g>
 			{/each}
 		</svg>
@@ -303,13 +281,13 @@
 		stroke-width: 2;
 	}
 
-	.radial-menu__slot.discovered {
+	.radial-menu__slot {
 		cursor: pointer;
 	}
 
 	.radial-menu__arc {
 		fill: rgba(15, 15, 20, 0.85);
-		stroke: rgba(255, 255, 255, 0.12);
+		stroke: rgba(255, 255, 255, 0.25);
 		stroke-width: 1.5;
 		transform-origin: center;
 		transform: scale(0);
@@ -324,11 +302,7 @@
 		transform: scale(1);
 	}
 
-	.radial-menu__slot.discovered .radial-menu__arc {
-		stroke: rgba(255, 255, 255, 0.25);
-	}
-
-	.radial-menu__slot.discovered:hover .radial-menu__arc {
+	.radial-menu__slot:hover .radial-menu__arc {
 		fill: rgba(35, 38, 48, 0.95);
 		stroke: rgba(255, 255, 255, 0.7);
 		stroke-width: 2;
@@ -338,11 +312,6 @@
 		fill: rgba(28, 48, 36, 0.92);
 		stroke: rgba(46, 200, 118, 0.95);
 		stroke-width: 2.2;
-	}
-
-	.radial-menu__slot:not(.discovered) .radial-menu__arc {
-		opacity: 0.35;
-		stroke-dasharray: 6 4;
 	}
 
 	.radial-menu__icon,
@@ -372,16 +341,6 @@
 
 	.radial-menu.open .radial-menu__icon {
 		opacity: 1;
-	}
-
-	.radial-menu__icon--unknown {
-		font-family: system-ui, sans-serif;
-		font-weight: 300;
-		font-size: 22px;
-	}
-
-	.radial-menu.open .radial-menu__icon--unknown {
-		opacity: 0.5;
 	}
 
 	.radial-menu__label {

@@ -36,8 +36,8 @@ import {
 } from "./VSMContext";
 
 export const VSM_CLUSTER_TRIANGLES = 64;
-export const VSM_CLUSTER_VERTICES = VSM_CLUSTER_TRIANGLES * 3;
-export const VSM_CLUSTER_MAX_WORK_ITEMS = 262144;
+const VSM_CLUSTER_VERTICES = VSM_CLUSTER_TRIANGLES * 3;
+const VSM_CLUSTER_MAX_WORK_ITEMS = 262144;
 
 type ClusterInstance = {
   mesh: Mesh;
@@ -60,7 +60,7 @@ type ClusterContent = {
   instanceClusters: number[];
 };
 
-export const appendGeometryClusters = (
+const appendGeometryClusters = (
   geometry: BufferGeometry,
   range: { start: number; count: number },
   positions: number[],

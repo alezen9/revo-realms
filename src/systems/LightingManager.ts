@@ -17,19 +17,13 @@ import { srgbColorTarget } from "../utils/TweakpaneColor";
 
 const config = {
   LIGHT_POSITION_OFFSET: new Vector3(10, 5, 10),
-  // directionalColor: new Color(0.53, 0.65, 0.79), // Dark
-  // directionalIntensity: 0.16, // Dark
-  directionalColor: new Color(0.96, 0.67, 0.46).convertSRGBToLinear(), // Light
-  directionalIntensity: 0.62, // Light
-  // hemiSkyColor: new Color(0.4, 0.45, 0.6), // Dark
-  // hemiGroundColor: new Color(0.3, 0.2, 0.2), // Dark
-  hemiSkyColor: new Color(0.82, 0.64, 0.53).convertSRGBToLinear(), // Light
-  hemiGroundColor: new Color(0.36, 0.31, 0.19).convertSRGBToLinear(), // Light
+  directionalColor: new Color(0.96, 0.67, 0.46).convertSRGBToLinear(),
+  directionalIntensity: 0.62,
+  hemiSkyColor: new Color(0.82, 0.64, 0.53).convertSRGBToLinear(),
+  hemiGroundColor: new Color(0.36, 0.31, 0.19).convertSRGBToLinear(),
   hemiIntensity: 0.38,
-  // fogColor: new Color(0.05, 0.12, 0.24), // Dark
-  // fogDensity: 0.009, // Dark
-  fogColor: new Color(0.64, 0.6, 0.48).convertSRGBToLinear(), // Light
-  fogDensity: 0.0044, // Light
+  fogColor: new Color(0.64, 0.6, 0.48).convertSRGBToLinear(),
+  fogDensity: 0.0044,
   fogEnabled: true,
   backgroundEnabled: false,
 };
@@ -199,17 +193,6 @@ export class LightingManager {
           ? this.assetManager.resources.envMapTexture
           : null;
       });
-
-    // lightFolder.addBinding(this.ambientLight, "color", {
-    //   label: "Ambient Color",
-    //   view: "color",
-    //   color: { type: "float" },
-    // });
-    // lightFolder.addBinding(this.ambientLight, "intensity", {
-    //   min: 0,
-    //   max: 1,
-    //   label: "Ambient intensity",
-    // });
 
     lightFolder
       .addBinding(srgbColorTarget(this.uHemiSkyColor.value), "value", {

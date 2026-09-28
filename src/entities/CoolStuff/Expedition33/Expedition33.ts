@@ -63,7 +63,6 @@ export default class Expedition33 {
       name: "Expedition 33",
       icon: "flag",
       position: this.origin,
-      discoveryRadius: 100,
       arrivalRadius: 15,
     });
     const windTargetId = windManager.registerTarget(

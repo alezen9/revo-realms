@@ -120,8 +120,6 @@ type EngineEvents = {
   "engine-loading-core-progress": (percentage: number) => void;
   "engine-loading-failed": (failure?: LoadingFailure) => void;
   "engine-monitoring-update": (snapshot: MonitoringSnapshot) => void;
-  "engine-time-scale": (scale: number) => void;
-  "engine-pause-change": (paused: boolean) => void;
   "engine-slowmo-change": (enabled: boolean) => void;
 } & ThrottledEvents;
 
@@ -135,12 +133,7 @@ type GameEvents = {
   "wind-target-change": (targetId: string | null) => void;
 };
 
-type LandmarkEvents = {
-  "landmark-discovered": (id: string) => void;
-  "landmark-selected": (id: string) => void;
-};
-
-type Events = EngineEvents & InputEvents & GameEvents & LandmarkEvents;
+type Events = EngineEvents & InputEvents & GameEvents;
 
 export class EventsManager {
   private emitter = new EventEmitter<Events>();
@@ -191,10 +184,6 @@ export class EventsManager {
     ...args: Parameters<Events[K]>
   ): boolean {
     return this.emitter.emit(event, ...args);
-  }
-
-  off<K extends keyof Events>(event: K, listener: Events[K]) {
-    this.emitter.off(event, listener);
   }
 
   removeAllListeners<K extends keyof Events>(event?: K) {

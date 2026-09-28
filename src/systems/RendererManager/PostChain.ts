@@ -1,4 +1,4 @@
-export type PostPass<TInput, TOutput> = {
+type PostPass<TInput, TOutput> = {
   apply: (input: TInput) => TOutput;
   render?: () => void;
 };

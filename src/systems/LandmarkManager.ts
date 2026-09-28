@@ -1,8 +1,4 @@
 import { Vector3 } from "three";
-import type { State } from "../Game";
-import type { EventsManager } from "./EventsManager";
-
-const REVEAL_ALL_LANDMARKS = true;
 
 export type LandmarkIconId =
   "fire" | "water" | "sword" | "axe" | "dragonball" | "flag" | "football";
@@ -12,58 +8,24 @@ export type Landmark = {
   name: string;
   icon: LandmarkIconId;
   position: Vector3;
-  discoveryRadius: number;
   arrivalRadius: number;
-  hasBeenDiscovered: boolean;
-  windTargetId?: string; // ID from wind system for activation
+  windTargetId?: string;
 };
 
-type LandmarkRegistration = Omit<
-  Landmark,
-  "id" | "hasBeenDiscovered" | "windTargetId"
->;
+type LandmarkRegistration = Omit<Landmark, "id" | "windTargetId">;
 
 export class LandmarkManager {
   private landmarks = new Map<string, Landmark>();
   private idCounter = 0;
-  private eventsManager: EventsManager;
-
-  constructor(eventsManager: EventsManager) {
-    this.eventsManager = eventsManager;
-    eventsManager.on(
-      "engine-render-update-throttle-16x",
-      this.checkDiscovery.bind(this),
-    );
-  }
 
   register(registration: LandmarkRegistration): string {
     const id = `landmark-${++this.idCounter}`;
-    const landmark: Landmark = {
-      ...registration,
-      id,
-      hasBeenDiscovered: REVEAL_ALL_LANDMARKS,
-    };
-    this.landmarks.set(id, landmark);
+    this.landmarks.set(id, { ...registration, id });
     return id;
-  }
-
-  discover(id: string): void {
-    const landmark = this.landmarks.get(id);
-    if (!landmark || landmark.hasBeenDiscovered) return;
-    landmark.hasBeenDiscovered = true;
-    this.eventsManager.emit("landmark-discovered", id);
-  }
-
-  isDiscovered(id: string): boolean {
-    return this.landmarks.get(id)?.hasBeenDiscovered ?? false;
   }
 
   getAll(): Landmark[] {
     return Array.from(this.landmarks.values());
-  }
-
-  getDiscovered(): Landmark[] {
-    return this.getAll().filter((l) => l.hasBeenDiscovered);
   }
 
   getById(id: string): Landmark | undefined {
@@ -75,23 +37,5 @@ export class LandmarkManager {
     if (landmark) {
       landmark.windTargetId = windTargetId;
     }
-  }
-
-  private checkDiscovery(state: State): void {
-    const playerPos = state.player.position;
-
-    this.landmarks.forEach((landmark) => {
-      if (landmark.hasBeenDiscovered) return;
-
-      const dx = playerPos.x - landmark.position.x;
-      const dz = playerPos.z - landmark.position.z;
-      const distanceSq = dx * dx + dz * dz;
-      const discoveryRadiusSq =
-        landmark.discoveryRadius * landmark.discoveryRadius;
-
-      if (distanceSq <= discoveryRadiusSq) {
-        this.discover(landmark.id);
-      }
-    });
   }
 }

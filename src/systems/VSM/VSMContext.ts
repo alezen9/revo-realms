@@ -72,12 +72,12 @@ export type VSMJobSource = {
 
 export type VSMLayerKind = "static" | "dynamic";
 
-export type VSMLayerChanges = {
+type VSMLayerChanges = {
   hasRosterChanged: boolean;
   hasCasterMoved: boolean;
 };
 
-export type VSMChanges = Record<VSMLayerKind, VSMLayerChanges> & {
+type VSMChanges = Record<VSMLayerKind, VSMLayerChanges> & {
   hasSunChanged: boolean;
   shouldRequestPages: boolean;
 };
