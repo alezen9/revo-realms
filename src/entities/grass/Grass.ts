@@ -15,7 +15,7 @@ const INDIRECT_FIRST_INSTANCE_FEATURE = "indirect-first-instance";
 const INDIRECT_DRAW_BYTE_LENGTH =
   config.LOD_COUNT * config.INDIRECT_ARGS_STRIDE * UINT32_BYTE_SIZE;
 
-export default class Grass {
+export class Grass {
   private compute = new GrassCompute();
   private material = new GrassMaterial(this.compute);
   // every LOD mesh rides the same wrapping tile, so only the group moves

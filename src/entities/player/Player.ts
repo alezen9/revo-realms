@@ -31,7 +31,7 @@ import { debugPlayer } from "./debug";
 
 const ZERO_VELOCITY = { x: 0, y: 0, z: 0 };
 
-export default class Player {
+export class Player {
   private mesh: Mesh;
   private visualRoot: Object3D;
   private rigidBody: RigidBody;

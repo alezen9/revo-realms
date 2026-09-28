@@ -34,7 +34,7 @@ class DragonSlayerMaterial extends VSMReceiverStandardMaterial {
   }
 }
 
-export default class DragonSlayerSword {
+export class DragonSlayerSword {
   constructor() {
     // Visual
     const sword = assets.getMesh("dragon_slayer");

@@ -25,7 +25,7 @@ class GokuStatueMaterial extends VSMReceiverStandardMaterial {
   }
 }
 
-export default class GokuStatue {
+export class GokuStatue {
   private gokuStatue: Mesh;
   private shadowSettings = { depthBias: 0.2 };
 

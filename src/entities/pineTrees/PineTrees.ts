@@ -64,7 +64,7 @@ class PineTreeBarkMaterial extends VSMReceiverLambertMaterial {
   }
 }
 
-export default class PineTrees {
+export class PineTrees {
   constructor() {
     // Visual
     const pineTreeCanopy = assets.getMesh("pine_tree_canopy");

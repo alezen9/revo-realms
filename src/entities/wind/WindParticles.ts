@@ -236,7 +236,7 @@ class WindParticlesSsbo {
   })().compute(config.PARTICLE_COUNT, [config.WORKGROUP_SIZE]);
 }
 
-export default class WindParticles {
+export class WindParticles {
   private ssbo = new WindParticlesSsbo();
   private computeTask: ComputeTask;
   private mesh: InstancedMesh;

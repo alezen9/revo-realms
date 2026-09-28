@@ -1,18 +1,18 @@
-import Terrain from "./terrain/Terrain";
-import Grass from "./grass/Grass";
-import Flowers from "./flowers/Flowers";
-import PineTrees from "./pineTrees/PineTrees";
-import WindParticles from "./wind/WindParticles";
-import WindStreaks from "./wind/WindStreaks";
-import LeviathanAxe from "./landmarks/LeviathanAxe";
-import DragonSlayerSword from "./landmarks/DragonSlayerSword";
-import GokuStatue from "./landmarks/GokuStatue";
-// import Expedition33Flag from "./landmarks/expedition33Flag/Expedition33Flag";
+import { Terrain } from "./terrain/Terrain";
+import { Grass } from "./grass/Grass";
+import { Flowers } from "./flowers/Flowers";
+import { PineTrees } from "./pineTrees/PineTrees";
+import { WindParticles } from "./wind/WindParticles";
+import { WindStreaks } from "./wind/WindStreaks";
+import { LeviathanAxe } from "./landmarks/LeviathanAxe";
+import { DragonSlayerSword } from "./landmarks/DragonSlayerSword";
+import { GokuStatue } from "./landmarks/GokuStatue";
+// import { Expedition33Flag } from "./landmarks/expedition33Flag/Expedition33Flag";
 import { LakeSurface } from "./lake/LakeSurface";
 import { Campfire } from "./landmarks/campfire/Campfire";
 import { FootballPitch } from "./landmarks/FootballPitch";
 
-export default class RevoRealm {
+export class RevoRealm {
   constructor() {
     new Terrain();
     new Grass();

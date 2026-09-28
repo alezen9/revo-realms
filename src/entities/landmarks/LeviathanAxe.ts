@@ -46,7 +46,7 @@ class LeviathanAxeMaterial extends VSMReceiverStandardMaterial {
   }
 }
 
-export default class LeviathanAxe {
+export class LeviathanAxe {
   constructor() {
     // Visual
     const axe = assets.getMesh("leviathan_axe");

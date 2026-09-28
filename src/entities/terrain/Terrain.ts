@@ -557,7 +557,7 @@ class OuterTerrain {
   };
 }
 
-export default class Terrain {
+export class Terrain {
   constructor() {
     const terrainMaterial = new TerrainMaterial();
 

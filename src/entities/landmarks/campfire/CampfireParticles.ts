@@ -66,7 +66,7 @@ type CustomParams = BaseParams & {
 
 type ParticleParams = FirePresetParams | CustomParams;
 
-export default class CampfireParticles extends InstancedMesh {
+export class CampfireParticles extends InstancedMesh {
   readonly mainBuffer: ParticleBuffer;
 
   constructor(params: ParticleParams) {

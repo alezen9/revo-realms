@@ -1,5 +1,5 @@
 import { RevoColliderType } from "../../../systems/physics/colliderTypes";
-import CampfireParticles from "./CampfireParticles";
+import { CampfireParticles } from "./CampfireParticles";
 import {
   assets,
   stage,

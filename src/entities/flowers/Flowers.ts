@@ -342,7 +342,7 @@ const getFlowerLocalPosition = (
     .add(swayOffset);
 };
 
-export default class Flowers {
+export class Flowers {
   private mesh: Mesh;
   private computeTask: ComputeTask;
 

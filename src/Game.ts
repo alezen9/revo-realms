@@ -1,5 +1,5 @@
-import Player from "./entities/player/Player";
-import RevoRealm from "./entities/RevoRealm";
+import { Player } from "./entities/player/Player";
+import { RevoRealm } from "./entities/RevoRealm";
 import { debounce } from "lodash-es";
 import { rendererConfig } from "./systems/rendering/Graphics";
 import {
@@ -25,7 +25,7 @@ export type Sizes = {
   aspect: number;
 };
 
-export default class Game {
+export class Game {
   private player: Player;
   private physicsState: State;
   private renderState: State;

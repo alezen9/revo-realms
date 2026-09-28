@@ -210,7 +210,7 @@ class WindStreaksSsbo {
   })().compute(STREAK_COUNT, [config.STREAK_WORKGROUP_SIZE]);
 }
 
-export default class WindStreaks {
+export class WindStreaks {
   private ssbo = new WindStreaksSsbo();
   private computeTask: ComputeTask;
   private mesh: InstancedMesh;

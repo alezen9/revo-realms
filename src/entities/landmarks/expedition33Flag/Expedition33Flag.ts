@@ -27,7 +27,7 @@ import { FlagSsbo } from "./FlagSsbo";
 // top of the hill, sampled once from the terrain heightmap
 const HILLTOP = new Vector3(-115.74, 3.5, 215.79);
 
-export default class Expedition33Flag {
+export class Expedition33Flag {
   private ssbo = new FlagSsbo();
   private computeTask: ComputeTask;
   private origin = HILLTOP.clone();

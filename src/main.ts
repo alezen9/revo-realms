@@ -1,5 +1,5 @@
 import "./style.css";
-import Game from "./Game";
+import { Game } from "./Game";
 import { mountUi } from "./ui/mountUi";
 import {
   assets,
