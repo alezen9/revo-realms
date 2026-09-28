@@ -24,6 +24,10 @@ export class PipelineWarmup {
   private graphics: Graphics;
   private stage: Stage;
   private tasks: PrewarmTask[] = [];
+  private frustumCullStates: FrustumCullState[] = [];
+  private timeoutId?: ReturnType<typeof setTimeout>;
+  private hasTimedOut = false;
+  private isRestored = false;
 
   constructor(graphics: Graphics, stage: Stage) {
     this.graphics = graphics;
@@ -34,78 +38,50 @@ export class PipelineWarmup {
     this.tasks.push(task);
   }
 
-  private collectFrustumCullStates() {
-    const states: FrustumCullState[] = [];
+  runStartupPrewarmAsync() {
+    this.disableFrustumCulling();
+    const timeoutPromise = new Promise<StartupPrewarmResult>((resolve) => {
+      this.timeoutId = setTimeout(() => {
+        this.hasTimedOut = true;
+        this.restoreOnce();
+        resolve({ completed: false, timedOut: true });
+      }, PREWARM_TIMEOUT_MS);
+    });
+    return Promise.race([this.prewarmAsync(), timeoutPromise]);
+  }
+
+  private async prewarmAsync(): Promise<StartupPrewarmResult> {
+    try {
+      for (const task of this.tasks) await task.prepare();
+      await this.graphics.compileScenesOnceAsync();
+      if (!this.hasTimedOut) this.graphics.render();
+      this.restoreOnce();
+      return { completed: !this.hasTimedOut, timedOut: this.hasTimedOut };
+    } catch (error) {
+      this.restoreOnce();
+      return { completed: false, timedOut: false, error };
+    } finally {
+      clearTimeout(this.timeoutId);
+    }
+  }
+
+  private disableFrustumCulling() {
+    this.frustumCullStates = [];
     for (const scene of this.stage.scenes)
       scene.traverse((object) => {
-        states.push({
+        this.frustumCullStates.push({
           object,
           frustumCulled: object.frustumCulled,
         });
+        object.frustumCulled = false;
       });
-    return states;
   }
 
-  private setFrustumCullStates(states: FrustumCullState[], enabled: boolean) {
-    states.forEach(({ object }) => {
-      object.frustumCulled = enabled;
-    });
-  }
-
-  private restoreFrustumCullStates(states: FrustumCullState[]) {
-    states.forEach(({ object, frustumCulled }) => {
+  private restoreOnce() {
+    if (this.isRestored) return;
+    this.isRestored = true;
+    for (const task of this.tasks) task.restore();
+    for (const { object, frustumCulled } of this.frustumCullStates)
       object.frustumCulled = frustumCulled;
-    });
-  }
-
-  async runStartupPrewarmAsync(): Promise<StartupPrewarmResult> {
-    const states = this.collectFrustumCullStates();
-    this.setFrustumCullStates(states, false);
-
-    let timeoutId: ReturnType<typeof setTimeout> | undefined;
-    let timedOut = false;
-    let restored = false;
-
-    const restoreOnce = () => {
-      if (restored) return;
-      this.tasks.forEach((task) => task.restore());
-      this.restoreFrustumCullStates(states);
-      restored = true;
-    };
-
-    const prewarmPromise = (async (): Promise<StartupPrewarmResult> => {
-      try {
-        for (const task of this.tasks) await task.prepare();
-        await this.graphics.compileScenesOnceAsync();
-        if (!timedOut) this.graphics.render();
-        restoreOnce();
-        return {
-          completed: !timedOut,
-          timedOut,
-        };
-      } catch (error) {
-        restoreOnce();
-        return {
-          completed: false,
-          timedOut: false,
-          error,
-        };
-      } finally {
-        if (timeoutId !== undefined) clearTimeout(timeoutId);
-      }
-    })();
-
-    const timeoutPromise = new Promise<StartupPrewarmResult>((resolve) => {
-      timeoutId = setTimeout(() => {
-        timedOut = true;
-        restoreOnce();
-        resolve({
-          completed: false,
-          timedOut: true,
-        });
-      }, PREWARM_TIMEOUT_MS);
-    });
-
-    return Promise.race([prewarmPromise, timeoutPromise]);
   }
 }

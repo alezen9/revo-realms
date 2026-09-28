@@ -31,6 +31,6 @@ export class PostChain<TOutput> {
   }
 
   render() {
-    for (const pass of this.passes) pass.render?.();
+    for (const pass of this.passes) if (pass.render) pass.render();
   }
 }

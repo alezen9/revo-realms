@@ -97,7 +97,8 @@ export class FramePipeline extends RenderPipeline {
   };
 
   private onSlowmoChange = (isEnabled: boolean) => {
-    this.saturationTarget = isEnabled ? 0 : 1;
+    this.saturationTarget = 1;
+    if (isEnabled) this.saturationTarget = 0;
   };
 
   private onEngineUpdate = ({ delta }: { delta: number }) => {

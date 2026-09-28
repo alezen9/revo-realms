@@ -11,8 +11,7 @@ type ComputeTaskOptions = {
 
 const setNodeNames = (nodes: ComputeTaskNodes | undefined, name: string) => {
   if (!nodes) return;
-  const nodeList = Array.isArray(nodes) ? nodes : [nodes];
-  for (const node of nodeList) {
+  for (const node of [nodes].flat()) {
     if (!node.name) node.name = name;
   }
 };
