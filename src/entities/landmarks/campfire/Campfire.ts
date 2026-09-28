@@ -1,5 +1,5 @@
 import { RevoColliderType } from "../../../systems/physics/colliderTypes";
-import { CampfireParticles } from "./CampfireParticles";
+import { Fire } from "./Fire";
 import {
   assets,
   stage,
@@ -30,16 +30,7 @@ export class Campfire {
     const campfire = assets.getMesh("campfire");
     campfire.material = new CampfireMaterial();
 
-    const fire = new CampfireParticles({
-      count: 2048,
-      height: 1.85,
-      coneFactor: 1.25,
-      speed: 0.5,
-      radius: 0.85,
-      scale: 0.65,
-      bloom: 1.5,
-      workGroupSize: 256,
-    });
+    const fire = new Fire();
     fire.position.copy(campfire.position).setY(-0.15);
 
     stage.mainScene.add(campfire, fire);
