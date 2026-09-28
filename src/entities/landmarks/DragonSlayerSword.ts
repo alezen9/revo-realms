@@ -36,13 +36,11 @@ class DragonSlayerMaterial extends VSMReceiverStandardMaterial {
 
 export class DragonSlayerSword {
   constructor() {
-    // Visual
     const sword = assets.getMesh("dragon_slayer");
     sword.material = new DragonSlayerMaterial();
     stage.mainScene.add(sword);
     graphics.vsmPass.registerCaster(sword);
 
-    // Physics
     sword.geometry.computeBoundingBox();
     const bounds = sword.geometry.boundingBox;
     if (!bounds) throw new Error("Dragon Slayer has no bounding box");

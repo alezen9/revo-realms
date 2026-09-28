@@ -27,12 +27,10 @@ class CampfireMaterial extends VSMReceiverStandardMaterial {
 
 export class Campfire {
   constructor() {
-    // Visual
     const campfire = assets.getMesh("campfire");
     campfire.material = new CampfireMaterial();
 
     const fire = new CampfireParticles({
-      preset: "fire",
       count: 2048,
       height: 1.85,
       coneFactor: 1.25,
@@ -47,7 +45,6 @@ export class Campfire {
     stage.mainScene.add(campfire, fire);
     graphics.vsmPass.registerCaster(campfire);
 
-    // Physics
     const fireColliderMesh = assets.getMesh("fire_collider");
     if (!fireColliderMesh.geometry.boundingBox) {
       fireColliderMesh.geometry.computeBoundingBox();

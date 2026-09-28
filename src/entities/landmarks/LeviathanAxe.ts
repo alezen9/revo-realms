@@ -48,14 +48,12 @@ class LeviathanAxeMaterial extends VSMReceiverStandardMaterial {
 
 export class LeviathanAxe {
   constructor() {
-    // Visual
     const axe = assets.getMesh("leviathan_axe");
     axe.material = new LeviathanAxeMaterial();
 
     stage.mainScene.add(axe);
     graphics.vsmPass.registerCaster(axe);
 
-    // Physics
     const scale = axe.scale.x;
     const headPosition = new Vector3(0.1, 0.05, 0)
       .multiplyScalar(scale)

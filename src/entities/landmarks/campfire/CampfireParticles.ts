@@ -25,28 +25,17 @@ import {
   OneMinusSrcAlphaFactor,
   PlaneGeometry,
   SpriteNodeMaterial,
+  type ComputeNode,
+  type Node,
 } from "three/webgpu";
 import { assets, frustumCulling, graphics, eventBus } from "../../../systems";
 import { gameTime } from "../../../systems/time/gameTime";
 
-const createParticleBuffer = (count: number | Float32Array) =>
-  instancedArray(count, "vec4");
-type ParticleBuffer = ReturnType<typeof createParticleBuffer>;
-type ParticleComputeArgs = [buffer: ParticleBuffer];
+const SPARK_SHARE = 0.1;
 
-const _computeFn = Fn<ParticleComputeArgs, void>(([_]) => {
-  /* noop */
-});
-
-type ParticleComputeFn = typeof _computeFn;
-
-type BaseParams = {
+type CampfireParticlesOptions = {
   count: number;
   workGroupSize?: number;
-};
-
-type FirePresetParams = BaseParams & {
-  preset: "fire";
   speed?: number;
   radius?: number;
   height?: number;
@@ -57,212 +46,202 @@ type FirePresetParams = BaseParams & {
   bloom?: number;
 };
 
-type CustomParams = BaseParams & {
-  preset?: "custom";
-  onUpdate: ParticleComputeFn;
-  onInit?: ParticleComputeFn;
-  material: SpriteNodeMaterial;
-};
+const createParticleBuffer = (count: number) => instancedArray(count, "vec4");
+const createSparkFlagBuffer = (count: number) => instancedArray(count, "float");
 
-type ParticleParams = FirePresetParams | CustomParams;
+type ParticleBuffer = ReturnType<typeof createParticleBuffer>;
+type SparkFlagBuffer = ReturnType<typeof createSparkFlagBuffer>;
+type FloatNode = Node<"float">;
 
-export class CampfireParticles extends InstancedMesh {
-  readonly mainBuffer: ParticleBuffer;
+type UpdateArgs = [
+  particles: ParticleBuffer,
+  sparkFlags: SparkFlagBuffer,
+  speed: FloatNode,
+  radius: FloatNode,
+  fireHeight: FloatNode,
+  fireLifetime: FloatNode,
+  coneFactor: FloatNode,
+];
 
-  constructor(params: ParticleParams) {
-    let material: SpriteNodeMaterial;
-    let onInit: ParticleComputeFn | undefined;
-    let onUpdate = _computeFn;
+const initSparkFlags = Fn<[sparkFlags: SparkFlagBuffer], void>(
+  ([sparkFlags]) => {
+    const random = hash(instanceIndex.add(12345));
+    sparkFlags.element(instanceIndex).assign(step(1 - SPARK_SHARE, random));
+  },
+);
 
-    super(new PlaneGeometry(), undefined, params.count);
+const updateParticles = Fn<UpdateArgs, void>(
+  ([
+    particles,
+    sparkFlags,
+    speed,
+    radius,
+    fireHeight,
+    fireLifetime,
+    coneFactor,
+  ]) => {
+    const particle = particles.element(instanceIndex);
+    const isSpark = sparkFlags.element(instanceIndex);
+    const sparkHeight = fireHeight.mul(2);
+    const sparkLifetime = fireLifetime.mul(0.65);
 
-    this.mainBuffer = createParticleBuffer(params.count); // holds: vec4 = (x, y, z, alpha)
-
-    switch (params.preset) {
-      case "custom":
-        material = params.material;
-        onInit = params.onInit;
-        onUpdate = params.onUpdate;
-        break;
-      case "fire":
-        const fireConfig = getFirePresetConfig(params, this.mainBuffer);
-        material = fireConfig.material;
-        onInit = fireConfig.onInit;
-        onUpdate = fireConfig.onUpdate;
-        break;
-      default:
-        throw new Error("preset not provided for particle system");
-    }
-
-    this.material = material;
-
-    const computeUpdate = onUpdate(this.mainBuffer).compute(params.count, [
-      params.workGroupSize ?? 1,
-    ]);
-    computeUpdate.name =
-      params.preset === "fire" ? "Campfire particles" : "Particles";
-    const computeInit = onInit?.(this.mainBuffer).compute(params.count, [
-      params.workGroupSize ?? 1,
-    ]);
-    if (computeInit) {
-      computeUpdate?.onInit(({ renderer }) => {
-        renderer.computeAsync(computeInit);
-      });
-    }
-
-    let shouldCompute = false;
-
-    eventBus.on("engine-render-update-throttle-64x", () => {
-      shouldCompute = frustumCulling.isMeshVisible(this);
-    });
-
-    eventBus.on("engine-render-update-throttle-2x", () => {
-      if (!shouldCompute) return;
-      graphics.renderer.compute(computeUpdate);
-    });
-  }
-}
-
-/**
- * Fire preset
- */
-const getFirePresetConfig = (
-  params: FirePresetParams,
-  mainBuffer: ParticleBuffer,
-) => {
-  const {
-    speed = 0.5,
-    radius = 1,
-    height: fireHeight = 1,
-    lifetime: fireLifetime = 1,
-    scale = 1,
-    detail = undefined,
-    coneFactor = 1,
-    bloom = 1,
-  } = params;
-  const sparkHeight = fireHeight * 2;
-  const sparkLifetime = fireLifetime * 0.65;
-  const secondaryBuffer = instancedArray(params.count, "float");
-  const fireParticlesPersentage = 0.9;
-
-  const onInit = Fn<ParticleComputeArgs, void>(([_buffer]) => {
-    const rand = hash(instanceIndex.add(12345));
-
-    const type = secondaryBuffer.element(instanceIndex);
-    const isSpark = step(fireParticlesPersentage, rand);
-    type.assign(isSpark);
-  });
-
-  const onUpdate = Fn<ParticleComputeArgs, void>(([_buffer]) => {
-    const data = _buffer.element(instanceIndex);
-    const isSpark = secondaryBuffer.element(instanceIndex);
-
-    const randSeed = hash(instanceIndex);
-    const s = mix(speed, speed * 0.5, isSpark);
-
+    const randomSeed = hash(instanceIndex);
+    const particleSpeed = mix(speed, speed.mul(0.5), isSpark);
     const lifetime = mix(fireLifetime, sparkLifetime, isSpark);
 
-    const t = gameTime.mul(s).add(randSeed.mul(lifetime)).mod(lifetime);
-    const progress = t.div(lifetime);
-    const verticalEase = float(1.0).sub(float(1.0).sub(progress).pow(2));
+    const age = gameTime
+      .mul(particleSpeed)
+      .add(randomSeed.mul(lifetime))
+      .mod(lifetime);
+    const progress = age.div(lifetime);
+    const verticalEase = float(1).sub(float(1).sub(progress).pow(2));
     const effectiveHeight = mix(fireHeight, sparkHeight, isSpark);
     const y = verticalEase.mul(effectiveHeight);
 
-    const randAngle = hash(instanceIndex.add(7890)).mul(PI2);
-    const randRadiusRaw = hash(instanceIndex.add(5678));
-
-    const randRadius = float(1).sub(float(1).sub(randRadiusRaw).pow(2));
+    const randomAngle = hash(instanceIndex.add(7890)).mul(PI2);
+    const randomRadius = float(1).sub(
+      float(1)
+        .sub(hash(instanceIndex.add(5678)))
+        .pow(2),
+    );
 
     const coneFalloff = float(1).sub(verticalEase.mul(coneFactor));
-    const squishFactor = smoothstep(0.0, 0.35, verticalEase);
-    const breathing = sin(gameTime.mul(0.5)).mul(0.05).add(1.0);
-    const effectiveRadius = mix(radius * 0.25, radius, squishFactor)
+    const squish = smoothstep(0, 0.35, verticalEase);
+    const breathing = sin(gameTime.mul(0.5)).mul(0.05).add(1);
+    const effectiveRadius = mix(radius.mul(0.25), radius, squish)
       .mul(coneFalloff)
       .mul(breathing);
 
-    const particleRadius = randRadius.mul(effectiveRadius);
-    const randSign = step(0.5, randAngle).mul(2).sub(1);
-    const swirlStrength = 0.05;
-    const swirlAngle = randAngle.add(
-      progress.mul(PI2).mul(swirlStrength).mul(randSign),
+    const particleRadius = randomRadius.mul(effectiveRadius);
+    const swirlSign = step(0.5, randomAngle).mul(2).sub(1);
+    const swirlAngle = randomAngle.add(
+      progress.mul(PI2).mul(0.05).mul(swirlSign),
     );
 
-    const expansionFactor = mix(1, 1.25, isSpark);
-    const wiggle = randSeed.sub(0.5).mul(0.05).mul(progress);
-
-    const sparkExpansionProgress = smoothstep(0, 0.75, progress).mul(isSpark);
-    const dynamicRadius = particleRadius.add(
-      sparkExpansionProgress.mul(expansionFactor),
-    );
+    const expansion = mix(1, 1.25, isSpark);
+    const wiggle = randomSeed.sub(0.5).mul(0.05).mul(progress);
+    const sparkExpansion = smoothstep(0, 0.75, progress).mul(isSpark);
+    const dynamicRadius = particleRadius.add(sparkExpansion.mul(expansion));
 
     const x = cos(swirlAngle.add(wiggle)).mul(dynamicRadius);
     const z = sin(swirlAngle.add(wiggle)).mul(dynamicRadius);
 
-    const fadeY = y.div(effectiveHeight);
+    const heightProgress = y.div(effectiveHeight);
+    const fadeIn = smoothstep(0, 0.5, heightProgress);
+    const fadeOut = float(1).sub(smoothstep(0.5, 1, heightProgress));
 
-    const fadeIn = smoothstep(0, 0.5, fadeY);
-    const fadeOut = float(1).sub(smoothstep(0.5, 1, fadeY));
-    const alpha = fadeIn.mul(fadeOut);
+    particle.assign(vec4(x, y, z, fadeIn.mul(fadeOut)));
+  },
+);
 
-    data.assign(vec4(x, y, z, alpha));
-  });
+export class CampfireParticles extends InstancedMesh {
+  // x, y, z -> position, w -> alpha
+  private particles: ParticleBuffer;
+  private sparkFlags: SparkFlagBuffer;
+  private computeUpdate: ComputeNode;
+  private isOnScreen = false;
 
-  const material = new SpriteNodeMaterial();
-  material.transparent = true;
-  material.depthWrite = false;
-  material.blending = CustomBlending;
-  material.blendEquation = AddEquation;
-  material.blendSrc = OneFactor;
-  material.blendDst = OneMinusSrcAlphaFactor;
+  constructor(options: CampfireParticlesOptions) {
+    const {
+      count,
+      workGroupSize = 1,
+      speed = 0.5,
+      radius = 1,
+      height = 1,
+      lifetime = 1,
+      coneFactor = 1,
+    } = options;
+    super(new PlaneGeometry(), undefined, count);
 
-  const data = mainBuffer.element(instanceIndex);
-  const isSpark = secondaryBuffer.element(instanceIndex);
-  const rand1 = hash(instanceIndex.add(9234));
-  const rand2 = hash(instanceIndex.add(33.87));
+    this.particles = createParticleBuffer(count);
+    this.sparkFlags = createSparkFlagBuffer(count);
+    this.material = this.createMaterial(options);
 
-  // Position
-  material.positionNode = data.xyz;
+    const computeInit = initSparkFlags(this.sparkFlags).compute(count, [
+      workGroupSize,
+    ]);
+    this.computeUpdate = updateParticles(
+      this.particles,
+      this.sparkFlags,
+      float(speed),
+      float(radius),
+      float(height),
+      float(lifetime),
+      float(coneFactor),
+    ).compute(count, [workGroupSize]);
+    this.computeUpdate.name = "Campfire particles";
+    this.computeUpdate.onInit(({ renderer }) => {
+      renderer.computeAsync(computeInit);
+    });
 
-  // Size
-  const sparkScale = float(1).sub(isSpark.mul(0.85));
-  const baseScale = rand2.clamp(0.25, 1);
-  material.scaleNode = baseScale.mul(data.w).mul(sparkScale).mul(scale);
+    eventBus.on("engine-render-update-throttle-64x", this.onVisibilityCheck);
+    eventBus.on("engine-render-update-throttle-2x", this.onComputeUpdate);
+  }
 
-  // Color
-  const u = step(0.5, rand1).mul(0.5);
-  const v = step(0.5, rand2).mul(0.5);
-
-  const baseUv = uv().mul(0.5);
-  const fireUv = baseUv.add(vec2(u, v));
-  const sample = texture(assets.resources.fireSprites, fireUv, detail);
-
-  const baseDiffuse = vec3(0.72, 0.62, 0.08).mul(2).toConst(); // gold
-  const midDiffuse = vec3(1, 0.1, 0).mul(4).toConst(); // darker red
-  const tipDiffuse = vec3(0).toConst(); // black
-
-  const effectiveHeight = mix(fireHeight, sparkHeight, isSpark);
-  const yFactor = smoothstep(0, 1, positionLocal.y.div(effectiveHeight)).pow(2);
-  const factor1 = smoothstep(0, 0.25, yFactor);
-  const mix1 = mix(baseDiffuse, midDiffuse, factor1);
-  const factor2 = smoothstep(0.9, 1, yFactor);
-  const fireColor = mix(mix1, tipDiffuse, factor2);
-  // 0 -> additive, 1 -> normal
-  const blendFactor2 = float(1).sub(smoothstep(0, 0.85, yFactor));
-  const blendFactor1 = step(0.65, rand2);
-  const blendFactor = blendFactor1.mul(blendFactor2);
-  const alphaScale = float(0.5).toConst();
-  const alphaBlend = sample.r.mul(blendFactor).mul(alphaScale);
-  material.colorNode = mix(fireColor, midDiffuse, isSpark)
-    .mul(alphaBlend)
-    .mul(bloom); // a bit of bloom
-  material.alphaTest = 0.1;
-
-  // Opacity
-  material.opacityNode = data.w.mul(sample.r).mul(alphaScale);
-
-  return {
-    material,
-    onInit,
-    onUpdate,
+  private onVisibilityCheck = () => {
+    this.isOnScreen = frustumCulling.isMeshVisible(this);
   };
-};
+
+  private onComputeUpdate = () => {
+    if (!this.isOnScreen) return;
+    graphics.renderer.compute(this.computeUpdate);
+  };
+
+  private createMaterial(options: CampfireParticlesOptions) {
+    const { height = 1, scale = 1, detail, bloom = 1 } = options;
+    const material = new SpriteNodeMaterial();
+    material.transparent = true;
+    material.depthWrite = false;
+    material.blending = CustomBlending;
+    material.blendEquation = AddEquation;
+    material.blendSrc = OneFactor;
+    material.blendDst = OneMinusSrcAlphaFactor;
+
+    const particle = this.particles.element(instanceIndex);
+    const isSpark = this.sparkFlags.element(instanceIndex);
+    const firstRandom = hash(instanceIndex.add(9234));
+    const secondRandom = hash(instanceIndex.add(33.87));
+
+    material.positionNode = particle.xyz;
+
+    const sparkScale = float(1).sub(isSpark.mul(0.85));
+    const baseScale = secondRandom.clamp(0.25, 1);
+    material.scaleNode = baseScale.mul(particle.w).mul(sparkScale).mul(scale);
+
+    const spriteCorner = vec2(
+      step(0.5, firstRandom).mul(0.5),
+      step(0.5, secondRandom).mul(0.5),
+    );
+    const sprite = texture(
+      assets.resources.fireSprites,
+      uv().mul(0.5).add(spriteCorner),
+      detail,
+    );
+
+    const gold = vec3(0.72, 0.62, 0.08).mul(2).toConst();
+    const deepRed = vec3(1, 0.1, 0).mul(4).toConst();
+    const black = vec3(0).toConst();
+
+    const effectiveHeight = mix(height, height * 2, isSpark);
+    const heightFactor = smoothstep(
+      0,
+      1,
+      positionLocal.y.div(effectiveHeight),
+    ).pow(2);
+    const lowerColor = mix(gold, deepRed, smoothstep(0, 0.25, heightFactor));
+    const fireColor = mix(lowerColor, black, smoothstep(0.9, 1, heightFactor));
+    // 0 -> additive, 1 -> normal
+    const blendFactor = step(0.65, secondRandom).mul(
+      float(1).sub(smoothstep(0, 0.85, heightFactor)),
+    );
+    const alphaScale = float(0.5).toConst();
+    const alphaBlend = sprite.r.mul(blendFactor).mul(alphaScale);
+    material.colorNode = mix(fireColor, deepRed, isSpark)
+      .mul(alphaBlend)
+      .mul(bloom);
+    material.alphaTest = 0.1;
+    material.opacityNode = particle.w.mul(sprite.r).mul(alphaScale);
+
+    return material;
+  }
+}

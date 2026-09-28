@@ -30,14 +30,12 @@ export class GokuStatue {
   private shadowSettings = { depthBias: 0.2 };
 
   constructor() {
-    // Visual
     const gokuStatue = assets.getMesh("goku_statue");
     this.gokuStatue = gokuStatue;
     gokuStatue.material = new GokuStatueMaterial();
     stage.mainScene.add(gokuStatue);
     graphics.vsmPass.registerCaster(gokuStatue, this.shadowSettings);
 
-    // Physics
     const collider = assets.getMesh("goku_statue_collider");
     const hx = 0.5 * collider.scale.x;
     const hy = 0.5 * collider.scale.y;
