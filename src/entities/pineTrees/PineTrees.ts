@@ -66,7 +66,6 @@ class PineTreeBarkMaterial extends VSMReceiverLambertMaterial {
 
 export class PineTrees {
   constructor() {
-    // Visual
     const pineTreeCanopy = assets.getMesh("pine_tree_canopy");
     const pineTreeBark = assets.getMesh("pine_tree_bark");
 
@@ -95,7 +94,6 @@ export class PineTrees {
     const baseHalfHeight = boundingBox.max.y / 2;
 
     for (const colliderCylinder of colliders) {
-      // Physics
       const radius = baseRadius * colliderCylinder.scale.x;
       const halfHeight = baseHalfHeight * colliderCylinder.scale.y;
       const colliderDesc = ColliderDesc.capsule(halfHeight, radius)
@@ -121,7 +119,8 @@ export class PineTrees {
     material: PineTreeBarkMaterial | PineTreeCanopyMaterial,
   ) {
     const vertexCount = geometry.getAttribute("position").count;
-    const indexCount = geometry.index?.count ?? vertexCount * 2;
+    let indexCount = vertexCount * 2;
+    if (geometry.index) indexCount = geometry.index.count;
     const batch = new BatchedMesh(
       colliders.length,
       vertexCount,

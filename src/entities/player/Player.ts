@@ -110,8 +110,8 @@ export class Player {
   }
 
   private createColliderDesc() {
-    // Average combine keeps bounces controlled: wood/rock pairs land in the
-    // 0.3-0.45 range instead of inheriting the highest coefficient
+    // average combine keeps bounces controlled: wood and rock pairs land in
+    // the 0.3 to 0.45 range instead of inheriting the highest coefficient
     return ColliderDesc.ball(config.RADIUS_IN_METERS)
       .setRestitution(config.RESTITUTION)
       .setRestitutionCombineRule(CoefficientCombineRule.Average)
@@ -214,9 +214,9 @@ export class Player {
     this.rigidBody.linvel(linearVelocity);
     const initialVelocityY = linearVelocity.y;
 
-    this.handleJumpCut(isJumpKeyPressed, linearVelocity);
+    this.applyJumpCut(isJumpKeyPressed, linearVelocity);
     if (!this.isOnGround) {
-      this.handleFastFall(delta, linearVelocity, physicsWorld.world.gravity.y);
+      this.applyFastFall(delta, linearVelocity, physicsWorld.world.gravity.y);
     }
 
     const isSlowBounce =
@@ -231,7 +231,7 @@ export class Player {
   }
 
   private checkIfGrounded(): boolean {
-    // Cast from just above the sphere's bottom for stable grounding.
+    // cast from just above the bottom of the sphere for stable grounding
     this.rigidBody.translation(this.rayOrigin);
     this.rayOrigin.y -=
       config.RADIUS_IN_METERS - config.GROUND_RAY_START_ABOVE_BOTTOM_IN_METERS;
@@ -271,13 +271,13 @@ export class Player {
     this.isOnGround = false;
   }
 
-  private handleJumpCut(isJumpKeyPressed: boolean, velocity: Vector) {
+  private applyJumpCut(isJumpKeyPressed: boolean, velocity: Vector) {
     const justReleasedJump = !isJumpKeyPressed && this.wasJumpHeld;
     if (!justReleasedJump || velocity.y <= 0) return;
     velocity.y *= config.JUMP_CUT_MULTIPLIER;
   }
 
-  private handleFastFall(delta: number, velocity: Vector, gravityY: number) {
+  private applyFastFall(delta: number, velocity: Vector, gravityY: number) {
     if (velocity.y >= 0) return;
     velocity.y -= config.FALL_MULTIPLIER * Math.abs(gravityY) * delta;
   }
@@ -328,9 +328,9 @@ export class Player {
 
     // spin follows actual motion (omega = up x v / r) instead of being its
     // own motor, so excess spin can never grip the ball up trees or walls;
-    // airborne spin stays natural. While braking, spin follows the input
-    // direction instead — backward spin while still sliding forward (drift);
-    // magnitude stays tied to the current speed, so no wall traction
+    // airborne spin stays natural. while braking, spin follows the input
+    // direction instead, so it spins backward while still sliding forward
+    // (drift); magnitude stays tied to the current speed, so no wall traction
     const alongForward =
       this.newLinVel.x * this.forwardVec.x +
       this.newLinVel.z * this.forwardVec.z;
