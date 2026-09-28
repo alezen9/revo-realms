@@ -76,7 +76,6 @@ export class GrassMaterial extends SpriteNodeMaterial {
       bladeOffsetZ.add(uniforms.uPlayerPosition.z),
     );
 
-    // WIDTH
     const widthDistanceFactor = smoothstep(
       uniforms.uWidthNearRadiusSquared,
       uniforms.uWidthFarRadiusSquared,
@@ -95,7 +94,6 @@ export class GrassMaterial extends SpriteNodeMaterial {
 
     this.scaleNode = vec3(bladeWidthScale, scaleY, 1);
 
-    // ROTATION
     const randomBendOffset = bladeHash.mul(0.25).sub(0.125);
 
     const spriteRotationNoise = bladeHash.mul(31.7).fract().mul(2).sub(1);
@@ -114,7 +112,6 @@ export class GrassMaterial extends SpriteNodeMaterial {
 
     this.rotationNode = spriteRotation.add(baseBending);
 
-    // POSITION / BEND
     const bendLengthSquared = bendXZ.dot(bendXZ);
 
     const bendDrop = bendLengthSquared
@@ -135,7 +132,6 @@ export class GrassMaterial extends SpriteNodeMaterial {
       bendOffset,
     );
 
-    // NEAR DETAIL / AO
     const nearDetailMask = float(1).sub(
       smoothstep(0, uniforms.uAoRadiusSquared, playerDistanceSquared),
     );
@@ -144,10 +140,8 @@ export class GrassMaterial extends SpriteNodeMaterial {
       .mul(0.25)
       .mul(nearDetailMask);
 
-    // COLOR
     const variedColor = getGrassColor(positionNoise);
 
-    // LIGHTING
     const viewOffset = cameraPosition.sub(worldPosition);
     const viewDirection = viewOffset.normalize();
     const viewDirectionXZ = viewOffset.xz.normalize();
@@ -163,7 +157,6 @@ export class GrassMaterial extends SpriteNodeMaterial {
       viewDirectionXZ,
     });
 
-    // PACK VARYINGS
     const bladeSurface = varying(
       vec4(variedColor, scaleY.div(uniforms.uBladeMaxScale).clamp()),
     );
@@ -188,7 +181,6 @@ export class GrassMaterial extends SpriteNodeMaterial {
     const nearDetailOcclusion = viewLightingDetail.z;
     const bladeSkyFacing = viewLightingDetail.w;
 
-    // FRAGMENT DETAIL
     const bladeEdgeDistance = bladeUv.x.mul(2).sub(1).abs();
 
     const edgeOcclusionMask = smoothstep(
@@ -224,7 +216,6 @@ export class GrassMaterial extends SpriteNodeMaterial {
       softShadow: vec4(bladeSurface.a),
     });
 
-    // LOD DEBUG
     const lodIndex = instanceIndex.div(config.BLADE_COUNT);
 
     const lodDebugColor = uniforms.uLodDebugColors.element(lodIndex);

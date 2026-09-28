@@ -9,57 +9,52 @@ const getDrawProfile = (segments: number) => ({
   indexCount: getBladeIndexCount(segments),
 });
 
-const getConfig = () => {
-  const BLADE_WIDTH = 0.065;
-  const BLADE_HEIGHT = 1.75;
-  const TILE_SIZE = 130;
-  // near to far, one indirect draw per entry
-  const LOD_DRAW_PROFILES = [6, 4, 2].map(getDrawProfile);
-  const BLADES_PER_CLUMP = 8;
-  const CLUMPS_PER_SIDE = 8 * 50; // multiple of BLADES_PER_CLUMP
-  const CLUMP_COUNT = CLUMPS_PER_SIDE * CLUMPS_PER_SIDE;
-  const BLADE_COUNT = CLUMP_COUNT * BLADES_PER_CLUMP;
-  const CLUMP_SPACING = TILE_SIZE / CLUMPS_PER_SIDE;
-  const CLUMP_LOCAL_RADIUS = CLUMP_SPACING * 0.6;
-  const MIN_VISIBLE_SCALE = 0.15;
-  const DETAILED_WIND_TRANSITION_WIDTH = 5;
+const BLADE_WIDTH = 0.065;
+const BLADE_HEIGHT = 1.75;
+const TILE_SIZE = 130;
+// near to far, one indirect draw per entry
+const LOD_DRAW_PROFILES = [6, 4, 2].map(getDrawProfile);
+const BLADES_PER_CLUMP = 8;
+const CLUMPS_PER_SIDE = 8 * 50; // multiple of BLADES_PER_CLUMP
+const CLUMP_COUNT = CLUMPS_PER_SIDE * CLUMPS_PER_SIDE;
+const BLADE_COUNT = CLUMP_COUNT * BLADES_PER_CLUMP;
+const CLUMP_SPACING = TILE_SIZE / CLUMPS_PER_SIDE;
+const CLUMP_LOCAL_RADIUS = CLUMP_SPACING * 0.6;
+const MIN_VISIBLE_SCALE = 0.15;
+const DETAILED_WIND_TRANSITION_WIDTH = 5;
 
-  return {
-    LOD_DRAW_PROFILES,
-    LOD_COUNT: LOD_DRAW_PROFILES.length,
-    // indexCount, instanceCount, firstIndex, baseVertex, firstInstance
-    INDIRECT_ARGS_STRIDE: 5,
-    INDEX_COUNT_INDEX: 0,
-    INSTANCE_COUNT_INDEX: 1,
-    FIRST_INSTANCE_INDEX: 4,
-    BLADE_WIDTH,
-    BLADE_HEIGHT,
-    BLADE_BOUNDING_SPHERE_RADIUS: BLADE_HEIGHT,
-    TILE_SIZE,
-    TILE_HALF_SIZE: TILE_SIZE / 2,
-    BLADES_PER_CLUMP,
-    CLUMPS_PER_SIDE,
-    CLUMP_COUNT,
-    BLADE_COUNT,
-    CLUMP_SPACING,
-    CLUMP_LOCAL_RADIUS,
-    WORKGROUP_SIZE: 64,
-    MIN_VISIBLE_SCALE,
-    DETAILED_WIND_TRANSITION_WIDTH,
-  };
+export const config = {
+  LOD_DRAW_PROFILES,
+  LOD_COUNT: LOD_DRAW_PROFILES.length,
+  // indexCount, instanceCount, firstIndex, baseVertex, firstInstance
+  INDIRECT_ARGS_STRIDE: 5,
+  INDEX_COUNT_INDEX: 0,
+  INSTANCE_COUNT_INDEX: 1,
+  FIRST_INSTANCE_INDEX: 4,
+  BLADE_WIDTH,
+  BLADE_HEIGHT,
+  BLADE_BOUNDING_SPHERE_RADIUS: BLADE_HEIGHT,
+  TILE_SIZE,
+  TILE_HALF_SIZE: TILE_SIZE / 2,
+  BLADES_PER_CLUMP,
+  CLUMPS_PER_SIDE,
+  CLUMP_COUNT,
+  BLADE_COUNT,
+  CLUMP_SPACING,
+  CLUMP_LOCAL_RADIUS,
+  WORKGROUP_SIZE: 64,
+  MIN_VISIBLE_SCALE,
+  DETAILED_WIND_TRANSITION_WIDTH,
 };
 
-export const config = getConfig();
 export type GrassConfig = typeof config;
 
 export const uniforms = {
-  // Culling
   uCullPadNDCX: uniform(0.075),
   uCullPadNDCYNear: uniform(0.75),
   uCullPadNDCYFar: uniform(0.2),
   uClumpBoundMultiplier: uniform(1),
 
-  // LOD
   uLod0Radius: uniform(15),
   uLod0RadiusSquared: uniform(15 * 15),
   uLod1Radius: uniform(35),
@@ -70,11 +65,9 @@ export const uniforms = {
     "color" as const,
   ),
 
-  // Player
   uPlayerPosition: uniform(new Vector3(0, 0, 0)),
   uPlayerDeltaXZ: uniform(new Vector2(0, 0)),
 
-  // Width
   uBladeWidth: uniform(config.BLADE_WIDTH),
   uWidthFarGain: uniform(4),
   uWidthNearRadius: uniform(15),
@@ -82,11 +75,9 @@ export const uniforms = {
   uWidthFarRadius: uniform(45),
   uWidthFarRadiusSquared: uniform(45 * 45),
 
-  // Scale
   uBladeMinScale: uniform(0.33),
   uBladeMaxScale: uniform(2.65),
 
-  // Trail
   uTrailGrowthRate: uniform(5),
   uTrailMinScale: uniform(0.15),
   uTrailRadius: uniform(0.65),
@@ -94,7 +85,6 @@ export const uniforms = {
   uTrailBendStrength: uniform(0.8),
   uKDown: uniform(50),
 
-  // Wind
   uWindStrength: uniform(0.32),
   uWindSpeed: uniform(0.18),
   uWindUvScale: uniform(1.35),
@@ -113,7 +103,6 @@ export const uniforms = {
   uBendDropStrength: uniform(1.3),
   uBendControlPoint: uniform(0.4),
 
-  // Color
   uBaseColorDark: uniform(new Color(0.12, 0.15, 0.07).convertSRGBToLinear()),
   uBaseColor: uniform(new Color(0.2, 0.38, 0.19).convertSRGBToLinear()),
   uTipColor: uniform(new Color(0.46, 0.49, 0.37).convertSRGBToLinear()),
@@ -124,13 +113,11 @@ export const uniforms = {
   uWarmVariationStrength: uniform(0.48),
   uRustVariationStrength: uniform(0.21),
 
-  // AO
   uAoScale: uniform(0.5),
   uAoRimSmoothness: uniform(5),
   uAoRadius: uniform(15),
   uAoRadiusSquared: uniform(15 * 15),
 
-  // lighting
   uDiffuseContrast: uniform(0.5),
   uLightExposure: uniform(1.15),
   uHighlightStrength: uniform(0.02),
@@ -138,7 +125,6 @@ export const uniforms = {
   uTuftRoundness: uniform(0.6),
   uWidthRoundness: uniform(0.8),
 
-  // Stochastic keep
   uFullDensityRadius: uniform(18),
   uFullDensityRadiusSquared: uniform(18 * 18),
   uDensityFalloffRadius: uniform(72),
@@ -148,7 +134,6 @@ export const uniforms = {
   uProjectedHeightFull: uniform(0.04),
   uStochasticHysteresis: uniform(0.11),
 
-  // Rotation
   uBaseBending: uniform(2.5),
   uSpriteRotationRandomness: uniform(0.05),
 };
