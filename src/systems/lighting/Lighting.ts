@@ -34,6 +34,7 @@ export class Lighting {
   private fog: FogExp2;
   private eventBus: EventBus;
   private assets: Assets;
+  private stage: Stage;
 
   sunDirection = config.LIGHT_POSITION_OFFSET.clone().normalize().negate();
   sunDirectionXZ = new Vector2(
@@ -59,28 +60,39 @@ export class Lighting {
   ) {
     this.assets = assets;
     this.eventBus = eventBus;
+    this.stage = stage;
     this.directionalLight = this.setupDirectionalLighting();
     stage.mainScene.add(this.directionalLight);
 
     this.hemisphereLight = this.setupHemisphereLight();
     stage.mainScene.add(this.hemisphereLight);
 
-    this.fog = this.setupFog();
-    this.syncFog(stage);
+    this.fog = new FogExp2(config.fogColor, config.fogDensity);
+    this.syncFog();
 
-    eventBus.on("engine-camera-change", () => this.syncFog(stage));
+    eventBus.on("engine-camera-change", this.syncFog);
 
-    this.debugLight(debugPanel, stage);
+    this.debugLight(debugPanel);
   }
 
   get sunColor() {
     return this.uSunColor.value;
   }
 
-  private syncFog(stage: Stage) {
+  private syncFog = () => {
+    const { stage } = this;
     const isPlayerCamera = stage.renderCamera === stage.playerCamera;
-    stage.mainScene.fog = config.fogEnabled && isPlayerCamera ? this.fog : null;
-  }
+    const isFogVisible = config.fogEnabled && isPlayerCamera;
+    stage.mainScene.fog = null;
+    if (isFogVisible) stage.mainScene.fog = this.fog;
+  };
+
+  private syncBackground = () => {
+    const { mainScene } = this.stage;
+    mainScene.background = null;
+    if (config.backgroundEnabled)
+      mainScene.background = this.assets.resources.envMapTexture;
+  };
 
   private syncSunDirection() {
     this.sunDirection.copy(config.LIGHT_POSITION_OFFSET).normalize().negate();
@@ -115,18 +127,13 @@ export class Lighting {
     return directionalLight;
   }
 
-  private setupFog() {
-    const fog = new FogExp2(config.fogColor, config.fogDensity);
-    return fog;
-  }
-
   private onEngineUpdate = ({ player }: State) => {
     this.directionalLight.position
       .copy(player.position)
       .add(config.LIGHT_POSITION_OFFSET);
   };
 
-  private debugLight(debugPanel: DebugPanel, stage: Stage) {
+  private debugLight(debugPanel: DebugPanel) {
     const lightFolder = debugPanel.panel.addFolder({
       title: "💡 Light",
       expanded: false,
@@ -181,16 +188,12 @@ export class Lighting {
       .addBinding(config, "fogEnabled", {
         label: "Fog enabled",
       })
-      .on("change", () => this.syncFog(stage));
+      .on("change", this.syncFog);
     lightFolder
       .addBinding(config, "backgroundEnabled", {
         label: "Background enabled",
       })
-      .on("change", ({ value }) => {
-        stage.mainScene.background = value
-          ? this.assets.resources.envMapTexture
-          : null;
-      });
+      .on("change", this.syncBackground);
 
     lightFolder
       .addBinding(srgbColorTarget(this.uHemiSkyColor.value), "value", {
