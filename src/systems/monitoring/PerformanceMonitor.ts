@@ -114,7 +114,7 @@ export class PerformanceMonitor {
   private physicsCatchUpSteps = 0;
   private physicsDiscardedMs = 0;
   private physicsRemainderMs = 0;
-  private device: DeviceAccumulator | null = null;
+  private device = createAccumulator();
   private lastDeviceFrameNumber = 0;
   private lastGpuFrameNumber = 0;
   private lastSceneTriangles = 0;
@@ -170,7 +170,7 @@ export class PerformanceMonitor {
 
     const { renderer } = this.graphics;
     const { backend } = renderer;
-    const device = "device" in backend ? backend.device : undefined;
+    const device = "device" in backend && backend.device;
     if (!(device instanceof GPUDevice)) {
       console.warn(
         "[agrimensor] no WebGPU device on the backend; not attached",
@@ -194,11 +194,11 @@ export class PerformanceMonitor {
   }
 
   sampleRender(renderTimestamp: DOMHighResTimeStamp) {
-    const { threeAdapter } = this;
-    if (!threeAdapter) return;
+    const { threeAdapter, agrimensor } = this;
+    if (!threeAdapter || !agrimensor) return;
 
     this.lastSceneTriangles = threeAdapter.consumePreviousFrameTriangles();
-    this.agrimensor?.beginRenderFrame();
+    agrimensor.beginRenderFrame();
     this.frameCount++;
 
     const budgetMs = 1000 / this.frameScheduler.effectiveFps;
@@ -213,18 +213,14 @@ export class PerformanceMonitor {
     }
     this.lastRenderSampleTime = renderTimestamp;
 
-    this.accumulateDevice();
+    this.accumulateDevice(agrimensor);
   }
 
-  private accumulateDevice() {
-    const agrimensor = this.agrimensor;
-    if (!agrimensor) return;
-
+  private accumulateDevice(agrimensor: Agrimensor) {
     const { frame, gpu } = agrimensor.snapshot();
     if (!frame) return;
 
-    if (!this.device) this.device = createAccumulator();
-    const device = this.device;
+    const { device } = this;
 
     if (frame.renderedFrameCount > this.lastDeviceFrameNumber) {
       this.lastDeviceFrameNumber = frame.renderedFrameCount;
@@ -336,17 +332,17 @@ export class PerformanceMonitor {
     const accumulator = this.device;
 
     let gpu: DeviceGpuMetrics | null = null;
-    if (accumulator && accumulator.gpuExecutionCount > 0) {
+    if (accumulator.gpuExecutionCount > 0) {
       const grassPass = accumulator.passDurations.get("compute:Grass");
+      let grassComputeAverageMs: number | null = null;
+      if (grassPass) grassComputeAverageMs = grassPass.sumMs / grassPass.count;
       gpu = {
         averageMs: accumulator.gpuExecutionSum / accumulator.gpuExecutionCount,
         renderAverageMs:
           accumulator.gpuRenderSum / accumulator.gpuExecutionCount,
         computeAverageMs:
           accumulator.gpuComputeSum / accumulator.gpuExecutionCount,
-        grassComputeAverageMs: grassPass
-          ? grassPass.sumMs / grassPass.count
-          : null,
+        grassComputeAverageMs,
         gapAverageMs: accumulator.gpuGapSum / accumulator.gpuExecutionCount,
         uninstrumentedPassMax: accumulator.gpuUninstrumentedPassMax,
         slowestPasses: this.buildSlowestPasses(accumulator),
@@ -354,15 +350,15 @@ export class PerformanceMonitor {
     }
 
     return {
-      drawCallCount: accumulator?.drawCallCount ?? 0,
-      renderPassCount: accumulator?.renderPassCount ?? 0,
-      computePassCount: accumulator?.computePassCount ?? 0,
-      computeDispatchCount: accumulator?.computeDispatchCount ?? 0,
-      gpuSubmissionCount: accumulator?.gpuSubmissionCount ?? 0,
-      queueWriteMaxBytes: accumulator?.queueWriteMaxBytes ?? 0,
-      commandCopyMaxBytes: accumulator?.commandCopyMaxBytes ?? 0,
-      pipelineCreationCount: accumulator?.pipelineCreationCount ?? 0,
-      pipelineBlockingMaxMs: accumulator?.pipelineBlockingMaxMs ?? 0,
+      drawCallCount: accumulator.drawCallCount,
+      renderPassCount: accumulator.renderPassCount,
+      computePassCount: accumulator.computePassCount,
+      computeDispatchCount: accumulator.computeDispatchCount,
+      gpuSubmissionCount: accumulator.gpuSubmissionCount,
+      queueWriteMaxBytes: accumulator.queueWriteMaxBytes,
+      commandCopyMaxBytes: accumulator.commandCopyMaxBytes,
+      pipelineCreationCount: accumulator.pipelineCreationCount,
+      pipelineBlockingMaxMs: accumulator.pipelineBlockingMaxMs,
       liveBytes: resources.liveResourceAllocationSumInBytes,
       peakBytes: resources.liveResourceAllocationPeakInBytes,
       textureBytes: resources.liveTextureAllocationSumInBytes,
@@ -384,6 +380,11 @@ export class PerformanceMonitor {
     const grass = this.grassStats;
     const frameIntervals = summarizeTimings(this.frameIntervals);
     const { canvas, renderer } = this.graphics;
+    let sceneTriangles = this.lastSceneTriangles;
+    if (grass)
+      sceneTriangles += grass.renderedTriangles - grass.allocatedTriangles;
+    let shadowPages: ShadowPageStats | null = null;
+    if (this.shadowPageStats) shadowPages = { ...this.shadowPageStats };
 
     const snapshot: MonitoringSnapshot = {
       fps: {
@@ -412,13 +413,9 @@ export class PerformanceMonitor {
       },
       frameBudgetMs: 1000 / effectiveFps,
       sampleRateMs: SNAPSHOT_INTERVAL_MS,
-      sceneTriangles: grass
-        ? this.lastSceneTriangles -
-          grass.allocatedTriangles +
-          grass.renderedTriangles
-        : this.lastSceneTriangles,
+      sceneTriangles,
       grass,
-      shadowPages: this.shadowPageStats ? { ...this.shadowPageStats } : null,
+      shadowPages,
       device: this.buildDeviceMetrics(),
     };
 
@@ -431,15 +428,15 @@ export class PerformanceMonitor {
     this.physicsMaxSteps = 0;
     this.physicsCatchUpSteps = 0;
     this.physicsDiscardedMs = 0;
-    this.device = null;
+    this.device = createAccumulator();
   }
 
   private dispose = () => {
     window.clearInterval(this.snapshotInterval);
-    this.threeAdapter?.dispose();
-    const agrimensor = this.agrimensor;
+    const { threeAdapter, agrimensor } = this;
+    if (threeAdapter) threeAdapter.dispose();
     // dropped first: beginRenderFrame throws on a destroyed instance
     this.agrimensor = undefined;
-    agrimensor?.destroy();
+    if (agrimensor) agrimensor.destroy();
   };
 }

@@ -16,8 +16,7 @@ const getEncoderLabel = (uid: string, prefix: string) => {
 };
 
 const getComputeLabel = (computeNodes: ComputeNode | ComputeNode[]) => {
-  const nodeList = Array.isArray(computeNodes) ? computeNodes : [computeNodes];
-  for (const node of nodeList) {
+  for (const node of [computeNodes].flat()) {
     if (node.name) return node.name;
   }
   return "Compute";
@@ -44,9 +43,8 @@ class PassLabelInspector extends InspectorBase {
   }
 
   beginCompute(uid: string, computeNodes: ComputeNode | ComputeNode[]) {
-    const encoderLabel = Array.isArray(computeNodes)
-      ? ARRAY_COMPUTE_ENCODER_LABEL
-      : getEncoderLabel(uid, "computeGroup");
+    let encoderLabel = getEncoderLabel(uid, "computeGroup");
+    if (Array.isArray(computeNodes)) encoderLabel = ARRAY_COMPUTE_ENCODER_LABEL;
     if (!encoderLabel) return;
     this.passLabels.set(encoderLabel, getComputeLabel(computeNodes));
   }
