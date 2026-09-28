@@ -11,10 +11,20 @@ export const debugExpedition33Flag = () => {
     min: 0,
     max: 2,
   });
-  folder.addBinding(uniforms.uWindForce, "value", {
-    label: "Wind force",
+  folder.addBinding(uniforms.uWindSpeed, "value", {
+    label: "Wind speed",
     min: 0,
-    max: 100,
+    max: 20,
+  });
+  folder.addBinding(uniforms.uDrag, "value", {
+    label: "Drag",
+    min: 0,
+    max: 10,
+  });
+  folder.addBinding(uniforms.uLift, "value", {
+    label: "Lift",
+    min: 0,
+    max: 10,
   });
   folder.addBinding(uniforms.uGustStrength, "value", {
     label: "Gust strength",
@@ -25,11 +35,6 @@ export const debugExpedition33Flag = () => {
     label: "Gust speed",
     min: 0,
     max: 1,
-  });
-  folder.addBinding(uniforms.uFlutter, "value", {
-    label: "Flutter",
-    min: 0,
-    max: 15,
   });
   folder.addBinding(uniforms.uGravity, "value", {
     label: "Gravity",

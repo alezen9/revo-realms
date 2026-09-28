@@ -9,7 +9,6 @@ import {
   instancedArray,
   invocationLocalIndex,
   mix,
-  sin,
   step,
   storageBarrier,
   texture,
@@ -123,47 +122,46 @@ const pushOutOfPlayer = Fn<[position: Node<"vec3">], Node<"vec3">>(
   },
 );
 
-const getWindAcceleration = Fn<[coordinates: Node<"vec4">], Node<"vec3">>(
-  ([coordinates]) => {
-    const widthRatio = coordinates.z;
-    const heightRatio = coordinates.w;
-    const windDirection = vec3(wind.uDirection.x, 0, wind.uDirection.y);
-    const windSideways = vec3(wind.uDirection.y.negate(), 0, wind.uDirection.x);
+// air on a small plate: drag along the relative wind, lift across it, both
+// scaled by how much the cloth faces the wind (NvCloth's applyWind model)
+const getWindAcceleration = Fn<
+  [
+    positions: ParticleBuffer,
+    index: Node<"uint">,
+    coordinates: Node<"vec4">,
+    velocity: Node<"vec3">,
+  ],
+  Node<"vec3">
+>(([positions, index, coordinates, velocity]) => {
+  const widthRatio = coordinates.z;
+  const heightRatio = coordinates.w;
+  const windDirection = vec3(wind.uDirection.x, 0, wind.uDirection.y);
 
-    const gustUv = vec2(
-      gameTime.mul(uniforms.uGustSpeed).sub(widthRatio.mul(0.3)),
-      heightRatio.mul(0.21).add(0.37),
-    );
-    const gustNoise = texture(assets.resources.noiseAtlas, gustUv).r;
-    const calmGust = float(1).sub(uniforms.uGustStrength);
-    const strongGust = float(1).add(uniforms.uGustStrength);
-    const gustFactor = mix(calmGust, strongGust, gustNoise);
-    const baseWind = uniforms.uWindStrength.add(wind.uIntensityDirectional);
-    const windPower = baseWind.mul(gustFactor).max(0);
+  const gustUv = vec2(
+    gameTime.mul(uniforms.uGustSpeed).sub(widthRatio.mul(0.3)),
+    heightRatio.mul(0.21).add(0.37),
+  );
+  const gustNoise = texture(assets.resources.noiseAtlas, gustUv).r;
+  const calmGust = float(1).sub(uniforms.uGustStrength);
+  const strongGust = float(1).add(uniforms.uGustStrength);
+  const gustFactor = mix(calmGust, strongGust, gustNoise);
+  const baseWind = uniforms.uWindStrength.add(wind.uIntensityDirectional);
+  const windSpeed = baseWind.mul(gustFactor).mul(uniforms.uWindSpeed).max(0);
 
-    const flutterPhase = gameTime
-      .mul(3.5)
-      .add(widthRatio.mul(9))
-      .add(heightRatio.mul(3.4));
-    const wavePhase = gameTime
-      .mul(9)
-      .sub(widthRatio.mul(7))
-      .add(heightRatio.mul(1.5));
-    const eventWave = sin(wavePhase).mul(wind.uIntensityDirectional.mul(1.5));
-    const sidewaysFlutter = sin(flutterPhase).add(eventWave);
-    const verticalFlutter = sin(flutterPhase.mul(0.71).add(1.7)).mul(0.6);
-    const flutterStrength = uniforms.uFlutter.mul(windPower).mul(widthRatio);
-    const flutter = windSideways
-      .mul(sidewaysFlutter)
-      .add(vec3(0, verticalFlutter, 0))
-      .mul(flutterStrength);
+  const relativeWind = windDirection.mul(windSpeed).sub(velocity);
+  const relativeSpeed = relativeWind.length().max(1e-4);
+  const normal = getParticleNormal(positions, index);
+  const facing = normal.dot(relativeWind).div(relativeSpeed);
 
-    const push = windDirection.mul(
-      windPower.mul(windPower).mul(uniforms.uWindForce),
-    );
-    return push.add(flutter);
-  },
-);
+  const drag = relativeWind.mul(
+    facing.abs().mul(relativeSpeed).mul(uniforms.uDrag),
+  );
+  const acrossWind = normal.sub(relativeWind.mul(facing.div(relativeSpeed)));
+  const lift = acrossWind.mul(
+    facing.mul(relativeSpeed.mul(relativeSpeed)).mul(uniforms.uLift),
+  );
+  return drag.add(lift);
+});
 
 // xyz -> weighted pull toward the rest length, w -> applied weight
 const pullTowardRest = Fn<
@@ -230,7 +228,13 @@ const integrateParticle = (
   velocity.mulAssign(cappedDisplacement.div(displacement));
 
   const gravity = vec3(0, uniforms.uGravity.negate(), 0);
-  const acceleration = gravity.add(getWindAcceleration(coordinates));
+  const windAcceleration = getWindAcceleration(
+    positions,
+    index,
+    coordinates,
+    velocity.div(STEP_SECONDS),
+  );
+  const acceleration = gravity.add(windAcceleration);
   const predicted = position
     .add(velocity)
     .add(acceleration.mul(STEP_SECONDS * STEP_SECONDS));

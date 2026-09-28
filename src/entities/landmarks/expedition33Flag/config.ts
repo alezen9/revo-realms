@@ -50,10 +50,11 @@ export const uniforms = {
   uPlayerRadius: uniform(0.5),
   uCollisionPadding: uniform(0.2),
   uWindStrength: uniform(0.15),
-  uWindForce: uniform(45),
+  uWindSpeed: uniform(6),
+  uDrag: uniform(3),
+  uLift: uniform(1.5),
   uGustStrength: uniform(0.5),
   uGustSpeed: uniform(0.1),
-  uFlutter: uniform(3),
   uDiffuseScale: uniform(8),
   uEmissive: uniform(15),
 };
