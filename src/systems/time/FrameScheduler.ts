@@ -6,6 +6,35 @@ const REFRESH_RATES = [
 ] as const;
 const MIN_RENDER_FPS_OPTION = 30;
 
+const getFrameDeltas = (timestamps: number[]) => {
+  const deltas: number[] = [];
+  for (let index = 1; index < timestamps.length; index++) {
+    const delta = timestamps[index] - timestamps[index - 1];
+    const isPlausible = delta > 0 && delta <= MAX_REFRESH_SAMPLE_SECONDS;
+    if (isPlausible) deltas.push(delta);
+  }
+  return deltas;
+};
+
+const getMedian = (sortedValues: number[]) => {
+  const middle = Math.floor(sortedValues.length / 2);
+  const hasOddCount = sortedValues.length % 2 === 1;
+  if (hasOddCount) return sortedValues[middle];
+  return (sortedValues[middle - 1] + sortedValues[middle]) / 2;
+};
+
+const getNearestRefreshRate = (measuredHz: number) => {
+  let nearest: number = REFRESH_RATES[0];
+  let nearestDistance = Math.abs(measuredHz - nearest);
+  for (const rate of REFRESH_RATES) {
+    const distance = Math.abs(measuredHz - rate);
+    if (distance >= nearestDistance) continue;
+    nearest = rate;
+    nearestDistance = distance;
+  }
+  return nearest;
+};
+
 export class FrameScheduler {
   shouldRender = false;
   targetFps = DEFAULT_TARGET_FPS;
@@ -26,7 +55,8 @@ export class FrameScheduler {
       return Promise.resolve();
     }
 
-    this.initPromise ??= new Promise<void>(this.startCalibration);
+    if (!this.initPromise)
+      this.initPromise = new Promise<void>(this.startCalibration);
     return this.initPromise;
   }
 
@@ -81,39 +111,16 @@ export class FrameScheduler {
       return;
     }
 
-    const deltas: number[] = [];
-
-    for (let i = 1; i < this.calibrationTimestamps.length; i++) {
-      const delta =
-        this.calibrationTimestamps[i] - this.calibrationTimestamps[i - 1];
-      if (delta <= 0 || delta > MAX_REFRESH_SAMPLE_SECONDS) continue;
-      deltas.push(delta);
-    }
-
+    const deltas = getFrameDeltas(this.calibrationTimestamps);
     if (deltas.length > 0) {
       deltas.sort((a, b) => a - b);
-      const middle = Math.floor(deltas.length / 2);
-      const medianDelta =
-        deltas.length % 2 === 1
-          ? deltas[middle]
-          : (deltas[middle - 1] + deltas[middle]) / 2;
-      const measuredHz = 1 / medianDelta;
-      let nearest: number = REFRESH_RATES[0];
-      let nearestDistance = Math.abs(measuredHz - nearest);
-
-      for (const rate of REFRESH_RATES) {
-        const distance = Math.abs(measuredHz - rate);
-        if (distance >= nearestDistance) continue;
-        nearest = rate;
-        nearestDistance = distance;
-      }
-
-      this.refreshHz = nearest;
+      this.refreshHz = getNearestRefreshRate(1 / getMedian(deltas));
     }
 
     this.isInitialized = true;
     this.updateCadence();
-    this.resolveCalibration?.();
+    const { resolveCalibration } = this;
+    if (resolveCalibration) resolveCalibration();
     this.resolveCalibration = undefined;
     this.initPromise = undefined;
   };

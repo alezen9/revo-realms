@@ -92,7 +92,8 @@ export class GameClock {
   private computeTimeScale() {
     const { isPaused, isSlowMotion, slowMotionScale } = this.state;
     if (isPaused) return 0;
-    return isSlowMotion ? slowMotionScale : 1;
+    if (isSlowMotion) return slowMotionScale;
+    return 1;
   }
 
   private updateState(update: Partial<TimeState>) {
