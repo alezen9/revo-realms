@@ -6,6 +6,7 @@ import {
   performanceMonitor,
   physicsWorld,
   graphics,
+  lighting,
 } from ".";
 
 export const setupAsync = async () => {
@@ -15,7 +16,7 @@ export const setupAsync = async () => {
   await performanceMonitor.initAsync();
   eventBus.emit("engine-loading-core-progress", 25);
   await Promise.all([physicsWorld.initAsync(), assets.initAsync(graphics)]);
-  graphics.initFramePipeline();
+  graphics.initFramePipeline({ lighting, assets, performanceMonitor });
   eventBus.emit("engine-loading-core-progress", 75);
   sound
     .initAsync()

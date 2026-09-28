@@ -19,7 +19,9 @@ import {
 } from "three/tsl";
 import type { DebugFolder } from "../debug/DebugPanel";
 import type { ScenePass } from "../rendering/passes/ScenePass";
-import { assets, lighting, performanceMonitor } from "..";
+import type { Assets } from "../assets/Assets";
+import type { Lighting } from "../lighting/Lighting";
+import type { PerformanceMonitor } from "../monitoring/PerformanceMonitor";
 import {
   VSM_POOL_CAPACITY,
   VSMContext,
@@ -43,10 +45,18 @@ import {
 import { VSMPages } from "./VSMPages";
 import { VSMSampler } from "./VSMSampler";
 
+export type VSMDependencies = {
+  lighting: Lighting;
+  assets: Assets;
+  performanceMonitor: PerformanceMonitor;
+};
+
 export class VSMPass {
   private renderer: WebGPURenderer;
   private scene: ScenePass;
   private camera: Camera;
+  private lighting: Lighting;
+  private assets: Assets;
   private context: VSMContext;
   private pages: VSMPages;
   private staticCache: VSMDepthPool;
@@ -57,10 +67,18 @@ export class VSMPass {
   private terrainBounds = { min: 0, max: 0 };
   private computeNodes: ComputeNode[] = [];
 
-  constructor(renderer: WebGPURenderer, scene: ScenePass, camera: Camera) {
+  constructor(
+    renderer: WebGPURenderer,
+    scene: ScenePass,
+    camera: Camera,
+    dependencies: VSMDependencies,
+  ) {
+    const { lighting, assets, performanceMonitor } = dependencies;
     this.renderer = renderer;
     this.scene = scene;
     this.camera = camera;
+    this.lighting = lighting;
+    this.assets = assets;
     this.context = new VSMContext(renderer, lighting.uSunDir);
     this.context.setCamera(camera);
     this.pages = new VSMPages(
@@ -107,8 +125,8 @@ export class VSMPass {
   }
 
   render() {
-    this.context.beginFrame(this.camera, lighting.sunDirection);
-    const { min, max } = assets.resources.heightmap.userData;
+    this.context.beginFrame(this.camera, this.lighting.sunDirection);
+    const { min, max } = this.assets.resources.heightmap.userData;
     if (typeof min !== "number" || typeof max !== "number")
       throw new Error("Shadows require terrain height bounds");
     const { terrainBounds, computeNodes } = this;

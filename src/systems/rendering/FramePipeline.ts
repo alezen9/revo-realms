@@ -4,7 +4,7 @@ import type { renderOutput } from "three/tsl";
 import type { DebugFolder, DebugPanel } from "../debug/DebugPanel";
 import type { EventBus } from "../events/EventBus";
 import type { Stage } from "../scene/Stage";
-import { VSMPass } from "../vsm/VSMPass";
+import { VSMPass, type VSMDependencies } from "../vsm/VSMPass";
 import { DualKawaseBloomPass } from "./passes/DualKawaseBloomPass";
 import { PostChain } from "./PostChain";
 import { ScenePass } from "./passes/ScenePass";
@@ -43,6 +43,7 @@ export class FramePipeline extends RenderPipeline {
     stage: Stage,
     eventBus: EventBus,
     debugPanel: DebugPanel,
+    vsmDependencies: VSMDependencies,
   ) {
     super(renderer);
     renderer.toneMappingExposure = 2;
@@ -58,7 +59,12 @@ export class FramePipeline extends RenderPipeline {
 
     const camera = this.stage.renderCamera;
     this.scenePass = new ScenePass(renderer, stage.mainScene, camera);
-    this.vsmPass = new VSMPass(renderer, this.scenePass, camera);
+    this.vsmPass = new VSMPass(
+      renderer,
+      this.scenePass,
+      camera,
+      vsmDependencies,
+    );
     this.waterPass = new WaterPass(renderer, stage.waterScene, camera);
     this.hdrPass = new TexturePass(renderer, "Scene HDR");
     this.dualKawaseBloomPass = new DualKawaseBloomPass(renderer, BLOOM_OPTIONS);

@@ -1,5 +1,6 @@
 import { type ComputeNode, type Node, WebGPURenderer } from "three/webgpu";
 import { FramePipeline } from "./FramePipeline";
+import type { VSMDependencies } from "../vsm/VSMPass";
 import { type DebugPanel } from "../debug/DebugPanel";
 import { type EventBus } from "../events/EventBus";
 import type { Stage } from "../scene/Stage";
@@ -65,12 +66,13 @@ export class Graphics {
     this.stage.init(this.canvas, this.debugPanel);
   }
 
-  initFramePipeline() {
+  initFramePipeline(vsmDependencies: VSMDependencies) {
     this.framePipeline = new FramePipeline(
       this.renderer,
       this.stage,
       this.eventBus,
       this.debugPanel,
+      vsmDependencies,
     );
   }
 
