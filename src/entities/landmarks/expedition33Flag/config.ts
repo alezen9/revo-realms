@@ -35,24 +35,20 @@ const getConfig = () => {
 export const config = getConfig();
 
 export const uniforms = {
-  // simulation
   uDelta: uniform(0),
   uStiffness: uniform(1),
   uDamping: uniform(2),
   uGravity: uniform(8),
   uThickness: uniform(0.2),
   uStaffAxis: uniform(new Vector3(0, 1, 0)),
-  // player
   uPlayerLocalPosition: uniform(new Vector3(0, -100, 0)),
   uPlayerRadius: uniform(0.5),
   uCollisionPadding: uniform(0.2),
-  // wind
   uWindStrength: uniform(0.15),
   uWindForce: uniform(45),
   uGustStrength: uniform(0.5),
   uGustSpeed: uniform(0.1),
   uFlutter: uniform(3),
-  // material
   uDiffuseScale: uniform(2),
   uEmissive: uniform(15),
 };

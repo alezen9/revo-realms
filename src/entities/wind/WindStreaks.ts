@@ -85,7 +85,7 @@ const getFieldCenter = Fn(() =>
 );
 
 // the curve is a pure function of arc length, so evaluating it further back
-// gives exactly where the head was — that is what makes the body follow it
+// gives exactly where the head was, which is what makes the body follow it
 const getCurveXZ = Fn<
   [origin: Node<"vec2">, arc: Node<"float">, seed: Node<"float">],
   Node<"vec2">

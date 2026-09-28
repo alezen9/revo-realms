@@ -8,47 +8,34 @@ import {
   type MinificationTextureFilter,
 } from "three";
 import { type GLTF } from "three/addons/loaders/GLTFLoader.js";
-// Model
-import worldModelUrl from "/models/sekai.glb?url"; // new
-// Environment
+import worldModelUrl from "/models/sekai.glb?url";
 import pxUrl from "/textures/environment/px.webp?url";
 import nxUrl from "/textures/environment/nx.webp?url";
 import pyUrl from "/textures/environment/py.webp?url";
 import nyUrl from "/textures/environment/ny.webp?url";
 import pzUrl from "/textures/environment/pz.webp?url";
 import nzUrl from "/textures/environment/nz.webp?url";
-// Terrain
 import terrainMapsUrl from "/textures/new-world/terrain/terrain-maps.ktx2?url"; // R shadow, G grass, B water
 import waterMaskUrl from "/textures/new-world/terrain/water-mask.bin?url"; // used CPU side
 import terrainNormAoUrl from "/textures/new-world/terrain/groundNormalAO_1k.ktx2?url";
 import normVeinWaterUrl from "/textures/new-world/water/water_normal_vein_uastc.ktx2?url";
-// God of War
 import leviathanDiffuseEmissiveUrl from "/textures/new-world/cool-stuff/leviathan/diffuse_emissive_1k.ktx2?url";
 import leviathanNormalUrl from "/textures/new-world/cool-stuff/leviathan/normal_512.ktx2?url";
 import leviathanORMUrl from "/textures/new-world/cool-stuff/leviathan/orm_512.ktx2?url";
-// Berserk
 import berserkDiffuseUrl from "/textures/new-world/cool-stuff/berserk/diffuse_1k.ktx2?url";
 import berserkNormalUrl from "/textures/new-world/cool-stuff/berserk/normal_1k.ktx2?url";
 import berserkORMUrl from "/textures/new-world/cool-stuff/berserk/orm_512.ktx2?url";
-// Dragon Ball
 import gokuStatueDiffuseUrl from "/textures/new-world/cool-stuff/dragon-ball/diffuse_1k.ktx2?url";
 import gokuStatueNormalUrl from "/textures/new-world/cool-stuff/dragon-ball/normal_1k.ktx2?url";
-// Expedition 33
 import expedition33DiffuseUrl from "/textures/new-world/cool-stuff/expedition-33/diffuse_1k.ktx2?url";
-// Campfire
 import campfireDiffuseUrl from "/textures/new-world/campfire/diffuse_2k.ktx2?url";
 import campfireNormalRoughnessUrl from "/textures/new-world/campfire/normalRoughness_1k.ktx2?url";
-// Fire
 import fireSpritesUrl from "/textures/new-world/fire/fireSprites_128_etc1s.ktx2?url";
-// Player
 import playerDiffuseUrl from "/textures/new-world/player/football/diffuse_512.ktx2?url";
 import playerNormalUrl from "/textures/new-world/player/football/normal_512.ktx2?url";
-// Flowers
 import edelweissUrl from "/textures/new-world/flowers/edelweiss_128.ktx2?url";
-// Pine Tree
 import pineTreeDiffuseUrl from "/textures/new-world/pine-tree/diffuse_2k.ktx2?url";
 
-// Tree
 import _treeBarkDiffuseUrl from "/textures/new-world/tree/bark_diffuse_512_uastc.ktx2?url";
 import _treeBarkNormalUrl from "/textures/new-world/tree/bark_normal_512_uastc.ktx2?url";
 
@@ -106,9 +93,6 @@ export type ResourceRaw =
   | BinaryResourceRaw;
 
 export const manifest = [
-  // -----------------------------------------------
-  // Core
-  // -----------------------------------------------
   { name: "worldModel", url: worldModelUrl, type: "gltf" },
   {
     name: "noiseAtlas", // super_noise_low / super_perlin / grainy / cracks
@@ -123,9 +107,6 @@ export const manifest = [
     colorSpace: SRGBColorSpace,
   },
 
-  // -----------------------------------------------
-  // Terrain
-  // -----------------------------------------------
   {
     name: "terrainMaps",
     url: terrainMapsUrl,
@@ -154,9 +135,6 @@ export const manifest = [
     wrap: true,
   },
 
-  // -----------------------------------------------
-  // Campfire
-  // -----------------------------------------------
   {
     name: "campfireDiffuse",
     url: campfireDiffuseUrl,
@@ -171,14 +149,8 @@ export const manifest = [
     flipY: false,
   },
 
-  // -----------------------------------------------
-  // Fire
-  // -----------------------------------------------
   { name: "fireSprites", url: fireSpritesUrl, type: "ktx2" },
 
-  // -----------------------------------------------
-  // God of War
-  // -----------------------------------------------
   {
     name: "leviathanAxeDiffuseEmissive",
     url: leviathanDiffuseEmissiveUrl,
@@ -199,9 +171,6 @@ export const manifest = [
     flipY: false,
   },
 
-  // -----------------------------------------------
-  // Berserk
-  // -----------------------------------------------
   {
     name: "dragonSlayerSwordDiffuse",
     url: berserkDiffuseUrl,
@@ -222,16 +191,13 @@ export const manifest = [
     flipY: false,
   },
 
-  // -----------------------------------------------
-  // Dragon Ball
-  // -----------------------------------------------
   {
     name: "concreteDiffuse",
     url: gokuStatueDiffuseUrl,
     type: "ktx2",
     flipY: false,
     wrap: true,
-    // colorSpace: SRGBColorSpace, // on purpose a bit dimmed, otherwise it's too vibrant
+    // left linear on purpose, as srgb it reads too vibrant
   },
   {
     name: "concreteNormal",
@@ -241,9 +207,6 @@ export const manifest = [
     wrap: true,
   },
 
-  // -----------------------------------------------
-  // Expedition 33
-  // -----------------------------------------------
   {
     name: "expedition33FlagDiffuse",
     url: expedition33DiffuseUrl,
@@ -252,9 +215,6 @@ export const manifest = [
     colorSpace: SRGBColorSpace,
   },
 
-  // -----------------------------------------------
-  // Player
-  // -----------------------------------------------
   {
     name: "playerDiffuse",
     url: playerDiffuseUrl,
@@ -270,9 +230,6 @@ export const manifest = [
     flipY: false,
   },
 
-  // -----------------------------------------------
-  // New Tree
-  // -----------------------------------------------
   {
     name: "treeBarkDiffuse",
     url: _treeBarkDiffuseUrl,
@@ -289,20 +246,14 @@ export const manifest = [
     wrap: true,
   },
 
-  // -----------------------------------------------
-  // Pine Tree
-  // -----------------------------------------------
   {
     name: "pineTreeDiffuse",
     url: pineTreeDiffuseUrl,
     type: "ktx2",
     flipY: false,
-    // colorSpace: SRGBColorSpace, // on purpose a bit dimmed, otherwise it's too vibrant
+    // left linear on purpose, as srgb it reads too vibrant
   },
 
-  // -----------------------------------------------
-  // Flowers
-  // -----------------------------------------------
   {
     name: "edelweiss",
     url: edelweissUrl,
