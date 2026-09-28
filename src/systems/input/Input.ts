@@ -1,111 +1,71 @@
 import type { EventBus } from "../events/EventBus";
 
-class KeyboardManager {
+export class Input {
   private keysPressed = new Set<string>();
   private keyDownListeners = new Map<string, VoidFunction>();
   private eventBus: EventBus;
 
   constructor(eventBus: EventBus) {
     this.eventBus = eventBus;
-    this.keysPressed = new Set();
-    this.keyDownListeners = new Map();
-
-    this.handleKeyDown = this.handleKeyDown.bind(this);
-    this.handleKeyUp = this.handleKeyUp.bind(this);
-    this.handleWheel = this.handleWheel.bind(this);
-    this.handleBlur = this.handleBlur.bind(this);
-
-    window.addEventListener("keydown", this.handleKeyDown);
-    window.addEventListener("keyup", this.handleKeyUp);
-    window.addEventListener("wheel", this.handleWheel, { passive: true });
-    window.addEventListener("blur", this.handleBlur);
+    window.addEventListener("keydown", this.onWindowKeyDown);
+    window.addEventListener("keyup", this.onWindowKeyUp);
+    window.addEventListener("wheel", this.onWindowWheel, { passive: true });
+    window.addEventListener("blur", this.onWindowBlur);
+    import.meta.hot?.dispose(this.dispose);
   }
 
-  private handleBlur() {
-    this.keysPressed.clear();
+  isForward() {
+    return this.keysPressed.has("KeyW") || this.keysPressed.has("ArrowUp");
   }
 
-  private handleWheel(event: WheelEvent) {
-    event.stopPropagation();
-    if (event.deltaY <= 0 || Math.abs(event.deltaY) <= Math.abs(event.deltaX))
-      return;
-    this.eventBus.emit("swipe-up");
+  isBackward() {
+    return this.keysPressed.has("KeyS") || this.keysPressed.has("ArrowDown");
   }
 
-  private handleKeyDown(event: KeyboardEvent) {
-    const code = event.code;
-    if (!this.keysPressed.has(code)) {
-      this.keysPressed.add(code);
-      this.keyDownListeners.get(code)?.();
-    }
+  isLeftward() {
+    return this.keysPressed.has("KeyA") || this.keysPressed.has("ArrowLeft");
   }
 
-  private handleKeyUp(event: KeyboardEvent) {
-    const code = event.code;
-    this.keysPressed.delete(code);
+  isRightward() {
+    return this.keysPressed.has("KeyD") || this.keysPressed.has("ArrowRight");
   }
 
-  isKeyPressed(code: string): boolean {
-    if (code === "*") return this.keysPressed.size > 0;
-    return this.keysPressed.has(code);
+  isJumpPressed() {
+    return this.keysPressed.has("Space");
   }
 
   onKeyDown(code: string, callback: VoidFunction) {
     this.keyDownListeners.set(code, callback);
   }
 
-  dispose() {
-    window.removeEventListener("keydown", this.handleKeyDown);
-    window.removeEventListener("keyup", this.handleKeyUp);
-    window.removeEventListener("wheel", this.handleWheel);
-    window.removeEventListener("blur", this.handleBlur);
-  }
-}
+  private onWindowKeyDown = (event: KeyboardEvent) => {
+    const { code } = event;
+    if (this.keysPressed.has(code)) return;
+    this.keysPressed.add(code);
+    const listener = this.keyDownListeners.get(code);
+    if (listener) listener();
+  };
 
-export class Input {
-  private keyboardManager: KeyboardManager;
+  private onWindowKeyUp = (event: KeyboardEvent) => {
+    this.keysPressed.delete(event.code);
+  };
 
-  constructor(eventBus: EventBus) {
-    this.keyboardManager = new KeyboardManager(eventBus);
+  private onWindowWheel = (event: WheelEvent) => {
+    event.stopPropagation();
+    const isScrollingUp = event.deltaY > 0;
+    const isMostlyVertical = Math.abs(event.deltaY) > Math.abs(event.deltaX);
+    if (!isScrollingUp || !isMostlyVertical) return;
+    this.eventBus.emit("swipe-up");
+  };
 
-    import.meta.hot?.dispose(() => {
-      this.keyboardManager.dispose();
-    });
-  }
+  private onWindowBlur = () => {
+    this.keysPressed.clear();
+  };
 
-  isForward(): boolean {
-    return (
-      this.keyboardManager.isKeyPressed("KeyW") ||
-      this.keyboardManager.isKeyPressed("ArrowUp")
-    );
-  }
-
-  isBackward(): boolean {
-    return (
-      this.keyboardManager.isKeyPressed("KeyS") ||
-      this.keyboardManager.isKeyPressed("ArrowDown")
-    );
-  }
-
-  isLeftward(): boolean {
-    return (
-      this.keyboardManager.isKeyPressed("KeyA") ||
-      this.keyboardManager.isKeyPressed("ArrowLeft")
-    );
-  }
-
-  isRightward(): boolean {
-    return (
-      this.keyboardManager.isKeyPressed("KeyD") ||
-      this.keyboardManager.isKeyPressed("ArrowRight")
-    );
-  }
-
-  isJumpPressed(): boolean {
-    return this.keyboardManager.isKeyPressed("Space");
-  }
-
-  onKeyDown(code: string, callback: VoidFunction) {
-    this.keyboardManager.onKeyDown(code, callback);
-  }
+  private dispose = () => {
+    window.removeEventListener("keydown", this.onWindowKeyDown);
+    window.removeEventListener("keyup", this.onWindowKeyUp);
+    window.removeEventListener("wheel", this.onWindowWheel);
+    window.removeEventListener("blur", this.onWindowBlur);
+  };
 }
