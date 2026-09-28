@@ -14,7 +14,7 @@
     "@tsconfig/svelte": "^5.0.8",
     "@tweakpane/core": "^2.0.5",
     "@types/lodash-es": "^4.17.12",
-    "@types/node": "^24.19.0",
+    "@types/node": "^26.6.3",
     "@types/three": "^0.186.0",
     "agrimensor": "^0.2.0",
     "prettier": "^3.9.9",
