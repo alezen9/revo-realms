@@ -110,11 +110,13 @@ export class Player {
 
   private createColliderDesc() {
     // average combine keeps bounces controlled: wood and rock pairs land in
-    // the 0.3 to 0.45 range instead of inheriting the highest coefficient
+    // the 0.3 to 0.45 range instead of inheriting the highest coefficient.
+    // no grip on obstacles or the roll spin climbs them, terrain overrides with max
     return ColliderDesc.ball(config.RADIUS_IN_METERS)
       .setRestitution(config.RESTITUTION)
       .setRestitutionCombineRule(CoefficientCombineRule.Average)
       .setFriction(config.FRICTION)
+      .setFrictionCombineRule(CoefficientCombineRule.Min)
       .setMass(config.MASS_IN_KILOGRAMS)
       .setActiveEvents(ActiveEvents.COLLISION_EVENTS);
   }

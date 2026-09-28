@@ -1,5 +1,6 @@
 import { Mesh, Vector3 } from "three/webgpu";
 import {
+  CoefficientCombineRule,
   ColliderDesc,
   type RigidBody,
   RigidBodyDesc,
@@ -44,6 +45,7 @@ export class OuterTerrain {
       halfSize,
     )
       .setFriction(1)
+      .setFrictionCombineRule(CoefficientCombineRule.Max)
       .setRestitution(0.2);
     physicsWorld.world.createCollider(colliderDesc, rigidBody).userData = {
       type: RevoColliderType.Terrain,

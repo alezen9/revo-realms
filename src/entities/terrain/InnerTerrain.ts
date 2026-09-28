@@ -7,7 +7,11 @@ import {
   NoColorSpace,
   RedFormat,
 } from "three/webgpu";
-import { ColliderDesc, HeightFieldFlags } from "@dimforge/rapier3d";
+import {
+  CoefficientCombineRule,
+  ColliderDesc,
+  HeightFieldFlags,
+} from "@dimforge/rapier3d";
 import { realmConfig } from "../realmConfig";
 import { RevoColliderType } from "../../systems/physics/colliderTypes";
 import { assets, physicsWorld, stage, graphics } from "../../systems";
@@ -142,6 +146,7 @@ export class InnerTerrain {
     )
       .setTranslation(0, -displacement, 0)
       .setFriction(1)
+      .setFrictionCombineRule(CoefficientCombineRule.Max)
       .setRestitution(0.2);
     physicsWorld.world.createCollider(colliderDesc).userData = {
       type: RevoColliderType.Terrain,
