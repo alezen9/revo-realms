@@ -8,7 +8,10 @@ import {
   TextureLoader,
 } from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
-import { DRACOLoader } from "three/addons/loaders/DRACOLoader.js";
+import {
+  DRACOLoader,
+  DRACO_GLTF_CONFIG,
+} from "three/addons/loaders/DRACOLoader.js";
 import { KTX2Loader } from "three/addons/loaders/KTX2Loader.js";
 import {
   manifest,
@@ -54,8 +57,8 @@ export class Assets {
 
   constructor(eventBus: EventBus) {
     this.eventBus = eventBus;
+    this.dracoLoader.setDecoderPath(DRACO_GLTF_CONFIG);
     this.gltfLoader.setDRACOLoader(this.dracoLoader);
-    this.ktx2Loader.setTranscoderPath("/basis/");
   }
 
   get resources() {
