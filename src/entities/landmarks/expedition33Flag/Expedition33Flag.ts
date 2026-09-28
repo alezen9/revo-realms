@@ -1,4 +1,5 @@
 import {
+  Box3,
   CylinderGeometry,
   Mesh,
   PlaneGeometry,
@@ -6,11 +7,12 @@ import {
   Sphere,
   Vector3,
 } from "three";
+import { ReadbackBuffer } from "three/webgpu";
 import { VSMReceiverStandardMaterial } from "../../../systems/vsm/VSMReceiverMaterials";
 import { ColliderDesc } from "@dimforge/rapier3d";
 import { type State } from "../../../Game";
+import { positionLocal, vec3 } from "three/tsl";
 import {
-  debugPanel,
   eventBus,
   landmarks,
   physicsWorld,
@@ -22,11 +24,12 @@ import { RevoColliderType } from "../../../systems/physics/colliderTypes";
 import { UP } from "../../axes";
 import { config, uniforms } from "./config";
 import { FlagMaterial } from "./FlagMaterial";
-import { FlagCompute } from "./FlagCompute";
+import { FlagCompute, getParticleAtPlanePoint } from "./FlagCompute";
 import { debugExpedition33Flag } from "./debug";
 
 // top of the hill, sampled once from the terrain heightmap
 const HILLTOP = new Vector3(-115.74, 3.5, 215.79);
+const BOUNDS_BYTE_LENGTH = 2 * 4 * Float32Array.BYTES_PER_ELEMENT;
 
 export class Expedition33Flag {
   private compute = new FlagCompute();
@@ -36,6 +39,11 @@ export class Expedition33Flag {
   private staffQuaternion = new Quaternion();
   private pendingSeconds = 0;
   private isPlayerNear = false;
+  // the cloth only exists on the gpu, so culling and shadow pages read its bounds back
+  private bounds = new Box3();
+  private boundingSphere = new Sphere();
+  private boundsReadback = new ReadbackBuffer(BOUNDS_BYTE_LENGTH);
+  private isReadingBounds = false;
 
   constructor() {
     const leanDirection = new Vector3(-HILLTOP.x, 0, -HILLTOP.z).normalize();
@@ -85,6 +93,7 @@ export class Expedition33Flag {
       .copy(this.origin)
       .addScaledVector(this.staffAxis, config.STAFF_HEIGHT / 2);
     staff.quaternion.copy(this.staffQuaternion);
+    graphics.vsmPass.registerCaster(staff);
     return staff;
   }
 
@@ -95,15 +104,27 @@ export class Expedition33Flag {
       config.SEGMENTS_X,
       config.SEGMENTS_Y,
     );
-    const center = this.staffAxis
-      .clone()
-      .multiplyScalar(config.ATTACH_TOP - config.FLAG_HEIGHT / 2);
-    geometry.boundingSphere = new Sphere(
-      center,
-      config.FLAG_WIDTH + config.FLAG_HEIGHT,
+    const reach = config.FLAG_WIDTH * config.TETHER_SLACK;
+    this.bounds.min.set(
+      -reach,
+      config.ATTACH_TOP - config.FLAG_HEIGHT - reach,
+      -reach,
     );
+    this.bounds.max.set(reach, config.ATTACH_TOP, reach);
+    this.bounds.getBoundingSphere(this.boundingSphere);
+    geometry.boundingBox = this.bounds;
+    geometry.boundingSphere = this.boundingSphere;
     const flag = new Mesh(geometry, new FlagMaterial(this.compute));
     flag.position.copy(this.origin);
+
+    const particlePosition = getParticleAtPlanePoint(
+      this.compute.positions,
+      positionLocal,
+    );
+    graphics.vsmPass.registerCaster(flag, {
+      type: "dynamic",
+      positionNode: particlePosition.add(vec3(this.origin)),
+    });
     return flag;
   }
 
@@ -145,5 +166,25 @@ export class Expedition33Flag {
     uniforms.uPlayerLocalPosition.value.copy(player.position).sub(this.origin);
     uniforms.uPlayerRadius.value = player.radius;
     this.computeTask.update();
+    if (!this.isReadingBounds) this.readBounds();
+  };
+
+  private readBounds = async () => {
+    this.isReadingBounds = true;
+    const readback = await graphics.renderer.getArrayBufferAsync(
+      this.compute.bounds.value,
+      this.boundsReadback,
+    );
+    try {
+      const { buffer } = readback;
+      if (!buffer) throw new Error("[Expedition33] bounds readback is empty");
+      const values = new Float32Array(buffer);
+      this.bounds.min.fromArray(values, 0).subScalar(config.BOUNDS_MARGIN);
+      this.bounds.max.fromArray(values, 4).addScalar(config.BOUNDS_MARGIN);
+      this.bounds.getBoundingSphere(this.boundingSphere);
+    } finally {
+      readback.release();
+      this.isReadingBounds = false;
+    }
   };
 }

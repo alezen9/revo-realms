@@ -42,7 +42,10 @@ const NEIGHBORS = [
 ];
 
 const createParticleBuffer = () => instancedArray(config.COUNT, "vec4");
-type ParticleBuffer = ReturnType<typeof createParticleBuffer>;
+export type ParticleBuffer = ReturnType<typeof createParticleBuffer>;
+// 0 -> minimum, 1 -> maximum, xyz in flag space
+const createBoundsBuffer = () => instancedArray(2, "vec4");
+type BoundsBuffer = ReturnType<typeof createBoundsBuffer>;
 
 // x -> column, y -> row, z -> widthRatio (0 staff, 1 free edge),
 // w -> heightRatio (0 top, 1 bottom)
@@ -55,6 +58,38 @@ const getGridCoordinates = Fn<[index: Node<"uint">], Node<"vec4">>(
     return vec4(column, row, widthRatio, heightRatio);
   },
 );
+
+const getParticleIndex = (column: Node<"float">, row: Node<"float">) =>
+  row
+    .clamp(0, config.SEGMENTS_Y)
+    .mul(config.POINTS_X)
+    .add(column.clamp(0, config.SEGMENTS_X))
+    .toUint();
+
+// points out of the plane geometry's front face, so faceDirection can flip it for the back
+export const getParticleNormal = Fn<
+  [positions: ParticleBuffer, index: Node<"uint">],
+  Node<"vec3">
+>(([positions, index]) => {
+  const coordinates = getGridCoordinates(index);
+  const column = coordinates.x;
+  const row = coordinates.y;
+  const left = positions.element(getParticleIndex(column.sub(1), row)).xyz;
+  const right = positions.element(getParticleIndex(column.add(1), row)).xyz;
+  const up = positions.element(getParticleIndex(column, row.sub(1))).xyz;
+  const down = positions.element(getParticleIndex(column, row.add(1))).xyz;
+  return down.sub(up).cross(right.sub(left)).normalize();
+});
+
+// shadow rasterization reads the rest plane, so each plane vertex maps back to its particle
+export const getParticleAtPlanePoint = Fn<
+  [positions: ParticleBuffer, planePoint: Node<"vec3">],
+  Node<"vec3">
+>(([positions, planePoint]) => {
+  const column = planePoint.x.add(0.5).mul(config.SEGMENTS_X).round();
+  const row = float(0.5).sub(planePoint.y).mul(config.SEGMENTS_Y).round();
+  return positions.element(getParticleIndex(column, row)).xyz;
+});
 
 const getStaffAnchor = Fn<[heightRatio: Node<"float">], Node<"vec3">>(
   ([heightRatio]) => {
@@ -168,11 +203,8 @@ const pullTowardRest = Fn<
     const isNeighborPinned = step(neighborColumn, 0.5);
     const correctionShare = isNeighborPinned.mul(0.5).add(0.5);
 
-    const neighborIndex = neighborRow
-      .clamp(0, config.SEGMENTS_Y)
-      .mul(config.POINTS_X)
-      .add(neighborColumn.clamp(0, config.SEGMENTS_X));
-    const neighborPosition = predicted.element(neighborIndex.toUint()).xyz;
+    const neighborIndex = getParticleIndex(neighborColumn, neighborRow);
+    const neighborPosition = predicted.element(neighborIndex).xyz;
     const toNeighbor = position.sub(neighborPosition);
     const distance = toNeighbor.length().max(1e-5);
     const stretchRatio = restLength.sub(distance).div(distance);
@@ -266,14 +298,29 @@ const initParticles = Fn<
   previousPositions.element(instanceIndex).assign(vec4(restPosition, 0));
 });
 
+const writeBounds = (positions: ParticleBuffer, bounds: BoundsBuffer) => {
+  If(invocationLocalIndex.equal(0), () => {
+    const minimum = vec3(1e8).toVar();
+    const maximum = vec3(-1e8).toVar();
+    Loop({ start: 0, end: config.COUNT, type: "uint" }, ({ i: index }) => {
+      const position = positions.element(index).xyz;
+      minimum.assign(minimum.min(position));
+      maximum.assign(maximum.max(position));
+    });
+    bounds.element(0).assign(vec4(minimum, 0));
+    bounds.element(1).assign(vec4(maximum, 0));
+  });
+};
+
 const simulateSteps = Fn<
   [
     positions: ParticleBuffer,
     previousPositions: ParticleBuffer,
     predictedPositions: ParticleBuffer,
+    bounds: BoundsBuffer,
   ],
   void
->(([positions, previousPositions, predictedPositions]) => {
+>(([positions, previousPositions, predictedPositions, bounds]) => {
   Loop({ start: 0, end: uniforms.uStepCount, type: "uint" }, () => {
     Loop(OWNED_SLOTS, ({ i: slot }) => {
       const index = getOwnedParticle(slot);
@@ -296,12 +343,14 @@ const simulateSteps = Fn<
     });
     storageBarrier();
   });
+  writeBounds(positions, bounds);
 });
 
 export class FlagCompute {
   readonly positions = createParticleBuffer();
   private previousPositions = createParticleBuffer();
   private predictedPositions = createParticleBuffer();
+  readonly bounds = createBoundsBuffer();
   readonly computeInit = initParticles(
     this.positions,
     this.previousPositions,
@@ -310,5 +359,6 @@ export class FlagCompute {
     this.positions,
     this.previousPositions,
     this.predictedPositions,
+    this.bounds,
   ).compute(config.WORKGROUP_SIZE, [config.WORKGROUP_SIZE]);
 }
