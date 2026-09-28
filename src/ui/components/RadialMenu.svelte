@@ -84,72 +84,76 @@
 	let slots = $derived(buildSlots(menuLandmarks))
 	let menuVisible = $derived(isVisible && slots.length > 0)
 
-	const getFocusableSlots = () =>
-		Array.from(
-			menuEl?.querySelectorAll<SVGGElement>(
-				".radial-menu__slot[tabindex='0']",
-			) ?? [],
+	const getFocusableSlots = () => {
+		if (!menuEl) return []
+		return Array.from(
+			menuEl.querySelectorAll<SVGGElement>(".radial-menu__slot[tabindex='0']"),
 		)
+	}
 
-	const handleSlotClick = (landmark: Landmark) => {
+	const onSlotClick = (landmark: Landmark) => {
 		const isActivated = wind.activateLandmark(landmark.id)
 		if (!isActivated) return
 		isVisible = false
 	}
 
+	const onWindTargetChange = (landmarkId: string | null) => {
+		selectedId = landmarkId
+	}
+
+	const focusNextSlot = (isBackward: boolean) => {
+		const focusable = getFocusableSlots()
+		if (!focusable.length) return
+		const currentIndex = focusable.findIndex(
+			element => element === document.activeElement,
+		)
+		let nextIndex = 0
+		if (currentIndex !== -1) {
+			let direction = 1
+			if (isBackward) direction = -1
+			nextIndex = (currentIndex + direction + focusable.length) % focusable.length
+		}
+		focusable[nextIndex].focus()
+	}
+
+	const onWindowKeyDown = (event: KeyboardEvent) => {
+		const isToggleKey = event.code === "KeyL" && !event.repeat
+		if (isToggleKey) {
+			menuLandmarks = landmarks.getAll()
+			isVisible = !isVisible
+			return
+		}
+		if (!menuVisible) return
+		if (event.code === "Escape") {
+			isVisible = false
+			return
+		}
+		if (event.key !== "Tab") return
+		event.preventDefault()
+		focusNextSlot(event.shiftKey)
+	}
+
+	const onWindowPointerDown = (event: PointerEvent) => {
+		const isOutsideMenu =
+			!!menuEl && event.target instanceof Node && !menuEl.contains(event.target)
+		if (menuVisible && isOutsideMenu) isVisible = false
+	}
+
 	onMount(() => {
 		const unsubscribeWindTarget = eventBus.on(
 			"wind-target-change",
-			(landmarkId: string | null) => {
-				selectedId = landmarkId
-			},
+			onWindTargetChange,
 		)
-		const handleKeyDown = (event: KeyboardEvent) => {
-			if (event.code === "KeyL" && !event.repeat) {
-				menuLandmarks = landmarks.getAll()
-				isVisible = !isVisible
-				return
-			}
-			if (!menuVisible) return
-			if (event.code === "Escape") {
-				isVisible = false
-				return
-			}
-			if (event.key === "Tab") {
-				event.preventDefault()
-				const focusable = getFocusableSlots()
-				if (!focusable.length) return
-				const currentIndex = focusable.indexOf(
-					document.activeElement as SVGGElement,
-				)
-				const direction = event.shiftKey ? -1 : 1
-				const nextIndex =
-					currentIndex === -1
-						? 0
-						: (currentIndex + direction + focusable.length) % focusable.length
-				focusable[nextIndex].focus()
-			}
-		}
-		const handlePointerDown = (event: PointerEvent) => {
-			if (
-				menuVisible &&
-				menuEl &&
-				event.target instanceof Node &&
-				!menuEl.contains(event.target)
-			) {
-				isVisible = false
-			}
-		}
-		window.addEventListener("keydown", handleKeyDown)
-		window.addEventListener("pointerdown", handlePointerDown)
+		window.addEventListener("keydown", onWindowKeyDown)
+		window.addEventListener("pointerdown", onWindowPointerDown)
 
 		menuLandmarks = landmarks.getAll()
 		selectedId = wind.activeLandmarkId
 
 		return () => {
 			unsubscribeWindTarget()
-			window.removeEventListener("keydown", handleKeyDown)
-			window.removeEventListener("pointerdown", handlePointerDown)
+			window.removeEventListener("keydown", onWindowKeyDown)
+			window.removeEventListener("pointerdown", onWindowPointerDown)
 		}
 	})
 
@@ -165,10 +169,11 @@
 		requestAnimationFrame(() => {
 			const focusable = getFocusableSlots()
 			if (!focusable.length) return
-			const selected = selectedId
-				? focusable.find(element => element.dataset.landmarkId === selectedId)
-				: null
-			;(selected ?? focusable[0]).focus()
+			const selected = focusable.find(
+				element => element.dataset.landmarkId === selectedId,
+			)
+			if (selected) selected.focus()
+			else focusable[0].focus()
 		})
 	})
 </script>
@@ -188,9 +193,9 @@
 					class="radial-menu__slot"
 					class:selected={selectedId === landmark.id}
 					style="--delay: {slot.delay}"
-					onclick={() => handleSlotClick(landmark)}
+					onclick={() => onSlotClick(landmark)}
 					onkeydown={event =>
-						event.key === "Enter" && handleSlotClick(landmark)}
+						event.key === "Enter" && onSlotClick(landmark)}
 					role="button"
 					tabindex={menuVisible ? 0 : -1}
 					data-landmark-id={landmark.id}

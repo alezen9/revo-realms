@@ -10,13 +10,14 @@
 	let coreProgress = 0
 	let resourcesProgress = 0
 
-	onMount(() => {
-		let unsubscribes: VoidFunction[] = []
-		const stopLoadingSubscriptions = () => {
-			unsubscribes.forEach(unsubscribe => unsubscribe())
-			unsubscribes = []
-		}
+	let unsubscribes: VoidFunction[] = []
 
+	const stopLoadingSubscriptions = () => {
+		for (const unsubscribe of unsubscribes) unsubscribe()
+		unsubscribes = []
+	}
+
+	onMount(() => {
 		unsubscribes = [
 			eventBus.on("engine-loading-core-progress", p => {
 				coreProgress = Math.min(Math.ceil(p / 2), 50)
