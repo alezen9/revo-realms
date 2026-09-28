@@ -2,6 +2,7 @@ import type { Collider } from "@dimforge/rapier3d";
 import { debugPanel } from "../../systems";
 import { playerConfig as config } from "./config";
 import { playerUniforms } from "./PlayerMaterial";
+import { playerCameraConfig } from "./PlayerCamera";
 
 export const debugPlayer = (collider: Collider) => {
   const folder = debugPanel.panel.addFolder({
@@ -60,6 +61,35 @@ export const debugPlayer = (collider: Collider) => {
     min: 0.1,
     max: 1,
   });
+
+  const camera = folder.addFolder({ title: "Camera" });
+  camera.addBinding(playerCameraConfig.OFFSET, "y", {
+    label: "Camera height",
+  });
+  camera.addBinding(playerCameraConfig.OFFSET, "z", {
+    label: "Camera distance",
+  });
+  camera.addBinding(playerCameraConfig, "TARGET_HEIGHT_IN_METERS", {
+    label: "Target height",
+    min: 0,
+    max: 5,
+    step: 0.1,
+  });
+  camera.addBinding(
+    playerCameraConfig,
+    "POSITION_FOLLOW_SPEED_IN_INVERSE_SECONDS",
+    { label: "Position follow", min: 1, max: 40, step: 0.5 },
+  );
+  camera.addBinding(
+    playerCameraConfig,
+    "TARGET_FOLLOW_SPEED_IN_INVERSE_SECONDS",
+    { label: "Target follow", min: 1, max: 50, step: 0.5 },
+  );
+  camera.addBinding(
+    playerCameraConfig,
+    "ROTATION_FOLLOW_SPEED_IN_INVERSE_SECONDS",
+    { label: "Rotation follow", min: 1, max: 50, step: 0.5 },
+  );
 
   const water = folder.addFolder({ title: "Water" });
   water.addBinding(config, "BUOYANCY_FORCE_IN_NEWTONS", {

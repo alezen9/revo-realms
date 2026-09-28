@@ -9,7 +9,6 @@ import {
 import { MapControls } from "three/addons/controls/MapControls.js";
 import { type EventBus } from "../events/EventBus";
 import type { DebugPanel } from "../debug/DebugPanel";
-import { playerCameraConfig } from "../../entities/player/PlayerCamera";
 import { uniform } from "three/tsl";
 import { TOOLING_FLAGS } from "../debug/toolingFlags";
 
@@ -86,33 +85,6 @@ export class Stage {
         step: 1,
       })
       .on("change", this.syncPlayerCameraProjection);
-    player.addBinding(playerCameraConfig.OFFSET, "y", {
-      label: "Camera height",
-    });
-    player.addBinding(playerCameraConfig.OFFSET, "z", {
-      label: "Camera distance",
-    });
-    player.addBinding(playerCameraConfig, "TARGET_HEIGHT_IN_METERS", {
-      label: "Target height",
-      min: 0,
-      max: 5,
-      step: 0.1,
-    });
-    player.addBinding(
-      playerCameraConfig,
-      "POSITION_FOLLOW_SPEED_IN_INVERSE_SECONDS",
-      { label: "Position follow", min: 1, max: 40, step: 0.5 },
-    );
-    player.addBinding(
-      playerCameraConfig,
-      "TARGET_FOLLOW_SPEED_IN_INVERSE_SECONDS",
-      { label: "Target follow", min: 1, max: 50, step: 0.5 },
-    );
-    player.addBinding(
-      playerCameraConfig,
-      "ROTATION_FOLLOW_SPEED_IN_INVERSE_SECONDS",
-      { label: "Rotation follow", min: 1, max: 50, step: 0.5 },
-    );
 
     const orbit = folder.addFolder({ title: "Orbit" });
     orbit
