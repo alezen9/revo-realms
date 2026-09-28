@@ -38,6 +38,8 @@ import {
 export const VSM_CLUSTER_TRIANGLES = 64;
 const VSM_CLUSTER_VERTICES = VSM_CLUSTER_TRIANGLES * 3;
 const VSM_CLUSTER_MAX_WORK_ITEMS = 262144;
+// indirect args: x -> vertices per cluster, y -> work item count
+const WORK_COUNT_INDEX = 1;
 
 type ClusterInstance = {
   mesh: Mesh;
@@ -88,13 +90,16 @@ const appendGeometryClusters = (
       const isPadding =
         cluster * VSM_CLUSTER_TRIANGLES + Math.floor(corner / 3) >=
         triangleCount;
-      const element =
-        range.start + (isPadding ? triangle * 3 : triangle * 3 + (corner % 3));
-      const vertexIndex = index ? index.getX(element) : element;
+      // padding repeats the last triangle's first corner, a zero area triangle
+      let cornerOffset = corner % 3;
+      if (isPadding) cornerOffset = 0;
+      const element = range.start + triangle * 3 + cornerOffset;
+      let vertexIndex = element;
+      if (index) vertexIndex = index.getX(element);
       vertex.fromBufferAttribute(position, vertexIndex);
       positions.push(vertex.x, vertex.y, vertex.z, 0);
-      if (uvs)
-        uvs.push(uv ? uv.getX(vertexIndex) : 0, uv ? uv.getY(vertexIndex) : 0);
+      if (uvs && uv) uvs.push(uv.getX(vertexIndex), uv.getY(vertexIndex));
+      if (uvs && !uv) uvs.push(0, 0);
       minimum.min(vertex);
       maximum.max(vertex);
     }
@@ -136,6 +141,127 @@ const getInstanceBatchIds = (caster: VSMCaster) => {
 const getCapacity = (length: number) =>
   2 ** Math.ceil(Math.log2(Math.max(length, 1)));
 
+const createVec4Node = (attribute: StorageBufferAttribute, count: number) =>
+  storage(attribute, "vec4", count);
+const createUvec4Node = (attribute: StorageBufferAttribute, count: number) =>
+  storage(attribute, "uvec4", count);
+const createWorkItemsNode = (attribute: StorageBufferAttribute) =>
+  storage(attribute, "uvec2", VSM_CLUSTER_MAX_WORK_ITEMS);
+const createWorkCounterNode = (attribute: StorageBufferAttribute) =>
+  storage(attribute, "uint", 4).toAtomic();
+
+type Vec4Node = ReturnType<typeof createVec4Node>;
+type Uvec4Node = ReturnType<typeof createUvec4Node>;
+type WorkItemsNode = ReturnType<typeof createWorkItemsNode>;
+type WorkCounterNode = ReturnType<typeof createWorkCounterNode>;
+
+const getWorldPosition = (
+  matrices: StorageBufferNode<"vec4">,
+  instance: Node<"uint">,
+  local: Node<"vec3">,
+  positionNode: Node<"vec3"> | undefined,
+) => {
+  if (positionNode)
+    return positionNode.context({
+      overrideNodes: new Map<Node, () => Node>([
+        [instanceIndex, () => instance],
+        [positionLocal, () => local],
+        [positionGeometry, () => local],
+      ]),
+    });
+  const matrixOffset = instance.mul(4);
+  return matrices
+    .element(matrixOffset)
+    .mul(local.x)
+    .add(matrices.element(matrixOffset.add(1)).mul(local.y))
+    .add(matrices.element(matrixOffset.add(2)).mul(local.z))
+    .add(matrices.element(matrixOffset.add(3))).xyz;
+};
+
+const computeClusterLightBounds = Fn<
+  [
+    instanceClusters: Uvec4Node,
+    clusterBounds: Vec4Node,
+    matrices: Vec4Node,
+    lightBounds: Vec4Node,
+    lightBasis: VSMContext["lightBasis"],
+    positionNode: Node<"vec3"> | undefined,
+  ],
+  void
+>(
+  ([
+    instanceClusters,
+    clusterBounds,
+    matrices,
+    lightBounds,
+    lightBasis,
+    positionNode,
+  ]) => {
+    const instanceCluster = instanceClusters.element(instanceIndex).toVar();
+    const minimum = clusterBounds.element(instanceCluster.z.mul(2)).xyz.toVar();
+    const maximum = clusterBounds
+      .element(instanceCluster.z.mul(2).add(1))
+      .xyz.toVar();
+    const bounds = vec4(1e8, 1e8, -1e8, -1e8).toVar();
+    Loop({ start: 0, end: 8, type: "uint" }, ({ i: corner }) => {
+      const cornerSide = vec3(
+        corner.bitAnd(1),
+        corner.shiftRight(1).bitAnd(1),
+        corner.shiftRight(2).bitAnd(1),
+      );
+      const local = maximum.sub(minimum).mul(cornerSide).add(minimum).toVar();
+      const world = getWorldPosition(
+        matrices,
+        instanceCluster.x,
+        local,
+        positionNode,
+      );
+      const light = getLightPosition(world, lightBasis);
+      bounds.assign(vec4(bounds.xy.min(light), bounds.zw.max(light)));
+    });
+    lightBounds.element(instanceIndex).assign(bounds);
+  },
+);
+
+const resetWorkCount = Fn<[workCounter: WorkCounterNode], void>(
+  ([workCounter]) => {
+    atomicStore(workCounter.element(WORK_COUNT_INDEX), 0);
+  },
+);
+
+const collectClusterWork = Fn<
+  [
+    lightBounds: Vec4Node,
+    pageJobs: Uvec4Node,
+    jobCount: Node<"uint">,
+    jobOffset: Node<"uint">,
+    workCounter: WorkCounterNode,
+    workItems: WorkItemsNode,
+  ],
+  void
+>(([lightBounds, pageJobs, jobCount, jobOffset, workCounter, workItems]) => {
+  const bounds = lightBounds.element(instanceIndex).toVar();
+  const jobTotal = jobCount.toVar();
+  Loop({ start: 0, end: jobTotal, type: "uint" }, ({ i: jobLoopIndex }) => {
+    const jobIndex = jobLoopIndex.toVar();
+    const job = pageJobs.element(jobIndex.add(jobOffset));
+    const pageSize = getPageSize(job.x.div(VSM_PAGES_PER_LEVEL));
+    const firstPage = getPageCoordinate(bounds.xy.div(pageSize));
+    const lastPage = getPageCoordinate(bounds.zw.div(pageSize));
+    const overlaps = job.z
+      .greaterThanEqual(firstPage.x)
+      .and(job.w.greaterThanEqual(firstPage.y))
+      .and(job.z.lessThanEqual(lastPage.x))
+      .and(job.w.lessThanEqual(lastPage.y));
+    If(overlaps, () => {
+      const itemIndex = atomicAdd(workCounter.element(WORK_COUNT_INDEX), 1);
+      If(itemIndex.lessThan(VSM_CLUSTER_MAX_WORK_ITEMS), () => {
+        workItems.element(itemIndex).assign(uvec2(jobIndex, instanceIndex));
+      });
+    });
+  });
+});
+
 export class VSMClusterBucket {
   readonly positionsAttribute: StorageBufferAttribute;
   readonly uvsAttribute?: StorageBufferAttribute;
@@ -169,7 +295,7 @@ export class VSMClusterBucket {
   private rasterInstanceClusters;
   private rasterPositions;
   private rasterMatrices;
-  private rasterUvs;
+  private rasterUvs?: StorageBufferNode<"vec2">;
   private batchMatrix = new Matrix4();
   private worldMatrix = new Matrix4();
   private instanceBounds = new Box3();
@@ -192,9 +318,9 @@ export class VSMClusterBucket {
     this.positionValues = new Float32Array(
       getCapacity(content.positions.length),
     );
-    this.uvValues = new Float32Array(
-      hasUvs ? getCapacity(content.uvs.length) : 2,
-    );
+    let uvCapacity = 2;
+    if (hasUvs) uvCapacity = getCapacity(content.uvs.length);
+    this.uvValues = new Float32Array(uvCapacity);
     this.matrixValues = new Float32Array(
       getCapacity(content.instances.length) * 16,
     );
@@ -247,117 +373,59 @@ export class VSMClusterBucket {
       "vec4",
       this.matricesAttribute.count,
     ).toReadOnly();
-    this.rasterUvs = this.uvsAttribute
-      ? storage(this.uvsAttribute, "vec2", this.uvsAttribute.count).toReadOnly()
-      : undefined;
+    if (this.uvsAttribute)
+      this.rasterUvs = storage(
+        this.uvsAttribute,
+        "vec2",
+        this.uvsAttribute.count,
+      ).toReadOnly();
     const lightBoundsAttribute = new StorageBufferAttribute(
       new Float32Array(instanceClusterCapacity * 4),
       4,
     );
-    const clusterBoundsNode = storage(
-      this.clusterBoundsAttribute,
-      "vec4",
-      this.clusterBoundsAttribute.count,
-    );
-    const lightBoundsNode = storage(
+    const lightBounds = createVec4Node(
       lightBoundsAttribute,
-      "vec4",
       instanceClusterCapacity,
     );
-    const instanceClustersNode = storage(
-      this.instanceClustersAttribute,
-      "uvec4",
-      instanceClusterCapacity,
-    );
-    const matricesNode = storage(
-      this.matricesAttribute,
-      "vec4",
-      this.matricesAttribute.count,
-    );
-    const workItems = storage(
-      this.workItemsAttribute,
-      "uvec2",
-      VSM_CLUSTER_MAX_WORK_ITEMS,
-    );
-    const pageJobs = storage(context.pageJobs, "uvec4", VSM_JOB_COUNT);
+    const workCounter = createWorkCounterNode(this.workIndirectAttribute);
     const jobCounts = storage(
       jobs.countAttribute,
       "uint",
       jobs.countLength,
     ).toReadOnly();
-    const indirectNode = storage(
-      this.workIndirectAttribute,
-      "uint",
-      4,
-    ).toAtomic();
 
-    this.boundsNode = Fn(() => {
-      const instanceCluster = instanceClustersNode
-        .element(instanceIndex)
-        .toVar();
-      const minimum = clusterBoundsNode
-        .element(instanceCluster.z.mul(2))
-        .xyz.toVar();
-      const maximum = clusterBoundsNode
-        .element(instanceCluster.z.mul(2).add(1))
-        .xyz.toVar();
-      const lightBounds = vec4(1e8, 1e8, -1e8, -1e8).toVar();
-      Loop({ start: 0, end: 8, type: "uint" }, ({ i: corner }) => {
-        const cornerSide = vec3(
-          corner.bitAnd(1),
-          corner.shiftRight(1).bitAnd(1),
-          corner.shiftRight(2).bitAnd(1),
-        );
-        const local = maximum.sub(minimum).mul(cornerSide).add(minimum).toVar();
-        const light = getLightPosition(
-          this.getWorldPosition(matricesNode, instanceCluster.x, local),
-          lightBasis,
-        );
-        lightBounds.assign(
-          vec4(lightBounds.xy.min(light), lightBounds.zw.max(light)),
-        );
-      });
-      lightBoundsNode.element(instanceIndex).assign(lightBounds);
-    })().compute(1, [64]);
+    this.boundsNode = computeClusterLightBounds(
+      createUvec4Node(this.instanceClustersAttribute, instanceClusterCapacity),
+      createVec4Node(
+        this.clusterBoundsAttribute,
+        this.clusterBoundsAttribute.count,
+      ),
+      createVec4Node(this.matricesAttribute, this.matricesAttribute.count),
+      lightBounds,
+      lightBasis,
+      this.positionNode,
+    ).compute(1, [64]);
+    this.resetNode = resetWorkCount(workCounter).compute(1, [1]);
+    this.buildNode = collectClusterWork(
+      lightBounds,
+      createUvec4Node(context.pageJobs, VSM_JOB_COUNT),
+      jobCounts.element(jobs.countIndex),
+      uint(jobs.offset),
+      workCounter,
+      createWorkItemsNode(this.workItemsAttribute),
+    ).compute(1, [64]);
 
-    this.resetNode = Fn(() => {
-      atomicStore(indirectNode.element(1), 0);
-    })().compute(1, [1]);
-
-    this.buildNode = Fn(() => {
-      const lightBounds = lightBoundsNode.element(instanceIndex).toVar();
-      const jobCount = jobCounts.element(jobs.countIndex).toVar();
-      Loop({ start: 0, end: jobCount, type: "uint" }, ({ i: jobLoopIndex }) => {
-        const jobIndex = jobLoopIndex.toVar();
-        const job = pageJobs.element(jobIndex.add(jobs.offset));
-        const pageSize = getPageSize(job.x.div(VSM_PAGES_PER_LEVEL));
-        const firstPage = getPageCoordinate(lightBounds.xy.div(pageSize));
-        const lastPage = getPageCoordinate(lightBounds.zw.div(pageSize));
-        const overlaps = job.z
-          .greaterThanEqual(firstPage.x)
-          .and(job.w.greaterThanEqual(firstPage.y))
-          .and(job.z.lessThanEqual(lastPage.x))
-          .and(job.w.lessThanEqual(lastPage.y));
-        If(overlaps, () => {
-          const itemIndex = atomicAdd(indirectNode.element(1), 1);
-          If(itemIndex.lessThan(VSM_CLUSTER_MAX_WORK_ITEMS), () => {
-            workItems.element(itemIndex).assign(uvec2(jobIndex, instanceIndex));
-          });
-        });
-      });
-    })().compute(1, [64]);
-
-    this.boundsNode.name = "V2 shadow cluster bounds";
-    this.resetNode.name = "V2 shadow cluster work reset";
-    this.buildNode.name = "V2 shadow cluster work";
+    this.boundsNode.name = "VSM cluster bounds";
+    this.resetNode.name = "VSM cluster work reset";
+    this.buildNode.name = "VSM cluster work";
     this.writeContent(content);
   }
 
   getWorkCount() {
-    const count = this.rasterWorkCount.element(1);
-    return count
+    const workCount = this.rasterWorkCount.element(WORK_COUNT_INDEX);
+    return workCount
       .lessThan(VSM_CLUSTER_MAX_WORK_ITEMS)
-      .select(count, uint(VSM_CLUSTER_MAX_WORK_ITEMS));
+      .select(workCount, uint(VSM_CLUSTER_MAX_WORK_ITEMS));
   }
 
   getWork(index: Node<"uint">): VSMRasterWork {
@@ -383,38 +451,18 @@ export class VSMClusterBucket {
     const depthBias = this.rasterMatrices.element(
       work.instance.mul(4).add(3),
     ).w;
-    const world = this.getWorldPosition(
+    const world = getWorldPosition(
       this.rasterMatrices,
       work.instance,
       local,
+      this.positionNode,
     );
     return vec4(world, depthBias);
   }
 
-  private getWorldPosition(
-    matrices: StorageBufferNode<"vec4">,
-    instance: Node<"uint">,
-    local: Node<"vec3">,
-  ) {
-    if (this.positionNode)
-      return this.positionNode.context({
-        overrideNodes: new Map<Node, () => Node>([
-          [instanceIndex, () => instance],
-          [positionLocal, () => local],
-          [positionGeometry, () => local],
-        ]),
-      });
-    const matrixOffset = instance.mul(4);
-    return matrices
-      .element(matrixOffset)
-      .mul(local.x)
-      .add(matrices.element(matrixOffset.add(1)).mul(local.y))
-      .add(matrices.element(matrixOffset.add(2)).mul(local.z))
-      .add(matrices.element(matrixOffset.add(3))).xyz;
-  }
-
   getUv(vertex: Node<"uint">) {
-    return this.rasterUvs ? this.rasterUvs.element(vertex) : vec2(0);
+    if (!this.rasterUvs) return vec2(0);
+    return this.rasterUvs.element(vertex);
   }
 
   setCasters(casters: VSMCaster[]) {
@@ -503,10 +551,10 @@ export class VSMClusterBucket {
     for (const caster of casters) {
       const { mesh } = caster;
       for (const batchInstanceId of getInstanceBatchIds(caster)) {
-        const geometryId =
-          mesh instanceof BatchedMesh && batchInstanceId !== undefined
-            ? mesh.getGeometryIdAt(batchInstanceId)
-            : -1;
+        const isBatchInstance =
+          mesh instanceof BatchedMesh && batchInstanceId !== undefined;
+        let geometryId = -1;
+        if (isBatchInstance) geometryId = mesh.getGeometryIdAt(batchInstanceId);
         const key = `${mesh.geometry.uuid}:${geometryId}`;
         let clusters = geometries.get(key);
         if (!clusters) {
@@ -517,16 +565,18 @@ export class VSMClusterBucket {
             range.start = batchRange.start;
             range.count = batchRange.count;
           } else {
+            const { index } = mesh.geometry;
             range.start = 0;
-            range.count = mesh.geometry.index
-              ? mesh.geometry.index.count
-              : mesh.geometry.getAttribute("position").count;
+            range.count = mesh.geometry.getAttribute("position").count;
+            if (index) range.count = index.count;
           }
+          let uvs: number[] | undefined;
+          if (this.hasUvs) uvs = content.uvs;
           clusters = appendGeometryClusters(
             mesh.geometry,
             range,
             content.positions,
-            this.hasUvs ? content.uvs : undefined,
+            uvs,
             content.clusterBounds,
             clusterTriangles,
           );
