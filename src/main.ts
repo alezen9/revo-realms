@@ -1,6 +1,8 @@
 import "./style.css";
 import { Game } from "./Game";
 import { mountUi } from "./ui/mountUi";
+import { DebugCameraControls } from "./systems/scene/DebugCameraControls";
+import { TOOLING_FLAGS } from "./systems/debug/toolingFlags";
 import {
   assets,
   debugPanel,
@@ -11,6 +13,7 @@ import {
   physicsWorld,
   pipelineWarmup,
   sound,
+  stage,
 } from "./systems";
 
 const hasWebGpuSupportAsync = async () => {
@@ -30,6 +33,8 @@ const setupSystemsAsync = async () => {
   eventBus.emit("engine-loading-core-progress", 0);
   await debugPanel.initAsync();
   await graphics.init();
+  if (TOOLING_FLAGS.debug)
+    new DebugCameraControls(stage, graphics.canvas, eventBus, debugPanel);
   await performanceMonitor.initAsync();
   eventBus.emit("engine-loading-core-progress", 25);
   await Promise.all([physicsWorld.initAsync(), assets.initAsync(graphics)]);

@@ -63,7 +63,6 @@ export class Graphics {
 
   async init() {
     await this.renderer.init();
-    this.stage.init(this.canvas, this.debugPanel);
   }
 
   initFramePipeline(vsmDependencies: VSMDependencies) {
