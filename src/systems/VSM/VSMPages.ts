@@ -28,6 +28,7 @@ import {
   vec4,
 } from "three/tsl";
 import type { ShadowPageStats } from "../EventsManager";
+import { TOOLING_FLAGS } from "../runtime/ToolingFlags";
 import {
   VSM_COUNTER_ACTIVE,
   VSM_COUNTER_ALLOCATED,
@@ -36,7 +37,6 @@ import {
   VSM_COUNTER_LEVEL_MISSES,
   VSM_COUNTER_MISSING,
   VSM_COUNTER_REDRAWS,
-  VSM_COUNTER_REQUESTED,
   VSM_COUNTER_REUSABLE,
   VSM_DYNAMIC_CAPACITY,
   VSM_DYNAMIC_COUNTER_TOTAL,
@@ -270,7 +270,6 @@ export class VSMPages {
             );
             const pageTag = getPageTag(pageCoordinate);
             const { slot, isResident } = context.resolvePage(pageKey, pageTag);
-            atomicAdd(atomicCounters.element(VSM_COUNTER_REQUESTED), 1);
             If(isResident, () => {
               context.slotMetadataNode
                 .element(slot)
@@ -394,7 +393,8 @@ export class VSMPages {
             1,
           );
           pageJobsNode.element(jobIndex.add(VSM_JOBS_ALLOCATED)).assign(job);
-          atomicAdd(atomicCounters.element(VSM_COUNTER_REDRAWS), 1);
+          if (TOOLING_FLAGS.monitoring)
+            atomicAdd(atomicCounters.element(VSM_COUNTER_REDRAWS), 1);
           const activeIndex = atomicAdd(
             atomicCounters.element(VSM_COUNTER_ACTIVE),
             1,
@@ -576,19 +576,6 @@ export class VSMPages {
       const residency = new Uint32Array(
         await this.renderer.getArrayBufferAsync(context.counters),
       );
-      const dynamicCounters = new Uint32Array(
-        await this.renderer.getArrayBufferAsync(context.dynamicCounters),
-      );
-      const now = performance.now();
-      const redrawTotal = residency[VSM_COUNTER_REDRAWS];
-      const elapsedSeconds = (now - this.redrawReadbackTime) / 1000;
-      this.stats.needed = residency[VSM_COUNTER_REQUESTED];
-      this.stats.redrawsPerSecond = Math.round(
-        (redrawTotal - this.redrawTotal) / elapsedSeconds,
-      );
-      this.stats.dynamic = dynamicCounters[VSM_DYNAMIC_COUNTER_TOTAL];
-      this.redrawTotal = redrawTotal;
-      this.redrawReadbackTime = now;
       let overflow = 0;
       for (let level = 0; level < VSM_LEVEL_COUNT; level++)
         overflow += Math.max(
@@ -596,6 +583,21 @@ export class VSMPages {
           residency[VSM_COUNTER_LEVEL_MISSES + level] - VSM_POOL_CAPACITY,
         );
       this.stats.missing = residency[VSM_COUNTER_MISSING] + overflow;
+      if (!TOOLING_FLAGS.monitoring) return;
+
+      const dynamicCounters = new Uint32Array(
+        await this.renderer.getArrayBufferAsync(context.dynamicCounters),
+      );
+      const now = performance.now();
+      const redrawTotal = residency[VSM_COUNTER_REDRAWS];
+      const elapsedSeconds = (now - this.redrawReadbackTime) / 1000;
+      this.stats.needed = residency[VSM_COUNTER_ACTIVE] + this.stats.missing;
+      this.stats.redrawsPerSecond = Math.round(
+        (redrawTotal - this.redrawTotal) / elapsedSeconds,
+      );
+      this.stats.dynamic = dynamicCounters[VSM_DYNAMIC_COUNTER_TOTAL];
+      this.redrawTotal = redrawTotal;
+      this.redrawReadbackTime = now;
     } catch (error) {
       console.error("Shadow page stats readback failed", error);
     } finally {

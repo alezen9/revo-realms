@@ -24,19 +24,18 @@ import {
 } from "./VSMMath";
 
 export const VSM_POOL_CAPACITY = 512;
-export const VSM_DYNAMIC_CAPACITY = 400;
+export const VSM_DYNAMIC_CAPACITY = 64;
 export const VSM_INVALID_PAGE_KEY = 0xffffffff;
 export const VSM_JOBS_ALLOCATED = 0;
 export const VSM_JOBS_ACTIVE = VSM_POOL_CAPACITY;
 export const VSM_JOBS_DYNAMIC = VSM_POOL_CAPACITY * 2;
 export const VSM_JOB_COUNT = VSM_POOL_CAPACITY * 3;
-export const VSM_COUNTER_REQUESTED = 0;
-export const VSM_COUNTER_ALLOCATED = 1;
-export const VSM_COUNTER_MISSING = 2;
-export const VSM_COUNTER_ACTIVE = 3;
-export const VSM_COUNTER_EMPTY = 4;
-export const VSM_COUNTER_REUSABLE = 5;
-export const VSM_COUNTER_LEVEL_MISSES = 6;
+export const VSM_COUNTER_ALLOCATED = 0;
+export const VSM_COUNTER_MISSING = 1;
+export const VSM_COUNTER_ACTIVE = 2;
+export const VSM_COUNTER_EMPTY = 3;
+export const VSM_COUNTER_REUSABLE = 4;
+export const VSM_COUNTER_LEVEL_MISSES = 5;
 export const VSM_COUNTER_REDRAWS = VSM_COUNTER_LEVEL_MISSES + VSM_LEVEL_COUNT;
 export const VSM_COUNTER_COUNT = VSM_COUNTER_REDRAWS + 1;
 export const VSM_DYNAMIC_COUNTER_TOTAL = 0;
