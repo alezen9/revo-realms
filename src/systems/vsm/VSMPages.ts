@@ -27,7 +27,7 @@ import {
   vec2,
   vec4,
 } from "three/tsl";
-import type { ShadowPageStats } from "../events/EventBus";
+import type { ShadowPageStats } from "../monitoring/monitoringTypes";
 import { TOOLING_FLAGS } from "../debug/toolingFlags";
 import {
   VSM_COUNTER_ACTIVE,

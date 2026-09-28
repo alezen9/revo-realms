@@ -2,7 +2,10 @@
 	import { onMount } from "svelte"
 	import { fade } from "svelte/transition"
 	import { eventBus } from "../../systems"
-	import type { MonitoringSnapshot, ResourceEntry } from "../../systems/events/EventBus"
+	import type {
+		MonitoringSnapshot,
+		ResourceEntry,
+	} from "../../systems/monitoring/monitoringTypes"
 
 	const REVEAL = { duration: 220 }
 	const RANK_ROWS = [0, 1, 2] as const

@@ -8,7 +8,7 @@ import { GrassBladeGeometry } from "./GrassBladeGeometry";
 import { GrassMaterial } from "./GrassMaterial";
 import { GrassCompute } from "./GrassCompute";
 import type { ComputeTask } from "../../systems/rendering/ComputeTask";
-import type { GrassMonitoringStats } from "../../systems/events/EventBus";
+import type { GrassMonitoringStats } from "../../systems/monitoring/monitoringTypes";
 
 const UINT32_BYTE_SIZE = Uint32Array.BYTES_PER_ELEMENT;
 const INDIRECT_FIRST_INSTANCE_FEATURE = "indirect-first-instance";

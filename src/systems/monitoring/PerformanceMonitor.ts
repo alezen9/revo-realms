@@ -2,15 +2,15 @@ import type { Agrimensor, PassKind } from "agrimensor";
 import type { FrameScheduler } from "../time/FrameScheduler";
 import type { PhysicsScheduler } from "../time/PhysicsScheduler";
 import type { GameClock } from "../time/GameClock";
+import type { EventBus } from "../events/EventBus";
 import type {
   DeviceGpuPassMetrics,
   DeviceGpuMetrics,
   DeviceMetrics,
-  EventBus,
   GrassMonitoringStats,
   MonitoringSnapshot,
   ShadowPageStats,
-} from "../events/EventBus";
+} from "./monitoringTypes";
 import { type Graphics } from "../rendering/Graphics";
 import { ThreeMonitoringAdapter } from "./ThreeMonitoringAdapter";
 import { TOOLING_FLAGS } from "../debug/toolingFlags";
