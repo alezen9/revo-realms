@@ -3,6 +3,7 @@ import {
   NodeFrame,
   type Node,
   type PassNode,
+  type Renderer,
   type TextureNode,
   type WebGPURenderer,
 } from "three/webgpu";
@@ -28,6 +29,10 @@ export class WaterPass {
   apply(sceneColor: Node<"vec4">) {
     const water = this.water.sample(screenUV);
     return mix(sceneColor, vec4(water.rgb, 1), water.a);
+  }
+
+  compileAsync(renderer: Renderer) {
+    return this.passNode.compileAsync(renderer);
   }
 
   render() {

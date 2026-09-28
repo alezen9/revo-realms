@@ -90,10 +90,8 @@ export class RendererManager {
     return this.postprocessingManager.vsmPass;
   }
 
-  async compileScenesOnceAsync() {
-    const { scenes, renderCamera } = this.sceneManager;
-    for (const scene of scenes)
-      await this.renderer.compileAsync(scene, renderCamera);
+  compileScenesOnceAsync() {
+    return this.postprocessingManager.compileAsync();
   }
 
   createComputeTask(options: CreateComputeTaskOptions) {

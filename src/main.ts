@@ -35,18 +35,13 @@ const bootstrap = async () => {
     const game = new Game();
     eventsManager.emit("engine-loading-core-progress", 90);
 
-    const prewarmResult = await prewarmManager.runStartupPrewarmAsync();
-    const isDev = import.meta.env.DEV;
-    if (prewarmResult.completed && isDev)
+    const { completed, timedOut, error } =
+      await prewarmManager.runStartupPrewarmAsync();
+    if (completed && import.meta.env.DEV)
       console.info("[main] Prewarm completed.");
-    else if (prewarmResult.timedOut)
-      console.warn("[main] Prewarm timed out. Continuing startup.");
-    else if (prewarmResult.error)
-      console.error(
-        "[main] Prewarm failed. Continuing startup.",
-        prewarmResult.error,
-      );
-    else console.warn("[main] Prewarm exited early. Continuing startup.");
+    if (timedOut) console.warn("[main] Prewarm timed out. Continuing startup.");
+    if (error)
+      console.error("[main] Prewarm failed. Continuing startup.", error);
 
     await game.startLoopAsync();
   } catch (error) {

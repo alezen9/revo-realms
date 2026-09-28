@@ -126,6 +126,11 @@ export class PostprocessingManager extends RenderPipeline {
     this.needsUpdate = true;
   };
 
+  async compileAsync() {
+    await this.scenePass.compileAsync(this.renderer);
+    await this.waterPass.compileAsync(this.renderer);
+  }
+
   sampleMainSceneColor(uv: Node<"vec2">) {
     return this.vsmPass.sampleShadowedColor(uv);
   }

@@ -6,6 +6,7 @@ import {
   UnsignedByteType,
   UnsignedInt101111Type,
   type PassNode,
+  type Renderer,
   type TextureNode,
   type WebGPURenderer,
 } from "three/webgpu";
@@ -50,6 +51,10 @@ export class ScenePass {
   setCamera(camera: Camera) {
     this.passNode.camera = camera;
     this.passNode.needsUpdate = true;
+  }
+
+  compileAsync(renderer: Renderer) {
+    return this.passNode.compileAsync(renderer);
   }
 
   render() {
