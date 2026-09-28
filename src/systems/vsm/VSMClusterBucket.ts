@@ -182,6 +182,7 @@ const computeClusterLightBounds = Fn<
   [
     instanceClusters: Uvec4Node,
     clusterBounds: Vec4Node,
+    positions: Vec4Node,
     matrices: Vec4Node,
     lightBounds: Vec4Node,
     lightBasis: VSMContext["lightBasis"],
@@ -192,17 +193,37 @@ const computeClusterLightBounds = Fn<
   ([
     instanceClusters,
     clusterBounds,
+    positions,
     matrices,
     lightBounds,
     lightBasis,
     positionNode,
   ]) => {
     const instanceCluster = instanceClusters.element(instanceIndex).toVar();
+    const bounds = vec4(1e8, 1e8, -1e8, -1e8).toVar();
+    // a position node can deform the cluster, so its rest box corners don't bound it
+    if (positionNode) {
+      const vertexCount = instanceCluster.w.mul(3);
+      Loop({ start: 0, end: vertexCount, type: "uint" }, ({ i: vertex }) => {
+        const local = positions
+          .element(instanceCluster.y.add(vertex))
+          .xyz.toVar();
+        const world = getWorldPosition(
+          matrices,
+          instanceCluster.x,
+          local,
+          positionNode,
+        );
+        const light = getLightPosition(world, lightBasis);
+        bounds.assign(vec4(bounds.xy.min(light), bounds.zw.max(light)));
+      });
+      lightBounds.element(instanceIndex).assign(bounds);
+      return;
+    }
     const minimum = clusterBounds.element(instanceCluster.z.mul(2)).xyz.toVar();
     const maximum = clusterBounds
       .element(instanceCluster.z.mul(2).add(1))
       .xyz.toVar();
-    const bounds = vec4(1e8, 1e8, -1e8, -1e8).toVar();
     Loop({ start: 0, end: 8, type: "uint" }, ({ i: corner }) => {
       const cornerSide = vec3(
         corner.bitAnd(1),
@@ -400,6 +421,7 @@ export class VSMClusterBucket {
         this.clusterBoundsAttribute,
         this.clusterBoundsAttribute.count,
       ),
+      createVec4Node(this.positionsAttribute, this.positionsAttribute.count),
       createVec4Node(this.matricesAttribute, this.matricesAttribute.count),
       lightBounds,
       lightBasis,
