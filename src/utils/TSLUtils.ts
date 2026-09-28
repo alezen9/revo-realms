@@ -13,7 +13,7 @@ import {
   EPSILON,
 } from "three/tsl";
 import type { Node } from "three/webgpu";
-import { realmConfig } from "../realm/config";
+import { realmConfig } from "../entities/realmConfig";
 
 type FloatNode = Node<"float">;
 type Vec2Node = Node<"vec2">;

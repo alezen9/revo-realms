@@ -1,15 +1,15 @@
-import Player from "./entities/Player/Player";
-import RevoRealm from "./realm/RevoRealm";
+import Player from "./entities/player/Player";
+import RevoRealm from "./entities/RevoRealm";
 import { debounce } from "lodash-es";
-import { rendererConfig } from "./systems/RendererManager/RendererManager";
+import { rendererConfig } from "./systems/rendering/Graphics";
 import {
-  debugManager,
-  monitoringManager,
-  physicsManager,
+  debugPanel,
+  performanceMonitor,
+  physicsWorld,
   physicsScheduler,
-  rendererManager,
-  eventsManager,
-  timeManager,
+  graphics,
+  eventBus,
+  gameClock,
   frameScheduler,
 } from "./systems";
 
@@ -44,7 +44,7 @@ export default class Game {
   }
 
   private debugGame() {
-    const folder = debugManager.panel.addFolder({
+    const folder = debugPanel.panel.addFolder({
       title: "⚡️ Performance",
       expanded: false,
     });
@@ -73,7 +73,7 @@ export default class Game {
         max: 1,
         step: 0.05,
       })
-      .on("change", () => rendererManager.applyResolution());
+      .on("change", () => graphics.applyResolution());
   }
 
   private getSizes(): Sizes {
@@ -89,42 +89,42 @@ export default class Game {
 
   private onResize = () => {
     const sizes = this.getSizes();
-    eventsManager.emit("engine-render-target-resize", sizes);
+    eventBus.emit("engine-render-target-resize", sizes);
   };
 
   private onResizeDebounced = debounce(this.onResize, 300);
 
   private onAnimationFrame = (timestamp: DOMHighResTimeStamp) => {
-    timeManager.update(timestamp);
-    if (timeManager.isPaused) return;
+    gameClock.update(timestamp);
+    if (gameClock.isPaused) return;
 
-    physicsScheduler.update(timeManager.delta);
+    physicsScheduler.update(gameClock.delta);
 
     for (let i = 0; i < physicsScheduler.pendingSteps; i++) {
-      eventsManager.emit("engine-before-physics", this.physicsState);
-      physicsManager.step();
-      eventsManager.emit("engine-after-physics", this.physicsState);
-      physicsManager.flush();
+      eventBus.emit("engine-before-physics", this.physicsState);
+      physicsWorld.step();
+      eventBus.emit("engine-after-physics", this.physicsState);
+      physicsWorld.flush();
     }
-    monitoringManager.samplePhysics();
+    performanceMonitor.samplePhysics();
 
     frameScheduler.update();
     if (!frameScheduler.shouldRender) return;
 
-    this.renderState.delta = timeManager.consumeRenderDelta();
+    this.renderState.delta = gameClock.consumeRenderDelta();
 
-    monitoringManager.sampleRender(timestamp);
-    eventsManager.emit("engine-render-update", this.renderState);
-    rendererManager.render();
+    performanceMonitor.sampleRender(timestamp);
+    eventBus.emit("engine-render-update", this.renderState);
+    graphics.render();
 
     if (!this.hasRenderedFirstFrame) {
       this.hasRenderedFirstFrame = true;
-      eventsManager.emit("engine-loading-core-progress", 100);
+      eventBus.emit("engine-loading-core-progress", 100);
     }
   };
 
   private dispose = () => {
-    rendererManager.renderer.setAnimationLoop(null);
+    graphics.renderer.setAnimationLoop(null);
     this.resizeObserver?.disconnect();
     this.resizeObserver = undefined;
     this.onResizeDebounced.cancel();
@@ -133,7 +133,7 @@ export default class Game {
   async startLoopAsync() {
     await frameScheduler.initAsync();
     this.debugGame();
-    timeManager.reset();
+    gameClock.reset();
 
     this.onResize();
     this.resizeObserver = new ResizeObserver(this.onResizeDebounced);
@@ -141,6 +141,6 @@ export default class Game {
 
     import.meta.hot?.dispose(this.dispose);
 
-    rendererManager.renderer.setAnimationLoop(this.onAnimationFrame);
+    graphics.renderer.setAnimationLoop(this.onAnimationFrame);
   }
 }

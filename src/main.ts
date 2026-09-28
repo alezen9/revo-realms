@@ -2,7 +2,7 @@ import "./style.css";
 import Game from "./Game";
 import { mountUi } from "./ui/mountUi";
 import { setupAsync } from "./systems/setupAsync";
-import { eventsManager, prewarmManager } from "./systems";
+import { eventBus, pipelineWarmup } from "./systems";
 
 const hasWebGpuSupportAsync = async () => {
   if (!navigator.gpu) return false;
@@ -23,7 +23,7 @@ const bootstrap = async () => {
   const doesSupportWebGpu = await hasWebGpuSupportAsync();
   if (!doesSupportWebGpu) {
     console.error("[main] Startup failed.", "WebGPU is required");
-    eventsManager.emit("engine-loading-failed", {
+    eventBus.emit("engine-loading-failed", {
       headline: "WebGPU is required",
       hint: "This experience relies on WebGPU-specific rendering and simulation features. Please use a browser and device that support WebGPU.",
     });
@@ -33,10 +33,10 @@ const bootstrap = async () => {
   try {
     await setupAsync();
     const game = new Game();
-    eventsManager.emit("engine-loading-core-progress", 90);
+    eventBus.emit("engine-loading-core-progress", 90);
 
     const { completed, timedOut, error } =
-      await prewarmManager.runStartupPrewarmAsync();
+      await pipelineWarmup.runStartupPrewarmAsync();
     if (completed && import.meta.env.DEV)
       console.info("[main] Prewarm completed.");
     if (timedOut) console.warn("[main] Prewarm timed out. Continuing startup.");
@@ -46,7 +46,7 @@ const bootstrap = async () => {
     await game.startLoopAsync();
   } catch (error) {
     console.error("[main] Startup failed.", error);
-    eventsManager.emit("engine-loading-failed");
+    eventBus.emit("engine-loading-failed");
   }
 };
 

@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from "svelte"
-	import { eventsManager } from "../../systems"
+	import { eventBus } from "../../systems"
 
 	let animation = $state("")
 
@@ -13,8 +13,8 @@
 	}
 
 	onMount(() => {
-		const unsubscribeWindStart = eventsManager.on("game-wind-start", onWindStart)
-		const unsubscribeWindEnd = eventsManager.on("game-wind-end", onWindEnd)
+		const unsubscribeWindStart = eventBus.on("game-wind-start", onWindStart)
+		const unsubscribeWindEnd = eventBus.on("game-wind-end", onWindEnd)
 
 		return () => {
 			unsubscribeWindStart()

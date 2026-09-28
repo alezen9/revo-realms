@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount } from "svelte"
-	import { eventsManager } from "../../systems"
-	import { realmConfig } from "../../realm/config"
+	import { eventBus } from "../../systems"
+	import { realmConfig } from "../../entities/realmConfig"
 	import compassUrl from "/textures/hud/compass.webp?url"
 	import arrowUrl from "/textures/hud/compassArrow.webp?url"
 
@@ -18,7 +18,7 @@
 	onMount(() => {
 		let relativeAngle = 0
 
-		const unsubscribe = eventsManager.on("engine-render-update-throttle-16x", ({ player }) => {
+		const unsubscribe = eventBus.on("engine-render-update-throttle-16x", ({ player }) => {
 			const isFarX = Math.abs(player.position.x) > distanceThreshold
 			const isFarZ = Math.abs(player.position.z) > distanceThreshold
 			const isFar = isFarX || isFarZ

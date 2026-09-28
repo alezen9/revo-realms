@@ -1,12 +1,12 @@
 <script lang="ts">
 	import { onMount } from "svelte"
 	import {
-		eventsManager,
-		landmarkManager,
-		timeManager,
-		windManager,
+		eventBus,
+		landmarks,
+		gameClock,
+		wind,
 	} from "../../systems"
-	import type { Landmark, LandmarkIconId } from "../../systems/LandmarkManager"
+	import type { Landmark, LandmarkIconId } from "../../systems/world/Landmarks"
 	import IconAxe from "./icons/IconAxe.svelte"
 	import IconDragonBall from "./icons/IconDragonBall.svelte"
 	import IconFire from "./icons/IconFire.svelte"
@@ -16,7 +16,7 @@
 	import IconWater from "./icons/IconWater.svelte"
 
 	let isVisible = $state(false)
-	let landmarks = $state<Landmark[]>([])
+	let menuLandmarks = $state<Landmark[]>([])
 	let activeWindTargetId = $state<string | null>(null)
 
 	const innerRadius = 78
@@ -81,10 +81,10 @@
 		})
 	}
 
-	let slots = $derived(buildSlots(landmarks))
+	let slots = $derived(buildSlots(menuLandmarks))
 	let selectedId = $derived(
 		activeWindTargetId
-			? (landmarks.find(
+			? (menuLandmarks.find(
 					landmark => landmark.windTargetId === activeWindTargetId,
 				)?.id ?? null)
 			: null,
@@ -100,13 +100,13 @@
 
 	const handleSlotClick = (landmark: Landmark) => {
 		if (!landmark.windTargetId) return
-		const isActivated = windManager.activateTargetById(landmark.windTargetId)
+		const isActivated = wind.activateTargetById(landmark.windTargetId)
 		if (!isActivated) return
 		isVisible = false
 	}
 
 	onMount(() => {
-		const unsubscribeWindTarget = eventsManager.on(
+		const unsubscribeWindTarget = eventBus.on(
 			"wind-target-change",
 			(targetId: string | null) => {
 				activeWindTargetId = targetId
@@ -114,7 +114,7 @@
 		)
 		const handleKeyDown = (event: KeyboardEvent) => {
 			if (event.code === "KeyL" && !event.repeat) {
-				landmarks = landmarkManager.getAll()
+				menuLandmarks = landmarks.getAll()
 				isVisible = !isVisible
 				return
 			}
@@ -151,8 +151,8 @@
 		window.addEventListener("keydown", handleKeyDown)
 		window.addEventListener("pointerdown", handlePointerDown)
 
-		landmarks = landmarkManager.getAll()
-		activeWindTargetId = windManager.activeTargetId
+		menuLandmarks = landmarks.getAll()
+		activeWindTargetId = wind.activeTargetId
 
 		return () => {
 			unsubscribeWindTarget()
@@ -162,9 +162,9 @@
 	})
 
 	$effect(() => {
-		timeManager.setSlowMotionEnabled(menuVisible)
+		gameClock.setSlowMotionEnabled(menuVisible)
 		return () => {
-			if (menuVisible) timeManager.setSlowMotionEnabled(false)
+			if (menuVisible) gameClock.setSlowMotionEnabled(false)
 		}
 	})
 

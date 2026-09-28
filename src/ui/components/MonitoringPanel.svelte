@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { onMount } from "svelte"
 	import { fade } from "svelte/transition"
-	import { eventsManager } from "../../systems"
-	import type { MonitoringSnapshot, ResourceEntry } from "../../systems/EventsManager"
+	import { eventBus } from "../../systems"
+	import type { MonitoringSnapshot, ResourceEntry } from "../../systems/events/EventBus"
 
 	const REVEAL = { duration: 220 }
 	const RANK_ROWS = [0, 1, 2] as const
@@ -73,7 +73,7 @@
 	}
 
 	onMount(() => {
-		const unsubscribe = eventsManager.on("engine-monitoring-update", value => {
+		const unsubscribe = eventBus.on("engine-monitoring-update", value => {
 			snapshot = value
 		})
 

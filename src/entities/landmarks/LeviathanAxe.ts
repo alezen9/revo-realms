@@ -1,0 +1,144 @@
+import {
+  assets,
+  debugPanel,
+  landmarks,
+  physicsWorld,
+  wind,
+  stage,
+  graphics,
+} from "../../systems";
+import { ColliderDesc } from "@dimforge/rapier3d";
+import { Mesh, Quaternion, Vector3 } from "three";
+import { VSMReceiverStandardMaterial } from "../../systems/vsm/VSMReceiverMaterials";
+import { color, normalMap, texture, uniform, uv } from "three/tsl";
+import { RevoColliderType } from "../../systems/physics/colliderTypes";
+
+const uniforms = {
+  uDiffuseScale: uniform(4),
+  uNormalScale: uniform(1.25),
+  uAoScale: uniform(0.75),
+  uMetalnessScale: uniform(1),
+  uRoughnessScale: uniform(1.5),
+  uEmissionScale: uniform(20),
+};
+
+class LeviathanAxeMaterial extends VSMReceiverStandardMaterial {
+  constructor() {
+    super();
+
+    const diffuseEmission = texture(
+      assets.resources.leviathanAxeDiffuseEmissive,
+      uv(),
+    );
+    this.colorNode = diffuseEmission.rgb.mul(uniforms.uDiffuseScale);
+
+    const emissive = color("lightblue")
+      .mul(diffuseEmission.a)
+      .mul(uniforms.uEmissionScale);
+    this.emissiveNode = emissive;
+
+    const normal = texture(assets.resources.leviathanAxeNormal, uv());
+    this.normalNode = normalMap(normal, uniforms.uNormalScale);
+
+    const orm = texture(assets.resources.leviathanAxeORM, uv());
+    this.aoNode = orm.r.mul(uniforms.uAoScale);
+    this.metalnessNode = orm.b.mul(uniforms.uMetalnessScale);
+    this.roughnessNode = orm.g.mul(uniforms.uRoughnessScale);
+  }
+}
+
+export default class LeviathanAxe {
+  constructor() {
+    // Visual
+    const axe = assets.resources.worldModel.scene.getObjectByName(
+      "leviathan_axe",
+    ) as Mesh;
+    axe.material = new LeviathanAxeMaterial();
+
+    stage.mainScene.add(axe);
+    graphics.vsmPass.registerCaster(axe);
+
+    // Physics
+    const scale = axe.scale.x;
+    const headPosition = new Vector3(0.1, 0.05, 0)
+      .multiplyScalar(scale)
+      .applyQuaternion(axe.quaternion)
+      .add(axe.position);
+    const headRotation = new Quaternion()
+      .setFromAxisAngle(new Vector3(0, 0, 1), Math.PI / 5)
+      .premultiply(axe.quaternion);
+    const headColliderDesc = ColliderDesc.cuboid(
+      0.4 * scale,
+      0.6 * scale,
+      0.12 * scale,
+    )
+      .setTranslation(...headPosition.toArray())
+      .setRotation(headRotation)
+      .setRestitution(0.4);
+    const headCollider = physicsWorld.world.createCollider(headColliderDesc);
+    headCollider.userData = {
+      type: RevoColliderType.Stone,
+    };
+
+    const handlePosition = new Vector3(-1.5, -0.75, 0)
+      .multiplyScalar(scale)
+      .applyQuaternion(axe.quaternion)
+      .add(axe.position);
+    const handleRotation = new Quaternion()
+      .setFromAxisAngle(new Vector3(0, 0, 1), 0.5 - Math.PI / 2)
+      .premultiply(axe.quaternion);
+    const handleColliderDesc = ColliderDesc.capsule(1.35 * scale, 0.2 * scale)
+      .setTranslation(...handlePosition.toArray())
+      .setRotation(handleRotation)
+      .setRestitution(0.4);
+    const handleCollider =
+      physicsWorld.world.createCollider(handleColliderDesc);
+    handleCollider.userData = {
+      type: RevoColliderType.Stone,
+    };
+
+    // Register landmark for radial menu discovery
+    const landmarkId = landmarks.register({
+      name: "Leviathan Axe",
+      icon: "axe",
+      position: axe.position,
+      arrivalRadius: 20,
+    });
+
+    // Register wind target and link to landmark
+    const windTargetId = wind.registerTarget("Leviathan Axe", axe.position, 20);
+    landmarks.setWindTargetId(landmarkId, windTargetId);
+    this.debug();
+  }
+
+  private debug() {
+    const folder = debugPanel.panel.addFolder({
+      title: "🪓 God of War",
+      expanded: false,
+    });
+    folder.addBinding(uniforms.uDiffuseScale, "value", {
+      label: "Diffuse scale",
+      min: 0,
+    });
+    folder.addBinding(uniforms.uNormalScale, "value", {
+      label: "Normal scale",
+      min: 0,
+    });
+    folder.addBinding(uniforms.uEmissionScale, "value", {
+      label: "Emission scale",
+      min: 0,
+    });
+    folder.addBinding(uniforms.uAoScale, "value", {
+      label: "AO scale",
+      min: 0,
+    });
+    folder.addBinding(uniforms.uMetalnessScale, "value", {
+      label: "Metalness scale",
+      min: 0,
+    });
+    folder.addBinding(uniforms.uRoughnessScale, "value", {
+      label: "Roughness scale",
+      min: 0,
+    });
+  }
+}

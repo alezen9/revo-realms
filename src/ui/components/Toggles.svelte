@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount } from "svelte"
 	import Button from "./Button.svelte"
-	import { audioManager, eventsManager, timeManager } from "../../systems"
+	import { sound, eventBus, gameClock } from "../../systems"
 	import CreditsDialog from "./CreditsDialog.svelte"
 
 	let isAudioActive = $state(false)
@@ -11,7 +11,7 @@
 	const setCreditsDialogOpen = (isOpen: boolean) => {
 		if (isCreditsDialogOpen === isOpen) return
 		isCreditsDialogOpen = isOpen
-		timeManager.setSlowMotionEnabled(isOpen)
+		gameClock.setSlowMotionEnabled(isOpen)
 	}
 
 	const onCreditsClick = (e: MouseEvent) => {
@@ -22,7 +22,7 @@
 	const onAudioToggle = async (e: MouseEvent) => {
 		e.stopPropagation()
 		isAudioActive = !isAudioActive
-		await audioManager.toggleMute()
+		await sound.toggleMute()
 	}
 
 	const onDialogClick = (e: MouseEvent) => {
@@ -32,7 +32,7 @@
 	}
 
 	onMount(() => {
-		const unsubscribeAudioProgress = eventsManager.on(
+		const unsubscribeAudioProgress = eventBus.on(
 			"engine-loading-audio-progress",
 			p => {
 				isAudioReady = p === 100
@@ -41,7 +41,7 @@
 
 		return () => {
 			unsubscribeAudioProgress()
-			if (isCreditsDialogOpen) timeManager.setSlowMotionEnabled(false)
+			if (isCreditsDialogOpen) gameClock.setSlowMotionEnabled(false)
 		}
 	})
 </script>

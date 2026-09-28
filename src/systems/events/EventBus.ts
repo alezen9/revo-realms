@@ -1,0 +1,192 @@
+import { EventEmitter } from "tseep/lib/ee-safe";
+import type { ResourceEntry } from "agrimensor";
+
+export type { ResourceEntry };
+import { type Sizes, type State } from "../../Game";
+
+type UpdateEvent = (state: State) => void;
+type ResizeEvent = (sizes: Sizes) => void;
+
+export type LoadingFailure = {
+  headline: string;
+  hint: string;
+};
+
+export type DeviceGpuMetrics = {
+  averageMs: number;
+  renderAverageMs: number;
+  computeAverageMs: number;
+  grassComputeAverageMs: number | null;
+  gapAverageMs: number;
+  uninstrumentedPassMax: number;
+  slowestPasses: DeviceGpuPassMetrics[];
+};
+
+export type DeviceGpuPassMetrics = {
+  kind: "render" | "compute";
+  label: string;
+  averageMs: number;
+};
+
+export type DeviceMetrics = {
+  drawCallCount: number;
+  renderPassCount: number;
+  computePassCount: number;
+  computeDispatchCount: number;
+  gpuSubmissionCount: number;
+  queueWriteMaxBytes: number;
+  commandCopyMaxBytes: number;
+  pipelineCreationCount: number;
+  pipelineBlockingMaxMs: number;
+  liveBytes: number;
+  peakBytes: number;
+  textureBytes: number;
+  bufferBytes: number;
+  largestResources: readonly ResourceEntry[];
+  gpu: DeviceGpuMetrics | null;
+};
+
+export type MonitoringSnapshot = {
+  fps: {
+    live: number;
+    target: number;
+    refreshHz: number;
+    missedFrames: number;
+  };
+  frame: {
+    intervalAverageMs: number;
+    intervalP95Ms: number;
+    intervalP99Ms: number;
+    intervalMaxMs: number;
+  };
+  physics: {
+    rate: number;
+    maxSteps: number;
+    catchUpSteps: number;
+    discardedMs: number;
+    remainderMs: number;
+  };
+  output: {
+    width: number;
+    height: number;
+    pixelRatio: number;
+  };
+  frameBudgetMs: number;
+  sampleRateMs: number;
+  sceneTriangles: number;
+  grass: GrassMonitoringStats | null;
+  shadowPages: ShadowPageStats | null;
+  device: DeviceMetrics | null;
+};
+
+export type ShadowPageStats = {
+  needed: number;
+  capacity: number;
+  missing: number;
+  redrawsPerSecond: number;
+  dynamic: number;
+  dynamicCapacity: number;
+};
+
+export type GrassMonitoringStats = {
+  rendered: number;
+  renderedPerLod: number[];
+  segmentsPerLod: number[];
+  total: number;
+  renderedTriangles: number;
+  allocatedTriangles: number;
+};
+
+const throttleLanes = [
+  { interval: 2, offset: 0, event: "engine-render-update-throttle-2x" },
+  { interval: 4, offset: 1, event: "engine-render-update-throttle-4x" },
+  { interval: 16, offset: 5, event: "engine-render-update-throttle-16x" },
+  { interval: 64, offset: 17, event: "engine-render-update-throttle-64x" },
+] as const;
+
+type ThrottleInterval = (typeof throttleLanes)[number]["interval"];
+type ThrottledEvents = {
+  [L in (typeof throttleLanes)[number] as L["event"]]: UpdateEvent;
+};
+
+type EngineEvents = {
+  "engine-before-physics": UpdateEvent;
+  "engine-after-physics": UpdateEvent;
+  "engine-render-update": UpdateEvent;
+  "engine-camera-change": VoidFunction;
+  "engine-render-target-resize": ResizeEvent;
+  "engine-loading-resources-progress": (percentage: number) => void;
+  "engine-loading-audio-progress": (percentage: number) => void;
+  "engine-loading-core-progress": (percentage: number) => void;
+  "engine-loading-failed": (failure?: LoadingFailure) => void;
+  "engine-monitoring-update": (snapshot: MonitoringSnapshot) => void;
+  "engine-slowmo-change": (enabled: boolean) => void;
+} & ThrottledEvents;
+
+type InputEvents = {
+  "swipe-up": VoidFunction;
+};
+
+type GameEvents = {
+  "game-wind-start": VoidFunction;
+  "game-wind-end": VoidFunction;
+  "wind-target-change": (targetId: string | null) => void;
+};
+
+type Events = EngineEvents & InputEvents & GameEvents;
+
+export class EventBus {
+  private emitter = new EventEmitter<Events>();
+  private frameIndex = 0;
+  private throttledDeltaByInterval = new Map<ThrottleInterval, number>();
+  private throttledState?: State;
+
+  constructor() {
+    this.updateThrottled();
+
+    import.meta.hot?.dispose(() => {
+      this.removeAllListeners();
+    });
+  }
+
+  private updateThrottled() {
+    this.on("engine-render-update", ({ player, delta }) => {
+      this.frameIndex++;
+
+      for (const lane of throttleLanes) {
+        const { interval, offset, event } = lane;
+        const accDelta =
+          (this.throttledDeltaByInterval.get(interval) ?? 0) + delta;
+        this.throttledDeltaByInterval.set(interval, accDelta);
+
+        const canEmit = this.frameIndex >= interval + offset;
+        if (!canEmit) continue;
+        if ((this.frameIndex - offset) % interval !== 0) continue;
+
+        if (!this.throttledState) this.throttledState = { player, delta: 0 };
+        this.throttledState.player = player;
+        this.throttledState.delta = accDelta;
+        this.emit(event, this.throttledState);
+        this.throttledDeltaByInterval.set(interval, 0);
+      }
+    });
+  }
+
+  on<K extends keyof Events>(event: K, listener: Events[K]): () => void {
+    this.emitter.on(event, listener);
+    return () => {
+      this.emitter.off(event, listener);
+    };
+  }
+
+  emit<K extends keyof Events>(
+    event: K,
+    ...args: Parameters<Events[K]>
+  ): boolean {
+    return this.emitter.emit(event, ...args);
+  }
+
+  removeAllListeners<K extends keyof Events>(event?: K) {
+    this.emitter.removeAllListeners(event);
+  }
+}

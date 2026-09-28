@@ -1,0 +1,402 @@
+import { debugPanel } from "../../systems";
+import { srgbColorTarget } from "../../systems/debug/tweakpaneColor";
+import type { GrassConfig, GrassUniforms } from "./config";
+
+export const debugGrass = (uniforms: GrassUniforms, config: GrassConfig) => {
+  const folder = debugPanel.panel.addFolder({
+    title: "🌱 Grass",
+    expanded: false,
+  });
+
+  const color = folder.addFolder({ title: "Color" });
+  color.addBinding(srgbColorTarget(uniforms.uTipColor.value), "value", {
+    label: "Tip",
+    view: "color",
+    color: { type: "float" },
+  });
+  color.addBinding(srgbColorTarget(uniforms.uBaseColor.value), "value", {
+    label: "Base",
+    view: "color",
+    color: { type: "float" },
+  });
+  color.addBinding(srgbColorTarget(uniforms.uBaseColorDark.value), "value", {
+    label: "Base dark",
+    view: "color",
+    color: { type: "float" },
+  });
+  color.addBinding(srgbColorTarget(uniforms.uWarmColor.value), "value", {
+    label: "Warm",
+    view: "color",
+    color: { type: "float" },
+  });
+  color.addBinding(srgbColorTarget(uniforms.uRustColor.value), "value", {
+    label: "Rust",
+    view: "color",
+    color: { type: "float" },
+  });
+  color.addBinding(uniforms.uColorMixFactor, "value", {
+    label: "Mix factor",
+    min: 0,
+    max: 1,
+    step: 0.01,
+  });
+  color.addBinding(uniforms.uColorVariationStrength, "value", {
+    label: "Olive variation",
+    min: 0,
+    max: 1,
+    step: 0.01,
+  });
+  color.addBinding(uniforms.uWarmVariationStrength, "value", {
+    label: "Warm variation",
+    min: 0,
+    max: 1,
+    step: 0.01,
+  });
+  color.addBinding(uniforms.uRustVariationStrength, "value", {
+    label: "Rust variation",
+    min: 0,
+    max: 1,
+    step: 0.01,
+  });
+
+  const lighting = folder.addFolder({
+    title: "Lighting",
+  });
+  lighting.addBinding(uniforms.uDiffuseContrast, "value", {
+    label: "Diffuse contrast",
+    min: 0,
+    max: 1,
+    step: 0.01,
+  });
+  lighting.addBinding(uniforms.uLightExposure, "value", {
+    label: "Exposure",
+    min: 0,
+    max: 3,
+    step: 0.01,
+  });
+  lighting.addBinding(uniforms.uHighlightStrength, "value", {
+    label: "Highlight strength",
+    min: 0,
+    max: 0.5,
+    step: 0.005,
+  });
+  lighting.addBinding(uniforms.uBacklightStrength, "value", {
+    label: "Backlight strength",
+    min: 0,
+    max: 1,
+    step: 0.01,
+  });
+
+  lighting.addBinding(uniforms.uTuftRoundness, "value", {
+    label: "Tuft roundness",
+    min: 0,
+    max: 2,
+    step: 0.01,
+  });
+  lighting.addBinding(uniforms.uWidthRoundness, "value", {
+    label: "Width roundness",
+    min: 0,
+    max: 3,
+    step: 0.01,
+  });
+
+  const ao = folder.addFolder({ title: "AO" });
+  ao.addBinding(uniforms.uAoScale, "value", {
+    label: "Scale",
+    min: 0,
+    max: 5,
+    step: 0.01,
+  });
+  ao.addBinding(uniforms.uAoRimSmoothness, "value", {
+    label: "Rim smoothness",
+    min: 0,
+    max: 5,
+    step: 0.01,
+  });
+  ao.addBinding(uniforms.uAoRadius, "value", {
+    label: "Radius",
+    min: 0,
+    max: config.TILE_HALF_SIZE,
+    step: 0.1,
+  }).on("change", ({ value }) => {
+    uniforms.uAoRadiusSquared.value = value * value;
+  });
+
+  const wind = folder.addFolder({ title: "Wind" });
+  wind.addBinding(uniforms.uWindStrength, "value", {
+    label: "Strength",
+    min: 0,
+    max: Math.PI,
+    step: 0.01,
+  });
+  wind.addBinding(uniforms.uWindSpeed, "value", {
+    label: "Speed",
+    min: 0,
+    max: 1,
+    step: 0.01,
+  });
+  wind.addBinding(uniforms.uWindUvScale, "value", {
+    label: "UV scale",
+    step: 0.01,
+    min: 0,
+    max: 10,
+  });
+  wind.addBinding(uniforms.uAmbientSwayStrength, "value", {
+    label: "Ambient sway",
+    min: 0,
+    max: 0.15,
+    step: 0.001,
+  });
+  wind.addBinding(uniforms.uWindLull, "value", {
+    label: "Calm floor",
+    min: 0,
+    max: 1,
+    step: 0.01,
+  });
+  wind.addBinding(uniforms.uWindEddyStrength, "value", {
+    label: "Eddy strength",
+    min: 0,
+    max: 1.5,
+    step: 0.01,
+  });
+  wind.addBinding(uniforms.uWindGustCoverage, "value", {
+    label: "Gust coverage",
+    min: 0,
+    max: 1,
+    step: 0.01,
+  });
+  wind
+    .addBinding(uniforms.uDetailedWindRadius, "value", {
+      label: "Detailed radius",
+      min: 0,
+      max: config.TILE_HALF_SIZE * Math.SQRT2,
+      step: 1,
+    })
+    .on("change", ({ value }) => {
+      uniforms.uDetailedWindRadiusSquared.value = value * value;
+
+      const outerRadius = value + config.DETAILED_WIND_TRANSITION_WIDTH;
+
+      uniforms.uDetailedWindOuterRadiusSquared.value =
+        outerRadius * outerRadius;
+    });
+  wind.addBinding(uniforms.uWindCurveP1, "value", {
+    label: "Wind curve short",
+    min: 0,
+    max: 1,
+    step: 0.01,
+  });
+  wind.addBinding(uniforms.uWindCurveP2, "value", {
+    label: "Wind curve tall",
+    min: 0,
+    max: 1,
+    step: 0.01,
+  });
+  wind.addBinding(uniforms.uBendDropStrength, "value", {
+    label: "Bend drop",
+    min: 0,
+    max: 4,
+    step: 0.05,
+  });
+  wind.addBinding(uniforms.uBendControlPoint, "value", {
+    label: "Bend control point",
+    min: 0,
+    max: 1,
+    step: 0.01,
+  });
+
+  const density = folder.addFolder({
+    title: "Density",
+  });
+  density
+    .addBinding(uniforms.uFullDensityRadius, "value", {
+      label: "Full density radius",
+      min: 0,
+      max: config.TILE_SIZE,
+      step: 0.1,
+    })
+    .on("change", ({ value }) => {
+      uniforms.uFullDensityRadiusSquared.value = value * value;
+    });
+  density
+    .addBinding(uniforms.uDensityFalloffRadius, "value", {
+      label: "Density falloff radius",
+      min: 0,
+      max: config.TILE_SIZE,
+      step: 0.1,
+    })
+    .on("change", ({ value }) => {
+      uniforms.uDensityFalloffRadiusSquared.value = value * value;
+    });
+  density.addBinding(uniforms.uFarDensity, "value", {
+    label: "Far density",
+    min: 0,
+    max: 1,
+    step: 0.01,
+  });
+  density.addBinding(uniforms.uStochasticHysteresis, "value", {
+    label: "Stochastic hysteresis",
+    min: 0,
+    max: 0.5,
+    step: 0.01,
+  });
+
+  const culling = folder.addFolder({
+    title: "Culling",
+  });
+  culling.addBinding(uniforms.uCullPadNDCX, "value", {
+    label: "Horizontal pad",
+    min: 0,
+    max: 2,
+    step: 0.01,
+  });
+  culling.addBinding(uniforms.uCullPadNDCYNear, "value", {
+    label: "Near vertical pad",
+    min: 0,
+    max: 2,
+    step: 0.01,
+  });
+  culling.addBinding(uniforms.uCullPadNDCYFar, "value", {
+    label: "Far vertical pad",
+    min: 0,
+    max: 2,
+    step: 0.01,
+  });
+  culling.addBinding(uniforms.uClumpBoundMultiplier, "value", {
+    label: "Clump bound",
+    min: 0.5,
+    max: 2,
+    step: 0.05,
+  });
+
+  const width = folder.addFolder({
+    title: "Width",
+  });
+  width.addBinding(uniforms.uBladeWidth, "value", {
+    label: "Blade width",
+    min: 0.01,
+    max: 0.3,
+    step: 0.005,
+  });
+  width.addBinding(uniforms.uWidthFarGain, "value", {
+    label: "Far width gain",
+    min: 1,
+    max: 10,
+    step: 0.05,
+  });
+  width
+    .addBinding(uniforms.uWidthNearRadius, "value", {
+      label: "Gain start radius",
+      min: 0,
+      max: config.TILE_HALF_SIZE,
+      step: 0.5,
+    })
+    .on("change", ({ value }) => {
+      uniforms.uWidthNearRadiusSquared.value = value * value;
+    });
+  width
+    .addBinding(uniforms.uWidthFarRadius, "value", {
+      label: "Gain full radius",
+      min: 0,
+      max: config.TILE_HALF_SIZE,
+      step: 0.5,
+    })
+    .on("change", ({ value }) => {
+      uniforms.uWidthFarRadiusSquared.value = value * value;
+    });
+
+  const lod = folder.addFolder({ title: "LOD" });
+  lod
+    .addBinding({ enabled: false }, "enabled", {
+      label: "Show LOD colors",
+    })
+    .on("change", ({ value }) => {
+      uniforms.uLodDebugEnabled.value = value ? 1 : 0;
+    });
+  lod
+    .addBinding(uniforms.uLod0Radius, "value", {
+      label: "Near radius",
+      min: 0,
+      max: config.TILE_HALF_SIZE,
+      step: 0.5,
+    })
+    .on("change", ({ value }) => {
+      uniforms.uLod0RadiusSquared.value = value * value;
+    });
+  lod
+    .addBinding(uniforms.uLod1Radius, "value", {
+      label: "Mid radius",
+      min: 0,
+      max: config.TILE_HALF_SIZE,
+      step: 0.5,
+    })
+    .on("change", ({ value }) => {
+      uniforms.uLod1RadiusSquared.value = value * value;
+    });
+
+  const trail = folder.addFolder({
+    title: "Trail",
+  });
+  trail.addBinding(uniforms.uTrailGrowthRate, "value", {
+    label: "Growth rate",
+    min: 0,
+    max: 10,
+    step: 0.1,
+  });
+  trail.addBinding(uniforms.uTrailMinScale, "value", {
+    label: "Min scale",
+    min: 0,
+    max: 1,
+    step: 0.01,
+  });
+  trail.addBinding(uniforms.uKDown, "value", {
+    label: "Crushing speed",
+    min: 0,
+    max: 100,
+    step: 1,
+  });
+  trail.addBinding(uniforms.uTrailBendStrength, "value", {
+    label: "Bend strength",
+    min: 0,
+    max: 2,
+    step: 0.01,
+  });
+  trail
+    .addBinding(uniforms.uTrailRadius, "value", {
+      label: "Trail radius",
+      min: 0,
+      max: 2,
+      step: 0.01,
+    })
+    .on("change", ({ value }) => {
+      uniforms.uTrailRadiusSquared.value = value * value;
+    });
+
+  const general = folder.addFolder({
+    title: "General",
+  });
+  general.addBinding(uniforms.uBaseBending, "value", {
+    label: "Base bend",
+    min: -Math.PI * 2,
+    max: Math.PI * 2,
+    step: 0.01,
+  });
+  general.addBinding(uniforms.uSpriteRotationRandomness, "value", {
+    label: "Sprite rotation",
+    min: 0,
+    max: Math.PI * 0.5,
+    step: 0.01,
+  });
+  general.addBinding(uniforms.uBladeMinScale, "value", {
+    label: "Min scale",
+    min: 0,
+    max: 5,
+    step: 0.01,
+  });
+  general.addBinding(uniforms.uBladeMaxScale, "value", {
+    label: "Max scale",
+    min: 0,
+    max: 5,
+    step: 0.01,
+  });
+};

@@ -1,26 +1,23 @@
 import {
-  assetManager,
-  audioManager,
-  debugManager,
-  eventsManager,
-  monitoringManager,
-  physicsManager,
-  rendererManager,
+  assets,
+  sound,
+  debugPanel,
+  eventBus,
+  performanceMonitor,
+  physicsWorld,
+  graphics,
 } from ".";
 
 export const setupAsync = async () => {
-  eventsManager.emit("engine-loading-core-progress", 0);
-  await debugManager.initAsync();
-  await rendererManager.init();
-  await monitoringManager.initAsync();
-  eventsManager.emit("engine-loading-core-progress", 25);
-  await Promise.all([
-    physicsManager.initAsync(),
-    assetManager.initAsync(rendererManager),
-  ]);
-  rendererManager.initPostprocessing();
-  eventsManager.emit("engine-loading-core-progress", 75);
-  audioManager
+  eventBus.emit("engine-loading-core-progress", 0);
+  await debugPanel.initAsync();
+  await graphics.init();
+  await performanceMonitor.initAsync();
+  eventBus.emit("engine-loading-core-progress", 25);
+  await Promise.all([physicsWorld.initAsync(), assets.initAsync(graphics)]);
+  graphics.initFramePipeline();
+  eventBus.emit("engine-loading-core-progress", 75);
+  sound
     .initAsync()
     .catch((error) => console.error("[setup] Audio init failed.", error)); // bg loading
 };

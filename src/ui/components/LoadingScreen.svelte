@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { onMount } from "svelte"
 	import { fade } from "svelte/transition"
-	import { eventsManager } from "../../systems"
-	import type { LoadingFailure } from "../../systems/EventsManager"
+	import { eventBus } from "../../systems"
+	import type { LoadingFailure } from "../../systems/events/EventBus"
 
 	let progress = $state(0)
 	let failure = $state<LoadingFailure | null>(null)
@@ -18,17 +18,17 @@
 		}
 
 		unsubscribes = [
-			eventsManager.on("engine-loading-core-progress", p => {
+			eventBus.on("engine-loading-core-progress", p => {
 				coreProgress = Math.min(Math.ceil(p / 2), 50)
 				progress = coreProgress + resourcesProgress
 				if (progress === 100) stopLoadingSubscriptions()
 			}),
-			eventsManager.on("engine-loading-resources-progress", p => {
+			eventBus.on("engine-loading-resources-progress", p => {
 				resourcesProgress = Math.min(Math.ceil(p / 2), 50)
 				progress = coreProgress + resourcesProgress
 				if (progress === 100) stopLoadingSubscriptions()
 			}),
-			eventsManager.on("engine-loading-failed", loadingFailure => {
+			eventBus.on("engine-loading-failed", loadingFailure => {
 				failure = loadingFailure ?? {
 					headline: "Something went wrong",
 					hint: "Please reload the page to try again",
