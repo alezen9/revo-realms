@@ -1,8 +1,17 @@
 import "./style.css";
 import Game from "./Game";
 import { mountUi } from "./ui/mountUi";
-import { setupAsync } from "./systems/setupAsync";
-import { eventBus, pipelineWarmup } from "./systems";
+import {
+  assets,
+  debugPanel,
+  eventBus,
+  graphics,
+  lighting,
+  performanceMonitor,
+  physicsWorld,
+  pipelineWarmup,
+  sound,
+} from "./systems";
 
 const hasWebGpuSupportAsync = async () => {
   if (!navigator.gpu) return false;
@@ -15,6 +24,20 @@ const hasWebGpuSupportAsync = async () => {
   } catch {
     return false;
   }
+};
+
+const setupSystemsAsync = async () => {
+  eventBus.emit("engine-loading-core-progress", 0);
+  await debugPanel.initAsync();
+  await graphics.init();
+  await performanceMonitor.initAsync();
+  eventBus.emit("engine-loading-core-progress", 25);
+  await Promise.all([physicsWorld.initAsync(), assets.initAsync(graphics)]);
+  graphics.initFramePipeline({ lighting, assets, performanceMonitor });
+  eventBus.emit("engine-loading-core-progress", 75);
+  sound
+    .initAsync()
+    .catch((error) => console.error("[setup] Audio init failed.", error)); // bg loading
 };
 
 const bootstrap = async () => {
@@ -31,7 +54,7 @@ const bootstrap = async () => {
   }
 
   try {
-    await setupAsync();
+    await setupSystemsAsync();
     const game = new Game();
     eventBus.emit("engine-loading-core-progress", 90);
 
