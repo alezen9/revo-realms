@@ -3,7 +3,6 @@ import {
   debugPanel,
   landmarks,
   physicsWorld,
-  wind,
   stage,
   graphics,
 } from "../../systems";
@@ -97,17 +96,12 @@ export default class LeviathanAxe {
       type: RevoColliderType.Stone,
     };
 
-    // Register landmark for radial menu discovery
-    const landmarkId = landmarks.register({
+    landmarks.register({
       name: "Leviathan Axe",
       icon: "axe",
       position: axe.position,
       arrivalRadius: 20,
     });
-
-    // Register wind target and link to landmark
-    const windTargetId = wind.registerTarget("Leviathan Axe", axe.position, 20);
-    landmarks.setWindTargetId(landmarkId, windTargetId);
     this.debug();
   }
 

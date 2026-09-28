@@ -1,14 +1,8 @@
-import { MathUtils, Vector2, Vector3 } from "three";
+import { MathUtils, Vector2 } from "three";
 import { uniform } from "three/tsl";
 import { type State } from "../../Game";
 import type { EventBus } from "../events/EventBus";
-
-type WindTarget = {
-  id: string;
-  label: string;
-  position: Vector3;
-  radiusSq: number;
-};
+import type { Landmark, Landmarks } from "./Landmarks";
 
 type Phase = "idle" | "direction" | "start" | "ramp" | "hold" | "end" | "decay";
 
@@ -23,9 +17,8 @@ export class Wind {
   private readonly DECAY_RATE = 0.85;
 
   // targets
-  private idCounter = 0;
-  private targets = new Map<string, WindTarget>();
-  private target?: WindTarget;
+  private target?: Landmark;
+  private targetArrivalRadiusSquared = 0;
   private targetPositionXZ = new Vector2(0, 0);
 
   private playerPositionXZ = new Vector2(0, 0);
@@ -35,9 +28,11 @@ export class Wind {
   private HOLD_INTENSITY_TIME_S = 3;
   private accTimer = 0;
   private eventBus: EventBus;
+  private landmarks: Landmarks;
 
-  constructor(eventBus: EventBus) {
+  constructor(eventBus: EventBus, landmarks: Landmarks) {
     this.eventBus = eventBus;
+    this.landmarks = landmarks;
 
     this.eventBus.on("swipe-up", this.handleSwipeUp);
     this.eventBus.on(
@@ -60,7 +55,7 @@ export class Wind {
     this.toTargetDir.subVectors(this.targetPositionXZ, this.playerPositionXZ);
     const lenSq = this.toTargetDir.lengthSq();
 
-    if (lenSq <= this.target.radiusSq) {
+    if (lenSq <= this.targetArrivalRadiusSquared) {
       this.target = undefined;
       this.phase = "idle";
       this.eventBus.emit("wind-target-change", null);
@@ -115,7 +110,7 @@ export class Wind {
     const dz = this.target.position.z - this.playerPositionXZ.y;
     const distanceSq = dx * dx + dz * dz;
 
-    if (distanceSq > this.target.radiusSq) return;
+    if (distanceSq > this.targetArrivalRadiusSquared) return;
 
     this.target = undefined;
     this.eventBus.emit("wind-target-change", null);
@@ -135,36 +130,27 @@ export class Wind {
     if (this.phase === "decay") return this.decayPhase(delta);
   };
 
-  registerTarget = (label: string, position: Vector3, radius: number) => {
-    const targetId = `windTarget-${++this.idCounter}`;
-    this.targets.set(targetId, {
-      id: targetId,
-      label,
-      position,
-      radiusSq: radius * radius,
-    });
+  activateLandmark = (landmarkId: string) => {
+    const landmark = this.landmarks.getById(landmarkId);
+    if (!landmark) return false;
 
-    return targetId;
-  };
-
-  activateTargetById = (id: string) => {
-    const target = this.targets.get(id);
-    if (!target) return false;
-
+    const { position, arrivalRadius } = landmark;
+    const arrivalRadiusSquared = arrivalRadius * arrivalRadius;
     if (this.hasPlayerPosition) {
-      const dx = target.position.x - this.playerPositionXZ.x;
-      const dz = target.position.z - this.playerPositionXZ.y;
+      const dx = position.x - this.playerPositionXZ.x;
+      const dz = position.z - this.playerPositionXZ.y;
       const distanceSq = dx * dx + dz * dz;
-      if (distanceSq <= target.radiusSq) return false;
+      if (distanceSq <= arrivalRadiusSquared) return false;
     }
 
-    this.target = target;
-    this.targetPositionXZ.set(target.position.x, target.position.z);
-    this.eventBus.emit("wind-target-change", id);
+    this.target = landmark;
+    this.targetArrivalRadiusSquared = arrivalRadiusSquared;
+    this.targetPositionXZ.set(position.x, position.z);
+    this.eventBus.emit("wind-target-change", landmarkId);
     return true;
   };
 
-  get activeTargetId() {
+  get activeLandmarkId() {
     return this.target?.id ?? null;
   }
 }

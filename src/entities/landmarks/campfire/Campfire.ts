@@ -6,7 +6,6 @@ import {
   stage,
   physicsWorld,
   landmarks,
-  wind,
   graphics,
 } from "../../../systems";
 import { ColliderDesc } from "@dimforge/rapier3d";
@@ -132,16 +131,11 @@ export class Campfire {
       type: RevoColliderType.Wood,
     };
 
-    // Register landmark for radial menu discovery
-    const landmarkId = landmarks.register({
+    landmarks.register({
       name: "Campfire",
       icon: "fire",
       position: campfire.position,
       arrivalRadius: 15,
     });
-
-    // Register wind target and link to landmark
-    const windTargetId = wind.registerTarget("Campfire", campfire.position, 15);
-    landmarks.setWindTargetId(landmarkId, windTargetId);
   }
 }

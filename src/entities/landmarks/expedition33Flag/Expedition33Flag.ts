@@ -16,7 +16,6 @@ import {
   physicsWorld,
   graphics,
   stage,
-  wind,
 } from "../../../systems";
 import type { ComputeTask } from "../../../systems/rendering/ComputeTask";
 import { RevoColliderType } from "../../../systems/physics/colliderTypes";
@@ -59,14 +58,12 @@ export default class Expedition33Flag {
     });
     this.computeTask.init();
 
-    const landmarkId = landmarks.register({
+    landmarks.register({
       name: "Expedition 33",
       icon: "flag",
       position: this.origin,
       arrivalRadius: 15,
     });
-    const windTargetId = wind.registerTarget("Expedition 33", this.origin, 15);
-    landmarks.setWindTargetId(landmarkId, windTargetId);
 
     eventBus.on("engine-render-update", this.onEngineUpdate);
     eventBus.on("engine-render-update-throttle-64x", this.onGateUpdate);

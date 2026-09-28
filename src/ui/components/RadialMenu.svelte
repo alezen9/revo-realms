@@ -17,7 +17,7 @@
 
 	let isVisible = $state(false)
 	let menuLandmarks = $state<Landmark[]>([])
-	let activeWindTargetId = $state<string | null>(null)
+	let selectedId = $state<string | null>(null)
 
 	const innerRadius = 78
 	const outerRadius = 178
@@ -82,13 +82,6 @@
 	}
 
 	let slots = $derived(buildSlots(menuLandmarks))
-	let selectedId = $derived(
-		activeWindTargetId
-			? (menuLandmarks.find(
-					landmark => landmark.windTargetId === activeWindTargetId,
-				)?.id ?? null)
-			: null,
-	)
 	let menuVisible = $derived(isVisible && slots.length > 0)
 
 	const getFocusableSlots = () =>
@@ -99,8 +92,7 @@
 		)
 
 	const handleSlotClick = (landmark: Landmark) => {
-		if (!landmark.windTargetId) return
-		const isActivated = wind.activateTargetById(landmark.windTargetId)
+		const isActivated = wind.activateLandmark(landmark.id)
 		if (!isActivated) return
 		isVisible = false
 	}
@@ -108,8 +100,8 @@
 	onMount(() => {
 		const unsubscribeWindTarget = eventBus.on(
 			"wind-target-change",
-			(targetId: string | null) => {
-				activeWindTargetId = targetId
+			(landmarkId: string | null) => {
+				selectedId = landmarkId
 			},
 		)
 		const handleKeyDown = (event: KeyboardEvent) => {
@@ -152,7 +144,7 @@
 		window.addEventListener("pointerdown", handlePointerDown)
 
 		menuLandmarks = landmarks.getAll()
-		activeWindTargetId = wind.activeTargetId
+		selectedId = wind.activeLandmarkId
 
 		return () => {
 			unsubscribeWindTarget()

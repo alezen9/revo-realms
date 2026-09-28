@@ -1,4 +1,4 @@
-import { assets, debugPanel, landmarks, wind, graphics } from "../../systems";
+import { assets, debugPanel, landmarks, graphics } from "../../systems";
 import { Mesh } from "three";
 import { VSMReceiverStandardMaterial } from "../../systems/vsm/VSMReceiverMaterials";
 import { ColliderDesc } from "@dimforge/rapier3d";
@@ -54,21 +54,12 @@ export default class GokuStatue {
       type: RevoColliderType.Stone,
     };
 
-    // Register landmark for radial menu discovery
-    const landmarkId = landmarks.register({
+    landmarks.register({
       name: "Goku Statue",
       icon: "dragonball",
       position: gokuStatue.position,
       arrivalRadius: 20,
     });
-
-    // Register wind target and link to landmark
-    const windTargetId = wind.registerTarget(
-      "Goku statue",
-      gokuStatue.position,
-      20,
-    );
-    landmarks.setWindTargetId(landmarkId, windTargetId);
     this.debug();
   }
 

@@ -40,7 +40,7 @@ const init = () => {
   );
   const landmarks = new Landmarks();
   const lighting = new Lighting(stage, debugPanel, eventBus, assets);
-  const wind = new Wind(eventBus);
+  const wind = new Wind(eventBus, landmarks);
   return {
     eventBus,
     frameScheduler,

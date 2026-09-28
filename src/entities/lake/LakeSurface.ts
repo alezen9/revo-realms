@@ -35,7 +35,6 @@ import {
   graphics,
   eventBus,
   landmarks,
-  wind,
 } from "../../systems";
 
 export class LakeSurface {
@@ -71,17 +70,12 @@ export class LakeSurface {
 
     stage.waterScene.add(lakeSurface);
 
-    // Register landmark for radial menu discovery
-    const landmarkId = landmarks.register({
+    landmarks.register({
       name: "Lake",
       icon: "water",
       position: lakeSurface.position,
       arrivalRadius: 90,
     });
-
-    // Register wind target and link to landmark
-    const windTargetId = wind.registerTarget("Lake", lakeSurface.position, 90);
-    landmarks.setWindTargetId(landmarkId, windTargetId);
 
     if (sound.isReady) this.attachLakeAudio();
     else

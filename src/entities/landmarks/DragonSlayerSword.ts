@@ -3,7 +3,6 @@ import {
   debugPanel,
   landmarks,
   physicsWorld,
-  wind,
   stage,
   graphics,
 } from "../../systems";
@@ -70,21 +69,12 @@ export default class DragonSlayerSword {
       type: RevoColliderType.Stone,
     };
 
-    // Register landmark for radial menu discovery
-    const landmarkId = landmarks.register({
+    landmarks.register({
       name: "Dragon Slayer",
       icon: "sword",
       position: sword.position,
       arrivalRadius: 20,
     });
-
-    // Register wind target and link to landmark
-    const windTargetId = wind.registerTarget(
-      "Dragon Slayer",
-      sword.position,
-      20,
-    );
-    landmarks.setWindTargetId(landmarkId, windTargetId);
     this.debug();
   }
 

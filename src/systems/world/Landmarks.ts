@@ -9,10 +9,9 @@ export type Landmark = {
   icon: LandmarkIconId;
   position: Vector3;
   arrivalRadius: number;
-  windTargetId?: string;
 };
 
-type LandmarkRegistration = Omit<Landmark, "id" | "windTargetId">;
+type LandmarkRegistration = Omit<Landmark, "id">;
 
 export class Landmarks {
   private landmarks = new Map<string, Landmark>();
@@ -30,12 +29,5 @@ export class Landmarks {
 
   getById(id: string): Landmark | undefined {
     return this.landmarks.get(id);
-  }
-
-  setWindTargetId(landmarkId: string, windTargetId: string): void {
-    const landmark = this.landmarks.get(landmarkId);
-    if (landmark) {
-      landmark.windTargetId = windTargetId;
-    }
   }
 }
