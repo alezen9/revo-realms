@@ -7,7 +7,7 @@ import {
   graphics,
 } from "../../systems";
 import { ColliderDesc } from "@dimforge/rapier3d";
-import { Mesh, Vector3 } from "three";
+import { Vector3 } from "three";
 import { VSMReceiverStandardMaterial } from "../../systems/vsm/VSMReceiverMaterials";
 import { normalMap, texture, uniform, uv } from "three/tsl";
 import { RevoColliderType } from "../../systems/physics/colliderTypes";
@@ -37,9 +37,7 @@ class DragonSlayerMaterial extends VSMReceiverStandardMaterial {
 export default class DragonSlayerSword {
   constructor() {
     // Visual
-    const sword = assets.resources.worldModel.scene.getObjectByName(
-      "dragon_slayer",
-    ) as Mesh;
+    const sword = assets.getMesh("dragon_slayer");
     sword.material = new DragonSlayerMaterial();
     stage.mainScene.add(sword);
     graphics.vsmPass.registerCaster(sword);

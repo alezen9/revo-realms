@@ -88,9 +88,7 @@ export default class Player {
   }
 
   private createCharacterMesh() {
-    const mesh = assets.resources.worldModel.scene.getObjectByName(
-      "player",
-    ) as Mesh;
+    const mesh = assets.getMesh("player");
     mesh.material = new PlayerMaterial();
     mesh.position.set(0, 0, 0);
     return mesh;

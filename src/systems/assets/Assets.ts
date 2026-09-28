@@ -1,6 +1,7 @@
 import {
   CubeTextureLoader,
   DataTexture,
+  Mesh,
   NoColorSpace,
   RepeatWrapping,
   Texture,
@@ -44,6 +45,13 @@ export class Assets {
     this.eventBus = eventBus;
     this.gltfLoader.setDRACOLoader(this.dracoLoader);
     this.ktx2Loader.setTranscoderPath("/basis/");
+  }
+
+  getMesh(name: string): Mesh {
+    const object = this.resources.worldModel.scene.getObjectByName(name);
+    if (!(object instanceof Mesh))
+      throw new Error(`World model has no mesh named "${name}"`);
+    return object;
   }
 
   private loadResource = async (resource: ResourceRaw) => {

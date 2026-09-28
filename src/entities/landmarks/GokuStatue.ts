@@ -31,18 +31,14 @@ export default class GokuStatue {
 
   constructor() {
     // Visual
-    const gokuStatue = assets.resources.worldModel.scene.getObjectByName(
-      "goku_statue",
-    ) as Mesh;
+    const gokuStatue = assets.getMesh("goku_statue");
     this.gokuStatue = gokuStatue;
     gokuStatue.material = new GokuStatueMaterial();
     stage.mainScene.add(gokuStatue);
     graphics.vsmPass.registerCaster(gokuStatue, this.shadowSettings);
 
     // Physics
-    const collider = assets.resources.worldModel.scene.getObjectByName(
-      "goku_statue_collider",
-    ) as Mesh;
+    const collider = assets.getMesh("goku_statue_collider");
     const hx = 0.5 * collider.scale.x;
     const hy = 0.5 * collider.scale.y;
     const hz = 0.5 * collider.scale.z;

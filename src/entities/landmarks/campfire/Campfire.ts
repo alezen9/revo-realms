@@ -1,4 +1,3 @@
-import { Mesh } from "three";
 import { RevoColliderType } from "../../../systems/physics/colliderTypes";
 import CampfireParticles from "./CampfireParticles";
 import {
@@ -29,9 +28,7 @@ class CampfireMaterial extends VSMReceiverStandardMaterial {
 export class Campfire {
   constructor() {
     // Visual
-    const campfire = assets.resources.worldModel.scene.getObjectByName(
-      "campfire",
-    ) as Mesh;
+    const campfire = assets.getMesh("campfire");
     campfire.material = new CampfireMaterial();
 
     const fire = new CampfireParticles({
@@ -51,9 +48,7 @@ export class Campfire {
     graphics.vsmPass.registerCaster(campfire);
 
     // Physics
-    const fireColliderMesh = assets.resources.worldModel.scene.getObjectByName(
-      "fire_collider",
-    ) as Mesh;
+    const fireColliderMesh = assets.getMesh("fire_collider");
     if (!fireColliderMesh.geometry.boundingBox) {
       fireColliderMesh.geometry.computeBoundingBox();
     }
@@ -69,10 +64,7 @@ export class Campfire {
       type: RevoColliderType.Stone,
     };
 
-    const shortLogColliderMesh =
-      assets.resources.worldModel.scene.getObjectByName(
-        "log_short_collider",
-      ) as Mesh;
+    const shortLogColliderMesh = assets.getMesh("log_short_collider");
     if (!shortLogColliderMesh.geometry.boundingBox) {
       shortLogColliderMesh.geometry.computeBoundingBox();
     }
@@ -101,10 +93,7 @@ export class Campfire {
       type: RevoColliderType.Wood,
     };
 
-    const longLogColliderMesh =
-      assets.resources.worldModel.scene.getObjectByName(
-        "log_long_collider",
-      ) as Mesh;
+    const longLogColliderMesh = assets.getMesh("log_long_collider");
     if (!longLogColliderMesh.geometry.boundingBox) {
       longLogColliderMesh.geometry.computeBoundingBox();
     }

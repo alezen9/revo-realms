@@ -42,9 +42,7 @@ export class LakeSurface {
   private unsubscribeAudioProgress?: VoidFunction;
 
   constructor() {
-    const lakeSurface = assets.resources.worldModel.scene.getObjectByName(
-      "lake-surface",
-    ) as Mesh;
+    const lakeSurface = assets.getMesh("lake-surface");
     this.lakeSurface = lakeSurface;
 
     const uniforms = {

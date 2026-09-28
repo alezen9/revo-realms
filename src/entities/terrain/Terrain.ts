@@ -282,9 +282,11 @@ class InnerTerrain {
 
   private createInnerTerrain(material: TerrainMaterial) {
     const terrainMeshes = assets.resources.worldModel.scene.children.filter(
-      (object) =>
-        object.name.startsWith("terrain-") && object.name !== "terrain-outer",
-    ) as Mesh[];
+      (object): object is Mesh =>
+        object instanceof Mesh &&
+        object.name.startsWith("terrain-") &&
+        object.name !== "terrain-outer",
+    );
 
     let heightfieldMesh: Mesh | undefined;
     const innerTerrain = new Group();
@@ -467,9 +469,7 @@ class OuterTerrain {
   }
 
   private createOuterTerrainMesh() {
-    const outerTerrain = assets.resources.worldModel.scene.getObjectByName(
-      "terrain-outer",
-    ) as Mesh;
+    const outerTerrain = assets.getMesh("terrain-outer");
 
     outerTerrain.geometry.computeBoundingSphere();
     outerTerrain.geometry.computeBoundingBox();

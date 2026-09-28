@@ -1,4 +1,4 @@
-import type { Mesh } from "three";
+import { Mesh } from "three";
 import {
   assets,
   debugPanel,
@@ -67,16 +67,13 @@ class PineTreeBarkMaterial extends VSMReceiverLambertMaterial {
 export default class PineTrees {
   constructor() {
     // Visual
-    const pineTreeCanopy = assets.resources.worldModel.scene.getObjectByName(
-      "pine_tree_canopy",
-    ) as Mesh;
-    const pineTreeBark = assets.resources.worldModel.scene.getObjectByName(
-      "pine_tree_bark",
-    ) as Mesh;
+    const pineTreeCanopy = assets.getMesh("pine_tree_canopy");
+    const pineTreeBark = assets.getMesh("pine_tree_bark");
 
     const colliders = assets.resources.worldModel.scene.children.filter(
-      ({ name }) => name.startsWith("pine_collider"),
-    ) as Mesh[];
+      (object): object is Mesh =>
+        object instanceof Mesh && object.name.startsWith("pine_collider"),
+    );
 
     const barkMaterial = new PineTreeBarkMaterial();
     const canopyMaterial = new PineTreeCanopyMaterial();

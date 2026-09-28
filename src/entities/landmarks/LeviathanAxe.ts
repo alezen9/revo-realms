@@ -7,7 +7,7 @@ import {
   graphics,
 } from "../../systems";
 import { ColliderDesc } from "@dimforge/rapier3d";
-import { Mesh, Quaternion, Vector3 } from "three";
+import { Quaternion, Vector3 } from "three";
 import { VSMReceiverStandardMaterial } from "../../systems/vsm/VSMReceiverMaterials";
 import { color, normalMap, texture, uniform, uv } from "three/tsl";
 import { RevoColliderType } from "../../systems/physics/colliderTypes";
@@ -49,9 +49,7 @@ class LeviathanAxeMaterial extends VSMReceiverStandardMaterial {
 export default class LeviathanAxe {
   constructor() {
     // Visual
-    const axe = assets.resources.worldModel.scene.getObjectByName(
-      "leviathan_axe",
-    ) as Mesh;
+    const axe = assets.getMesh("leviathan_axe");
     axe.material = new LeviathanAxeMaterial();
 
     stage.mainScene.add(axe);
