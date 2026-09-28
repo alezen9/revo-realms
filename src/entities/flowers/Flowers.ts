@@ -46,7 +46,16 @@ import {
 } from "../../systems";
 import { type State } from "../../Game";
 import { gameTime } from "../../systems/time/gameTime";
-import { TSLUtils } from "../../utils/TSLUtils";
+import {
+  packFlag,
+  packUnit,
+  packUnits,
+  unpackFlag,
+  unpackUnit,
+  unpackUnits,
+} from "../../shaders/packing";
+import { computeMapUvByPosition } from "../../shaders/mapping";
+import { computeFrustumVisibility } from "../../shaders/frustum";
 import { srgbColorTarget } from "../../systems/debug/tweakpaneColor";
 import type { ComputeTask } from "../../systems/rendering/ComputeTask";
 
@@ -113,7 +122,7 @@ class FlowersSsbo {
   }
 
   getYOffset = Fn<[data: Node<"vec4">], Node<"float">>(([data]) => {
-    return TSLUtils.unpackUnits(
+    return unpackUnits(
       data.z,
       0,
       12,
@@ -123,18 +132,18 @@ class FlowersSsbo {
   });
 
   getVisibility = Fn<[data: Node<"vec4">], Node<"float">>(([data]) => {
-    return TSLUtils.unpackFlag(data.z, 12);
+    return unpackFlag(data.z, 12);
   });
 
   getGrassScale = Fn<[data: Node<"vec4">], Node<"float">>(([data]) => {
-    return TSLUtils.unpackUnit(data.z, 13, 6);
+    return unpackUnit(data.z, 13, 6);
   });
 
   getNoise = Fn<[data: Node<"vec4">], Node<"vec4">>(([data]) => {
-    const x = TSLUtils.unpackUnit(data.w, 0, 6);
-    const y = TSLUtils.unpackUnit(data.w, 6, 6);
-    const z = TSLUtils.unpackUnit(data.w, 12, 6);
-    const w = TSLUtils.unpackUnit(data.w, 18, 6);
+    const x = unpackUnit(data.w, 0, 6);
+    const y = unpackUnit(data.w, 6, 6);
+    const z = unpackUnit(data.w, 12, 6);
+    const w = unpackUnit(data.w, 18, 6);
     return vec4(x, y, z, w);
   });
 
@@ -142,7 +151,7 @@ class FlowersSsbo {
     [data: Node<"vec4">, value: Node<"float">],
     Node<"vec4">
   >(([data, value]) => {
-    data.z = TSLUtils.packUnits(
+    data.z = packUnits(
       data.z,
       0,
       12,
@@ -157,7 +166,7 @@ class FlowersSsbo {
     [data: Node<"vec4">, value: Node<"float">],
     Node<"vec4">
   >(([data, value]) => {
-    data.z = TSLUtils.packFlag(data.z, 12, value);
+    data.z = packFlag(data.z, 12, value);
     return data;
   });
 
@@ -165,7 +174,7 @@ class FlowersSsbo {
     [data: Node<"vec4">, value: Node<"float">],
     Node<"vec4">
   >(([data, value]) => {
-    data.z = TSLUtils.packUnit(data.z, 13, 6, value);
+    data.z = packUnit(data.z, 13, 6, value);
     return data;
   });
 
@@ -173,10 +182,10 @@ class FlowersSsbo {
     [data: Node<"vec4">, value: Node<"vec4">],
     Node<"vec4">
   >(([data, value]) => {
-    data.w = TSLUtils.packUnit(data.w, 0, 6, value.x);
-    data.w = TSLUtils.packUnit(data.w, 6, 6, value.y);
-    data.w = TSLUtils.packUnit(data.w, 12, 6, value.z);
-    data.w = TSLUtils.packUnit(data.w, 18, 6, value.a);
+    data.w = packUnit(data.w, 0, 6, value.x);
+    data.w = packUnit(data.w, 6, 6, value.y);
+    data.w = packUnit(data.w, 12, 6, value.z);
+    data.w = packUnit(data.w, 18, 6, value.a);
     return data;
   });
 
@@ -233,7 +242,7 @@ class FlowersSsbo {
     const clipPosition = stage.uCameraMatrix.mul(vec4(worldPos, 1));
 
     // Visibility
-    const isVisible = TSLUtils.computeFrustumVisibility(
+    const isVisible = computeFrustumVisibility(
       clipPosition,
       stage.uFx,
       stage.uFy,
@@ -247,7 +256,7 @@ class FlowersSsbo {
 
     If(isVisible.greaterThan(0), () => {
       // Y offset
-      const mapUv = TSLUtils.computeMapUvByPosition(worldPos.xz);
+      const mapUv = computeMapUvByPosition(worldPos.xz);
       const heightUv = vec2(mapUv.x, float(1).sub(mapUv.y));
       const yOffset = texture(assets.resources.heightmap, heightUv).r;
       data.assign(this.setYOffset(data, yOffset));
@@ -255,7 +264,7 @@ class FlowersSsbo {
       // Grass scale
       const grassMapValue = texture(
         assets.resources.terrainMaps,
-        TSLUtils.computeMapUvByPosition(worldPos.xz),
+        computeMapUvByPosition(worldPos.xz),
       ).g;
       const grassScale = grassMapValue
         .sub(0.5)

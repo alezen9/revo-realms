@@ -1,27 +1,34 @@
 import { Fn, cos, float, mix, sin, step, vec2 } from "three/tsl";
 import { type Node } from "three/webgpu";
 import { assets } from "../../systems";
-import { TSLUtils } from "../../utils/TSLUtils";
+import {
+  packFlag,
+  packUnit,
+  packUnits,
+  unpackFlag,
+  unpackUnit,
+  unpackUnits,
+} from "../../shaders/packing";
 import { config, uniforms } from "./config";
 
 const getHeightmapMax = () =>
   Math.ceil(assets.resources.heightmap.userData.max);
 
 export const getYOffset = Fn<[data: Node<"vec4">], Node<"float">>(([data]) => {
-  return TSLUtils.unpackUnits(data.w, 0, 16, 0, getHeightmapMax());
+  return unpackUnits(data.w, 0, 16, 0, getHeightmapMax());
 });
 
 export const setYOffset = Fn<
   [data: Node<"vec4">, value: Node<"float">],
   Node<"vec4">
 >(([data, value]) => {
-  data.w = TSLUtils.packUnits(data.w, 0, 16, value, 0, getHeightmapMax());
+  data.w = packUnits(data.w, 0, 16, value, 0, getHeightmapMax());
   return data;
 });
 
 export const getBend = Fn<[data: Node<"vec2">], Node<"vec2">>(([data]) => {
-  const bendX = TSLUtils.unpackUnits(data.x, 0, 12, -6, 6);
-  const bendZ = TSLUtils.unpackUnits(data.x, 12, 12, -6, 6);
+  const bendX = unpackUnits(data.x, 0, 12, -6, 6);
+  const bendZ = unpackUnits(data.x, 12, 12, -6, 6);
   return vec2(bendX, bendZ);
 });
 
@@ -29,26 +36,26 @@ export const setBend = Fn<
   [data: Node<"vec2">, value: Node<"vec2">],
   Node<"vec2">
 >(([data, value]) => {
-  data.x = TSLUtils.packUnits(data.x, 0, 12, value.x, -6, 6);
-  data.x = TSLUtils.packUnits(data.x, 12, 12, value.y, -6, 6);
+  data.x = packUnits(data.x, 0, 12, value.x, -6, 6);
+  data.x = packUnits(data.x, 12, 12, value.y, -6, 6);
   return data;
 });
 
 export const getScale = Fn<[data: Node<"vec2">], Node<"float">>(([data]) => {
-  return TSLUtils.unpackUnits(data.y, 0, 8, 0, uniforms.uBladeMaxScale);
+  return unpackUnits(data.y, 0, 8, 0, uniforms.uBladeMaxScale);
 });
 
 export const setScale = Fn<
   [data: Node<"vec2">, value: Node<"float">],
   Node<"vec2">
 >(([data, value]) => {
-  data.y = TSLUtils.packUnits(data.y, 0, 8, value, 0, uniforms.uBladeMaxScale);
+  data.y = packUnits(data.y, 0, 8, value, 0, uniforms.uBladeMaxScale);
   return data;
 });
 
 export const getOriginalScale = Fn<[data: Node<"vec2">], Node<"float">>(
   ([data]) => {
-    return TSLUtils.unpackUnits(
+    return unpackUnits(
       data.y,
       8,
       8,
@@ -62,7 +69,7 @@ export const setOriginalScale = Fn<
   [data: Node<"vec2">, value: Node<"float">],
   Node<"vec2">
 >(([data, value]) => {
-  data.y = TSLUtils.packUnits(
+  data.y = packUnits(
     data.y,
     8,
     8,
@@ -75,7 +82,7 @@ export const setOriginalScale = Fn<
 
 export const getTerrainCacheValidity = Fn<[data: Node<"vec4">], Node<"float">>(
   ([data]) => {
-    return TSLUtils.unpackFlag(data.w, 20);
+    return unpackFlag(data.w, 20);
   },
 );
 
@@ -83,13 +90,13 @@ export const setTerrainCacheValidity = Fn<
   [data: Node<"vec4">, value: Node<"float">],
   Node<"vec4">
 >(([data, value]) => {
-  data.w = TSLUtils.packFlag(data.w, 20, value);
+  data.w = packFlag(data.w, 20, value);
   return data;
 });
 
 export const getVisibility = Fn<[data: Node<"vec2">], Node<"float">>(
   ([data]) => {
-    return TSLUtils.unpackFlag(data.y, 16);
+    return unpackFlag(data.y, 16);
   },
 );
 
@@ -97,13 +104,13 @@ export const setVisibility = Fn<
   [data: Node<"vec2">, value: Node<"float">],
   Node<"vec2">
 >(([data, value]) => {
-  data.y = TSLUtils.packFlag(data.y, 16, value);
+  data.y = packFlag(data.y, 16, value);
   return data;
 });
 
 export const getPreviousVisibility = Fn<[data: Node<"vec2">], Node<"float">>(
   ([data]) => {
-    return TSLUtils.unpackFlag(data.y, 21);
+    return unpackFlag(data.y, 21);
   },
 );
 
@@ -111,7 +118,7 @@ export const setPreviousVisibility = Fn<
   [data: Node<"vec2">, value: Node<"float">],
   Node<"vec2">
 >(([data, value]) => {
-  data.y = TSLUtils.packFlag(data.y, 21, value);
+  data.y = packFlag(data.y, 21, value);
   return data;
 });
 
@@ -119,19 +126,19 @@ export const setClumpOrientation = Fn<
   [data: Node<"vec4">, value: Node<"float">],
   Node<"vec4">
 >(([data, value]) => {
-  data.w = TSLUtils.packUnits(data.w, 21, 2, value, 0, 3);
+  data.w = packUnits(data.w, 21, 2, value, 0, 3);
   return data;
 });
 
 export const getPositionNoise = Fn<[data: Node<"vec2">], Node<"float">>(
-  ([data]) => TSLUtils.unpackUnit(data.y, 17, 4),
+  ([data]) => unpackUnit(data.y, 17, 4),
 );
 
 export const setPositionNoise = Fn<
   [data: Node<"vec2">, value: Node<"float">],
   Node<"vec2">
 >(([data, value]) => {
-  data.y = TSLUtils.packUnit(data.y, 17, 4, value);
+  data.y = packUnit(data.y, 17, 4, value);
   return data;
 });
 
@@ -139,7 +146,7 @@ const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5));
 
 export const getClumpRotation = Fn<[data: Node<"vec4">], Node<"vec2">>(
   ([data]) => {
-    const orientation = TSLUtils.unpackUnits(data.w, 21, 2, 0, 3);
+    const orientation = unpackUnits(data.w, 21, 2, 0, 3);
     const isQuarterTurn = float(orientation.mod(2));
     const direction = float(1).sub(step(2, orientation).mul(2));
     return vec2(isQuarterTurn, direction);

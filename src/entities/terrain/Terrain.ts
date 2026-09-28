@@ -47,7 +47,7 @@ import {
 } from "../../systems";
 import { gameTime } from "../../systems/time/gameTime";
 import { srgbColorTarget } from "../../systems/debug/tweakpaneColor";
-import { TSLUtils } from "../../utils/TSLUtils";
+import { computeMapUvByPosition } from "../../shaders/mapping";
 
 const GRASS_GROUND_SOFTNESS = 0.25;
 
@@ -119,7 +119,7 @@ class TerrainMaterial extends VSMReceiverLambertMaterial {
   }
 
   private createMaterial() {
-    const worldUv = TSLUtils.computeMapUvByPosition(positionWorld.xz);
+    const worldUv = computeMapUvByPosition(positionWorld.xz);
 
     const mapUv = varying(worldUv);
 

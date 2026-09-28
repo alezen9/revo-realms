@@ -25,7 +25,7 @@ import {
   vec3,
 } from "three/tsl";
 import { gameTime } from "../../systems/time/gameTime";
-import { TSLUtils } from "../../utils/TSLUtils";
+import { blendRNM } from "../../shaders/normals";
 import {
   assets,
   sound,
@@ -252,7 +252,7 @@ class WaterMaterial extends MeshBasicNodeMaterial {
       .fract();
     const tex2 = texture(assets.resources.normVeinWater, nUV2);
     const tsn2 = tex2.rgb.mul(2).sub(1).normalize();
-    const blendedTsn = TSLUtils.blendRNM(tsn1, tsn2);
+    const blendedTsn = blendRNM(tsn1, tsn2);
     const tsn = vec3(
       blendedTsn.xy.mul(this.uniforms.uNormalScale),
       blendedTsn.z,

@@ -40,7 +40,7 @@ import {
   wind,
 } from "../../systems";
 import { gameTime } from "../../systems/time/gameTime";
-import { TSLUtils } from "../../utils/TSLUtils";
+import { computeMapUvByPosition } from "../../shaders/mapping";
 
 const STREAK_COUNT = 12;
 const SEGMENT_COUNT = 24;
@@ -175,7 +175,7 @@ class WindStreaksSsbo {
     const nextOrigin = mix(origin, getSpawnOrigin(streakIndex), shouldReset);
     const nextArc = mix(arc, float(0), shouldReset);
     const nextHeadXZ = getCurveXZ(nextOrigin, nextArc, seed);
-    const headMapUv = TSLUtils.computeMapUvByPosition(nextHeadXZ);
+    const headMapUv = computeMapUvByPosition(nextHeadXZ);
     const headHeightUv = vec2(headMapUv.x, float(1).sub(headMapUv.y));
     const targetHeight = texture(assets.resources.heightmap, headHeightUv)
       .r.add(uniforms.uHeight.mul(mix(0.05, 0.9, variation.mul(variation))))
@@ -193,7 +193,7 @@ class WindStreaksSsbo {
       const trailProgress = float(i).div(SEGMENT_COUNT);
       const pointArc = nextArc.sub(trailProgress.mul(TRAIL_LENGTH));
       const positionXZ = getCurveXZ(nextOrigin, pointArc, seed);
-      const pointMapUv = TSLUtils.computeMapUvByPosition(positionXZ);
+      const pointMapUv = computeMapUvByPosition(positionXZ);
       const pointHeightUv = vec2(pointMapUv.x, float(1).sub(pointMapUv.y));
       const terrainHeight = texture(
         assets.resources.heightmap,

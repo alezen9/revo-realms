@@ -36,7 +36,7 @@ import {
   wind,
 } from "../../systems";
 import { gameTime } from "../../systems/time/gameTime";
-import { TSLUtils } from "../../utils/TSLUtils";
+import { computeMapUvByPosition } from "../../shaders/mapping";
 
 const uniforms = {
   uPlayerDeltaXZ: uniform(new Vector2(0, 0)),
@@ -105,12 +105,12 @@ class WindParticlesSsbo {
     const worldPosition = vec3(offsetX, 0, offsetZ).add(
       uniforms.uPlayerPosition,
     );
-    const mapUv = TSLUtils.computeMapUvByPosition(worldPosition.xz);
+    const mapUv = computeMapUvByPosition(worldPosition.xz);
     const heightUv = vec2(mapUv.x, float(1).sub(mapUv.y));
     const terrainHeight = texture(assets.resources.heightmap, heightUv).r;
     const grassMapValue = texture(
       assets.resources.terrainMaps,
-      TSLUtils.computeMapUvByPosition(worldPosition.xz),
+      computeMapUvByPosition(worldPosition.xz),
     ).g;
     const isSpawnValid = step(0.25, grassMapValue);
     const heightOffset = mix(0.25, uniforms.uHeight.mul(0.85), variation);
@@ -214,7 +214,7 @@ class WindParticlesSsbo {
       const spawnWorldPosition = vec3(spawnPosition.x, 0, spawnPosition.y).add(
         uniforms.uPlayerPosition,
       );
-      const spawnMapUv = TSLUtils.computeMapUvByPosition(spawnWorldPosition.xz);
+      const spawnMapUv = computeMapUvByPosition(spawnWorldPosition.xz);
       const spawnHeightUv = vec2(spawnMapUv.x, float(1).sub(spawnMapUv.y));
       const terrainHeight = texture(
         assets.resources.heightmap,
@@ -222,7 +222,7 @@ class WindParticlesSsbo {
       ).r;
       const spawnGrassMapValue = texture(
         assets.resources.terrainMaps,
-        TSLUtils.computeMapUvByPosition(spawnWorldPosition.xz),
+        computeMapUvByPosition(spawnWorldPosition.xz),
       ).g;
       const isSpawnValid = step(0.25, spawnGrassMapValue);
       const heightOffset = mix(0.25, uniforms.uHeight.mul(0.85), variation);

@@ -32,7 +32,8 @@ import {
 } from "three/tsl";
 import { IndirectStorageBufferAttribute, type Node } from "three/webgpu";
 import { assets, stage, wind } from "../../systems";
-import { TSLUtils } from "../../utils/TSLUtils";
+import { computeMapUvByPosition } from "../../shaders/mapping";
+import { computeFrustumVisibility } from "../../shaders/frustum";
 import { getGrassHeightFromMask, getGrassNoiseUv } from "./GrassShading";
 import { gameDeltaTime, gameTime } from "../../systems/time/gameTime";
 import { config, uniforms } from "./config";
@@ -230,7 +231,7 @@ export class GrassCompute {
       .add(config.CLUMP_LOCAL_RADIUS)
       .mul(uniforms.uClumpBoundMultiplier);
 
-    const isInFrustum = TSLUtils.computeFrustumVisibility(
+    const isInFrustum = computeFrustumVisibility(
       clumpClipPosition,
       stage.uFx,
       stage.uFy,
@@ -255,7 +256,7 @@ export class GrassCompute {
     const needsTerrainRefresh = float(1).sub(terrainCacheValidity);
 
     If(needsTerrainRefresh, () => {
-      const terrainMapUv = TSLUtils.computeMapUvByPosition(clumpWorldPos.xz);
+      const terrainMapUv = computeMapUvByPosition(clumpWorldPos.xz);
 
       const terrainSample = texture(assets.resources.terrainMaps, terrainMapUv);
 
