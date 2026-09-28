@@ -144,74 +144,85 @@ const getVisibility = Fn<
   return wind.uIntensityDirectional.mul(fieldFade).mul(spawnFade);
 });
 
-class WindStreaksSsbo {
+const createStreakBuffer = () => instancedArray(STREAK_COUNT, "vec4");
+const createSpinePointBuffer = () =>
+  instancedArray(config.TOTAL_SPINE_POINT_COUNT, "vec4");
+type StreakBuffer = ReturnType<typeof createStreakBuffer>;
+type SpinePointBuffer = ReturnType<typeof createSpinePointBuffer>;
+
+const updateStreaks = Fn<
+  [streaks: StreakBuffer, spinePoints: SpinePointBuffer],
+  void
+>(([streaks, spinePoints]) => {
+  const streakIndex = float(instanceIndex);
+  const seed = hash(streakIndex);
+  const variation = streakIndex.mul(config.HEIGHT_SEQUENCE_STEP).fract();
+  const streak = streaks.element(instanceIndex);
+  const origin = streak.xy.toVar();
+
+  const speed = float(config.STREAK_SPEED)
+    .mul(uniforms.uSpeed)
+    .mul(mix(0.88, 1.12, seed));
+  const arc = streak.z.add(
+    speed.mul(wind.uIntensityDirectional).mul(uniforms.uDelta),
+  );
+
+  const headXZ = getCurveXZ(origin, arc, seed);
+  const alongDistance = headXZ.sub(getFieldCenter()).dot(wind.uDirection);
+  const isRecycling = step(config.RECYCLE_DISTANCE, alongDistance);
+  const shouldReset = uniforms.uReset.max(isRecycling).toVar();
+  const nextOrigin = mix(origin, getSpawnOrigin(streakIndex), shouldReset);
+  const nextArc = mix(arc, float(0), shouldReset);
+  const nextHeadXZ = getCurveXZ(nextOrigin, nextArc, seed);
+  const headMapUv = computeMapUvByPosition(nextHeadXZ);
+  const headHeightUv = vec2(headMapUv.x, float(1).sub(headMapUv.y));
+  const targetHeight = texture(assets.resources.heightmap, headHeightUv)
+    .r.add(uniforms.uHeight.mul(mix(0.05, 0.9, variation.mul(variation))))
+    .add(config.GROUND_CLEARANCE);
+  const heightFollow = float(1).sub(
+    exp(uniforms.uDelta.mul(config.HEIGHT_FOLLOW_RATE).negate()),
+  );
+  const movedHeight = mix(streak.w, targetHeight, heightFollow);
+  const nextHeight = mix(movedHeight, targetHeight, shouldReset);
+
+  streak.assign(vec4(nextOrigin.x, nextOrigin.y, nextArc, nextHeight));
+
+  const baseIndex = streakIndex.mul(SPINE_POINT_COUNT);
+  Loop(SPINE_POINT_COUNT, ({ i }) => {
+    const trailProgress = float(i).div(SEGMENT_COUNT);
+    const pointArc = nextArc.sub(trailProgress.mul(TRAIL_LENGTH));
+    const positionXZ = getCurveXZ(nextOrigin, pointArc, seed);
+    const pointMapUv = computeMapUvByPosition(positionXZ);
+    const pointHeightUv = vec2(pointMapUv.x, float(1).sub(pointMapUv.y));
+    const terrainHeight = texture(assets.resources.heightmap, pointHeightUv).r;
+    const height = nextHeight.max(terrainHeight.add(config.GROUND_CLEARANCE));
+    const position = vec3(positionXZ.x, height, positionXZ.y);
+    const visibility = getVisibility(position, nextArc);
+
+    spinePoints
+      .element(baseIndex.add(float(i)))
+      .assign(vec4(position, visibility));
+  });
+});
+
+class WindStreaksCompute {
   // xy -> curve origin in world XZ, z -> travelled arc, w -> smoothed height
-  readonly streaks = instancedArray(STREAK_COUNT, "vec4");
-  readonly spinePoints = instancedArray(config.TOTAL_SPINE_POINT_COUNT, "vec4");
+  readonly streaks = createStreakBuffer();
+  readonly spinePoints = createSpinePointBuffer();
+  readonly computeStreaks;
 
   constructor() {
     this.streaks.value.name = "windStreaks.streaks";
     this.spinePoints.value.name = "windStreaks.spinePoints";
+    this.computeStreaks = updateStreaks(this.streaks, this.spinePoints).compute(
+      STREAK_COUNT,
+      [config.STREAK_WORKGROUP_SIZE],
+    );
   }
-
-  readonly computeStreaks = Fn(() => {
-    const streakIndex = float(instanceIndex);
-    const seed = hash(streakIndex);
-    const variation = streakIndex.mul(config.HEIGHT_SEQUENCE_STEP).fract();
-    const streak = this.streaks.element(instanceIndex);
-    const origin = streak.xy.toVar();
-
-    const speed = float(config.STREAK_SPEED)
-      .mul(uniforms.uSpeed)
-      .mul(mix(0.88, 1.12, seed));
-    const arc = streak.z.add(
-      speed.mul(wind.uIntensityDirectional).mul(uniforms.uDelta),
-    );
-
-    const headXZ = getCurveXZ(origin, arc, seed);
-    const alongDistance = headXZ.sub(getFieldCenter()).dot(wind.uDirection);
-    const isRecycling = step(config.RECYCLE_DISTANCE, alongDistance);
-    const shouldReset = uniforms.uReset.max(isRecycling).toVar();
-    const nextOrigin = mix(origin, getSpawnOrigin(streakIndex), shouldReset);
-    const nextArc = mix(arc, float(0), shouldReset);
-    const nextHeadXZ = getCurveXZ(nextOrigin, nextArc, seed);
-    const headMapUv = computeMapUvByPosition(nextHeadXZ);
-    const headHeightUv = vec2(headMapUv.x, float(1).sub(headMapUv.y));
-    const targetHeight = texture(assets.resources.heightmap, headHeightUv)
-      .r.add(uniforms.uHeight.mul(mix(0.05, 0.9, variation.mul(variation))))
-      .add(config.GROUND_CLEARANCE);
-    const heightFollow = float(1).sub(
-      exp(uniforms.uDelta.mul(config.HEIGHT_FOLLOW_RATE).negate()),
-    );
-    const movedHeight = mix(streak.w, targetHeight, heightFollow);
-    const nextHeight = mix(movedHeight, targetHeight, shouldReset);
-
-    streak.assign(vec4(nextOrigin.x, nextOrigin.y, nextArc, nextHeight));
-
-    const baseIndex = streakIndex.mul(SPINE_POINT_COUNT);
-    Loop(SPINE_POINT_COUNT, ({ i }) => {
-      const trailProgress = float(i).div(SEGMENT_COUNT);
-      const pointArc = nextArc.sub(trailProgress.mul(TRAIL_LENGTH));
-      const positionXZ = getCurveXZ(nextOrigin, pointArc, seed);
-      const pointMapUv = computeMapUvByPosition(positionXZ);
-      const pointHeightUv = vec2(pointMapUv.x, float(1).sub(pointMapUv.y));
-      const terrainHeight = texture(
-        assets.resources.heightmap,
-        pointHeightUv,
-      ).r;
-      const height = nextHeight.max(terrainHeight.add(config.GROUND_CLEARANCE));
-      const position = vec3(positionXZ.x, height, positionXZ.y);
-      const visibility = getVisibility(position, nextArc);
-
-      this.spinePoints
-        .element(baseIndex.add(float(i)))
-        .assign(vec4(position, visibility));
-    });
-  })().compute(STREAK_COUNT, [config.STREAK_WORKGROUP_SIZE]);
 }
 
 export class WindStreaks {
-  private ssbo = new WindStreaksSsbo();
+  private streaksCompute = new WindStreaksCompute();
   private computeTask: ComputeTask;
   private mesh: InstancedMesh;
   private elapsedSinceUpdate = 0;
@@ -219,12 +230,12 @@ export class WindStreaks {
   constructor() {
     this.computeTask = graphics.createComputeTask({
       label: "WindStreaks",
-      init: this.ssbo.computeStreaks,
-      update: this.ssbo.computeStreaks,
+      init: this.streaksCompute.computeStreaks,
+      update: this.streaksCompute.computeStreaks,
     });
     this.mesh = this.createMesh();
     stage.mainScene.add(this.mesh);
-    void this.computeTask.init()?.then(this.clearReset, this.clearReset);
+    void this.computeTask.init().then(this.clearReset, this.clearReset);
     this.registerPrewarmTask();
     eventBus.on("game-wind-start", this.onWindStart);
     eventBus.on("engine-render-update", this.onEngineUpdate);
@@ -234,7 +245,7 @@ export class WindStreaks {
   private createMesh() {
     const mesh = new InstancedMesh(
       new PlaneGeometry(1, 1, 1, SEGMENT_COUNT),
-      new WindStreakMaterial(this.ssbo),
+      new WindStreakMaterial(this.streaksCompute),
       STREAK_COUNT,
     );
     mesh.visible = false;
@@ -273,14 +284,14 @@ export class WindStreaks {
       this.elapsedSinceUpdate + delta,
       config.MAX_UPDATE_DELTA,
     );
-    this.updateSsbo();
+    this.updateStreaks();
   };
 
-  private updateSsbo() {
+  private updateStreaks() {
     if (!this.computeTask.canUpdate) return;
 
     uniforms.uDelta.value = this.elapsedSinceUpdate;
-    uniforms.uReset.value = this.isResetPending ? 1 : 0;
+    uniforms.uReset.value = Number(this.isResetPending);
 
     const didUpdate = this.computeTask.update();
     if (!didUpdate) return;
@@ -319,7 +330,7 @@ export class WindStreaks {
 }
 
 class WindStreakMaterial extends MeshBasicNodeMaterial {
-  constructor(ssbo: WindStreaksSsbo) {
+  constructor(streaksCompute: WindStreaksCompute) {
     super();
 
     this.transparent = true;
@@ -332,11 +343,11 @@ class WindStreakMaterial extends MeshBasicNodeMaterial {
     const baseIndex = streakIndex.mul(SPINE_POINT_COUNT);
     const trailProgress = uv().y;
     const row = trailProgress.mul(SEGMENT_COUNT).round();
-    const point = ssbo.spinePoints.element(baseIndex.add(row));
-    const towardHead = ssbo.spinePoints.element(
+    const point = streaksCompute.spinePoints.element(baseIndex.add(row));
+    const towardHead = streaksCompute.spinePoints.element(
       baseIndex.add(row.sub(1).max(0)),
     ).xyz;
-    const towardTail = ssbo.spinePoints.element(
+    const towardTail = streaksCompute.spinePoints.element(
       baseIndex.add(row.add(1).min(SEGMENT_COUNT)),
     ).xyz;
 
