@@ -22,18 +22,19 @@ import { RevoColliderType } from "../../../systems/physics/colliderTypes";
 import { UP } from "../../axes";
 import { config, uniforms } from "./config";
 import { FlagMaterial } from "./FlagMaterial";
-import { FlagSsbo } from "./FlagSsbo";
+import { FlagCompute } from "./FlagCompute";
+import { debugExpedition33Flag } from "./debug";
 
 // top of the hill, sampled once from the terrain heightmap
 const HILLTOP = new Vector3(-115.74, 3.5, 215.79);
 
 export class Expedition33Flag {
-  private ssbo = new FlagSsbo();
+  private compute = new FlagCompute();
   private computeTask: ComputeTask;
   private origin = HILLTOP.clone();
   private staffAxis = new Vector3();
   private staffQuaternion = new Quaternion();
-  private pendingDelta = 0;
+  private pendingSeconds = 0;
   private isPlayerNear = false;
 
   constructor() {
@@ -50,11 +51,8 @@ export class Expedition33Flag {
 
     this.computeTask = graphics.createComputeTask({
       label: "Expedition33",
-      init: this.ssbo.computeInit,
-      update: [
-        this.ssbo.computeIntegrate,
-        ...this.ssbo.computeConstraintPasses,
-      ],
+      init: this.compute.computeInit,
+      update: this.compute.computeUpdate,
     });
     this.computeTask.init();
 
@@ -67,7 +65,7 @@ export class Expedition33Flag {
 
     eventBus.on("engine-render-update", this.onEngineUpdate);
     eventBus.on("engine-render-update-throttle-64x", this.onGateUpdate);
-    this.debug();
+    debugExpedition33Flag();
   }
 
   private createStaff() {
@@ -104,7 +102,7 @@ export class Expedition33Flag {
       center,
       config.FLAG_WIDTH + config.FLAG_HEIGHT,
     );
-    const flag = new Mesh(geometry, new FlagMaterial(this.ssbo));
+    const flag = new Mesh(geometry, new FlagMaterial(this.compute));
     flag.position.copy(this.origin);
     return flag;
   }
@@ -132,81 +130,20 @@ export class Expedition33Flag {
   };
 
   private onEngineUpdate = ({ delta, player }: State) => {
-    this.pendingDelta = Math.min(this.pendingDelta + delta, 1 / 30);
     if (!this.isPlayerNear) return;
     if (!this.computeTask.canUpdate) return;
 
+    this.pendingSeconds = Math.min(
+      this.pendingSeconds + delta,
+      config.MAX_CATCH_UP_SECONDS,
+    );
+    const stepCount = Math.floor(this.pendingSeconds / config.STEP_SECONDS);
+    if (stepCount === 0) return;
+    this.pendingSeconds -= stepCount * config.STEP_SECONDS;
+
+    uniforms.uStepCount.value = stepCount;
     uniforms.uPlayerLocalPosition.value.copy(player.position).sub(this.origin);
     uniforms.uPlayerRadius.value = player.radius;
-    uniforms.uDelta.value = this.pendingDelta;
-    this.pendingDelta = 0;
     this.computeTask.update();
   };
-
-  private debug() {
-    const folder = debugPanel.panel.addFolder({
-      title: "🚩 Expedition 33",
-      expanded: false,
-    });
-    folder.addBinding(uniforms.uWindStrength, "value", {
-      label: "Wind strength",
-      min: 0,
-      max: 2,
-    });
-    folder.addBinding(uniforms.uWindForce, "value", {
-      label: "Wind force",
-      min: 0,
-      max: 100,
-    });
-    folder.addBinding(uniforms.uGustStrength, "value", {
-      label: "Gust strength",
-      min: 0,
-      max: 1,
-    });
-    folder.addBinding(uniforms.uGustSpeed, "value", {
-      label: "Gust speed",
-      min: 0,
-      max: 1,
-    });
-    folder.addBinding(uniforms.uFlutter, "value", {
-      label: "Flutter",
-      min: 0,
-      max: 15,
-    });
-    folder.addBinding(uniforms.uGravity, "value", {
-      label: "Gravity",
-      min: 0,
-      max: 10,
-    });
-    folder.addBinding(uniforms.uStiffness, "value", {
-      label: "Stiffness",
-      min: 0,
-      max: 2,
-    });
-    folder.addBinding(uniforms.uDamping, "value", {
-      label: "Damping",
-      min: 0,
-      max: 8,
-    });
-    folder.addBinding(uniforms.uThickness, "value", {
-      label: "Thickness",
-      min: 0,
-      max: 0.3,
-    });
-    folder.addBinding(uniforms.uCollisionPadding, "value", {
-      label: "Collision padding",
-      min: 0,
-      max: 1,
-    });
-    folder.addBinding(uniforms.uDiffuseScale, "value", {
-      label: "Diffuse scale",
-      min: 0,
-      max: 6,
-    });
-    folder.addBinding(uniforms.uEmissive, "value", {
-      label: "Emissive",
-      min: 0,
-      max: 40,
-    });
-  }
 }
