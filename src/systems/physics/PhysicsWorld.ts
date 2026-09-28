@@ -5,7 +5,7 @@ import {
   World,
 } from "@dimforge/rapier3d";
 import { RevoColliderType } from "./colliderTypes";
-import { MathUtils, Vector3 } from "three";
+import { type Audio, MathUtils, Vector3 } from "three";
 import { LineSegments2 } from "three/examples/jsm/lines/webgpu/LineSegments2.js";
 import { LineSegmentsGeometry } from "three/examples/jsm/Addons.js";
 import { Line2NodeMaterial } from "three/webgpu";
@@ -13,12 +13,10 @@ import type { DebugPanel } from "../debug/DebugPanel";
 import type { Stage } from "../scene/Stage";
 import type { Sound } from "../audio/Sound";
 
-const config = {
-  minImpactSq: 5,
-  maxImpactSq: 400,
-  minImpactVolume: 0.01,
-  maxImpactVolume: 0.25,
-};
+const MIN_IMPACT_SPEED_SQUARED = 5;
+const MAX_IMPACT_SPEED_SQUARED = 400;
+const MIN_IMPACT_VOLUME = 0.01;
+const MAX_IMPACT_VOLUME = 0.25;
 
 export class PhysicsWorld {
   world!: World;
@@ -26,7 +24,7 @@ export class PhysicsWorld {
   private sound: Sound;
   private stage: Stage;
 
-  private dummyVectorLinVel = new Vector3();
+  private playerLinearVelocity = new Vector3();
   private fixedDebugMesh?: LineSegments2;
   private dynamicDebugMesh?: LineSegments2;
   private dynamicDebugGeometry?: LineSegmentsGeometry;
@@ -39,11 +37,10 @@ export class PhysicsWorld {
   }
 
   async initAsync() {
-    return import("@dimforge/rapier3d").then(() => {
-      this.world = new World({ x: 0, y: -9.81, z: 0 });
-      this.eventQueue = new EventQueue(true);
-      this.world.timestep = 1 / 60;
-    });
+    await import("@dimforge/rapier3d");
+    this.world = new World({ x: 0, y: -9.81, z: 0 });
+    this.eventQueue = new EventQueue(true);
+    this.world.timestep = 1 / 60;
   }
 
   private setupDebug(debugPanel: DebugPanel) {
@@ -63,85 +60,60 @@ export class PhysicsWorld {
     if (this.dynamicDebugMesh) this.dynamicDebugMesh.visible = enabled;
   }
 
-  private getColliderName(collider: Collider) {
-    return collider.userData?.type;
+  private getColliderType(collider: Collider) {
+    if (!collider.userData) return undefined;
+    return collider.userData.type;
   }
 
-  private impactToVolume(intensity: number): number {
-    const raw = MathUtils.mapLinear(
-      intensity,
-      config.minImpactSq,
-      config.maxImpactSq,
-      config.minImpactVolume,
-      config.maxImpactVolume,
+  private playImpactSound(playerCollider: Collider, impactSound: Audio) {
+    const body = playerCollider.parent();
+    if (!body) return;
+    body.linvel(this.playerLinearVelocity);
+    const impactSpeedSquared = this.playerLinearVelocity.lengthSq();
+    if (impactSpeedSquared < MIN_IMPACT_SPEED_SQUARED) return;
+    const volume = MathUtils.clamp(
+      MathUtils.mapLinear(
+        impactSpeedSquared,
+        MIN_IMPACT_SPEED_SQUARED,
+        MAX_IMPACT_SPEED_SQUARED,
+        MIN_IMPACT_VOLUME,
+        MAX_IMPACT_VOLUME,
+      ),
+      MIN_IMPACT_VOLUME,
+      MAX_IMPACT_VOLUME,
     );
-    return MathUtils.clamp(raw, config.minImpactVolume, config.maxImpactVolume);
-  }
-
-  private onCollisionWithWood(playerCollider: Collider) {
-    const body = playerCollider.parent();
-    if (!body) return;
-    body.linvel(this.dummyVectorLinVel);
-    const intensity = this.dummyVectorLinVel.lengthSq();
-    if (intensity < config.minImpactSq) return;
-    const volume = this.impactToVolume(intensity);
-    this.sound.hitWood.setVolume(volume);
-    this.sound.hitWood.play();
-  }
-
-  private onCollisionWithStone(playerCollider: Collider) {
-    const body = playerCollider.parent();
-    if (!body) return;
-    body.linvel(this.dummyVectorLinVel);
-    const intensity = this.dummyVectorLinVel.lengthSq();
-    if (intensity < config.minImpactSq) return;
-    const volume = this.impactToVolume(intensity);
-    this.sound.hitStone.setVolume(volume);
-    this.sound.hitStone.play();
-  }
-
-  private handleCollisionSounds() {
-    this.eventQueue.drainCollisionEvents(this.onCollisionEvent);
+    impactSound.setVolume(volume);
+    impactSound.play();
   }
 
   private onCollisionEvent = (
-    handle1: number,
-    handle2: number,
-    started: boolean,
+    firstHandle: number,
+    secondHandle: number,
+    hasStarted: boolean,
   ) => {
-    if (this.sound.isMute) return;
-    if (!started) return;
+    if (this.sound.isMute || !hasStarted) return;
 
-    const collider1 = this.world.getCollider(handle1);
-    const collider2 = this.world.getCollider(handle2);
-    if (!collider1 || !collider2) return;
+    const firstCollider = this.world.getCollider(firstHandle);
+    const secondCollider = this.world.getCollider(secondHandle);
+    if (!firstCollider || !secondCollider) return;
 
-    const collider1Type = this.getColliderName(collider1);
-    const collider2Type = this.getColliderName(collider2);
+    const firstType = this.getColliderType(firstCollider);
+    const secondType = this.getColliderType(secondCollider);
+    const isFirstPlayer = firstType === RevoColliderType.Player;
+    const isSecondPlayer = secondType === RevoColliderType.Player;
+    if (!isFirstPlayer && !isSecondPlayer) return;
 
-    let playerCollider: Collider | null = null;
-    let collidedWith: RevoColliderType | undefined;
-
-    if (collider1Type === RevoColliderType.Player) {
-      playerCollider = collider1;
-      collidedWith = collider2Type;
-    } else if (collider2Type === RevoColliderType.Player) {
-      playerCollider = collider2;
-      collidedWith = collider1Type;
+    let playerCollider = firstCollider;
+    let otherType = secondType;
+    if (!isFirstPlayer) {
+      playerCollider = secondCollider;
+      otherType = firstType;
     }
 
-    if (!playerCollider) return;
-
-    switch (collidedWith) {
-      case RevoColliderType.Wood:
-        this.onCollisionWithWood(playerCollider);
-        break;
-      case RevoColliderType.Stone:
-        this.onCollisionWithStone(playerCollider);
-        break;
-      default:
-        break;
-    }
+    if (otherType === RevoColliderType.Wood)
+      this.playImpactSound(playerCollider, this.sound.hitWood);
+    if (otherType === RevoColliderType.Stone)
+      this.playImpactSound(playerCollider, this.sound.hitStone);
   };
 
   private createDebugMesh(positions: Float32Array) {
@@ -211,6 +183,7 @@ export class PhysicsWorld {
   flush() {
     this.updateDebug();
 
-    if (this.sound.isReady) this.handleCollisionSounds();
+    if (this.sound.isReady)
+      this.eventQueue.drainCollisionEvents(this.onCollisionEvent);
   }
 }

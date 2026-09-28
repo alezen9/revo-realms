@@ -14,12 +14,9 @@ import { type Stage } from "../scene/Stage";
 import type { EventBus } from "../events/EventBus";
 
 export class Sound {
-  // Loaders
   private audioLoader: AudioLoader;
   private audioListener: AudioListener;
   private eventBus: EventBus;
-
-  // State
   isReady = false;
   isMute = true;
   private files: Array<Audio | PositionalAudio> = [];
@@ -48,11 +45,12 @@ export class Sound {
     const context = this.audioListener.context;
     if (context.state === "suspended") await context.resume();
     this.isMute = !this.isMute;
-    this.files.forEach((file) => {
-      const volume = this.isMute ? 0 : file.userData.originalVolume;
+    for (const file of this.files) {
+      let volume = file.userData.originalVolume;
+      if (this.isMute) volume = 0;
       file.setVolume(volume);
       if (file.loop && !file.isPlaying) file.play();
-    });
+    }
   }
 
   private newAudio(buffer: AudioBuffer, volume = 1, loop = false) {
@@ -82,17 +80,18 @@ export class Sound {
   }
 
   async initAsync() {
-    const res = await Promise.all([
-      this.audioLoader.loadAsync(ambientUrl),
-      this.audioLoader.loadAsync(lakeUrl),
-      this.audioLoader.loadAsync(hitWoodUrl),
-      this.audioLoader.loadAsync(hitStoneUrl),
-    ]);
+    const [ambientBuffer, lakeBuffer, hitWoodBuffer, hitStoneBuffer] =
+      await Promise.all([
+        this.audioLoader.loadAsync(ambientUrl),
+        this.audioLoader.loadAsync(lakeUrl),
+        this.audioLoader.loadAsync(hitWoodUrl),
+        this.audioLoader.loadAsync(hitStoneUrl),
+      ]);
 
-    this.newAudio(res[0], 0.05, true);
-    this.lake = this.newPositionalAudio(res[1], 1, true, 50);
-    this.hitWood = this.newAudio(res[2], 0, false);
-    this.hitStone = this.newAudio(res[3], 0, false);
+    this.newAudio(ambientBuffer, 0.05, true);
+    this.lake = this.newPositionalAudio(lakeBuffer, 1, true, 50);
+    this.hitWood = this.newAudio(hitWoodBuffer, 0, false);
+    this.hitStone = this.newAudio(hitStoneBuffer, 0, false);
 
     this.isReady = true;
     this.eventBus.emit("engine-loading-audio-progress", 100);
