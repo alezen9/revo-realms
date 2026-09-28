@@ -1,8 +1,12 @@
 const params = new URLSearchParams(window.location.search);
-const debug = params.get("debug");
-const monitoring = params.get("monitoring");
+
+const readFlag = (name: string) => {
+  const value = params.get(name);
+  if (!value) return import.meta.env.DEV;
+  return value === "true";
+};
 
 export const TOOLING_FLAGS = {
-  debug: debug ? debug === "true" : import.meta.env.DEV,
-  monitoring: monitoring ? monitoring === "true" : import.meta.env.DEV,
+  debug: readFlag("debug"),
+  monitoring: readFlag("monitoring"),
 };

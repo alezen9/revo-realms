@@ -86,11 +86,14 @@ class PendingFolder implements DebugFolder {
 }
 
 export class DebugPanel {
-  private readonly pending = TOOLING_FLAGS.debug
-    ? new PendingFolder()
-    : undefined;
+  readonly panel: DebugFolder = new DeadFolder();
+  private pending?: PendingFolder;
 
-  readonly panel: DebugFolder = this.pending ?? new DeadFolder();
+  constructor() {
+    if (!TOOLING_FLAGS.debug) return;
+    this.pending = new PendingFolder();
+    this.panel = this.pending;
+  }
 
   async initAsync() {
     const { pending } = this;
@@ -98,7 +101,8 @@ export class DebugPanel {
 
     const { Pane } = await import("tweakpane");
     const pane = new Pane({ title: "Revo Realms" });
-    pane.element?.parentElement?.classList.add("debug-panel");
+    const { parentElement } = pane.element;
+    if (parentElement) parentElement.classList.add("debug-panel");
     pending.attach(pane);
   }
 }
