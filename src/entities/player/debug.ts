@@ -39,10 +39,15 @@ export const debugPlayer = (collider: Collider) => {
       max: 1,
     })
     .on("change", ({ value }) => collider.setRestitution(value));
-  physics.addBinding(config, "FALL_MULTIPLIER", {
-    label: "Fall multiplier",
-    min: 0,
-    max: 10,
+  physics.addBinding(config, "RISE_GRAVITY_MULTIPLIER", {
+    label: "Rise gravity",
+    min: 1,
+    max: 6,
+  });
+  physics.addBinding(config, "FALL_GRAVITY_MULTIPLIER", {
+    label: "Fall gravity",
+    min: 1,
+    max: 6,
   });
 
   const jump = folder.addFolder({ title: "Jump" });

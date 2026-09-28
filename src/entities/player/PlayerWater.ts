@@ -50,7 +50,6 @@ export class PlayerWater {
 
   private applyDamping() {
     const {
-      LINEAR_DAMPING_IN_INVERSE_SECONDS: landLinear,
       ANGULAR_DAMPING_IN_INVERSE_SECONDS: landAngular,
       WATER_DAMPING_LINEAR_IN_INVERSE_SECONDS: waterLinear,
       WATER_DAMPING_ANGULAR_IN_INVERSE_SECONDS: waterAngular,
@@ -62,7 +61,8 @@ export class PlayerWater {
       return;
     }
 
-    this.rigidBody.setLinearDamping(landLinear);
+    // land drag is horizontal only and applied by the player
+    this.rigidBody.setLinearDamping(0);
     this.rigidBody.setAngularDamping(landAngular);
   }
 

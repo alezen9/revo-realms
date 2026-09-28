@@ -105,7 +105,6 @@ export class Player {
     const { x, y, z } = config.PLAYER_INITIAL_POSITION;
     return RigidBodyDesc.dynamic()
       .setTranslation(x, y, z)
-      .setLinearDamping(config.LINEAR_DAMPING_IN_INVERSE_SECONDS)
       .setAngularDamping(config.ANGULAR_DAMPING_IN_INVERSE_SECONDS);
   }
 
@@ -126,6 +125,7 @@ export class Player {
     this.rigidBody.translation(this.bodyPosition);
     this.water.update(delta, this.bodyPosition);
     this.updateYaw(delta);
+    this.applyHorizontalDamping(delta);
     this.updateVerticalMovement(delta);
     this.updateHorizontalMovement(delta);
   };
@@ -216,7 +216,7 @@ export class Player {
 
     this.applyJumpCut(isJumpKeyPressed, linearVelocity);
     if (!this.isOnGround) {
-      this.applyFastFall(delta, linearVelocity, physicsWorld.world.gravity.y);
+      this.applyAirGravity(delta, linearVelocity, physicsWorld.world.gravity.y);
     }
 
     const isSlowBounce =
@@ -277,9 +277,24 @@ export class Player {
     velocity.y *= config.JUMP_CUT_MULTIPLIER;
   }
 
-  private applyFastFall(delta: number, velocity: Vector, gravityY: number) {
-    if (velocity.y >= 0) return;
-    velocity.y -= config.FALL_MULTIPLIER * Math.abs(gravityY) * delta;
+  private applyAirGravity(delta: number, velocity: Vector, gravityY: number) {
+    let gravityMultiplier = config.RISE_GRAVITY_MULTIPLIER;
+    if (velocity.y < 0) gravityMultiplier = config.FALL_GRAVITY_MULTIPLIER;
+    // the world already applies gravity once
+    velocity.y -= (gravityMultiplier - 1) * Math.abs(gravityY) * delta;
+  }
+
+  private applyHorizontalDamping(delta: number) {
+    if (this.water.isInWater) return;
+    const { linearVelocity } = this;
+    this.rigidBody.linvel(linearVelocity);
+    // damping vertical speed too made jumps pop and then hang at the apex
+    const damping = Math.exp(
+      -config.HORIZONTAL_DAMPING_IN_INVERSE_SECONDS * delta,
+    );
+    linearVelocity.x *= damping;
+    linearVelocity.z *= damping;
+    this.rigidBody.setLinvel(linearVelocity, false);
   }
 
   private updateYaw(delta: number) {
