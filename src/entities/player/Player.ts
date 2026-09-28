@@ -44,11 +44,9 @@ export class Player {
   private yawInRadians = 0;
   private previousYawInRadians = 0;
   private yawQuaternion = new Quaternion();
-  private newLinVel = new Vector3();
-  private newAngVel = new Vector3();
   private linearVelocity = new Vector3();
   private angularVelocity = new Vector3();
-  private forwardVec = new Vector3();
+  private forwardDirection = new Vector3();
   private jumpImpulse = new Vector3();
   private bodyPosition = new Vector3();
   private rayOrigin = new Vector3();
@@ -81,7 +79,7 @@ export class Player {
     eventBus.on("engine-before-physics", this.onBeforePhysics);
     eventBus.on("engine-after-physics", this.onAfterPhysics);
     eventBus.on("engine-render-update", this.onEngineUpdate);
-    eventBus.on("engine-render-update-throttle-64x", this.onGateUpdate);
+    eventBus.on("engine-render-update-throttle-64x", this.onFallCheck);
     // light tracking must run after visual interpolation
     lighting.setTarget(this.visualRoot);
     debugPlayer(this.collider);
@@ -140,7 +138,7 @@ export class Player {
       delta,
       this.isOnGround,
       this.water.isInWater,
-      this.forwardVec,
+      this.forwardDirection,
     );
   };
 
@@ -172,7 +170,7 @@ export class Player {
     playerUniforms.uPosition.value.copy(this.visualRoot.position);
   };
 
-  private onGateUpdate = () => {
+  private onFallCheck = () => {
     if (this.visualRoot.position.y > config.RESET_Y_IN_METERS) return;
 
     this.rigidBody.setLinvel(ZERO_VELOCITY, false);
@@ -232,7 +230,7 @@ export class Player {
     this.rigidBody.setLinvel(linearVelocity, true);
   }
 
-  private checkIfGrounded(): boolean {
+  private checkIfGrounded() {
     // cast from just above the bottom of the sphere for stable grounding
     this.rigidBody.translation(this.rayOrigin);
     this.rayOrigin.y -=
@@ -250,7 +248,7 @@ export class Player {
     return hit.timeOfImpact <= config.GROUND_CONTACT_THRESHOLD_IN_METERS;
   }
 
-  private canJump(): boolean {
+  private canJump() {
     // deep water has no jumps, but a grounded ball in the shallows should
     // still respond
     if (this.water.isInWater && !this.isOnGround) return false;
@@ -307,7 +305,7 @@ export class Player {
     if (input.isRightward()) this.yawInRadians -= turnSpeed * delta;
 
     this.yawQuaternion.setFromAxisAngle(UP, this.yawInRadians);
-    this.forwardVec.copy(FORWARD).applyQuaternion(this.yawQuaternion);
+    this.forwardDirection.copy(FORWARD).applyQuaternion(this.yawQuaternion);
   }
 
   private getMovementMultiplier() {
@@ -322,48 +320,48 @@ export class Player {
     if (!isForward && !isBackward) return;
 
     const {
-      LIN_VEL_STRENGTH_IN_METERS_PER_SECOND_SQUARED: acceleration,
+      ACCELERATION_IN_METERS_PER_SECOND_SQUARED: acceleration,
       MAX_SPEED_IN_METERS_PER_SECOND: maxSpeed,
       RADIUS_IN_METERS: radius,
     } = config;
+    const { linearVelocity, angularVelocity, forwardDirection } = this;
 
     const driveSign = Number(isForward) - Number(isBackward);
-    const linVelScale = acceleration * delta * this.getMovementMultiplier();
+    const velocityGain = acceleration * delta * this.getMovementMultiplier();
 
-    this.rigidBody.linvel(this.newLinVel);
-    this.newLinVel.addScaledVector(this.forwardVec, linVelScale * driveSign);
+    this.rigidBody.linvel(linearVelocity);
+    linearVelocity.addScaledVector(forwardDirection, velocityGain * driveSign);
 
-    const horizontalSpeed = Math.hypot(this.newLinVel.x, this.newLinVel.z);
-    if (horizontalSpeed > maxSpeed) {
-      const scale = maxSpeed / horizontalSpeed;
-      this.newLinVel.x *= scale;
-      this.newLinVel.z *= scale;
+    const horizontalSpeedSquared =
+      linearVelocity.x ** 2 + linearVelocity.z ** 2;
+    if (horizontalSpeedSquared > maxSpeed ** 2) {
+      const scale = maxSpeed / Math.sqrt(horizontalSpeedSquared);
+      linearVelocity.x *= scale;
+      linearVelocity.z *= scale;
     }
-    this.rigidBody.setLinvel(this.newLinVel, true);
+    this.rigidBody.setLinvel(linearVelocity, true);
 
     if (!this.isOnGround && !this.water.isInWater) return;
 
-    // spin follows actual motion (omega = up x v / r) instead of being its
-    // own motor, so excess spin can never grip the ball up trees or walls;
-    // airborne spin stays natural. while braking, spin follows the input
-    // direction instead, so it spins backward while still sliding forward
-    // (drift); magnitude stays tied to the current speed, so no wall traction
-    const alongForward =
-      this.newLinVel.x * this.forwardVec.x +
-      this.newLinVel.z * this.forwardVec.z;
-    const isDrifting = driveSign !== 0 && alongForward * driveSign < 0;
+    // spin follows the motion (up x v / r) so it never acts as its own motor.
+    // braking spins against the slide for a drift, at the same speed so it
+    // still has no wall traction
+    const forwardSpeed =
+      linearVelocity.x * forwardDirection.x +
+      linearVelocity.z * forwardDirection.z;
+    const isDrifting = driveSign !== 0 && forwardSpeed * driveSign < 0;
 
     if (isDrifting) {
       const driftSpin =
-        (driveSign * Math.abs(alongForward) * config.DRIFT_SPIN_MULTIPLIER) /
+        (driveSign * Math.abs(forwardSpeed) * config.DRIFT_SPIN_MULTIPLIER) /
         radius;
-      this.newAngVel
-        .crossVectors(UP, this.forwardVec)
+      angularVelocity
+        .crossVectors(UP, forwardDirection)
         .multiplyScalar(driftSpin);
     } else {
-      this.newAngVel.crossVectors(UP, this.newLinVel).divideScalar(radius);
+      angularVelocity.crossVectors(UP, linearVelocity).divideScalar(radius);
     }
-    this.rigidBody.setAngvel(this.newAngVel, true);
+    this.rigidBody.setAngvel(angularVelocity, true);
   }
 
   get position() {

@@ -11,7 +11,7 @@ export const debugPlayer = (collider: Collider) => {
   });
 
   const physics = folder.addFolder({ title: "Physics" });
-  physics.addBinding(config, "LIN_VEL_STRENGTH_IN_METERS_PER_SECOND_SQUARED", {
+  physics.addBinding(config, "ACCELERATION_IN_METERS_PER_SECOND_SQUARED", {
     label: "Acceleration",
     min: 5,
     max: 150,
