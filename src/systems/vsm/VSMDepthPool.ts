@@ -64,11 +64,226 @@ type ClusterCaster = {
   rasterNode: ComputeNode;
 };
 
+const createDepthNode = (attribute: StorageBufferAttribute, count: number) =>
+  storage(attribute, "uint", count).toAtomic();
+const createPageJobsNode = (attribute: StorageBufferAttribute) =>
+  storage(attribute, "uvec4", VSM_JOB_COUNT).toReadOnly();
+const createTriangleCorners = () =>
+  workgroupArray("vec3", VSM_CLUSTER_TRIANGLES * 3);
+const createTriangleUvs = () =>
+  workgroupArray("vec2", VSM_CLUSTER_TRIANGLES * 3);
+
+type DepthNode = ReturnType<typeof createDepthNode>;
+type PageJobsNode = ReturnType<typeof createPageJobsNode>;
+type TriangleCorners = ReturnType<typeof createTriangleCorners>;
+type TriangleUvs = ReturnType<typeof createTriangleUvs>;
+
+type RasterArgs = [
+  source: VSMClusterBucket,
+  depth: DepthNode,
+  triangleCorners: TriangleCorners,
+  triangleUvs: TriangleUvs,
+  lightBasis: VSMContext["lightBasis"],
+  minimumY: Node<"float">,
+  maximumY: Node<"float">,
+  alphaTest: Node<"float">,
+  opacityNode: Node<"float"> | undefined,
+];
+
 const getEdge = (from: Node<"vec2">, to: Node<"vec2">, point: Node<"vec2">) =>
   to.x
     .sub(from.x)
     .mul(point.y.sub(from.y))
     .sub(to.y.sub(from.y).mul(point.x.sub(from.x)));
+
+const clearPages = Fn<
+  [
+    depth: DepthNode,
+    pageJobs: PageJobsNode,
+    jobCount: Node<"uint">,
+    jobOffset: Node<"uint">,
+  ],
+  void
+>(([depth, pageJobs, jobCount, jobOffset]) => {
+  Loop(
+    {
+      start: workgroupId.x,
+      end: jobCount,
+      type: "uint",
+      update: CLEAR_WORKGROUPS,
+    },
+    ({ i: jobLoopIndex }) => {
+      const pageBase = pageJobs
+        .element(jobLoopIndex.add(jobOffset))
+        .y.mul(PAGE_TEXEL_COUNT)
+        .toVar();
+      Loop(
+        {
+          start: localId.x,
+          end: uint(PAGE_TEXEL_COUNT),
+          type: "uint",
+          update: CLEAR_WORKGROUP_SIZE,
+        },
+        ({ i: texel }) => {
+          atomicStore(depth.element(pageBase.add(texel)), DEPTH_SCALE);
+        },
+      );
+    },
+  );
+});
+
+// opacityNode is only passed for alpha tested casters with uvs, so the opaque
+// raster never reads uvs
+const rasterizeClusters = Fn<RasterArgs, void>(
+  ([
+    source,
+    depth,
+    triangleCorners,
+    triangleUvs,
+    lightBasis,
+    minimumY,
+    maximumY,
+    alphaTest,
+    opacityNode,
+  ]) => {
+    Loop(
+      {
+        start: workgroupId.x,
+        end: source.getWorkCount(),
+        type: "uint",
+        update: RASTER_WORKGROUPS,
+      },
+      ({ i: itemLoopIndex }) => {
+        const work = source.getWork(itemLoopIndex.toVar());
+        const triangleCount = work.triangleCount.toVar();
+        const pageSize = getPageSize(work.level).toVar();
+        const pageOrigin = vec2(work.pageCoordinate)
+          .sub(VSM_PAGE_OFFSET)
+          .toVar();
+        If(localId.x.lessThan(triangleCount), () => {
+          Loop({ start: 0, end: 3, type: "uint" }, ({ i: corner }) => {
+            const vertex = work.firstVertex
+              .add(localId.x.mul(3))
+              .add(corner)
+              .toVar();
+            const casterCorner = source.getCorner(work, vertex).toVar();
+            const world = casterCorner.xyz;
+            const texel = getLightPosition(world, lightBasis)
+              .div(pageSize)
+              .sub(pageOrigin)
+              .mul(VSM_PAGE_TEXELS);
+            const cornerDepth = maximumY
+              .sub(world.y)
+              .add(casterCorner.w)
+              .div(maximumY.sub(minimumY));
+            const cornerIndex = localId.x.mul(3).add(corner);
+            triangleCorners
+              .element<"vec3">(cornerIndex)
+              .assign(vec3(texel, cornerDepth));
+            if (opacityNode)
+              triangleUvs
+                .element<"vec2">(cornerIndex)
+                .assign(source.getUv(vertex));
+          });
+        });
+        workgroupBarrier();
+        const pageBase = work.slot.mul(PAGE_TEXEL_COUNT).toVar();
+        Loop(
+          { start: uint(0), end: triangleCount, type: "uint" },
+          ({ i: triangleLoopIndex }) => {
+            const cornerBase = triangleLoopIndex.mul(3).toVar();
+            const first = triangleCorners.element<"vec3">(cornerBase).toVar();
+            const second = triangleCorners
+              .element<"vec3">(cornerBase.add(1))
+              .toVar();
+            const third = triangleCorners
+              .element<"vec3">(cornerBase.add(2))
+              .toVar();
+            const area = getEdge(first.xy, second.xy, third.xy).toVar();
+            const minimum = first.xy.min(second.xy).min(third.xy).sub(0.5);
+            const maximum = first.xy.max(second.xy).max(third.xy).sub(0.5);
+            const isOnPage = maximum.x
+              .greaterThanEqual(0)
+              .and(maximum.y.greaterThanEqual(0))
+              .and(minimum.x.lessThan(VSM_PAGE_TEXELS))
+              .and(minimum.y.lessThan(VSM_PAGE_TEXELS))
+              .and(area.abs().greaterThan(1e-8));
+            const firstTexel = uvec2(
+              minimum.ceil().clamp(0, VSM_PAGE_TEXELS - 1),
+            ).toVar();
+            const lastTexel = uvec2(
+              maximum.floor().clamp(0, VSM_PAGE_TEXELS - 1),
+            ).toVar();
+            const width = lastTexel.x.sub(firstTexel.x).add(1).toVar();
+            const texelCount = isOnPage
+              .and(lastTexel.x.greaterThanEqual(firstTexel.x))
+              .and(lastTexel.y.greaterThanEqual(firstTexel.y))
+              .select(width.mul(lastTexel.y.sub(firstTexel.y).add(1)), uint(0));
+            Loop(
+              {
+                start: localId.x,
+                end: texelCount,
+                type: "uint",
+                update: VSM_CLUSTER_TRIANGLES,
+              },
+              ({ i: texelIndex }) => {
+                const x = firstTexel.x.add(texelIndex.mod(width)).toVar();
+                const y = firstTexel.y.add(texelIndex.div(width)).toVar();
+                const center = vec2(x, y).add(0.5);
+                const firstWeight = getEdge(second.xy, third.xy, center)
+                  .div(area)
+                  .toVar();
+                const secondWeight = getEdge(third.xy, first.xy, center)
+                  .div(area)
+                  .toVar();
+                const thirdWeight = getEdge(first.xy, second.xy, center)
+                  .div(area)
+                  .toVar();
+                const isInside = firstWeight
+                  .greaterThanEqual(0)
+                  .and(secondWeight.greaterThanEqual(0))
+                  .and(thirdWeight.greaterThanEqual(0));
+                let isCovered = isInside;
+                if (opacityNode) {
+                  const texelUv = triangleUvs
+                    .element<"vec2">(cornerBase)
+                    .mul(firstWeight)
+                    .add(
+                      triangleUvs
+                        .element<"vec2">(cornerBase.add(1))
+                        .mul(secondWeight),
+                    )
+                    .add(
+                      triangleUvs
+                        .element<"vec2">(cornerBase.add(2))
+                        .mul(thirdWeight),
+                    );
+                  const opacity = opacityNode.context({
+                    forceUVContext: true,
+                    getUV: () => texelUv,
+                  });
+                  isCovered = isInside.and(opacity.greaterThanEqual(alphaTest));
+                }
+                If(isCovered, () => {
+                  const texelDepth = first.z
+                    .mul(firstWeight)
+                    .add(second.z.mul(secondWeight))
+                    .add(third.z.mul(thirdWeight))
+                    .clamp(0, 1);
+                  atomicMin(
+                    depth.element(pageBase.add(y.mul(VSM_PAGE_TEXELS)).add(x)),
+                    uint(texelDepth.mul(DEPTH_SCALE)),
+                  );
+                });
+              },
+            );
+          },
+        );
+        workgroupBarrier();
+      },
+    );
+  },
+);
 
 export class VSMDepthPool {
   readonly minimumY = uniform(-8);
@@ -80,8 +295,6 @@ export class VSMDepthPool {
   private jobs: VSMJobSource;
   private depthNode;
   private readDepthNode;
-  private pageJobsNode;
-  private jobCountNode;
   private clearNode;
   private clusterCasters = new Map<string, ClusterCaster>();
 
@@ -96,55 +309,24 @@ export class VSMDepthPool {
       new Uint32Array(texelCount),
       1,
     );
-    this.depthNode = storage(depthAttribute, "uint", texelCount).toAtomic();
+    this.depthNode = createDepthNode(depthAttribute, texelCount);
     this.readDepthNode = storage(
       depthAttribute,
       "uint",
       texelCount,
     ).toReadOnly();
-    this.pageJobsNode = storage(
-      context.pageJobs,
-      "uvec4",
-      VSM_JOB_COUNT,
-    ).toReadOnly();
-    this.jobCountNode = storage(
+    const jobCounts = storage(
       jobs.countAttribute,
       "uint",
       jobs.countLength,
     ).toReadOnly();
 
-    this.clearNode = Fn(() => {
-      Loop(
-        {
-          start: workgroupId.x,
-          end: this.jobCountNode.element(jobs.countIndex),
-          type: "uint",
-          update: CLEAR_WORKGROUPS,
-        },
-        ({ i: jobLoopIndex }) => {
-          const pageBase = this.pageJobsNode
-            .element(jobLoopIndex.add(jobs.offset))
-            .y.mul(PAGE_TEXEL_COUNT)
-            .toVar();
-          Loop(
-            {
-              start: localId.x,
-              end: uint(PAGE_TEXEL_COUNT),
-              type: "uint",
-              update: CLEAR_WORKGROUP_SIZE,
-            },
-            ({ i: texel }) => {
-              atomicStore(
-                this.depthNode.element(pageBase.add(texel)),
-                DEPTH_SCALE,
-              );
-            },
-          );
-        },
-      );
-    })().compute(CLEAR_WORKGROUPS * CLEAR_WORKGROUP_SIZE, [
-      CLEAR_WORKGROUP_SIZE,
-    ]);
+    this.clearNode = clearPages(
+      this.depthNode,
+      createPageJobsNode(context.pageJobs),
+      jobCounts.element(jobs.countIndex),
+      uint(jobs.offset),
+    ).compute(CLEAR_WORKGROUPS * CLEAR_WORKGROUP_SIZE, [CLEAR_WORKGROUP_SIZE]);
     this.clearNode.name = `VSM ${kind} clear`;
   }
 
@@ -287,180 +469,37 @@ export class VSMDepthPool {
     }
     for (const [key, casters] of groups) {
       const clusterCaster = this.clusterCasters.get(key);
-      if (clusterCaster?.bucket.setCasters(casters)) continue;
-      clusterCaster?.rasterNode.dispose();
-      clusterCaster?.bucket.dispose();
+      if (clusterCaster) {
+        const hasKeptBucket = clusterCaster.bucket.setCasters(casters);
+        if (hasKeptBucket) continue;
+        clusterCaster.rasterNode.dispose();
+        clusterCaster.bucket.dispose();
+      }
       const [{ opacityNode, alphaTest }] = casters;
+      const hasOpacity = !!opacityNode;
       const bucket = new VSMClusterBucket(
         this.context,
         this.jobs,
         casters,
-        opacityNode !== undefined,
+        hasOpacity,
       );
-      const rasterNode = this.createRasterNode(bucket, alphaTest, opacityNode);
+      let rasterOpacityNode: Node<"float"> | undefined;
+      if (bucket.hasUvs) rasterOpacityNode = opacityNode;
+      const rasterNode = rasterizeClusters(
+        bucket,
+        this.depthNode,
+        createTriangleCorners(),
+        createTriangleUvs(),
+        this.context.lightBasis,
+        this.minimumY,
+        this.maximumY,
+        float(alphaTest),
+        rasterOpacityNode,
+      ).compute(RASTER_WORKGROUPS * VSM_CLUSTER_TRIANGLES, [
+        VSM_CLUSTER_TRIANGLES,
+      ]);
+      rasterNode.name = `VSM ${this.kind} raster`;
       this.clusterCasters.set(key, { bucket, rasterNode });
     }
-  }
-
-  private createRasterNode(
-    source: VSMClusterBucket,
-    alphaTest: number,
-    opacityNode?: Node<"float">,
-  ) {
-    const { lightBasis } = this.context;
-    const { minimumY, maximumY } = this;
-    const hasOpacity = source.hasUvs && opacityNode !== undefined;
-    const triangleCorners = workgroupArray("vec3", VSM_CLUSTER_TRIANGLES * 3);
-    const triangleUvs = workgroupArray("vec2", VSM_CLUSTER_TRIANGLES * 3);
-
-    const rasterNode = Fn(() => {
-      Loop(
-        {
-          start: workgroupId.x,
-          end: source.getWorkCount(),
-          type: "uint",
-          update: RASTER_WORKGROUPS,
-        },
-        ({ i: itemLoopIndex }) => {
-          const work = source.getWork(itemLoopIndex.toVar());
-          const triangleCount = work.triangleCount.toVar();
-          const pageSize = getPageSize(work.level).toVar();
-          const pageOrigin = vec2(work.pageCoordinate)
-            .sub(VSM_PAGE_OFFSET)
-            .toVar();
-          If(localId.x.lessThan(triangleCount), () => {
-            Loop({ start: 0, end: 3, type: "uint" }, ({ i: corner }) => {
-              const vertex = work.firstVertex
-                .add(localId.x.mul(3))
-                .add(corner)
-                .toVar();
-              const casterCorner = source.getCorner(work, vertex).toVar();
-              const world = casterCorner.xyz;
-              const texel = getLightPosition(world, lightBasis)
-                .div(pageSize)
-                .sub(pageOrigin)
-                .mul(VSM_PAGE_TEXELS);
-              const depth = maximumY
-                .sub(world.y)
-                .add(casterCorner.w)
-                .div(maximumY.sub(minimumY));
-              const cornerIndex = localId.x.mul(3).add(corner);
-              triangleCorners
-                .element<"vec3">(cornerIndex)
-                .assign(vec3(texel, depth));
-              if (hasOpacity)
-                triangleUvs
-                  .element<"vec2">(cornerIndex)
-                  .assign(source.getUv(vertex));
-            });
-          });
-          workgroupBarrier();
-          const pageBase = work.slot.mul(PAGE_TEXEL_COUNT).toVar();
-          Loop(
-            { start: uint(0), end: triangleCount, type: "uint" },
-            ({ i: triangleLoopIndex }) => {
-              const cornerBase = triangleLoopIndex.mul(3).toVar();
-              const first = triangleCorners.element<"vec3">(cornerBase).toVar();
-              const second = triangleCorners
-                .element<"vec3">(cornerBase.add(1))
-                .toVar();
-              const third = triangleCorners
-                .element<"vec3">(cornerBase.add(2))
-                .toVar();
-              const area = getEdge(first.xy, second.xy, third.xy).toVar();
-              const minimum = first.xy.min(second.xy).min(third.xy).sub(0.5);
-              const maximum = first.xy.max(second.xy).max(third.xy).sub(0.5);
-              const isOnPage = maximum.x
-                .greaterThanEqual(0)
-                .and(maximum.y.greaterThanEqual(0))
-                .and(minimum.x.lessThan(VSM_PAGE_TEXELS))
-                .and(minimum.y.lessThan(VSM_PAGE_TEXELS))
-                .and(area.abs().greaterThan(1e-8));
-              const firstTexel = uvec2(
-                minimum.ceil().clamp(0, VSM_PAGE_TEXELS - 1),
-              ).toVar();
-              const lastTexel = uvec2(
-                maximum.floor().clamp(0, VSM_PAGE_TEXELS - 1),
-              ).toVar();
-              const width = lastTexel.x.sub(firstTexel.x).add(1).toVar();
-              const texelCount = isOnPage
-                .and(lastTexel.x.greaterThanEqual(firstTexel.x))
-                .and(lastTexel.y.greaterThanEqual(firstTexel.y))
-                .select(
-                  width.mul(lastTexel.y.sub(firstTexel.y).add(1)),
-                  uint(0),
-                );
-              Loop(
-                {
-                  start: localId.x,
-                  end: texelCount,
-                  type: "uint",
-                  update: VSM_CLUSTER_TRIANGLES,
-                },
-                ({ i: texelIndex }) => {
-                  const x = firstTexel.x.add(texelIndex.mod(width)).toVar();
-                  const y = firstTexel.y.add(texelIndex.div(width)).toVar();
-                  const center = vec2(x, y).add(0.5);
-                  const firstWeight = getEdge(second.xy, third.xy, center)
-                    .div(area)
-                    .toVar();
-                  const secondWeight = getEdge(third.xy, first.xy, center)
-                    .div(area)
-                    .toVar();
-                  const thirdWeight = getEdge(first.xy, second.xy, center)
-                    .div(area)
-                    .toVar();
-                  const isInside = firstWeight
-                    .greaterThanEqual(0)
-                    .and(secondWeight.greaterThanEqual(0))
-                    .and(thirdWeight.greaterThanEqual(0));
-                  let isCovered = isInside;
-                  if (hasOpacity && opacityNode) {
-                    const texelUv = triangleUvs
-                      .element<"vec2">(cornerBase)
-                      .mul(firstWeight)
-                      .add(
-                        triangleUvs
-                          .element<"vec2">(cornerBase.add(1))
-                          .mul(secondWeight),
-                      )
-                      .add(
-                        triangleUvs
-                          .element<"vec2">(cornerBase.add(2))
-                          .mul(thirdWeight),
-                      );
-                    const opacity = opacityNode.context({
-                      forceUVContext: true,
-                      getUV: () => texelUv,
-                    });
-                    isCovered = isInside.and(
-                      opacity.greaterThanEqual(alphaTest),
-                    );
-                  }
-                  If(isCovered, () => {
-                    const depth = first.z
-                      .mul(firstWeight)
-                      .add(second.z.mul(secondWeight))
-                      .add(third.z.mul(thirdWeight))
-                      .clamp(0, 1);
-                    atomicMin(
-                      this.depthNode.element(
-                        pageBase.add(y.mul(VSM_PAGE_TEXELS)).add(x),
-                      ),
-                      uint(depth.mul(DEPTH_SCALE)),
-                    );
-                  });
-                },
-              );
-            },
-          );
-          workgroupBarrier();
-        },
-      );
-    })().compute(RASTER_WORKGROUPS * VSM_CLUSTER_TRIANGLES, [
-      VSM_CLUSTER_TRIANGLES,
-    ]);
-    rasterNode.name = `VSM ${this.kind} raster`;
-    return rasterNode;
   }
 }
