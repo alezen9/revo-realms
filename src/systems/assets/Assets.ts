@@ -28,6 +28,9 @@ type FailedLoad = {
 const MAX_RETRIES = 3;
 const RETRY_BACKOFF_MS = 250;
 
+const hasAllResources = (loaded: Partial<Resources>): loaded is Resources =>
+  manifest.every(({ name }) => name in loaded);
+
 export class Assets {
   private textureLoader = new TextureLoader();
   private cubeTextureLoader = new CubeTextureLoader();
@@ -36,15 +39,21 @@ export class Assets {
   private ktx2Loader = new KTX2Loader();
   private eventBus: EventBus;
   private loadedCount = 0;
-
-  resources = {
+  private loadedResources: Partial<Resources> = {
     heightmap: new DataTexture(),
-  } as Resources;
+  };
+  private completeResources?: Resources;
 
   constructor(eventBus: EventBus) {
     this.eventBus = eventBus;
     this.gltfLoader.setDRACOLoader(this.dracoLoader);
     this.ktx2Loader.setTranscoderPath("/basis/");
+  }
+
+  get resources() {
+    if (!this.completeResources)
+      throw new Error("Resources read before loading finished");
+    return this.completeResources;
   }
 
   getMesh(name: string): Mesh {
@@ -70,12 +79,12 @@ export class Assets {
         texture.generateMipmaps =
           resource.generateMipmaps ?? texture.generateMipmaps;
         if (resource.wrap) texture.wrapS = texture.wrapT = RepeatWrapping;
-        this.resources[resource.name] = texture;
+        this.loadedResources[resource.name] = texture;
         break;
       }
       case "gltf":
         const file = await this.gltfLoader.loadAsync(resource.url);
-        this.resources[resource.name] = file;
+        this.loadedResources[resource.name] = file;
         break;
       case "cubeTexture": {
         const cubeTexture = await this.cubeTextureLoader.loadAsync(
@@ -83,7 +92,7 @@ export class Assets {
         );
         cubeTexture.name = resource.name;
         cubeTexture.colorSpace = resource.colorSpace ?? NoColorSpace;
-        this.resources[resource.name] = cubeTexture;
+        this.loadedResources[resource.name] = cubeTexture;
         break;
       }
       case "binary": {
@@ -91,7 +100,7 @@ export class Assets {
         if (!response.ok)
           throw new Error(`${resource.url} responded ${response.status}`);
         const buffer = await response.arrayBuffer();
-        this.resources[resource.name] = new Uint8Array(buffer);
+        this.loadedResources[resource.name] = new Uint8Array(buffer);
         break;
       }
     }
@@ -127,12 +136,16 @@ export class Assets {
     this.dracoLoader.dispose();
     this.ktx2Loader.dispose();
 
-    if (!failures.length) return;
+    if (failures.length) {
+      const details = failures.map(
+        ({ resource, error }) =>
+          `${resource.name}: ${error instanceof Error ? error.message : error}`,
+      );
+      throw new Error(`Failed to load resources -> ${details.join(" | ")}`);
+    }
 
-    const details = failures.map(
-      ({ resource, error }) =>
-        `${resource.name}: ${error instanceof Error ? error.message : error}`,
-    );
-    throw new Error(`Failed to load resources -> ${details.join(" | ")}`);
+    if (!hasAllResources(this.loadedResources))
+      throw new Error("Loaded resources do not match the manifest");
+    this.completeResources = this.loadedResources;
   }
 }

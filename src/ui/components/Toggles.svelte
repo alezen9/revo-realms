@@ -27,7 +27,7 @@
 
 	const onDialogClick = (e: MouseEvent) => {
 		e.stopPropagation()
-		const shouldStayOpen = (e.target as HTMLElement).tagName !== "DIALOG"
+		const shouldStayOpen = !(e.target instanceof HTMLDialogElement)
 		setCreditsDialogOpen(shouldStayOpen)
 	}
 
