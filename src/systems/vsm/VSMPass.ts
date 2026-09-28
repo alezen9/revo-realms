@@ -281,9 +281,14 @@ export class VSMPass {
         .floor()
         .clamp(0, VSM_PAGE_TEXELS - 1),
     );
-    const layerDepth = layer.loadDepth(isDynamic ? dynamicSlot : slot, texel);
+    let layerSlot = slot;
+    let hasPage = isResident;
+    if (isDynamic) {
+      layerSlot = dynamicSlot;
+      hasPage = hasDynamic;
+    }
+    const layerDepth = layer.loadDepth(layerSlot, texel);
     const visualDepth = layerDepth.sub(0.65).mul(5).clamp();
-    const hasPage = isDynamic ? hasDynamic : isResident;
     const color = depth
       .greaterThanEqual(1)
       .select(vec3(0), hasPage.select(vec3(visualDepth), vec3(1, 0, 0)));

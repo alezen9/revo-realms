@@ -243,16 +243,17 @@ export class VSMSampler {
       this.context.lightBasis,
     ).toVar();
     const pagePosition = lightPosition.div(pageSize).toVar();
+    let heightPerPage: Vec2Node = vec2(0);
+    if (!isSoftReceiver)
+      heightPerPage = getReceiverSlope(lightPosition, worldPosition.y).mul(
+        pageSize,
+      );
     const receiver = {
       worldY: worldPosition.y.toVar(),
       texelMeters: getPageSize(getReceiverLevel(viewDistance))
         .div(VSM_PAGE_TEXELS)
         .toVar(),
-      heightPerPage: isSoftReceiver
-        ? vec2(0).toVar()
-        : getReceiverSlope(lightPosition, worldPosition.y)
-            .mul(pageSize)
-            .toVar(),
+      heightPerPage: heightPerPage.toVar(),
     };
     const isInside = this.staticPool.isReady
       .greaterThan(0)

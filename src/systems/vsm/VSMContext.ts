@@ -329,7 +329,8 @@ export class VSMContext {
       throw new Error(`Batched shadow caster must be static: ${mesh.name}`);
 
     const { material } = mesh;
-    const alphaTest = material instanceof NodeMaterial ? material.alphaTest : 0;
+    let alphaTest = 0;
+    if (material instanceof NodeMaterial) alphaTest = material.alphaTest;
     if (opacityNode && alphaTest <= 0)
       throw new Error(`Shadow opacity needs material alphaTest: ${mesh.name}`);
 
