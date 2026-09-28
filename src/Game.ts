@@ -53,11 +53,9 @@ export class Game {
     };
 
     const cadences = frameScheduler.getRenderCadences();
-    const options = cadences.reduce((acc, cadence) => {
-      const formattedLabel = cadence.fps.toFixed(2);
-      acc[formattedLabel] = cadence.divisor;
-      return acc;
-    }, {});
+    const options: Record<string, number> = {};
+    for (const cadence of cadences)
+      options[cadence.fps.toFixed(2)] = cadence.divisor;
 
     folder
       .addBinding(config, "renderDivisor", {

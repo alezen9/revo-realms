@@ -1,3 +1,5 @@
+<script lang="ts"></script>
+
 <span class="wip-badge" aria-label="Work in Progress">Work in Progress</span>
 
 <style>

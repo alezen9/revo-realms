@@ -1,3 +1,5 @@
+<script lang="ts"></script>
+
 <div class="keys" aria-label="Keyboard shortcuts">
 	<span class="key" title="Landmarks Wheel">L</span>
 	<span class="key" title="Pause / Resume">P </span>

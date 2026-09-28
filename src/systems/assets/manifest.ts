@@ -41,7 +41,7 @@ import _treeBarkNormalUrl from "/textures/new-world/tree/bark_normal_512_uastc.k
 
 import noiseAtlasUrl from "/textures/new-world/noise/noise_atlas.ktx2?url";
 
-type ResourceType = {
+export type ResourceType = {
   texture: Texture;
   gltf: GLTF;
   cubeTexture: CubeTexture;

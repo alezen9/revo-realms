@@ -10,7 +10,12 @@ import {
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { DRACOLoader } from "three/addons/loaders/DRACOLoader.js";
 import { KTX2Loader } from "three/addons/loaders/KTX2Loader.js";
-import { manifest, type ResourceRaw, type ExternalResources } from "./manifest";
+import {
+  manifest,
+  type ResourceRaw,
+  type ResourceType,
+  type ExternalResources,
+} from "./manifest";
 import { type Graphics } from "../rendering/Graphics";
 import type { EventBus } from "../events/EventBus";
 
@@ -20,6 +25,8 @@ type InternalResources = {
 
 type Resources = ExternalResources & InternalResources;
 
+type LoadedResource = ResourceType[keyof ResourceType] | DataTexture;
+
 type FailedLoad = {
   resource: ResourceRaw;
   error: unknown;
@@ -28,8 +35,9 @@ type FailedLoad = {
 const MAX_RETRIES = 3;
 const RETRY_BACKOFF_MS = 250;
 
-const hasAllResources = (loaded: Partial<Resources>): loaded is Resources =>
-  manifest.every(({ name }) => name in loaded);
+const hasAllResources = (
+  loaded: Record<string, LoadedResource>,
+): loaded is Resources => manifest.every(({ name }) => name in loaded);
 
 export class Assets {
   private textureLoader = new TextureLoader();
@@ -39,7 +47,7 @@ export class Assets {
   private ktx2Loader = new KTX2Loader();
   private eventBus: EventBus;
   private loadedCount = 0;
-  private loadedResources: Partial<Resources> = {
+  private loadedResources: Record<string, LoadedResource> = {
     heightmap: new DataTexture(),
   };
   private completeResources?: Resources;
