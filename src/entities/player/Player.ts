@@ -160,6 +160,7 @@ export default class Player {
     const interpolatedYaw =
       this.previousYawInRadians + shortestYawOffset * physicsScheduler.alpha;
     this.camera.update(delta, this.visualRoot.position, interpolatedYaw);
+    stage.syncPlayerCameraUniforms();
 
     this.rigidBody.angvel(this.angularVelocity);
     const spinRate = this.angularVelocity.length();

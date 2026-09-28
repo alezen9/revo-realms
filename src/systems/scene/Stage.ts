@@ -50,16 +50,6 @@ export class Stage {
       this.playerCamera.aspect = sizes.aspect;
       this.syncPlayerCameraProjection();
     });
-
-    this.eventBus.on("engine-render-update", () => {
-      this.uPlayerCameraPosition.value.copy(this.playerCamera.position);
-      const projectionMatrix = this.playerCamera.projectionMatrix;
-      this.uFx.value = projectionMatrix.elements[0];
-      this.uFy.value = projectionMatrix.elements[5];
-      this.uCameraMatrix.value
-        .copy(projectionMatrix)
-        .multiply(this.playerCamera.matrixWorldInverse);
-    });
   }
 
   private debugCameras(debugPanel: DebugPanel) {
@@ -208,6 +198,18 @@ export class Stage {
 
   get scenes() {
     return [this.mainScene, this.waterScene];
+  }
+
+  syncPlayerCameraUniforms() {
+    const { projectionMatrix, matrixWorldInverse, position } =
+      this.playerCamera;
+    this.uPlayerCameraPosition.value.copy(position);
+    this.uFx.value = projectionMatrix.elements[0];
+    this.uFy.value = projectionMatrix.elements[5];
+    this.uCameraMatrix.value.multiplyMatrices(
+      projectionMatrix,
+      matrixWorldInverse,
+    );
   }
 
   private syncPlayerCameraProjection = () => {

@@ -49,6 +49,7 @@ export class PlayerCamera {
 
     this.camera.position.copy(this.smoothedPosition);
     this.camera.lookAt(this.smoothedTarget);
+    this.camera.updateMatrixWorld();
   }
 
   snapYaw(playerYawInRadians: number) {
