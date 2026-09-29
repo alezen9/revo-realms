@@ -1,4 +1,4 @@
-import { Vector2, Vector3, type Box3, type Texture } from "three";
+import { Vector2, type Box3, type Texture } from "three";
 import {
   StorageBufferAttribute,
   type ComputeNode,
@@ -53,7 +53,8 @@ import {
   VSM_PAGE_TEXELS,
   VSM_PAGES_PER_LEVEL,
   VSM_SOFT_RECEIVER_THRESHOLD,
-  computePageCoordinate,
+  EMPTY_PAGE_RANGE,
+  growPageRanges,
   getLightPosition,
   getPageCoordinate,
   getPageKey,
@@ -444,7 +445,6 @@ export class VSMPages {
     4,
   );
   private invalidationCount = uniform(0, "uint");
-  private corner = new Vector3();
   private hasPendingInvalidation = false;
   private hasPendingWork = true;
   private hasDispatchedResidency = false;
@@ -565,31 +565,18 @@ export class VSMPages {
     const { x: lightX, y: lightY } = this.context.lightBasis;
     const boxCount = Math.min(boxes.length, MAX_INVALIDATION_BOXES);
     for (let rect = 0; rect < boxCount * VSM_LEVEL_COUNT; rect++)
-      this.invalidationValues.set([0xffffffff, 0xffffffff, 0, 0], rect * 4);
+      this.invalidationValues.set(EMPTY_PAGE_RANGE, rect * 4);
+    // boxes past the limit merge into the last one
     for (let index = 0; index < boxes.length; index++) {
-      const { min, max } = boxes[index];
-      const offset =
-        Math.min(index, MAX_INVALIDATION_BOXES - 1) * VSM_LEVEL_COUNT * 4;
-      for (let level = 0; level < VSM_LEVEL_COUNT; level++) {
-        const rectOffset = offset + level * 4;
-        for (let corner = 0; corner < 8; corner++) {
-          const cornerX = corner & 1 ? max.x : min.x;
-          const cornerY = corner & 2 ? max.y : min.y;
-          const cornerZ = corner & 4 ? max.z : min.z;
-          this.corner.set(cornerX, cornerY, cornerZ);
-          const page = computePageCoordinate(
-            this.corner,
-            lightX.value,
-            lightY.value,
-            level,
-          );
-          const values = this.invalidationValues;
-          values[rectOffset] = Math.min(values[rectOffset], page.x);
-          values[rectOffset + 1] = Math.min(values[rectOffset + 1], page.y);
-          values[rectOffset + 2] = Math.max(values[rectOffset + 2], page.x);
-          values[rectOffset + 3] = Math.max(values[rectOffset + 3], page.y);
-        }
-      }
+      const box = Math.min(index, MAX_INVALIDATION_BOXES - 1);
+      const offset = box * VSM_LEVEL_COUNT * 4;
+      growPageRanges(
+        this.invalidationValues,
+        offset,
+        boxes[index],
+        lightX.value,
+        lightY.value,
+      );
     }
     this.invalidationRects.needsUpdate = true;
     this.invalidationCount.value = boxCount;

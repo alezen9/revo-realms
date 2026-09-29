@@ -1,4 +1,4 @@
-import type { Vector3 } from "three";
+import { Vector3, type Box3 } from "three";
 import type { Node } from "three/webgpu";
 import { ceil, float, log2, uint, uniform, uvec2, vec2 } from "three/tsl";
 
@@ -130,15 +130,35 @@ export const isPageInWindow = (
     .and(pageCoordinate.x.lessThan(windowCenter.x.add(VSM_PAGE_WINDOW_HALF)))
     .and(pageCoordinate.y.lessThan(windowCenter.y.add(VSM_PAGE_WINDOW_HALF)));
 
-export const computePageCoordinate = (
-  position: Vector3,
+// min x, min y, max x, max y, reset to this before growing
+export const EMPTY_PAGE_RANGE = [0xffffffff, 0xffffffff, 0, 0];
+const boxCorner = new Vector3();
+
+// grows one page range per level, starting at offset, to cover the box
+export const growPageRanges = (
+  ranges: Uint32Array,
+  offset: number,
+  box: Box3,
   lightX: Vector3,
   lightY: Vector3,
-  level: number,
 ) => {
-  const pageSize = FIRST_PAGE_SIZE * 2 ** level;
-  return {
-    x: Math.floor(position.dot(lightX) / pageSize) + VSM_PAGE_OFFSET,
-    y: Math.floor(position.dot(lightY) / pageSize) + VSM_PAGE_OFFSET,
-  };
+  const { min, max } = box;
+  for (let level = 0; level < VSM_LEVEL_COUNT; level++) {
+    const pageSize = FIRST_PAGE_SIZE * 2 ** level;
+    const rangeOffset = offset + level * 4;
+    for (let corner = 0; corner < 8; corner++) {
+      boxCorner.copy(min);
+      if (corner & 1) boxCorner.x = max.x;
+      if (corner & 2) boxCorner.y = max.y;
+      if (corner & 4) boxCorner.z = max.z;
+      const pageX =
+        Math.floor(boxCorner.dot(lightX) / pageSize) + VSM_PAGE_OFFSET;
+      const pageY =
+        Math.floor(boxCorner.dot(lightY) / pageSize) + VSM_PAGE_OFFSET;
+      ranges[rangeOffset] = Math.min(ranges[rangeOffset], pageX);
+      ranges[rangeOffset + 1] = Math.min(ranges[rangeOffset + 1], pageY);
+      ranges[rangeOffset + 2] = Math.max(ranges[rangeOffset + 2], pageX);
+      ranges[rangeOffset + 3] = Math.max(ranges[rangeOffset + 3], pageY);
+    }
+  }
 };
