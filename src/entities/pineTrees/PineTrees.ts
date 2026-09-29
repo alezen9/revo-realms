@@ -11,6 +11,7 @@ import { BatchedMesh, MeshBasicNodeMaterial } from "three/webgpu";
 import { VSMReceiverLambertMaterial } from "../../systems/vsm/VSMReceiverMaterials";
 import {
   attribute,
+  float,
   normalMap,
   oscSine,
   positionLocal,
@@ -61,6 +62,9 @@ class PineTreeCanopyMaterial extends VSMReceiverLambertMaterial {
     this.forceSinglePass = true;
     this.depthFunc = EqualDepth;
     this.depthWrite = false;
+    // needles are too thin and noisy for the finest shadow pages, and close up
+    // they scatter page requests across the whole pool
+    this.softShadowNode = float(0.5);
 
     const diffuse = texture(assets.resources.pineTreeDiffuse, uv());
     this.colorNode = diffuse.rgb.mul(uniforms.uCanopyDiffuseScale);
