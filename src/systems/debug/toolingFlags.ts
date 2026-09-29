@@ -10,3 +10,7 @@ export const TOOLING_FLAGS = {
   debug: readFlag("debug"),
   monitoring: readFlag("monitoring"),
 };
+
+export const FEATURE_FLAGS = {
+  expedition33: readFlag("expedition33"),
+};

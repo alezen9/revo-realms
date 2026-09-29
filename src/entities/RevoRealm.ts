@@ -7,10 +7,11 @@ import { WindStreaks } from "./wind/WindStreaks";
 import { LeviathanAxe } from "./landmarks/LeviathanAxe";
 import { DragonSlayerSword } from "./landmarks/DragonSlayerSword";
 import { GokuStatue } from "./landmarks/GokuStatue";
-// import { Expedition33Flag } from "./landmarks/expedition33Flag/Expedition33Flag";
+import { Expedition33Flag } from "./landmarks/expedition33Flag/Expedition33Flag";
 import { Water } from "./water/Water";
 import { Campfire } from "./landmarks/campfire/Campfire";
 import { FootballPitch } from "./landmarks/FootballPitch";
+import { FEATURE_FLAGS } from "../systems/debug/toolingFlags";
 
 export class RevoRealm {
   constructor() {
@@ -23,7 +24,7 @@ export class RevoRealm {
     new LeviathanAxe();
     new DragonSlayerSword();
     new GokuStatue();
-    // new Expedition33Flag();
+    if (FEATURE_FLAGS.expedition33) new Expedition33Flag();
     new Water();
     new Campfire();
     new FootballPitch();
