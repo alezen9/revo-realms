@@ -29,7 +29,7 @@ const uniforms = {
   uUnderwaterSandColor: uniform(
     new Color(0.95, 0.87, 0.68).convertSRGBToLinear(),
   ),
-  uSandColor: uniform(new Color(0.97, 0.92, 0.81).convertSRGBToLinear()),
+  uSandColor: uniform(new Color(0.89, 0.85, 0.75).convertSRGBToLinear()),
   uGrassNormalScale: uniform(1),
   uSandNormalScale: uniform(1),
   uWaterNormalScale: uniform(0.35),

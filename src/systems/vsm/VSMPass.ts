@@ -63,7 +63,7 @@ export class VSMPass {
   private dynamicLayer: VSMDynamicLayer;
   private sampler: VSMSampler;
   private uSunVisibility = uniform(1);
-  private uShadowIntensity = uniform(0.7);
+  private uShadowIntensity = uniform(0.8);
   private terrainBounds = { min: 0, max: 0 };
   private computeNodes: ComputeNode[] = [];
 
