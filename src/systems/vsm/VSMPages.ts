@@ -67,12 +67,10 @@ import {
   isPageInWindow,
 } from "./VSMMath";
 
-const TILE_SIZE = 2;
+const REQUEST_PIXEL_STRIDE = 2;
 const REQUEST_WORKGROUP_SIZE = 8;
 const FILTER_TEXELS = 3;
 const REQUEST_WORD_COUNT = VSM_PAGE_COUNT / 32;
-const INVALID_MINIMUM = 1e8;
-const INVALID_MAXIMUM = -1e8;
 const READBACK_INTERVAL_MS = 1000;
 const MAX_INVALIDATION_BOXES = 64;
 const EMPTY_LIST_OFFSET = VSM_LEVEL_COUNT * VSM_POOL_CAPACITY;
@@ -131,15 +129,17 @@ const requestPages = (
   context: VSMContext,
   requestBits: CounterNode,
   level: Node<"uint">,
-  bounds: Node<"vec4">,
+  lightPosition: Node<"vec2">,
 ) => {
   const { cameraPosition, lightBasis } = context;
   const pageSize = getPageSize(level);
   const filterMargin = pageSize.mul(FILTER_TEXELS / VSM_PAGE_TEXELS);
   const firstPage = getPageCoordinate(
-    bounds.xy.sub(filterMargin).div(pageSize),
+    lightPosition.sub(filterMargin).div(pageSize),
   );
-  const lastPage = getPageCoordinate(bounds.zw.add(filterMargin).div(pageSize));
+  const lastPage = getPageCoordinate(
+    lightPosition.add(filterMargin).div(pageSize),
+  );
   const windowCenter = getWindowCenter(cameraPosition, lightBasis, level);
   const pageWidth = lastPage.x.sub(firstPage.x).add(1);
   const pageHeight = lastPage.y.sub(firstPage.y).add(1);
@@ -177,52 +177,19 @@ const requestVisiblePages = Fn<
   ],
   void
 >(([context, requestBits, depth, softReceiver, depthSize]) => {
-  const tile = uvec2(globalId.xy);
-  const levelBounds: Node<"vec4">[] = [];
-  for (let levelIndex = 0; levelIndex < VSM_LEVEL_COUNT; levelIndex++)
-    levelBounds.push(
-      vec4(
-        INVALID_MINIMUM,
-        INVALID_MINIMUM,
-        INVALID_MAXIMUM,
-        INVALID_MAXIMUM,
-      ).toVar(),
-    );
-  Loop({ start: 0, end: TILE_SIZE, type: "uint" }, ({ i: localYIndex }) => {
-    const localY = localYIndex.toVar();
-    Loop({ start: 0, end: TILE_SIZE, type: "uint" }, ({ i: localXIndex }) => {
-      const localX = localXIndex.toVar();
-      const pixel = tile.mul(TILE_SIZE).add(uvec2(localX, localY));
-      const receiver = loadReceiver(
-        context,
-        depth,
-        softReceiver,
-        depthSize,
-        pixel,
-      );
-      const level = receiver.level.toVar();
-      const upperLevel = receiver.upperLevel.toVar();
-      const lightPosition = receiver.lightPosition.toVar();
-      const expandedBounds = vec4(lightPosition, lightPosition);
-      for (let levelIndex = 0; levelIndex < VSM_LEVEL_COUNT; levelIndex++) {
-        const bounds = levelBounds[levelIndex];
-        const isHit = receiver.isValid.and(
-          level.equal(levelIndex).or(upperLevel.equal(levelIndex)),
-        );
-        const grownBounds = vec4(
-          bounds.xy.min(expandedBounds.xy),
-          bounds.zw.max(expandedBounds.zw),
-        );
-        bounds.assign(isHit.select(grownBounds, bounds));
-      }
-    });
+  const pixel = uvec2(globalId.xy).mul(REQUEST_PIXEL_STRIDE);
+  const receiver = loadReceiver(context, depth, softReceiver, depthSize, pixel);
+  const isValid = receiver.isValid.toVar();
+  const level = receiver.level.toVar();
+  const upperLevel = receiver.upperLevel.toVar();
+  const lightPosition = receiver.lightPosition.toVar();
+  const hasUpperLevel = isValid.and(upperLevel.notEqual(level));
+  If(isValid, () => {
+    requestPages(context, requestBits, level, lightPosition);
   });
-  for (let levelIndex = 0; levelIndex < VSM_LEVEL_COUNT; levelIndex++) {
-    const bounds = levelBounds[levelIndex];
-    If(bounds.x.lessThan(INVALID_MINIMUM), () => {
-      requestPages(context, requestBits, uint(levelIndex), bounds);
-    });
-  }
+  If(hasUpperLevel, () => {
+    requestPages(context, requestBits, upperLevel, lightPosition);
+  });
 });
 
 const resetResidencyCounters = Fn<[counters: CounterNode], void>(
@@ -529,10 +496,10 @@ export class VSMPages {
     const height = Math.max(1, Math.floor(drawingBufferSize.y));
     this.depthSize.value.set(width, height);
     this.requestDispatchSize[0] = Math.ceil(
-      width / (REQUEST_WORKGROUP_SIZE * TILE_SIZE),
+      width / (REQUEST_WORKGROUP_SIZE * REQUEST_PIXEL_STRIDE),
     );
     this.requestDispatchSize[1] = Math.ceil(
-      height / (REQUEST_WORKGROUP_SIZE * TILE_SIZE),
+      height / (REQUEST_WORKGROUP_SIZE * REQUEST_PIXEL_STRIDE),
     );
     nodes.push(this.requestResetNode, this.requestNode);
   }
