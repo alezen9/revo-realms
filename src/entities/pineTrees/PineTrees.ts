@@ -6,8 +6,7 @@ import {
   stage,
   graphics,
 } from "../../systems";
-import { EqualDepth } from "three";
-import { BatchedMesh, MeshBasicNodeMaterial } from "three/webgpu";
+import { BatchedMesh } from "three/webgpu";
 import { VSMReceiverLambertMaterial } from "../../systems/vsm/VSMReceiverMaterials";
 import {
   attribute,
@@ -32,43 +31,27 @@ const uniforms = {
   uBarkUvScale: uniform(3),
 };
 
-const getCanopyPosition = () => {
-  const windWeight = attribute<"float">("_windweight");
-  const random = uv().x.mul(uv().y).mul(4);
-  const profile = windWeight.mul(windWeight);
-  const t = gameTime.mul(uniforms.uCanopySwaySpeed).add(random);
-  const swayOffset = oscSine(t).mul(profile).mul(0.1);
-  return positionLocal.add(vec3(0, swayOffset, 0));
-};
-
-// alpha tested needles defeat hidden surface removal, so a cheap pass writes
-// their depth first and the lit pass only shades what is left in front
-class PineTreeCanopyDepthMaterial extends MeshBasicNodeMaterial {
-  constructor() {
-    super();
-    this.forceSinglePass = true;
-    this.colorWrite = false;
-    this.opacityNode = texture(assets.resources.pineTreeDiffuse, uv()).a;
-    this.alphaTest = 0.35;
-    this.alphaToCoverage = true;
-    this.positionNode = getCanopyPosition();
-  }
-}
-
-// no alpha test here, the equal depth test keeps only the samples the depth pass kept
 class PineTreeCanopyMaterial extends VSMReceiverLambertMaterial {
   constructor() {
     super();
     this.forceSinglePass = true;
-    this.depthFunc = EqualDepth;
-    this.depthWrite = false;
+
+    const windWeight = attribute<"float">("_windweight");
+
+    const diffuse = texture(assets.resources.pineTreeDiffuse, uv());
+    this.colorNode = diffuse.rgb.mul(uniforms.uCanopyDiffuseScale);
+    this.opacityNode = diffuse.a;
+    this.alphaTest = 0.35;
+    this.alphaToCoverage = true;
     // needles are too thin and noisy for the finest shadow pages, and close up
     // they scatter page requests across the whole pool
     this.softShadowNode = float(0.5);
 
-    const diffuse = texture(assets.resources.pineTreeDiffuse, uv());
-    this.colorNode = diffuse.rgb.mul(uniforms.uCanopyDiffuseScale);
-    this.positionNode = getCanopyPosition();
+    const random = uv().x.mul(uv().y).mul(4);
+    const profile = windWeight.mul(windWeight);
+    const t = gameTime.mul(uniforms.uCanopySwaySpeed).add(random);
+    const swayOffset = oscSine(t).mul(profile).mul(0.1);
+    this.positionNode = positionLocal.add(vec3(0, swayOffset, 0));
   }
 }
 
@@ -96,7 +79,6 @@ export class PineTrees {
     );
 
     const barkMaterial = new PineTreeBarkMaterial();
-    const canopyDepthMaterial = new PineTreeCanopyDepthMaterial();
     const canopyMaterial = new PineTreeCanopyMaterial();
 
     const barkBatch = this.createBatchedMesh(
@@ -104,19 +86,11 @@ export class PineTrees {
       pineTreeBark.geometry,
       barkMaterial,
     );
-    const canopyDepthBatch = this.createBatchedMesh(
-      colliders,
-      pineTreeCanopy.geometry,
-      canopyDepthMaterial,
-    );
     const canopyBatch = this.createBatchedMesh(
       colliders,
       pineTreeCanopy.geometry,
       canopyMaterial,
     );
-    // after the opaque scene, depth first so the lit pass can test against it
-    canopyDepthBatch.renderOrder = 1;
-    canopyBatch.renderOrder = 2;
 
     const baseCollider = colliders[0];
     const { boundingBox } = baseCollider.geometry;
@@ -136,9 +110,9 @@ export class PineTrees {
       };
     }
 
-    stage.mainScene.add(barkBatch, canopyDepthBatch, canopyBatch);
+    stage.mainScene.add(barkBatch, canopyBatch);
     graphics.vsmPass.registerCaster(barkBatch);
-    graphics.vsmPass.registerCaster(canopyDepthBatch, {
+    graphics.vsmPass.registerCaster(canopyBatch, {
       opacityNode: texture(assets.resources.pineTreeDiffuse).a,
     });
     this.debug();
@@ -147,10 +121,7 @@ export class PineTrees {
   private createBatchedMesh(
     colliders: Mesh[],
     geometry: Mesh["geometry"],
-    material:
-      | PineTreeBarkMaterial
-      | PineTreeCanopyDepthMaterial
-      | PineTreeCanopyMaterial,
+    material: PineTreeBarkMaterial | PineTreeCanopyMaterial,
   ) {
     const vertexCount = geometry.getAttribute("position").count;
     let indexCount = vertexCount * 2;
