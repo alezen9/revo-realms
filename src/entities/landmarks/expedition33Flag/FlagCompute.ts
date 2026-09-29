@@ -23,8 +23,8 @@ import { config, uniforms } from "./config";
 
 const { REST_X, REST_Y, BEND_WEIGHT, STEP_SECONDS } = config;
 const REST_DIAGONAL = Math.hypot(REST_X, REST_Y);
-
-// column offset, row offset, rest length, weight
+// column offset, row offset, rest length, weight: the structural ring, the
+// shear ring, then a weak two ring bending that resists sharp creases
 const NEIGHBORS = [
   [1, 0, REST_X, 1],
   [-1, 0, REST_X, 1],
@@ -39,6 +39,11 @@ const NEIGHBORS = [
   [0, 2, REST_Y * 2, BEND_WEIGHT],
   [0, -2, REST_Y * 2, BEND_WEIGHT],
 ];
+const EPSILON = 1e-5;
+// gusts travel across the flag and sample their own band of the noise atlas
+const GUST_TRAVEL_ACROSS_WIDTH = 0.3;
+const GUST_BAND_HEIGHT = 0.21;
+const GUST_BAND_OFFSET = 0.37;
 
 const createParticleBuffer = () => instancedArray(config.COUNT, "vec4");
 export type ParticleBuffer = ReturnType<typeof createParticleBuffer>;
@@ -58,12 +63,16 @@ const getGridCoordinates = Fn<[index: Node<"uint">], Node<"vec4">>(
   },
 );
 
-const getParticleIndex = (column: Node<"float">, row: Node<"float">) =>
+const getParticleIndex = Fn<
+  [column: Node<"float">, row: Node<"float">],
+  Node<"uint">
+>(([column, row]) =>
   row
     .clamp(0, config.SEGMENTS_Y)
     .mul(config.POINTS_X)
     .add(column.clamp(0, config.SEGMENTS_X))
-    .toUint();
+    .toUint(),
+);
 
 // points out of the plane geometry's front face, so faceDirection can flip it for the back
 export const getParticleNormal = Fn<
@@ -81,12 +90,12 @@ export const getParticleNormal = Fn<
 });
 
 // shadow rasterization reads the rest plane, so each plane vertex maps back to its particle
-export const getParticleAtPlanePoint = Fn<
-  [positions: ParticleBuffer, planePoint: Node<"vec3">],
+export const getParticleAtPlanePosition = Fn<
+  [positions: ParticleBuffer, planePosition: Node<"vec3">],
   Node<"vec3">
->(([positions, planePoint]) => {
-  const column = planePoint.x.add(0.5).mul(config.SEGMENTS_X).round();
-  const row = float(0.5).sub(planePoint.y).mul(config.SEGMENTS_Y).round();
+>(([positions, planePosition]) => {
+  const column = planePosition.x.add(0.5).mul(config.SEGMENTS_X).round();
+  const row = float(0.5).sub(planePosition.y).mul(config.SEGMENTS_Y).round();
   return positions.element(getParticleIndex(column, row)).xyz;
 });
 
@@ -104,7 +113,7 @@ const clampToTether = Fn<
   Node<"vec3">
 >(([position, anchor, widthRatio]) => {
   const fromAnchor = position.sub(anchor);
-  const anchorDistance = fromAnchor.length().max(1e-5);
+  const anchorDistance = fromAnchor.length().max(EPSILON);
   const reach = widthRatio.mul(config.FLAG_WIDTH * config.TETHER_SLACK);
   const clampedDistance = anchorDistance.min(reach);
   return anchor.add(fromAnchor.mul(clampedDistance.div(anchorDistance)));
@@ -113,7 +122,7 @@ const clampToTether = Fn<
 const pushOutOfPlayer = Fn<[position: Node<"vec3">], Node<"vec3">>(
   ([position]) => {
     const fromPlayer = position.sub(uniforms.uPlayerLocalPosition);
-    const distance = fromPlayer.length().max(1e-5);
+    const distance = fromPlayer.length().max(EPSILON);
     const safeRadius = uniforms.uPlayerRadius.add(uniforms.uCollisionPadding);
     const safeDistance = distance.max(safeRadius);
     return uniforms.uPlayerLocalPosition.add(
@@ -138,8 +147,10 @@ const getWindAcceleration = Fn<
   const windDirection = vec3(wind.uDirection.x, 0, wind.uDirection.y);
 
   const gustUv = vec2(
-    gameTime.mul(uniforms.uGustSpeed).sub(widthRatio.mul(0.3)),
-    heightRatio.mul(0.21).add(0.37),
+    gameTime
+      .mul(uniforms.uGustSpeed)
+      .sub(widthRatio.mul(GUST_TRAVEL_ACROSS_WIDTH)),
+    heightRatio.mul(GUST_BAND_HEIGHT).add(GUST_BAND_OFFSET),
   );
   const gustNoise = texture(assets.resources.noiseAtlas, gustUv).r;
   const calmGust = float(1).sub(uniforms.uGustStrength);
@@ -149,7 +160,7 @@ const getWindAcceleration = Fn<
   const windSpeed = baseWind.mul(gustFactor).mul(uniforms.uWindSpeed).max(0);
 
   const relativeWind = windDirection.mul(windSpeed).sub(velocity);
-  const relativeSpeed = relativeWind.length().max(1e-4);
+  const relativeSpeed = relativeWind.length().max(EPSILON);
   const normal = getParticleNormal(positions, index);
   const facing = normal.dot(relativeWind).div(relativeSpeed);
 
@@ -166,8 +177,8 @@ const getWindAcceleration = Fn<
 // xyz -> weighted pull toward the rest length, w -> applied weight
 const pullTowardRest = Fn<
   [
-    predicted: ParticleBuffer,
-    position: Node<"vec3">,
+    predictedPositions: ParticleBuffer,
+    predicted: Node<"vec3">,
     coordinates: Node<"vec4">,
     offsetX: Node<"float">,
     offsetY: Node<"float">,
@@ -177,8 +188,8 @@ const pullTowardRest = Fn<
   Node<"vec4">
 >(
   ([
+    predictedPositions,
     predicted,
-    position,
     coordinates,
     offsetX,
     offsetY,
@@ -202,41 +213,46 @@ const pullTowardRest = Fn<
     const correctionShare = isNeighborPinned.mul(0.5).add(0.5);
 
     const neighborIndex = getParticleIndex(neighborColumn, neighborRow);
-    const neighborPosition = predicted.element(neighborIndex).xyz;
-    const toNeighbor = position.sub(neighborPosition);
-    const distance = toNeighbor.length().max(1e-5);
+    const neighbor = predictedPositions.element(neighborIndex).xyz;
+    const toNeighbor = predicted.sub(neighbor);
+    const distance = toNeighbor.length().max(EPSILON);
     const stretchRatio = restLength.sub(distance).div(distance);
     const pull = toNeighbor.mul(stretchRatio.mul(correctionShare));
     return vec4(pull.mul(appliedWeight), appliedWeight);
   },
 );
 
-const integrateParticle = (
-  positions: ParticleBuffer,
-  previousPositions: ParticleBuffer,
-  predictedPositions: ParticleBuffer,
-  index: Node<"uint">,
-) => {
+const integrateParticle = Fn<
+  [
+    positions: ParticleBuffer,
+    previousPositions: ParticleBuffer,
+    predictedPositions: ParticleBuffer,
+    index: Node<"uint">,
+  ],
+  void
+>(([positions, previousPositions, predictedPositions, index]) => {
   const coordinates = getGridCoordinates(index);
   const position = positions.element(index).xyz.toVar();
   const previous = previousPositions.element(index).xyz;
 
   const damping = exp(uniforms.uDamping.mul(-STEP_SECONDS));
-  const velocity = position.sub(previous).mul(damping).toVar();
-  const displacement = velocity.length().max(1e-6);
-  const cappedDisplacement = displacement.min(config.MAX_SPEED * STEP_SECONDS);
-  velocity.mulAssign(cappedDisplacement.div(displacement));
+  const displacement = position.sub(previous).mul(damping).toVar();
+  const displacementLength = displacement.length().max(EPSILON);
+  const maxDisplacement = displacementLength.min(
+    config.MAX_SPEED * STEP_SECONDS,
+  );
+  displacement.mulAssign(maxDisplacement.div(displacementLength));
 
   const gravity = vec3(0, uniforms.uGravity.negate(), 0);
   const windAcceleration = getWindAcceleration(
     positions,
     index,
     coordinates,
-    velocity.div(STEP_SECONDS),
+    displacement.div(STEP_SECONDS),
   );
   const acceleration = gravity.add(windAcceleration);
   const predicted = position
-    .add(velocity)
+    .add(displacement)
     .add(acceleration.mul(STEP_SECONDS * STEP_SECONDS));
 
   const isPinned = step(coordinates.x, 0.5);
@@ -247,16 +263,20 @@ const integrateParticle = (
   predictedPositions
     .element(index)
     .assign(vec4(mix(predicted, anchor, isPinned), 0));
-};
+}, "void");
 
-const solveParticle = (
-  predictedPositions: ParticleBuffer,
-  positions: ParticleBuffer,
-  index: Node<"uint">,
-) => {
+const solveParticle = Fn<
+  [
+    predictedPositions: ParticleBuffer,
+    positions: ParticleBuffer,
+    index: Node<"uint">,
+  ],
+  void
+>(([predictedPositions, positions, index]) => {
   const coordinates = getGridCoordinates(index);
   const predicted = predictedPositions.element(index).xyz;
 
+  // the table unrolls while the shader is built, the gpu sees 12 plain calls
   const total = vec4(0).toVar();
   for (const [offsetX, offsetY, restLength, weight] of NEIGHBORS)
     total.addAssign(
@@ -278,7 +298,7 @@ const solveParticle = (
 
   const isPinned = step(coordinates.x, 0.5);
   positions.element(index).assign(vec4(mix(collided, anchor, isPinned), 0));
-};
+}, "void");
 
 const OWNED_SLOTS = {
   start: 0,
@@ -286,8 +306,9 @@ const OWNED_SLOTS = {
   type: "uint",
 } as const;
 
-const getOwnedParticle = (slot: Node<"uint">) =>
-  invocationLocalIndex.add(slot.mul(config.WORKGROUP_SIZE));
+const getOwnedParticle = Fn<[slot: Node<"uint">], Node<"uint">>(([slot]) =>
+  invocationLocalIndex.add(slot.mul(config.WORKGROUP_SIZE)),
+);
 
 const initParticles = Fn<
   [positions: ParticleBuffer, previousPositions: ParticleBuffer],
@@ -302,19 +323,22 @@ const initParticles = Fn<
   previousPositions.element(instanceIndex).assign(vec4(restPosition, 0));
 });
 
-const writeBounds = (positions: ParticleBuffer, bounds: BoundsBuffer) => {
-  If(invocationLocalIndex.equal(0), () => {
-    const minimum = vec3(1e8).toVar();
-    const maximum = vec3(-1e8).toVar();
-    Loop({ start: 0, end: config.COUNT, type: "uint" }, ({ i: index }) => {
-      const position = positions.element(index).xyz;
-      minimum.assign(minimum.min(position));
-      maximum.assign(maximum.max(position));
+const writeBounds = Fn<[positions: ParticleBuffer, bounds: BoundsBuffer], void>(
+  ([positions, bounds]) => {
+    If(invocationLocalIndex.equal(0), () => {
+      const minimum = vec3(1e8).toVar();
+      const maximum = vec3(-1e8).toVar();
+      Loop({ start: 0, end: config.COUNT, type: "uint" }, ({ i: index }) => {
+        const position = positions.element(index).xyz;
+        minimum.assign(minimum.min(position));
+        maximum.assign(maximum.max(position));
+      });
+      bounds.element(0).assign(vec4(minimum, 0));
+      bounds.element(1).assign(vec4(maximum, 0));
     });
-    bounds.element(0).assign(vec4(minimum, 0));
-    bounds.element(1).assign(vec4(maximum, 0));
-  });
-};
+  },
+  "void",
+);
 
 const simulateSteps = Fn<
   [
@@ -326,6 +350,7 @@ const simulateSteps = Fn<
   void
 >(([positions, previousPositions, predictedPositions, bounds]) => {
   Loop({ start: 0, end: uniforms.uStepCount, type: "uint" }, () => {
+    // the ownership guards stay branches, two invocations on one particle would race
     Loop(OWNED_SLOTS, ({ i: slot }) => {
       const index = getOwnedParticle(slot);
       If(index.lessThan(config.COUNT), () => {
@@ -358,7 +383,7 @@ export class FlagCompute {
   readonly computeInit = initParticles(
     this.positions,
     this.previousPositions,
-  ).compute(config.COUNT, [64]);
+  ).compute(config.COUNT, [config.WORKGROUP_SIZE]);
   readonly computeUpdate = simulateSteps(
     this.positions,
     this.previousPositions,

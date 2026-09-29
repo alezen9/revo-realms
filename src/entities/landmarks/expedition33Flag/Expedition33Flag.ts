@@ -8,10 +8,9 @@ import {
   Vector3,
 } from "three";
 import { ReadbackBuffer } from "three/webgpu";
-import { VSMReceiverStandardMaterial } from "../../../systems/vsm/VSMReceiverMaterials";
+import { positionLocal, vec3 } from "three/tsl";
 import { ColliderDesc } from "@dimforge/rapier3d";
 import { type State } from "../../../Game";
-import { positionLocal, vec3 } from "three/tsl";
 import {
   eventBus,
   landmarks,
@@ -21,10 +20,11 @@ import {
 } from "../../../systems";
 import type { ComputeTask } from "../../../systems/rendering/ComputeTask";
 import { RevoColliderType } from "../../../systems/physics/colliderTypes";
+import { VSMReceiverStandardMaterial } from "../../../systems/vsm/VSMReceiverMaterials";
 import { UP } from "../../axes";
 import { config, uniforms } from "./config";
+import { FlagCompute, getParticleAtPlanePosition } from "./FlagCompute";
 import { FlagMaterial } from "./FlagMaterial";
-import { FlagCompute, getParticleAtPlanePoint } from "./FlagCompute";
 import { debugExpedition33Flag } from "./debug";
 
 // top of the hill, sampled once from the terrain heightmap
@@ -117,7 +117,7 @@ export class Expedition33Flag {
     const flag = new Mesh(geometry, new FlagMaterial(this.compute));
     flag.position.copy(this.origin);
 
-    const particlePosition = getParticleAtPlanePoint(
+    const particlePosition = getParticleAtPlanePosition(
       this.compute.positions,
       positionLocal,
     );
@@ -171,19 +171,20 @@ export class Expedition33Flag {
 
   private readBounds = async () => {
     this.isReadingBounds = true;
-    const readback = await graphics.renderer.getArrayBufferAsync(
-      this.compute.bounds.value,
-      this.boundsReadback,
-    );
     try {
+      const readback = await graphics.renderer.getArrayBufferAsync(
+        this.compute.bounds.value,
+        this.boundsReadback,
+      );
       const { buffer } = readback;
-      if (!buffer) throw new Error("[Expedition33] bounds readback is empty");
-      const values = new Float32Array(buffer);
-      this.bounds.min.fromArray(values, 0).subScalar(config.BOUNDS_MARGIN);
-      this.bounds.max.fromArray(values, 4).addScalar(config.BOUNDS_MARGIN);
-      this.bounds.getBoundingSphere(this.boundingSphere);
-    } finally {
+      if (buffer) {
+        const values = new Float32Array(buffer);
+        this.bounds.min.fromArray(values, 0).subScalar(config.BOUNDS_MARGIN);
+        this.bounds.max.fromArray(values, 4).addScalar(config.BOUNDS_MARGIN);
+        this.bounds.getBoundingSphere(this.boundingSphere);
+      }
       readback.release();
+    } finally {
       this.isReadingBounds = false;
     }
   };
