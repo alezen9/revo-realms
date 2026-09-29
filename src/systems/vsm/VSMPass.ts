@@ -228,12 +228,10 @@ export class VSMPass {
     const { depth, worldPosition, viewDistance } =
       this.sampler.getReceiver(screenUV);
     const softness = this.sampler.getSoftness(screenUV);
-    const level = softness
-      .greaterThan(VSM_SOFT_RECEIVER_THRESHOLD)
-      .select(
-        uint(getSoftReceiverLevel(viewDistance, softness).floor()),
-        getReceiverLevel(viewDistance),
-      );
+    const isSoftReceiver = softness.greaterThan(VSM_SOFT_RECEIVER_THRESHOLD);
+    const softLevel = getSoftReceiverLevel(viewDistance, softness).floor();
+    const receiverLevel = float(getReceiverLevel(viewDistance));
+    const level = uint(mix(receiverLevel, softLevel, float(isSoftReceiver)));
     const pagePosition = getLightPosition(
       worldPosition,
       this.context.lightBasis,
