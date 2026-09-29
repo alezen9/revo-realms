@@ -47,9 +47,6 @@ const GUST_BAND_OFFSET = 0.37;
 
 const createParticleBuffer = () => instancedArray(config.COUNT, "vec4");
 export type ParticleBuffer = ReturnType<typeof createParticleBuffer>;
-// 0 -> minimum, 1 -> maximum, xyz in flag space
-const createBoundsBuffer = () => instancedArray(2, "vec4");
-type BoundsBuffer = ReturnType<typeof createBoundsBuffer>;
 
 // x -> column, y -> row, z -> widthRatio (0 staff, 1 free edge),
 // w -> heightRatio (0 top, 1 bottom)
@@ -323,32 +320,14 @@ const initParticles = Fn<
   previousPositions.element(instanceIndex).assign(vec4(restPosition, 0));
 });
 
-const writeBounds = Fn<[positions: ParticleBuffer, bounds: BoundsBuffer], void>(
-  ([positions, bounds]) => {
-    If(invocationLocalIndex.equal(0), () => {
-      const minimum = vec3(1e8).toVar();
-      const maximum = vec3(-1e8).toVar();
-      Loop({ start: 0, end: config.COUNT, type: "uint" }, ({ i: index }) => {
-        const position = positions.element(index).xyz;
-        minimum.assign(minimum.min(position));
-        maximum.assign(maximum.max(position));
-      });
-      bounds.element(0).assign(vec4(minimum, 0));
-      bounds.element(1).assign(vec4(maximum, 0));
-    });
-  },
-  "void",
-);
-
 const simulateSteps = Fn<
   [
     positions: ParticleBuffer,
     previousPositions: ParticleBuffer,
     predictedPositions: ParticleBuffer,
-    bounds: BoundsBuffer,
   ],
   void
->(([positions, previousPositions, predictedPositions, bounds]) => {
+>(([positions, previousPositions, predictedPositions]) => {
   Loop({ start: 0, end: uniforms.uStepCount, type: "uint" }, () => {
     // the ownership guards stay branches, two invocations on one particle would race
     Loop(OWNED_SLOTS, ({ i: slot }) => {
@@ -372,14 +351,12 @@ const simulateSteps = Fn<
     });
     storageBarrier();
   });
-  writeBounds(positions, bounds);
 });
 
 export class FlagCompute {
   readonly positions = createParticleBuffer();
   private previousPositions = createParticleBuffer();
   private predictedPositions = createParticleBuffer();
-  readonly bounds = createBoundsBuffer();
   readonly computeInit = initParticles(
     this.positions,
     this.previousPositions,
@@ -388,6 +365,5 @@ export class FlagCompute {
     this.positions,
     this.previousPositions,
     this.predictedPositions,
-    this.bounds,
   ).compute(config.WORKGROUP_SIZE, [config.WORKGROUP_SIZE]);
 }

@@ -355,9 +355,19 @@ export class VSMDepthPool {
   }
 
   collectComputeNodes(nodes: ComputeNode[]) {
+    this.collectBoundsNodes(nodes);
+    this.collectRasterNodes(nodes);
+  }
+
+  collectBoundsNodes(nodes: ComputeNode[]) {
+    for (const { bucket } of this.clusterCasters.values())
+      bucket.collectBoundsNodes(nodes);
+  }
+
+  collectRasterNodes(nodes: ComputeNode[]) {
     nodes.push(this.clearNode);
     for (const { bucket, rasterNode } of this.clusterCasters.values()) {
-      bucket.collectComputeNodes(nodes);
+      bucket.collectWorkNodes(nodes);
       nodes.push(rasterNode);
     }
     this.isReady.value = 1;
@@ -482,6 +492,7 @@ export class VSMDepthPool {
         this.jobs,
         casters,
         hasOpacity,
+        this.kind,
       );
       let rasterOpacityNode: Node<"float"> | undefined;
       if (bucket.hasUvs) rasterOpacityNode = opacityNode;

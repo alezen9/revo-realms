@@ -17,22 +17,28 @@ import {
   storage,
   uint,
   uvec2,
+  uvec4,
   vec2,
   vec3,
   vec4,
 } from "three/tsl";
 import type { VSMRasterWork } from "./VSMDepthPool";
 import {
+  VSM_LEVEL_COUNT,
   VSM_PAGES_PER_LEVEL,
   getLightPosition,
   getPageCoordinate,
+  getPageKey,
   getPageSize,
+  getWindowCenter,
+  isPageInWindow,
 } from "./VSMMath";
 import {
   VSM_JOB_COUNT,
   type VSMCaster,
   type VSMContext,
   type VSMJobSource,
+  type VSMLayerKind,
 } from "./VSMContext";
 
 export const VSM_CLUSTER_TRIANGLES = 64;
@@ -283,6 +289,51 @@ const collectClusterWork = Fn<
   });
 });
 
+// stamps the active pages this cluster covers, read by the dynamic touch pass
+const markClusterPages = Fn<
+  [
+    lightBounds: Vec4Node,
+    pageTable: Uvec4Node,
+    frame: Node<"uint">,
+    cameraPosition: Node<"vec3">,
+    lightBasis: VSMContext["lightBasis"],
+  ],
+  void
+>(([lightBounds, pageTable, frame, cameraPosition, lightBasis]) => {
+  const bounds = lightBounds.element(instanceIndex).toVar();
+  Loop(
+    { start: 0, end: VSM_LEVEL_COUNT, type: "uint" },
+    ({ i: levelIndex }) => {
+      const level = levelIndex.toVar();
+      const pageSize = getPageSize(level);
+      const firstPage = getPageCoordinate(bounds.xy.div(pageSize)).toVar();
+      const lastPage = getPageCoordinate(bounds.zw.div(pageSize)).toVar();
+      const windowCenter = getWindowCenter(
+        cameraPosition,
+        lightBasis,
+        level,
+      ).toVar();
+      const pageWidth = lastPage.x.sub(firstPage.x).add(1).toVar();
+      const pageCount = pageWidth.mul(lastPage.y.sub(firstPage.y).add(1));
+      Loop(
+        { start: 0, end: pageCount, type: "uint" },
+        ({ i: pageLoopIndex }) => {
+          const pageIndex = pageLoopIndex.toVar();
+          const pageCoordinate = firstPage.add(
+            uvec2(pageIndex.mod(pageWidth), pageIndex.div(pageWidth)),
+          );
+          If(isPageInWindow(pageCoordinate, windowCenter), () => {
+            const page = pageTable.element(getPageKey(level, pageCoordinate));
+            If(page.w.equal(frame), () => {
+              page.assign(uvec4(page.x, frame, page.z, page.w));
+            });
+          });
+        },
+      );
+    },
+  );
+});
+
 export class VSMClusterBucket {
   readonly positionsAttribute: StorageBufferAttribute;
   readonly uvsAttribute?: StorageBufferAttribute;
@@ -310,6 +361,7 @@ export class VSMClusterBucket {
   private boundsNode;
   private resetNode;
   private buildNode;
+  private markNode?: ComputeNode;
   private rasterJobs;
   private rasterWorkCount;
   private rasterWorkItems;
@@ -327,6 +379,7 @@ export class VSMClusterBucket {
     jobs: VSMJobSource,
     casters: VSMCaster[],
     hasUvs: boolean,
+    kind: VSMLayerKind,
   ) {
     const { lightBasis } = context;
     this.positionNode = casters[0].positionNode;
@@ -440,6 +493,16 @@ export class VSMClusterBucket {
     this.boundsNode.name = "VSM cluster bounds";
     this.resetNode.name = "VSM cluster work reset";
     this.buildNode.name = "VSM cluster work";
+    if (kind === "dynamic") {
+      this.markNode = markClusterPages(
+        lightBounds,
+        context.pageTableNode,
+        context.frame,
+        context.cameraPosition,
+        lightBasis,
+      ).compute(1, [64]);
+      this.markNode.name = "VSM cluster pages";
+    }
     this.writeContent(content);
   }
 
@@ -531,16 +594,21 @@ export class VSMClusterBucket {
     this.hasDirtyBounds = true;
   }
 
-  collectComputeNodes(nodes: ComputeNode[]) {
+  collectBoundsNodes(nodes: ComputeNode[]) {
     if (this.hasDirtyBounds || this.positionNode) nodes.push(this.boundsNode);
-    nodes.push(this.resetNode, this.buildNode);
     this.hasDirtyBounds = false;
+    if (this.markNode) nodes.push(this.markNode);
+  }
+
+  collectWorkNodes(nodes: ComputeNode[]) {
+    nodes.push(this.resetNode, this.buildNode);
   }
 
   dispose() {
     this.boundsNode.dispose();
     this.resetNode.dispose();
     this.buildNode.dispose();
+    if (this.markNode) this.markNode.dispose();
   }
 
   private writeContent(content: ClusterContent) {
@@ -556,6 +624,7 @@ export class VSMClusterBucket {
     const instanceClusterCount = content.instanceClusters.length / 4;
     this.boundsNode.count = instanceClusterCount;
     this.buildNode.count = instanceClusterCount;
+    if (this.markNode) this.markNode.count = instanceClusterCount;
     this.updateMatrices();
   }
 

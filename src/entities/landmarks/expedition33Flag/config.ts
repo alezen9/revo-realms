@@ -33,8 +33,6 @@ export const config = {
   MAX_CATCH_UP_SECONDS: 1 / 30,
   MAX_SPEED: 18,
   TETHER_SLACK: 1.02,
-  // the bounds readback lands a few frames late, the cloth can move this much meanwhile
-  BOUNDS_MARGIN: 0.5,
   BEND_WEIGHT: 0.35,
   // the whole flag runs in one workgroup so every step stays in one dispatch
   WORKGROUP_SIZE,

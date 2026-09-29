@@ -1,4 +1,3 @@
-import { Box3, Vector3 } from "three";
 import {
   StorageBufferAttribute,
   type ComputeNode,
@@ -28,15 +27,10 @@ import {
   VSM_JOBS_ACTIVE,
   VSM_JOBS_DYNAMIC,
   VSM_POOL_CAPACITY,
-  type VSMCaster,
   type VSMContext,
 } from "./VSMContext";
 import { VSMDepthPool } from "./VSMDepthPool";
-import {
-  VSM_LEVEL_COUNT,
-  VSM_PAGES_PER_LEVEL,
-  computePageCoordinate,
-} from "./VSMMath";
+import { VSM_PAGES_PER_LEVEL } from "./VSMMath";
 
 const createCounterNode = (attribute: StorageBufferAttribute, count: number) =>
   storage(attribute, "uint", count).toAtomic();
@@ -51,35 +45,8 @@ type DynamicJobArgs = [
   dynamicCounters: CounterNode,
   pageJobs: Uvec4Node,
   pageTable: Uvec4Node,
-  casterRanges: Uvec4Node,
-  casterCount: Node<"uint">,
   frame: Node<"uint">,
 ];
-
-const isCasterOnPage = (range: Node<"uvec4">, job: Node<"uvec4">) =>
-  job.z
-    .greaterThanEqual(range.x)
-    .and(job.w.greaterThanEqual(range.y))
-    .and(job.z.lessThanEqual(range.z))
-    .and(job.w.lessThanEqual(range.w));
-
-const isPageTouched = (
-  job: Node<"uvec4">,
-  level: Node<"uint">,
-  pageTable: Uvec4Node,
-  casterRanges: Uvec4Node,
-  casterCount: Node<"uint">,
-  frame: Node<"uint">,
-) => {
-  const isTouched = pageTable.element(job.x).y.equal(frame).toVar();
-  Loop({ start: 0, end: casterCount, type: "uint" }, ({ i: casterIndex }) => {
-    const range = casterRanges.element(
-      casterIndex.mul(VSM_LEVEL_COUNT).add(level),
-    );
-    isTouched.assign(isTouched.or(isCasterOnPage(range, job)));
-  });
-  return isTouched;
-};
 
 const prepareDynamicPages = Fn<
   [
@@ -103,28 +70,14 @@ const prepareDynamicPages = Fn<
   });
 });
 
+// dynamic clusters stamp the active pages they cover with this frame
 const countTouchedPages = Fn<DynamicJobArgs, void>(
-  ([
-    counters,
-    dynamicCounters,
-    pageJobs,
-    pageTable,
-    casterRanges,
-    casterCount,
-    frame,
-  ]) => {
+  ([counters, dynamicCounters, pageJobs, pageTable, frame]) => {
     const activeCount = atomicLoad(counters.element(VSM_COUNTER_ACTIVE));
     If(instanceIndex.lessThan(activeCount), () => {
       const job = pageJobs.element(instanceIndex.add(VSM_JOBS_ACTIVE));
       const level = job.x.div(VSM_PAGES_PER_LEVEL);
-      const isTouched = isPageTouched(
-        job,
-        level,
-        pageTable,
-        casterRanges,
-        casterCount,
-        frame,
-      );
+      const isTouched = pageTable.element(job.x).y.equal(frame);
       If(isTouched, () => {
         const levelCount = dynamicCounters.element(
           level.add(VSM_DYNAMIC_COUNTER_LEVEL_COUNTS),
@@ -136,27 +89,12 @@ const countTouchedPages = Fn<DynamicJobArgs, void>(
 );
 
 const assignDynamicSlots = Fn<DynamicJobArgs, void>(
-  ([
-    counters,
-    dynamicCounters,
-    pageJobs,
-    pageTable,
-    casterRanges,
-    casterCount,
-    frame,
-  ]) => {
+  ([counters, dynamicCounters, pageJobs, pageTable, frame]) => {
     const activeCount = atomicLoad(counters.element(VSM_COUNTER_ACTIVE));
     If(instanceIndex.lessThan(activeCount), () => {
       const job = pageJobs.element(instanceIndex.add(VSM_JOBS_ACTIVE));
       const level = job.x.div(VSM_PAGES_PER_LEVEL).toVar();
-      const isTouched = isPageTouched(
-        job,
-        level,
-        pageTable,
-        casterRanges,
-        casterCount,
-        frame,
-      );
+      const isTouched = pageTable.element(job.x).y.equal(frame);
       If(isTouched, () => {
         // finer levels take the first slots so a full pool drops the coarse ones
         const firstSlot = uint(0).toVar();
@@ -200,44 +138,17 @@ const assignDynamicSlots = Fn<DynamicJobArgs, void>(
 
 export class VSMDynamicLayer {
   readonly pool: VSMDepthPool;
-  private context: VSMContext;
-  private sources: VSMCaster[] = [];
-  private casterRanges = new DynamicCasterRanges(0);
-  private computeNodes: ComputeNode[] = [];
+  private prepareNode: ComputeNode;
+  private touchNode: ComputeNode;
+  private jobsNode: ComputeNode;
 
   constructor(context: VSMContext) {
-    this.context = context;
     this.pool = new VSMDepthPool(context, {
       kind: "dynamic",
       capacity: VSM_DYNAMIC_CAPACITY,
       jobs: context.dynamicJobs,
       depthBiasTexels: 3,
     });
-  }
-
-  sync(terrainBounds: { min: number; max: number }) {
-    const { changes } = this.context;
-    const { hasRosterChanged, hasCasterMoved } = changes.dynamic;
-    if (!hasRosterChanged && !hasCasterMoved && !changes.hasSunChanged) return;
-
-    if (hasRosterChanged) this.rebuildCasters();
-    this.pool.sync(terrainBounds);
-    const { x: lightX, y: lightY } = this.context.lightBasis;
-    this.casterRanges.update(this.sources, lightX.value, lightY.value);
-  }
-
-  collectComputeNodes(nodes: ComputeNode[]) {
-    nodes.push(...this.computeNodes);
-    this.pool.collectComputeNodes(nodes);
-  }
-
-  private rebuildCasters() {
-    const { context } = this;
-    this.sources = [];
-    for (const caster of context.casters)
-      if (caster.type === "dynamic") this.sources.push(caster);
-    this.casterRanges = new DynamicCasterRanges(this.sources.length);
-    for (const node of this.computeNodes) node.dispose();
 
     const counters = createCounterNode(context.counters, VSM_COUNTER_COUNT);
     const dynamicCounters = createCounterNode(
@@ -245,99 +156,45 @@ export class VSMDynamicLayer {
       VSM_DYNAMIC_COUNTER_COUNT,
     );
     const pageJobs = createUvec4Node(context.pageJobs, VSM_JOB_COUNT);
-    const { pageRangesAttribute, casterCount } = this.casterRanges;
-    const casterRanges = createUvec4Node(
-      pageRangesAttribute,
-      pageRangesAttribute.count,
-    );
     const { pageTableNode: pageTable, frame } = context;
     const jobArgs: DynamicJobArgs = [
       counters,
       dynamicCounters,
       pageJobs,
       pageTable,
-      casterRanges,
-      uint(casterCount),
       frame,
     ];
     const workgroup = [64];
 
-    const prepareNode = prepareDynamicPages(
+    this.prepareNode = prepareDynamicPages(
       counters,
       dynamicCounters,
       pageJobs,
       pageTable,
       frame,
     ).compute(VSM_POOL_CAPACITY, workgroup);
-    prepareNode.name = "VSM dynamic prepare";
-    const touchNode = countTouchedPages(...jobArgs).compute(
+    this.prepareNode.name = "VSM dynamic prepare";
+    this.touchNode = countTouchedPages(...jobArgs).compute(
       VSM_POOL_CAPACITY,
       workgroup,
     );
-    touchNode.name = "VSM dynamic touch";
-    const jobsNode = assignDynamicSlots(...jobArgs).compute(
+    this.touchNode.name = "VSM dynamic touch";
+    this.jobsNode = assignDynamicSlots(...jobArgs).compute(
       VSM_POOL_CAPACITY,
       workgroup,
     );
-    jobsNode.name = "VSM dynamic jobs";
-    this.computeNodes = [prepareNode, touchNode, jobsNode];
-  }
-}
-
-class DynamicCasterRanges {
-  readonly pageRangesAttribute: StorageBufferAttribute;
-  readonly casterCount: number;
-  private rangeValues: Uint32Array;
-  private bounds = new Box3();
-  private corner = new Vector3();
-
-  constructor(casterCount: number) {
-    this.casterCount = casterCount;
-    // storage buffers can't be empty, so an empty roster keeps one range
-    const allocatedCount = Math.max(casterCount, 1);
-    this.rangeValues = new Uint32Array(allocatedCount * VSM_LEVEL_COUNT * 4);
-    this.pageRangesAttribute = new StorageBufferAttribute(this.rangeValues, 4);
+    this.jobsNode.name = "VSM dynamic jobs";
   }
 
-  update(sources: VSMCaster[], lightX: Vector3, lightY: Vector3) {
-    if (sources.length !== this.casterCount)
-      throw new Error(
-        "Dynamic caster count changed without rebuilding the ranges",
-      );
+  sync(terrainBounds: { min: number; max: number }) {
+    this.pool.sync(terrainBounds);
+  }
 
-    const { min, max } = this.bounds;
-    for (let casterIndex = 0; casterIndex < sources.length; casterIndex++) {
-      const { mesh } = sources[casterIndex];
-      mesh.updateWorldMatrix(true, false);
-      this.bounds.setFromObject(mesh);
-      for (let level = 0; level < VSM_LEVEL_COUNT; level++) {
-        let minX = Infinity;
-        let minY = Infinity;
-        let maxX = -Infinity;
-        let maxY = -Infinity;
-        for (let corner = 0; corner < 8; corner++) {
-          const cornerX = corner & 1 ? max.x : min.x;
-          const cornerY = corner & 2 ? max.y : min.y;
-          const cornerZ = corner & 4 ? max.z : min.z;
-          this.corner.set(cornerX, cornerY, cornerZ);
-          const page = computePageCoordinate(
-            this.corner,
-            lightX,
-            lightY,
-            level,
-          );
-          minX = Math.min(minX, page.x);
-          minY = Math.min(minY, page.y);
-          maxX = Math.max(maxX, page.x);
-          maxY = Math.max(maxY, page.y);
-        }
-        const rangeOffset = (casterIndex * VSM_LEVEL_COUNT + level) * 4;
-        this.rangeValues[rangeOffset] = minX;
-        this.rangeValues[rangeOffset + 1] = minY;
-        this.rangeValues[rangeOffset + 2] = maxX;
-        this.rangeValues[rangeOffset + 3] = maxY;
-      }
-    }
-    this.pageRangesAttribute.needsUpdate = true;
+  // clusters mark their pages before the touch pass, their shape can come from the gpu
+  collectComputeNodes(nodes: ComputeNode[]) {
+    nodes.push(this.prepareNode);
+    this.pool.collectBoundsNodes(nodes);
+    nodes.push(this.touchNode, this.jobsNode);
+    this.pool.collectRasterNodes(nodes);
   }
 }
