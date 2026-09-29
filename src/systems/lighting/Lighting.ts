@@ -17,13 +17,13 @@ import { srgbColorTarget } from "../debug/tweakpaneColor";
 
 const config = {
   LIGHT_POSITION_OFFSET: new Vector3(10, 5, 10),
-  directionalColor: new Color(0.95, 0.64, 0.42).convertSRGBToLinear(),
+  directionalColor: new Color(0.96, 0.58, 0.36).convertSRGBToLinear(),
   directionalIntensity: 1.25,
   hemiSkyColor: new Color(0.82, 0.64, 0.53).convertSRGBToLinear(),
   hemiGroundColor: new Color(0.36, 0.31, 0.19).convertSRGBToLinear(),
   hemiIntensity: 0.5,
   fogColor: new Color(0.64, 0.6, 0.48).convertSRGBToLinear(),
-  fogDensity: 0.0044,
+  fogDensity: 0.007,
   fogEnabled: true,
   backgroundEnabled: false,
 };
