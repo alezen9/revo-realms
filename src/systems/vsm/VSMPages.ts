@@ -150,12 +150,15 @@ const requestPages = (
       const pageCoordinate = firstPage.add(
         uvec2(pageIndex.mod(pageWidth), pageIndex.div(pageWidth)),
       );
-      If(isPageInWindow(pageCoordinate, windowCenter), () => {
-        const key = getPageKey(level, pageCoordinate);
-        atomicOr(
-          requestBits.element(key.div(32)),
-          uint(1).shiftLeft(key.mod(32)),
-        );
+      const key = getPageKey(level, pageCoordinate);
+      const word = requestBits.element(key.div(32));
+      const bit = uint(1).shiftLeft(key.mod(32)).toVar();
+      const isInWindow = isPageInWindow(pageCoordinate, windowCenter);
+      const isNewRequest = isInWindow.and(
+        atomicLoad(word).bitAnd(bit).equal(0),
+      );
+      If(isNewRequest, () => {
+        atomicOr(word, bit);
       });
     },
   );
