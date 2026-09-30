@@ -82,6 +82,7 @@ type TriangleUvs = ReturnType<typeof createTriangleUvs>;
 type RasterArgs = [
   source: VSMClusterBucket,
   depth: DepthNode,
+  casterFlagBase: Node<"uint">,
   triangleCorners: TriangleCorners,
   triangleUvs: TriangleUvs,
   lightBasis: VSMContext["lightBasis"],
@@ -100,12 +101,13 @@ const getEdge = (from: Node<"vec2">, to: Node<"vec2">, point: Node<"vec2">) => {
 const clearPages = Fn<
   [
     depth: DepthNode,
+    casterFlagBase: Node<"uint">,
     pageJobs: PageJobsNode,
     jobCount: Node<"uint">,
     jobOffset: Node<"uint">,
   ],
   void
->(([depth, pageJobs, jobCount, jobOffset]) => {
+>(([depth, casterFlagBase, pageJobs, jobCount, jobOffset]) => {
   Loop(
     {
       start: workgroupId.x,
@@ -116,6 +118,9 @@ const clearPages = Fn<
     ({ i: jobLoopIndex }) => {
       const job = pageJobs.element(jobLoopIndex.add(jobOffset));
       const pageBase = job.y.mul(PAGE_TEXEL_COUNT).toVar();
+      If(localId.x.equal(0), () => {
+        atomicStore(depth.element(casterFlagBase.add(job.y)), 0);
+      });
       Loop(
         {
           start: localId.x,
@@ -137,6 +142,7 @@ const rasterizeClusters = Fn<RasterArgs, void>(
   ([
     source,
     depth,
+    casterFlagBase,
     triangleCorners,
     triangleUvs,
     lightBasis,
@@ -216,6 +222,9 @@ const rasterizeClusters = Fn<RasterArgs, void>(
             const hasRows = lastTexel.y.greaterThanEqual(firstTexel.y);
             const hasTexels = isOnPage.and(hasColumns).and(hasRows);
             const texelCount = hasTexels.select(width.mul(height), uint(0));
+            If(hasTexels.and(localId.x.equal(0)), () => {
+              atomicStore(depth.element(casterFlagBase.add(work.slot)), 1);
+            });
             Loop(
               {
                 start: localId.x,
@@ -291,6 +300,7 @@ export class VSMDepthPool {
   private jobs: VSMJobSource;
   private depthNode;
   private readDepthNode;
+  private casterFlagBase: number;
   private clearNode;
   private clusterCasters = new Map<string, ClusterCaster>();
 
@@ -300,7 +310,9 @@ export class VSMDepthPool {
     this.kind = kind;
     this.jobs = jobs;
     this.depthBiasTexels = depthBiasTexels;
-    const texelCount = capacity * PAGE_TEXEL_COUNT;
+    // one word per slot after the pages remembers if anything was drawn into it
+    this.casterFlagBase = capacity * PAGE_TEXEL_COUNT;
+    const texelCount = this.casterFlagBase + capacity;
     const depthAttribute = new StorageBufferAttribute(
       new Uint32Array(texelCount),
       1,
@@ -319,6 +331,7 @@ export class VSMDepthPool {
 
     this.clearNode = clearPages(
       this.depthNode,
+      uint(this.casterFlagBase),
       createPageJobsNode(context.pageJobs),
       jobCounts.element(jobs.countIndex),
       uint(jobs.offset),
@@ -367,6 +380,12 @@ export class VSMDepthPool {
       nodes.push(rasterNode);
     }
     this.isReady.value = 1;
+  }
+
+  hasCasters(slot: Node<"uint">) {
+    return this.readDepthNode
+      .element(slot.add(this.casterFlagBase))
+      .notEqual(0);
   }
 
   loadDepth(slot: Node<"uint">, texel: Node<"uvec2">) {
@@ -477,6 +496,7 @@ export class VSMDepthPool {
       const rasterNode = rasterizeClusters(
         bucket,
         this.depthNode,
+        uint(this.casterFlagBase),
         createTriangleCorners(),
         createTriangleUvs(),
         this.context.lightBasis,

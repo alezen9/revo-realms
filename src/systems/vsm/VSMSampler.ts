@@ -1,5 +1,6 @@
 import type { Node } from "three/webgpu";
 import {
+  bool,
   cos,
   dFdx,
   dFdy,
@@ -53,6 +54,7 @@ type PageLookup = {
   isResident: Node<"bool">;
   hasDynamic: Node<"bool">;
   dynamicSlot: Node<"uint">;
+  hasCasters: Node<"bool">;
 };
 
 const PENUMBRA_TAP_COUNT = 8;
@@ -142,15 +144,14 @@ export class VSMSampler {
     If(softness.greaterThan(VSM_SOFT_RECEIVER_THRESHOLD), () => {
       visibility.assign(this.resolveSoftSurfaces(uv, softness));
     }).Else(() => {
-      visibility.assign(
-        this.computeVisibility(
-          receiverWorldPosition,
-          receiverDepth,
-          receiverViewDistance,
-          getReceiverLevel(receiverViewDistance),
-          false,
-        ),
+      const shadow = this.computeVisibility(
+        receiverWorldPosition,
+        receiverDepth,
+        receiverViewDistance,
+        getReceiverLevel(receiverViewDistance),
+        false,
       );
+      visibility.assign(shadow.visibility);
     });
     return visibility;
   });
@@ -183,26 +184,28 @@ export class VSMSampler {
     for (const depth of depths)
       farCount = farCount.add(float(depth.greaterThan(middleDepth)));
     const farCoverage = farCount.div(SCENE_PASS_SAMPLES).toVar();
-    const visibility = this.computeVisibility(
+    const nearShadow = this.computeVisibility(
       nearWorldPosition,
       nearDepth,
       nearViewDistance,
       getDitheredSoftLevel(nearViewDistance, softness),
       true,
-    ).toVar();
+    );
+    const visibility = nearShadow.visibility.toVar();
     const surfaceGap = farViewDistance.sub(nearViewDistance);
     const hasFarSurface = surfaceGap.greaterThan(
       nearViewDistance.mul(SURFACE_SPLIT_RATIO),
     );
-    If(hasFarSurface, () => {
-      const farVisibility = this.computeVisibility(
+    const needsFarSurface = hasFarSurface.and(nearShadow.hasCasters);
+    If(needsFarSurface, () => {
+      const farShadow = this.computeVisibility(
         farWorldPosition,
         farDepth,
         farViewDistance,
         getDitheredSoftLevel(farViewDistance, softness),
         true,
       );
-      visibility.assign(mix(visibility, farVisibility, farCoverage));
+      visibility.assign(mix(visibility, farShadow.visibility, farCoverage));
     });
     return visibility;
   }
@@ -258,6 +261,7 @@ export class VSMSampler {
     const isSunUp = sunDirection.y.lessThan(-0.25);
     const isInside = isShadowReady.and(isSurface).and(isSunUp);
     const visibility = float(1).toVar();
+    const hasCasters = bool(false).toVar();
     If(isInside, () => {
       const centerPage = this.lookupPage(
         getPageCoordinate(pagePosition),
@@ -276,12 +280,15 @@ export class VSMSampler {
         .and(centerPage.isResident)
         .toVar();
       if (isSoftReceiver) {
-        If(isTentAvailable, () => {
+        hasCasters.assign(centerPage.hasCasters);
+        const isTentNeeded = isTentAvailable.and(centerPage.hasCasters);
+        const isTentUnavailable = isTentAvailable.not();
+        If(isTentNeeded, () => {
           visibilitySum.assign(
             this.sampleTent(pagePosition, centerPage, receiver),
           );
           weight.assign(1);
-        }).Else(() => {
+        }).ElseIf(isTentUnavailable, () => {
           for (const direction of SOFT_TAP_DIRECTIONS) {
             const tap = this.sampleTap(
               pagePosition,
@@ -331,7 +338,7 @@ export class VSMSampler {
         visibility.assign(visibilitySum.div(weight));
       });
     });
-    return visibility;
+    return { visibility, hasCasters };
   }
 
   private lookupPage(
@@ -342,12 +349,23 @@ export class VSMSampler {
       getPageKey(level, pageCoordinate),
       getPageTag(pageCoordinate),
     );
+    const slot = page.slot.toVar();
+    const isResident = page.isResident.toVar();
+    const hasDynamic = page.hasDynamic.toVar();
+    const dynamicSlot = page.dynamicSlot.toVar();
+    const hasStaticCasters = this.staticPool.hasCasters(slot);
+    const hasDynamicCasters = hasDynamic.and(
+      this.dynamicPool.hasCasters(dynamicSlot),
+    );
+    const isMissing = isResident.not();
+    const hasCasters = isMissing.or(hasStaticCasters).or(hasDynamicCasters);
     return {
       coordinate: pageCoordinate.toVar(),
-      slot: page.slot.toVar(),
-      isResident: page.isResident.toVar(),
-      hasDynamic: page.hasDynamic.toVar(),
-      dynamicSlot: page.dynamicSlot.toVar(),
+      slot,
+      isResident,
+      hasDynamic,
+      dynamicSlot,
+      hasCasters,
     };
   }
 
