@@ -304,19 +304,19 @@ export class DualKawaseBloomPass {
 
   addBindings(folder: DebugFolder) {
     folder.addBinding(this.strength, "value", {
-      label: "Bloom strength",
+      label: "Strength",
     });
     folder.addBinding(this.threshold, "value", {
-      label: "Bloom threshold",
+      label: "Threshold",
     });
     folder.addBinding(this.smoothWidth, "value", {
-      label: "Bloom smooth width",
+      label: "Smooth width",
       min: 0.01,
       max: 1,
       step: 0.01,
     });
     folder.addBinding(this.spread, "value", {
-      label: "Bloom spread",
+      label: "Spread",
       min: 1,
       max: 3,
       step: 0.1,

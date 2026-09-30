@@ -80,6 +80,7 @@ export class FramePipeline extends RenderPipeline {
     this.chain = PostChain.from(this.scenePass)
       .pipe(this.vsmPass)
       .pipe(this.waterPass)
+      .pipe(this.vsmPass.lightShafts)
       .pipe(this.hdrPass)
       .pipe(this.dualKawaseBloomPass)
       .pipe(this.acesToneMappingPass);
@@ -117,14 +118,6 @@ export class FramePipeline extends RenderPipeline {
   };
 
   private addBindings() {
-    this.dualKawaseBloomPass.addBindings(this.debugFolder);
-    this.debugFolder.addBinding(this.renderer, "toneMappingExposure", {
-      label: "Exposure",
-      min: 0,
-      max: 10,
-      step: 0.01,
-    });
-    this.vsmPass.addBindings(this.debugFolder);
     const viewOptions: Record<string, string> = {};
     for (const view of Object.keys(this.debugOutputs)) viewOptions[view] = view;
     this.debugFolder
@@ -136,12 +129,38 @@ export class FramePipeline extends RenderPipeline {
     let rows = 1;
     for (const legend of Object.values(this.debugLegends))
       rows = Math.max(rows, legend.split("\n").length);
-    return this.debugFolder.addBinding(this.debugLegend, "text", {
-      label: undefined,
-      readonly: true,
-      multiline: true,
-      rows,
+    const legendBinding = this.debugFolder.addBinding(
+      this.debugLegend,
+      "text",
+      {
+        label: undefined,
+        readonly: true,
+        multiline: true,
+        rows,
+      },
+    );
+    this.debugFolder.addBinding(this.renderer, "toneMappingExposure", {
+      label: "Exposure",
+      min: 0,
+      max: 10,
+      step: 0.01,
     });
+    const bloomFolder = this.debugFolder.addFolder({
+      title: "Bloom",
+      expanded: false,
+    });
+    this.dualKawaseBloomPass.addBindings(bloomFolder);
+    const shadowsFolder = this.debugFolder.addFolder({
+      title: "Shadows",
+      expanded: false,
+    });
+    this.vsmPass.addBindings(shadowsFolder);
+    const lightShaftsFolder = this.debugFolder.addFolder({
+      title: "Light shafts",
+      expanded: false,
+    });
+    this.vsmPass.lightShafts.addBindings(lightShaftsFolder);
+    return legendBinding;
   }
 
   private selectDebugView = () => {

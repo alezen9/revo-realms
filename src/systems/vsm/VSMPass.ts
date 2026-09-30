@@ -29,6 +29,7 @@ import {
 } from "./VSMContext";
 import { VSMDepthPool } from "./VSMDepthPool";
 import { VSMDynamicLayer } from "./VSMDynamicLayer";
+import { VSMLightShafts } from "./VSMLightShafts";
 import {
   VSM_PAGE_TEXELS,
   getLightPosition,
@@ -69,6 +70,7 @@ export type VSMDependencies = {
 };
 
 export class VSMPass {
+  readonly lightShafts: VSMLightShafts;
   private renderer: WebGPURenderer;
   private scene: ScenePass;
   private camera: Camera;
@@ -117,12 +119,20 @@ export class VSMPass {
       this.staticCache,
       this.dynamicLayer.pool,
     );
+    this.lightShafts = new VSMLightShafts(
+      renderer,
+      camera,
+      this.context,
+      this.sampler,
+      lighting,
+    );
     performanceMonitor.setShadowPageStats(this.pages.stats);
   }
 
   setCamera(camera: Camera) {
     this.camera = camera;
     this.context.setCamera(camera);
+    this.lightShafts.setCamera(camera);
   }
 
   registerCaster(mesh: Mesh, options?: VSMCasterOptions) {
@@ -171,25 +181,25 @@ export class VSMPass {
       step: 0.05,
     });
     folder.addBinding(this.uShadowIntensity, "value", {
-      label: "Shadow intensity",
+      label: "Intensity",
       min: 0,
       max: 1,
       step: 0.05,
     });
     folder.addBinding(this.sampler.filter.softness, "value", {
-      label: "Shadow softness",
+      label: "Softness",
       min: 0,
       max: 3,
       step: 0.05,
     });
     folder.addBinding(this.sampler.filter.lightSize, "value", {
-      label: "Shadow light size",
+      label: "Light size",
       min: 0,
       max: 0.1,
       step: 0.001,
     });
     folder.addBinding(this.sampler.filter.maxSoftness, "value", {
-      label: "Shadow max softness",
+      label: "Max softness",
       min: 0,
       max: 16,
       step: 0.5,
@@ -201,7 +211,7 @@ export class VSMPass {
       step: 1,
     });
     folder.addBinding(vsmResolutionBias, "value", {
-      label: "Shadow resolution bias",
+      label: "Resolution bias",
       min: 0,
       max: 4,
       step: 1,
@@ -259,6 +269,10 @@ export class VSMPass {
       ),
       "Static depth": this.makeDepthOutput(this.staticCache, false),
       "Dynamic depth": this.makeDepthOutput(this.dynamicLayer.pool, true),
+      "Light shafts": renderOutput(
+        vec4(this.lightShafts.sample(), 1),
+        NoToneMapping,
+      ),
     };
   }
 

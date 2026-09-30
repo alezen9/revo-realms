@@ -1,6 +1,7 @@
 import type { Node } from "three/webgpu";
 import {
   bool,
+  Break,
   cos,
   dFdx,
   dFdy,
@@ -9,6 +10,7 @@ import {
   fract,
   getViewPosition,
   If,
+  Loop,
   mix,
   screenCoordinate,
   screenSize,
@@ -97,6 +99,18 @@ const getReceiverSlope = (lightPosition: Vec2Node, worldHeight: FloatNode) => {
   const clampedSlope = slope.mul(slopeScale);
   const hasSlope = determinantSize.greaterThan(MIN_DETERMINANT);
   return hasSlope.select(clampedSlope, vec2(0));
+};
+
+const getPointLit = (
+  pool: VSMDepthPool,
+  slot: Node<"uint">,
+  texel: Node<"uvec2">,
+  worldY: FloatNode,
+) => {
+  const depthRange = pool.maximumY.sub(pool.minimumY);
+  const pointDepth = pool.maximumY.sub(worldY).div(depthRange);
+  const storedDepth = pool.loadDepth(slot, texel);
+  return float(pointDepth.lessThanEqual(storedDepth));
 };
 
 const getInterleavedGradientNoise = (pixel: Vec2Node) => {
@@ -228,6 +242,42 @@ export class VSMSampler {
 
   getSoftness(uv: Vec2Node) {
     return this.scene.softShadow.sample(uv).r;
+  }
+
+  sampleSunVisibility(worldPosition: Node<"vec3">, level: Node<"uint">) {
+    const lightPosition = getLightPosition(
+      worldPosition,
+      this.context.lightBasis,
+    ).toVar();
+    const visibility = float(1).toVar();
+    Loop(
+      { start: level, end: uint(VSM_LEVEL_COUNT), type: "uint" },
+      ({ i: candidateLevel }) => {
+        const pagePosition = lightPosition.div(getPageSize(candidateLevel));
+        const pageCoordinate = getPageCoordinate(pagePosition);
+        const page = this.lookupPage(pageCoordinate, candidateLevel);
+        If(page.isResident, () => {
+          const pageTexel = pagePosition.fract().mul(VSM_PAGE_TEXELS).floor();
+          const texel = uvec2(pageTexel.clamp(0, VSM_PAGE_TEXELS - 1));
+          const staticLit = getPointLit(
+            this.staticPool,
+            page.slot,
+            texel,
+            worldPosition.y,
+          );
+          const dynamicLit = getPointLit(
+            this.dynamicPool,
+            page.dynamicSlot,
+            texel,
+            worldPosition.y,
+          );
+          const dynamicVisibility = mix(1, dynamicLit, float(page.hasDynamic));
+          visibility.assign(staticLit.mul(dynamicVisibility));
+          Break();
+        });
+      },
+    );
+    return visibility;
   }
 
   private computeVisibility(
