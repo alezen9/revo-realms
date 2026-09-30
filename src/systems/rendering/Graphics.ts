@@ -14,7 +14,7 @@ type CreateComputeTaskOptions = {
 };
 
 export const rendererConfig = {
-  resolutionScale: 0.85,
+  resolutionScale: 0.75,
 };
 
 export class Graphics {
