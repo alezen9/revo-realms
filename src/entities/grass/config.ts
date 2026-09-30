@@ -57,8 +57,8 @@ export const uniforms = {
 
   uLod0Radius: uniform(15),
   uLod0RadiusSquared: uniform(15 * 15),
-  uLod1Radius: uniform(35),
-  uLod1RadiusSquared: uniform(35 * 35),
+  uLod1Radius: uniform(25),
+  uLod1RadiusSquared: uniform(25 * 25),
   uLodDebugEnabled: uniform(0),
   uLodDebugColors: uniformArray(
     [new Color("green"), new Color("blue"), new Color("red")],
@@ -127,8 +127,8 @@ export const uniforms = {
 
   uFullDensityRadius: uniform(18),
   uFullDensityRadiusSquared: uniform(18 * 18),
-  uDensityFalloffRadius: uniform(72),
-  uDensityFalloffRadiusSquared: uniform(72 * 72),
+  uDensityFalloffRadius: uniform(55),
+  uDensityFalloffRadiusSquared: uniform(55 * 55),
   uFarDensity: uniform(0.0625),
   uProjectedHeightMin: uniform(0.01),
   uProjectedHeightFull: uniform(0.04),
