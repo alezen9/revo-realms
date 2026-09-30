@@ -68,7 +68,8 @@ const DOWNSAMPLE_SCALE = 0.25;
 const weighKarisGroup = Fn<KarisGroupArgs, Vec4Node>(
   ([first, second, third, fourth, groupWeight]) => {
     const average = first.add(second).add(third).add(fourth).mul(0.25);
-    const karisWeight = float(1).div(luminance(average.rgb).add(1));
+    const averageLuminance = luminance(average.rgb);
+    const karisWeight = float(1).div(averageLuminance.add(1));
     const weight = groupWeight.mul(karisWeight);
     return vec4(average.rgb.mul(weight), weight);
   },
@@ -288,7 +289,8 @@ export class DualKawaseBloomPass {
       this.spread,
     );
     const tightGlow = prefiltered.sample(screenUV);
-    const upsampled = this.upsamplePass.apply(tightGlow.add(wideGlow).mul(0.5));
+    const combinedGlow = tightGlow.add(wideGlow).mul(0.5);
+    const upsampled = this.upsamplePass.apply(combinedGlow);
 
     const glow = upsampled.sample(screenUV).mul(this.strength);
     return input.sample(screenUV).add(glow);

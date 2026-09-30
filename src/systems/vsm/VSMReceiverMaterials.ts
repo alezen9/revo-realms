@@ -37,11 +37,11 @@ class DirectSunPhongLightingModel extends PhongLightingModel {
     const diffuseBefore = vec3(reflectedLight.directDiffuse).toVar();
     const specularBefore = vec3(reflectedLight.directSpecular).toVar();
     super.direct(lightData, builder);
-    this.directSun.addAssign(
-      vec3(reflectedLight.directDiffuse)
-        .sub(diffuseBefore)
-        .add(vec3(reflectedLight.directSpecular).sub(specularBefore)),
+    const diffuseGain = vec3(reflectedLight.directDiffuse).sub(diffuseBefore);
+    const specularGain = vec3(reflectedLight.directSpecular).sub(
+      specularBefore,
     );
+    this.directSun.addAssign(diffuseGain.add(specularGain));
   }
 }
 
@@ -52,12 +52,9 @@ export class VSMReceiverLambertMaterial extends MeshLambertNodeMaterial {
 
   setupLightingModel() {
     const lightingModel = new DirectSunPhongLightingModel();
-    const directSun = vec4(
-      this.extraDirectSun
-        ? lightingModel.directSun.add(this.extraDirectSun)
-        : lightingModel.directSun,
-      1,
-    );
+    let sunLight: Node<"vec3"> = lightingModel.directSun;
+    if (this.extraDirectSun) sunLight = sunLight.add(this.extraDirectSun);
+    const directSun = vec4(sunLight, 1);
     this.mrtNode = this.softShadowNode
       ? mrt({ directSun, softShadow: vec4(this.softShadowNode) })
       : mrt({ directSun });
@@ -81,11 +78,11 @@ class DirectSunPhysicalLightingModel extends PhysicalLightingModel {
     const diffuseBefore = vec3(reflectedLight.directDiffuse).toVar();
     const specularBefore = vec3(reflectedLight.directSpecular).toVar();
     super.direct(lightData, builder);
-    this.directSun.addAssign(
-      vec3(reflectedLight.directDiffuse)
-        .sub(diffuseBefore)
-        .add(vec3(reflectedLight.directSpecular).sub(specularBefore)),
+    const diffuseGain = vec3(reflectedLight.directDiffuse).sub(diffuseBefore);
+    const specularGain = vec3(reflectedLight.directSpecular).sub(
+      specularBefore,
     );
+    this.directSun.addAssign(diffuseGain.add(specularGain));
   }
 }
 

@@ -148,7 +148,8 @@ export const getClumpRotation = Fn<[data: Node<"vec4">], Node<"vec2">>(
   ([data]) => {
     const orientation = unpackUnits(data.w, 21, 2, 0, 3);
     const isQuarterTurn = float(orientation.mod(2));
-    const direction = float(1).sub(step(2, orientation).mul(2));
+    const isReversed = step(2, orientation);
+    const direction = float(1).sub(isReversed.mul(2));
     return vec2(isQuarterTurn, direction);
   },
 );

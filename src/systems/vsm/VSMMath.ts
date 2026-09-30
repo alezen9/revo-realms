@@ -45,45 +45,45 @@ export const getLightPosition = (
 
 export const VSM_SOFT_RECEIVER_THRESHOLD = 0.02;
 
-export const getReceiverLevel = (viewDistance: Node<"float">) =>
-  uint(
-    ceil(log2(viewDistance.max(0.0001)))
-      .add(vsmResolutionBias)
-      .sub(VSM_FIRST_LEVEL)
-      .clamp(0, VSM_LEVEL_COUNT - 1),
-  );
+export const getReceiverLevel = (viewDistance: Node<"float">) => {
+  const distanceLevel = ceil(log2(viewDistance.max(0.0001)));
+  const biasedLevel = distanceLevel.add(vsmResolutionBias).sub(VSM_FIRST_LEVEL);
+  return uint(biasedLevel.clamp(0, VSM_LEVEL_COUNT - 1));
+};
 
 export const getSoftReceiverLevel = (
   viewDistance: Node<"float">,
   softness: Node<"float">,
-) =>
-  log2(viewDistance.max(0.0001))
-    .add(0.5)
+) => {
+  const distanceLevel = log2(viewDistance.max(0.0001)).add(0.5);
+  const softnessBias = softness.mul(vsmSoftReceiverLevelBias);
+  const biasedLevel = distanceLevel
     .add(vsmResolutionBias)
-    .add(softness.mul(vsmSoftReceiverLevelBias))
-    .sub(VSM_FIRST_LEVEL)
-    .clamp(0, VSM_LEVEL_COUNT - 1);
+    .add(softnessBias)
+    .sub(VSM_FIRST_LEVEL);
+  return biasedLevel.clamp(0, VSM_LEVEL_COUNT - 1);
+};
 
-export const getPageSize = (level: Node<"uint">) =>
-  float(uint(1).shiftLeft(level)).mul(FIRST_PAGE_SIZE);
+export const getPageSize = (level: Node<"uint">) => {
+  const levelScale = float(uint(1).shiftLeft(level));
+  return levelScale.mul(FIRST_PAGE_SIZE);
+};
 
-export const getPageTag = (pageCoordinate: Node<"uvec2">) =>
-  pageCoordinate.x
-    .bitAnd(TAG_MASK)
-    .bitOr(pageCoordinate.y.bitAnd(TAG_MASK).shiftLeft(14));
+export const getPageTag = (pageCoordinate: Node<"uvec2">) => {
+  const tagX = pageCoordinate.x.bitAnd(TAG_MASK);
+  const tagY = pageCoordinate.y.bitAnd(TAG_MASK).shiftLeft(14);
+  return tagX.bitOr(tagY);
+};
 
 export const getPageKey = (
   level: Node<"uint">,
   pageCoordinate: Node<"uvec2">,
-) =>
-  level
-    .mul(VSM_PAGES_PER_LEVEL)
-    .add(
-      pageCoordinate.y
-        .mod(VSM_PAGE_GRID_SIZE)
-        .mul(VSM_PAGE_GRID_SIZE)
-        .add(pageCoordinate.x.mod(VSM_PAGE_GRID_SIZE)),
-    );
+) => {
+  const gridX = pageCoordinate.x.mod(VSM_PAGE_GRID_SIZE);
+  const gridY = pageCoordinate.y.mod(VSM_PAGE_GRID_SIZE);
+  const localKey = gridY.mul(VSM_PAGE_GRID_SIZE).add(gridX);
+  return level.mul(VSM_PAGES_PER_LEVEL).add(localKey);
+};
 
 export const getPageCoordinate = (pagePosition: Node<"vec2">) =>
   pagePosition.floor().add(VSM_PAGE_OFFSET).toUVec2();
@@ -92,10 +92,10 @@ export const getWindowCenter = (
   cameraPosition: Node<"vec3">,
   lightBasis: VSMLightBasis,
   level: Node<"uint">,
-) =>
-  getPageCoordinate(
-    getLightPosition(cameraPosition, lightBasis).div(getPageSize(level)),
-  );
+) => {
+  const lightPosition = getLightPosition(cameraPosition, lightBasis);
+  return getPageCoordinate(lightPosition.div(getPageSize(level)));
+};
 
 export const getWindowPage = (
   pageKey: Node<"uint">,
@@ -107,28 +107,28 @@ export const getWindowPage = (
     localKey.div(VSM_PAGE_GRID_SIZE),
   );
   const windowStart = windowCenter.sub(VSM_PAGE_WINDOW_HALF);
-  return windowStart.add(
-    wrapped
-      .add(VSM_PAGE_GRID_SIZE)
-      .sub(windowStart.mod(VSM_PAGE_GRID_SIZE))
-      .mod(VSM_PAGE_GRID_SIZE),
-  );
+  const startOffset = windowStart.mod(VSM_PAGE_GRID_SIZE);
+  const offsetInWindow = wrapped
+    .add(VSM_PAGE_GRID_SIZE)
+    .sub(startOffset)
+    .mod(VSM_PAGE_GRID_SIZE);
+  return windowStart.add(offsetInWindow);
 };
 
 export const isPageInWindow = (
   pageCoordinate: Node<"uvec2">,
   windowCenter: Node<"uvec2">,
-) =>
-  pageCoordinate.x
-    .add(VSM_PAGE_WINDOW_HALF)
+) => {
+  const shiftedPage = pageCoordinate.add(VSM_PAGE_WINDOW_HALF);
+  const windowEnd = windowCenter.add(VSM_PAGE_WINDOW_HALF);
+  const isPastWindowStart = shiftedPage.x
     .greaterThanEqual(windowCenter.x)
-    .and(
-      pageCoordinate.y
-        .add(VSM_PAGE_WINDOW_HALF)
-        .greaterThanEqual(windowCenter.y),
-    )
-    .and(pageCoordinate.x.lessThan(windowCenter.x.add(VSM_PAGE_WINDOW_HALF)))
-    .and(pageCoordinate.y.lessThan(windowCenter.y.add(VSM_PAGE_WINDOW_HALF)));
+    .and(shiftedPage.y.greaterThanEqual(windowCenter.y));
+  const isBeforeWindowEnd = pageCoordinate.x
+    .lessThan(windowEnd.x)
+    .and(pageCoordinate.y.lessThan(windowEnd.y));
+  return isPastWindowStart.and(isBeforeWindowEnd);
+};
 
 // min x, min y, max x, max y, reset to this before growing
 export const EMPTY_PAGE_RANGE = [0xffffffff, 0xffffffff, 0, 0];
@@ -143,22 +143,32 @@ export const growPageRanges = (
   lightY: Vector3,
 ) => {
   const { min, max } = box;
+  let minimumX = Infinity;
+  let minimumY = Infinity;
+  let maximumX = -Infinity;
+  let maximumY = -Infinity;
+  for (let corner = 0; corner < 8; corner++) {
+    boxCorner.copy(min);
+    if (corner & 1) boxCorner.x = max.x;
+    if (corner & 2) boxCorner.y = max.y;
+    if (corner & 4) boxCorner.z = max.z;
+    const lightPositionX = boxCorner.dot(lightX);
+    const lightPositionY = boxCorner.dot(lightY);
+    minimumX = Math.min(minimumX, lightPositionX);
+    minimumY = Math.min(minimumY, lightPositionY);
+    maximumX = Math.max(maximumX, lightPositionX);
+    maximumY = Math.max(maximumY, lightPositionY);
+  }
   for (let level = 0; level < VSM_LEVEL_COUNT; level++) {
     const pageSize = FIRST_PAGE_SIZE * 2 ** level;
     const rangeOffset = offset + level * 4;
-    for (let corner = 0; corner < 8; corner++) {
-      boxCorner.copy(min);
-      if (corner & 1) boxCorner.x = max.x;
-      if (corner & 2) boxCorner.y = max.y;
-      if (corner & 4) boxCorner.z = max.z;
-      const pageX =
-        Math.floor(boxCorner.dot(lightX) / pageSize) + VSM_PAGE_OFFSET;
-      const pageY =
-        Math.floor(boxCorner.dot(lightY) / pageSize) + VSM_PAGE_OFFSET;
-      ranges[rangeOffset] = Math.min(ranges[rangeOffset], pageX);
-      ranges[rangeOffset + 1] = Math.min(ranges[rangeOffset + 1], pageY);
-      ranges[rangeOffset + 2] = Math.max(ranges[rangeOffset + 2], pageX);
-      ranges[rangeOffset + 3] = Math.max(ranges[rangeOffset + 3], pageY);
-    }
+    const firstPageX = Math.floor(minimumX / pageSize) + VSM_PAGE_OFFSET;
+    const firstPageY = Math.floor(minimumY / pageSize) + VSM_PAGE_OFFSET;
+    const lastPageX = Math.floor(maximumX / pageSize) + VSM_PAGE_OFFSET;
+    const lastPageY = Math.floor(maximumY / pageSize) + VSM_PAGE_OFFSET;
+    ranges[rangeOffset] = Math.min(ranges[rangeOffset], firstPageX);
+    ranges[rangeOffset + 1] = Math.min(ranges[rangeOffset + 1], firstPageY);
+    ranges[rangeOffset + 2] = Math.max(ranges[rangeOffset + 2], lastPageX);
+    ranges[rangeOffset + 3] = Math.max(ranges[rangeOffset + 3], lastPageY);
   }
 };

@@ -160,15 +160,16 @@ const updateStreaks = Fn<
   const streak = streaks.element(instanceIndex);
   const origin = streak.xy.toVar();
 
+  const speedVariation = mix(0.88, 1.12, seed);
   const speed = float(config.STREAK_SPEED)
     .mul(uniforms.uSpeed)
-    .mul(mix(0.88, 1.12, seed));
-  const arc = streak.z.add(
-    speed.mul(wind.uIntensityDirectional).mul(uniforms.uDelta),
-  );
+    .mul(speedVariation);
+  const arcStep = speed.mul(wind.uIntensityDirectional).mul(uniforms.uDelta);
+  const arc = streak.z.add(arcStep);
 
   const headXZ = getCurveXZ(origin, arc, seed);
-  const alongDistance = headXZ.sub(getFieldCenter()).dot(wind.uDirection);
+  const headOffset = headXZ.sub(getFieldCenter());
+  const alongDistance = headOffset.dot(wind.uDirection);
   const isRecycling = step(config.RECYCLE_DISTANCE, alongDistance);
   const shouldReset = uniforms.uReset.max(isRecycling).toVar();
   const nextOrigin = mix(origin, getSpawnOrigin(streakIndex), shouldReset);
@@ -176,12 +177,16 @@ const updateStreaks = Fn<
   const nextHeadXZ = getCurveXZ(nextOrigin, nextArc, seed);
   const headMapUv = computeMapUvByPosition(nextHeadXZ);
   const headHeightUv = vec2(headMapUv.x, float(1).sub(headMapUv.y));
-  const targetHeight = texture(assets.resources.heightmap, headHeightUv)
-    .r.add(uniforms.uHeight.mul(mix(0.05, 0.9, variation.mul(variation))))
+  const headTerrainHeight = texture(assets.resources.heightmap, headHeightUv).r;
+  const heightVariation = mix(0.05, 0.9, variation.mul(variation));
+  const hoverHeight = uniforms.uHeight.mul(heightVariation);
+  const targetHeight = headTerrainHeight
+    .add(hoverHeight)
     .add(config.GROUND_CLEARANCE);
-  const heightFollow = float(1).sub(
-    exp(uniforms.uDelta.mul(config.HEIGHT_FOLLOW_RATE).negate()),
+  const followDecay = exp(
+    uniforms.uDelta.mul(config.HEIGHT_FOLLOW_RATE).negate(),
   );
+  const heightFollow = float(1).sub(followDecay);
   const movedHeight = mix(streak.w, targetHeight, heightFollow);
   const nextHeight = mix(movedHeight, targetHeight, shouldReset);
 
@@ -195,7 +200,8 @@ const updateStreaks = Fn<
     const pointMapUv = computeMapUvByPosition(positionXZ);
     const pointHeightUv = vec2(pointMapUv.x, float(1).sub(pointMapUv.y));
     const terrainHeight = texture(assets.resources.heightmap, pointHeightUv).r;
-    const height = nextHeight.max(terrainHeight.add(config.GROUND_CLEARANCE));
+    const clearedTerrainHeight = terrainHeight.add(config.GROUND_CLEARANCE);
+    const height = nextHeight.max(clearedTerrainHeight);
     const position = vec3(positionXZ.x, height, positionXZ.y);
     const visibility = getVisibility(position, nextArc);
 
@@ -343,17 +349,15 @@ class WindStreakMaterial extends MeshBasicNodeMaterial {
     const baseIndex = streakIndex.mul(SPINE_POINT_COUNT);
     const trailProgress = uv().y;
     const row = trailProgress.mul(SEGMENT_COUNT).round();
-    const point = streaksCompute.spinePoints.element(baseIndex.add(row));
-    const towardHead = streaksCompute.spinePoints.element(
-      baseIndex.add(row.sub(1).max(0)),
-    ).xyz;
-    const towardTail = streaksCompute.spinePoints.element(
-      baseIndex.add(row.add(1).min(SEGMENT_COUNT)),
-    ).xyz;
+    const headRow = row.sub(1).max(0);
+    const tailRow = row.add(1).min(SEGMENT_COUNT);
+    const { spinePoints } = streaksCompute;
+    const point = spinePoints.element(baseIndex.add(row));
+    const towardHead = spinePoints.element(baseIndex.add(headRow)).xyz;
+    const towardTail = spinePoints.element(baseIndex.add(tailRow)).xyz;
 
-    const endpointDirection = vec3(wind.uDirection.x, 0, wind.uDirection.y)
-      .negate()
-      .mul(0.001);
+    const windDirection = vec3(wind.uDirection.x, 0, wind.uDirection.y);
+    const endpointDirection = windDirection.mul(-0.001);
     const incoming = point.xyz
       .sub(towardHead)
       .add(endpointDirection)
@@ -369,10 +373,11 @@ class WindStreakMaterial extends MeshBasicNodeMaterial {
     const cameraSideLength = cameraSide.length();
     const cameraSideAxis = cameraSide.div(cameraSideLength.max(1e-5));
     const worldSide = tangent.cross(vec3(0, 1, 0)).normalize();
+    const isFacingWorldSide = step(0, cameraSide.dot(worldSide));
     const alignedWorldSide = mix(
       worldSide.negate(),
       worldSide,
-      step(0, cameraSide.dot(worldSide)),
+      isFacingWorldSide,
     );
     const sideBlend = smoothstep(0.05, 0.2, cameraSideLength);
     const sideAxis = mix(
@@ -380,24 +385,20 @@ class WindStreakMaterial extends MeshBasicNodeMaterial {
       cameraSideAxis,
       sideBlend,
     ).normalize();
-    const miterScale = float(1)
-      .div(tangent.dot(outgoing).abs().max(1e-3))
-      .min(1.5);
+    const miterCosine = tangent.dot(outgoing).abs().max(1e-3);
+    const miterScale = float(1).div(miterCosine).min(1.5);
     const sideSign = uv().x.mul(2).sub(1);
-    const width = uniforms.uWidth
-      .mul(smoothstep(0, 0.2, trailProgress))
-      .mul(float(1).sub(trailProgress).pow(1.5))
-      .mul(miterScale);
+    const headTaper = smoothstep(0, 0.2, trailProgress);
+    const tailTaper = float(1).sub(trailProgress).pow(1.5);
+    const width = uniforms.uWidth.mul(headTaper).mul(tailTaper).mul(miterScale);
+    const sideOffset = sideAxis.mul(sideSign).mul(width);
 
-    this.positionNode = point.xyz.add(sideAxis.mul(sideSign).mul(width));
+    this.positionNode = point.xyz.add(sideOffset);
     this.colorNode = uniforms.uColor;
 
     const edgeFade = float(1).sub(smoothstep(0.08, 0.92, sideSign.abs()));
-    const headFade = mix(
-      0.4,
-      1,
-      float(1).sub(smoothstep(0.1, 1, trailProgress)),
-    );
+    const trailFade = float(1).sub(smoothstep(0.1, 1, trailProgress));
+    const headFade = mix(0.4, 1, trailFade);
     this.opacityNode = point.w.mul(0.09).mul(edgeFade).mul(headFade);
   }
 }

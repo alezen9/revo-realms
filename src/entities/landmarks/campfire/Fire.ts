@@ -65,42 +65,37 @@ const updateParticles = Fn<
   const particleSpeed = mix(SPEED, SPEED * 0.5, isSpark);
   const lifetime = mix(LIFETIME, LIFETIME * 0.65, isSpark);
 
-  const age = gameTime
-    .mul(particleSpeed)
-    .add(randomSeed.mul(lifetime))
-    .mod(lifetime);
+  const ageOffset = randomSeed.mul(lifetime);
+  const age = gameTime.mul(particleSpeed).add(ageOffset).mod(lifetime);
   const progress = age.div(lifetime);
-  const verticalEase = float(1).sub(float(1).sub(progress).pow(2));
+  const remainingProgress = float(1).sub(progress);
+  const verticalEase = float(1).sub(remainingProgress.pow(2));
   const effectiveHeight = mix(HEIGHT, HEIGHT * 2, isSpark);
   const y = verticalEase.mul(effectiveHeight);
 
   const randomAngle = hash(instanceIndex.add(7890)).mul(PI2);
-  const randomRadius = float(1).sub(
-    float(1)
-      .sub(hash(instanceIndex.add(5678)))
-      .pow(2),
-  );
+  const radiusSeed = hash(instanceIndex.add(5678));
+  const randomRadius = float(1).sub(float(1).sub(radiusSeed).pow(2));
 
   const coneFalloff = float(1).sub(verticalEase.mul(CONE_FACTOR));
   const squish = smoothstep(0, 0.35, verticalEase);
   const breathing = sin(gameTime.mul(0.5)).mul(0.05).add(1);
-  const effectiveRadius = mix(RADIUS * 0.25, RADIUS, squish)
-    .mul(coneFalloff)
-    .mul(breathing);
+  const squishedRadius = mix(RADIUS * 0.25, RADIUS, squish);
+  const effectiveRadius = squishedRadius.mul(coneFalloff).mul(breathing);
 
   const particleRadius = randomRadius.mul(effectiveRadius);
   const swirlSign = step(0.5, randomAngle).mul(2).sub(1);
-  const swirlAngle = randomAngle.add(
-    progress.mul(PI2).mul(0.05).mul(swirlSign),
-  );
+  const swirlTurn = progress.mul(PI2).mul(0.05).mul(swirlSign);
+  const swirlAngle = randomAngle.add(swirlTurn);
 
   const expansion = mix(1, 1.25, isSpark);
   const wiggle = randomSeed.sub(0.5).mul(0.05).mul(progress);
   const sparkExpansion = smoothstep(0, 0.75, progress).mul(isSpark);
   const dynamicRadius = particleRadius.add(sparkExpansion.mul(expansion));
 
-  const x = cos(swirlAngle.add(wiggle)).mul(dynamicRadius);
-  const z = sin(swirlAngle.add(wiggle)).mul(dynamicRadius);
+  const wiggledAngle = swirlAngle.add(wiggle);
+  const x = cos(wiggledAngle).mul(dynamicRadius);
+  const z = sin(wiggledAngle).mul(dynamicRadius);
 
   const heightProgress = y.div(effectiveHeight);
   const fadeIn = smoothstep(0, 0.5, heightProgress);
@@ -169,32 +164,26 @@ export class Fire extends InstancedMesh {
       step(0.5, firstRandom).mul(0.5),
       step(0.5, secondRandom).mul(0.5),
     );
-    const sprite = texture(
-      assets.resources.fireSprites,
-      uv().mul(0.5).add(spriteCorner),
-    );
+    const spriteUv = uv().mul(0.5).add(spriteCorner);
+    const sprite = texture(assets.resources.fireSprites, spriteUv);
 
     const gold = vec3(0.72, 0.62, 0.08).mul(2).toConst();
     const deepRed = vec3(1, 0.1, 0).mul(4).toConst();
     const black = vec3(0).toConst();
 
     const effectiveHeight = mix(HEIGHT, HEIGHT * 2, isSpark);
-    const heightFactor = smoothstep(
-      0,
-      1,
-      positionLocal.y.div(effectiveHeight),
-    ).pow(2);
+    const heightRatio = positionLocal.y.div(effectiveHeight);
+    const heightFactor = smoothstep(0, 1, heightRatio).pow(2);
     const lowerColor = mix(gold, deepRed, smoothstep(0, 0.25, heightFactor));
     const fireColor = mix(lowerColor, black, smoothstep(0.9, 1, heightFactor));
     // 0 -> additive, 1 -> normal
-    const blendFactor = step(0.65, secondRandom).mul(
-      float(1).sub(smoothstep(0, 0.85, heightFactor)),
-    );
+    const isNormalBlend = step(0.65, secondRandom);
+    const lowFlame = float(1).sub(smoothstep(0, 0.85, heightFactor));
+    const blendFactor = isNormalBlend.mul(lowFlame);
     const alphaScale = float(0.5).toConst();
     const alphaBlend = sprite.r.mul(blendFactor).mul(alphaScale);
-    material.colorNode = mix(fireColor, deepRed, isSpark)
-      .mul(alphaBlend)
-      .mul(BLOOM);
+    const particleColor = mix(fireColor, deepRed, isSpark);
+    material.colorNode = particleColor.mul(alphaBlend).mul(BLOOM);
     material.alphaTest = 0.1;
     material.opacityNode = particle.w.mul(sprite.r).mul(alphaScale);
 

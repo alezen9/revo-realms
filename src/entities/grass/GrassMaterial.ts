@@ -114,13 +114,14 @@ export class GrassMaterial extends SpriteNodeMaterial {
 
     const bendLengthSquared = bendXZ.dot(bendXZ);
 
+    const bladeLength = scaleY.mul(config.BLADE_HEIGHT * 2);
     const bendDrop = bendLengthSquared
-      .div(scaleY.mul(config.BLADE_HEIGHT * 2))
+      .div(bladeLength)
       .mul(uniforms.uBendDropStrength);
 
-    const bendControlShape = bladeHeight
-      .mul(float(1).sub(bladeHeight))
-      .mul(uniforms.uBendControlPoint.mul(2));
+    const heightArc = bladeHeight.mul(float(1).sub(bladeHeight));
+    const controlStrength = uniforms.uBendControlPoint.mul(2);
+    const bendControlShape = heightArc.mul(controlStrength);
 
     const bendShape = bendControlShape.add(bladeHeightSquared);
 

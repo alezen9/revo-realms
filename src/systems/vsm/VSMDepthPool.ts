@@ -42,6 +42,7 @@ const DEPTH_SCALE = 16777215;
 const CLEAR_WORKGROUP_SIZE = 256;
 const CLEAR_WORKGROUPS = 128;
 const RASTER_WORKGROUPS = 512;
+const TENT_TAP_COUNT = 9;
 
 type VSMDepthPoolOptions = {
   kind: VSMLayerKind;
@@ -90,11 +91,11 @@ type RasterArgs = [
   opacityNode: Node<"float"> | undefined,
 ];
 
-const getEdge = (from: Node<"vec2">, to: Node<"vec2">, point: Node<"vec2">) =>
-  to.x
-    .sub(from.x)
-    .mul(point.y.sub(from.y))
-    .sub(to.y.sub(from.y).mul(point.x.sub(from.x)));
+const getEdge = (from: Node<"vec2">, to: Node<"vec2">, point: Node<"vec2">) => {
+  const edge = to.sub(from);
+  const offset = point.sub(from);
+  return edge.x.mul(offset.y).sub(edge.y.mul(offset.x));
+};
 
 const clearPages = Fn<
   [
@@ -113,10 +114,8 @@ const clearPages = Fn<
       update: CLEAR_WORKGROUPS,
     },
     ({ i: jobLoopIndex }) => {
-      const pageBase = pageJobs
-        .element(jobLoopIndex.add(jobOffset))
-        .y.mul(PAGE_TEXEL_COUNT)
-        .toVar();
+      const job = pageJobs.element(jobLoopIndex.add(jobOffset));
+      const pageBase = job.y.mul(PAGE_TEXEL_COUNT).toVar();
       Loop(
         {
           start: localId.x,
@@ -160,23 +159,18 @@ const rasterizeClusters = Fn<RasterArgs, void>(
         const pageOrigin = vec2(work.pageCoordinate)
           .sub(VSM_PAGE_OFFSET)
           .toVar();
+        const depthRange = maximumY.sub(minimumY);
         If(localId.x.lessThan(triangleCount), () => {
           Loop({ start: 0, end: 3, type: "uint" }, ({ i: corner }) => {
-            const vertex = work.firstVertex
-              .add(localId.x.mul(3))
-              .add(corner)
-              .toVar();
+            const cornerIndex = localId.x.mul(3).add(corner).toVar();
+            const vertex = work.firstVertex.add(cornerIndex).toVar();
             const casterCorner = source.getCorner(work, vertex).toVar();
             const world = casterCorner.xyz;
-            const texel = getLightPosition(world, lightBasis)
-              .div(pageSize)
-              .sub(pageOrigin)
-              .mul(VSM_PAGE_TEXELS);
-            const cornerDepth = maximumY
-              .sub(world.y)
-              .add(casterCorner.w)
-              .div(maximumY.sub(minimumY));
-            const cornerIndex = localId.x.mul(3).add(corner);
+            const lightPosition = getLightPosition(world, lightBasis);
+            const pagePosition = lightPosition.div(pageSize).sub(pageOrigin);
+            const texel = pagePosition.mul(VSM_PAGE_TEXELS);
+            const cornerHeight = world.y.sub(casterCorner.w);
+            const cornerDepth = maximumY.sub(cornerHeight).div(depthRange);
             triangleCorners
               .element<"vec3">(cornerIndex)
               .assign(vec3(texel, cornerDepth));
@@ -202,12 +196,14 @@ const rasterizeClusters = Fn<RasterArgs, void>(
             const area = getEdge(first.xy, second.xy, third.xy).toVar();
             const minimum = first.xy.min(second.xy).min(third.xy).sub(0.5);
             const maximum = first.xy.max(second.xy).max(third.xy).sub(0.5);
-            const isOnPage = maximum.x
-              .greaterThanEqual(0)
-              .and(maximum.y.greaterThanEqual(0))
-              .and(minimum.x.lessThan(VSM_PAGE_TEXELS))
-              .and(minimum.y.lessThan(VSM_PAGE_TEXELS))
-              .and(area.abs().greaterThan(1e-8));
+            const isPastPageStart = maximum.x
+              .min(maximum.y)
+              .greaterThanEqual(0);
+            const isBeforePageEnd = minimum.x
+              .max(minimum.y)
+              .lessThan(VSM_PAGE_TEXELS);
+            const hasArea = area.abs().greaterThan(1e-8);
+            const isOnPage = isPastPageStart.and(isBeforePageEnd).and(hasArea);
             const firstTexel = uvec2(
               minimum.ceil().clamp(0, VSM_PAGE_TEXELS - 1),
             ).toVar();
@@ -215,10 +211,11 @@ const rasterizeClusters = Fn<RasterArgs, void>(
               maximum.floor().clamp(0, VSM_PAGE_TEXELS - 1),
             ).toVar();
             const width = lastTexel.x.sub(firstTexel.x).add(1).toVar();
-            const texelCount = isOnPage
-              .and(lastTexel.x.greaterThanEqual(firstTexel.x))
-              .and(lastTexel.y.greaterThanEqual(firstTexel.y))
-              .select(width.mul(lastTexel.y.sub(firstTexel.y).add(1)), uint(0));
+            const height = lastTexel.y.sub(firstTexel.y).add(1);
+            const hasColumns = lastTexel.x.greaterThanEqual(firstTexel.x);
+            const hasRows = lastTexel.y.greaterThanEqual(firstTexel.y);
+            const hasTexels = isOnPage.and(hasColumns).and(hasRows);
+            const texelCount = hasTexels.select(width.mul(height), uint(0));
             Loop(
               {
                 start: localId.x,
@@ -239,25 +236,23 @@ const rasterizeClusters = Fn<RasterArgs, void>(
                 const thirdWeight = getEdge(first.xy, second.xy, center)
                   .div(area)
                   .toVar();
-                const isInside = firstWeight
-                  .greaterThanEqual(0)
-                  .and(secondWeight.greaterThanEqual(0))
-                  .and(thirdWeight.greaterThanEqual(0));
+                const smallestWeight = firstWeight
+                  .min(secondWeight)
+                  .min(thirdWeight);
+                const isInside = smallestWeight.greaterThanEqual(0);
                 let isCovered = isInside;
                 if (opacityNode) {
-                  const texelUv = triangleUvs
-                    .element<"vec2">(cornerBase)
+                  const firstUv = triangleUvs.element<"vec2">(cornerBase);
+                  const secondUv = triangleUvs.element<"vec2">(
+                    cornerBase.add(1),
+                  );
+                  const thirdUv = triangleUvs.element<"vec2">(
+                    cornerBase.add(2),
+                  );
+                  const texelUv = firstUv
                     .mul(firstWeight)
-                    .add(
-                      triangleUvs
-                        .element<"vec2">(cornerBase.add(1))
-                        .mul(secondWeight),
-                    )
-                    .add(
-                      triangleUvs
-                        .element<"vec2">(cornerBase.add(2))
-                        .mul(thirdWeight),
-                    );
+                    .add(secondUv.mul(secondWeight))
+                    .add(thirdUv.mul(thirdWeight));
                   const opacity = opacityNode.context({
                     forceUVContext: true,
                     getUV: () => texelUv,
@@ -265,15 +260,16 @@ const rasterizeClusters = Fn<RasterArgs, void>(
                   isCovered = isInside.and(opacity.greaterThanEqual(alphaTest));
                 }
                 If(isCovered, () => {
-                  const texelDepth = first.z
+                  const weightedDepth = first.z
                     .mul(firstWeight)
                     .add(second.z.mul(secondWeight))
-                    .add(third.z.mul(thirdWeight))
-                    .clamp(0, 1);
-                  atomicMin(
-                    depth.element(pageBase.add(y.mul(VSM_PAGE_TEXELS)).add(x)),
-                    uint(texelDepth.mul(DEPTH_SCALE)),
-                  );
+                    .add(third.z.mul(thirdWeight));
+                  const texelDepth = weightedDepth.clamp(0, 1);
+                  const depthIndex = pageBase
+                    .add(y.mul(VSM_PAGE_TEXELS))
+                    .add(x);
+                  const storedDepth = uint(texelDepth.mul(DEPTH_SCALE));
+                  atomicMin(depth.element(depthIndex), storedDepth);
                 });
               },
             );
@@ -374,14 +370,10 @@ export class VSMDepthPool {
   }
 
   loadDepth(slot: Node<"uint">, texel: Node<"uvec2">) {
-    return float(
-      this.readDepthNode.element(
-        slot
-          .mul(PAGE_TEXEL_COUNT)
-          .add(texel.y.mul(VSM_PAGE_TEXELS))
-          .add(texel.x),
-      ),
-    ).div(DEPTH_SCALE);
+    const pageBase = slot.mul(PAGE_TEXEL_COUNT);
+    const depthIndex = pageBase.add(texel.y.mul(VSM_PAGE_TEXELS)).add(texel.x);
+    const storedDepth = float(this.readDepthNode.element(depthIndex));
+    return storedDepth.div(DEPTH_SCALE);
   }
 
   compareDepth(
@@ -394,19 +386,13 @@ export class VSMDepthPool {
     const weight = position.sub(origin);
     const first = uvec2(origin.clamp(0, VSM_PAGE_TEXELS - 1));
     const last = uvec2(origin.add(1).clamp(0, VSM_PAGE_TEXELS - 1));
-    return mix(
-      mix(
-        this.getLit(slot, uvec2(first.x, first.y), receiverDepth),
-        this.getLit(slot, uvec2(last.x, first.y), receiverDepth),
-        weight.x,
-      ),
-      mix(
-        this.getLit(slot, uvec2(first.x, last.y), receiverDepth),
-        this.getLit(slot, uvec2(last.x, last.y), receiverDepth),
-        weight.x,
-      ),
-      weight.y,
-    );
+    const topLeft = this.getLit(slot, uvec2(first.x, first.y), receiverDepth);
+    const topRight = this.getLit(slot, uvec2(last.x, first.y), receiverDepth);
+    const bottomLeft = this.getLit(slot, uvec2(first.x, last.y), receiverDepth);
+    const bottomRight = this.getLit(slot, uvec2(last.x, last.y), receiverDepth);
+    const top = mix(topLeft, topRight, weight.x);
+    const bottom = mix(bottomLeft, bottomRight, weight.x);
+    return mix(top, bottom, weight.y);
   }
 
   compareDepthTent(
@@ -430,23 +416,16 @@ export class VSMDepthPool {
       fraction.y.mul(0.5),
     ];
     let visibility: Node<"float"> = float(0);
-    for (let row = 0; row < 3; row++) {
-      let rowVisibility: Node<"float"> = float(0);
-      for (let column = 0; column < 3; column++) {
-        const texel = base.add(uvec2(column, row));
-        const pageOffset = vec2(texel)
-          .add(0.5)
-          .div(VSM_PAGE_TEXELS)
-          .sub(pageUv);
-        rowVisibility = rowVisibility.add(
-          this.getLit(
-            slot,
-            texel,
-            receiverDepth.add(receiverDepthSlope.dot(pageOffset)),
-          ).mul(weightsX[column]),
-        );
-      }
-      visibility = visibility.add(rowVisibility.mul(weightsY[row]));
+    for (let tap = 0; tap < TENT_TAP_COUNT; tap++) {
+      const column = tap % 3;
+      const row = Math.floor(tap / 3);
+      const texel = base.add(uvec2(column, row));
+      const texelCenter = vec2(texel).add(0.5).div(VSM_PAGE_TEXELS);
+      const pageOffset = texelCenter.sub(pageUv);
+      const tapDepth = receiverDepth.add(receiverDepthSlope.dot(pageOffset));
+      const tapWeight = weightsX[column].mul(weightsY[row]);
+      const tapVisibility = this.getLit(slot, texel, tapDepth);
+      visibility = visibility.add(tapVisibility.mul(tapWeight));
     }
     return visibility;
   }
@@ -456,9 +435,8 @@ export class VSMDepthPool {
     texel: Node<"uvec2">,
     receiverDepth: Node<"float">,
   ) {
-    return receiverDepth
-      .lessThanEqual(this.loadDepth(slot, texel))
-      .select(float(1), float(0));
+    const storedDepth = this.loadDepth(slot, texel);
+    return float(receiverDepth.lessThanEqual(storedDepth));
   }
 
   private rebuildClusterCasters() {

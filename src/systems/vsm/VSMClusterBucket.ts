@@ -89,13 +89,10 @@ const appendGeometryClusters = (
     minimum.setScalar(Infinity);
     maximum.setScalar(-Infinity);
     for (let corner = 0; corner < VSM_CLUSTER_VERTICES; corner++) {
-      const triangle = Math.min(
-        cluster * VSM_CLUSTER_TRIANGLES + Math.floor(corner / 3),
-        triangleCount - 1,
-      );
-      const isPadding =
-        cluster * VSM_CLUSTER_TRIANGLES + Math.floor(corner / 3) >=
-        triangleCount;
+      const clusterTriangle =
+        cluster * VSM_CLUSTER_TRIANGLES + Math.floor(corner / 3);
+      const triangle = Math.min(clusterTriangle, triangleCount - 1);
+      const isPadding = clusterTriangle >= triangleCount;
       // padding repeats the last triangle's first corner, a zero area triangle
       let cornerOffset = corner % 3;
       if (isPadding) cornerOffset = 0;
@@ -109,12 +106,8 @@ const appendGeometryClusters = (
       minimum.min(vertex);
       maximum.max(vertex);
     }
-    clusterTriangles.push(
-      Math.min(
-        VSM_CLUSTER_TRIANGLES,
-        triangleCount - cluster * VSM_CLUSTER_TRIANGLES,
-      ),
-    );
+    const remainingTriangles = triangleCount - cluster * VSM_CLUSTER_TRIANGLES;
+    clusterTriangles.push(Math.min(VSM_CLUSTER_TRIANGLES, remainingTriangles));
     clusterBounds.push(
       minimum.x,
       minimum.y,
@@ -176,12 +169,16 @@ const getWorldPosition = (
       ]),
     });
   const matrixOffset = instance.mul(4);
-  return matrices
-    .element(matrixOffset)
+  const columnX = matrices.element(matrixOffset);
+  const columnY = matrices.element(matrixOffset.add(1));
+  const columnZ = matrices.element(matrixOffset.add(2));
+  const translation = matrices.element(matrixOffset.add(3));
+  const world = columnX
     .mul(local.x)
-    .add(matrices.element(matrixOffset.add(1)).mul(local.y))
-    .add(matrices.element(matrixOffset.add(2)).mul(local.z))
-    .add(matrices.element(matrixOffset.add(3))).xyz;
+    .add(columnY.mul(local.y))
+    .add(columnZ.mul(local.z))
+    .add(translation);
+  return world.xyz;
 };
 
 const computeClusterLightBounds = Fn<
@@ -211,9 +208,8 @@ const computeClusterLightBounds = Fn<
     if (positionNode) {
       const vertexCount = instanceCluster.w.mul(3);
       Loop({ start: 0, end: vertexCount, type: "uint" }, ({ i: vertex }) => {
-        const local = positions
-          .element(instanceCluster.y.add(vertex))
-          .xyz.toVar();
+        const positionIndex = instanceCluster.y.add(vertex);
+        const local = positions.element(positionIndex).xyz.toVar();
         const world = getWorldPosition(
           matrices,
           instanceCluster.x,
@@ -226,17 +222,17 @@ const computeClusterLightBounds = Fn<
       lightBounds.element(instanceIndex).assign(bounds);
       return;
     }
-    const minimum = clusterBounds.element(instanceCluster.z.mul(2)).xyz.toVar();
-    const maximum = clusterBounds
-      .element(instanceCluster.z.mul(2).add(1))
-      .xyz.toVar();
+    const boundsIndex = instanceCluster.z.mul(2);
+    const minimum = clusterBounds.element(boundsIndex).xyz.toVar();
+    const maximum = clusterBounds.element(boundsIndex.add(1)).xyz.toVar();
+    const size = maximum.sub(minimum).toVar();
     Loop({ start: 0, end: 8, type: "uint" }, ({ i: corner }) => {
       const cornerSide = vec3(
         corner.bitAnd(1),
         corner.shiftRight(1).bitAnd(1),
         corner.shiftRight(2).bitAnd(1),
       );
-      const local = maximum.sub(minimum).mul(cornerSide).add(minimum).toVar();
+      const local = size.mul(cornerSide).add(minimum).toVar();
       const world = getWorldPosition(
         matrices,
         instanceCluster.x,
@@ -275,11 +271,13 @@ const collectClusterWork = Fn<
     const pageSize = getPageSize(job.x.div(VSM_PAGES_PER_LEVEL));
     const firstPage = getPageCoordinate(bounds.xy.div(pageSize));
     const lastPage = getPageCoordinate(bounds.zw.div(pageSize));
-    const overlaps = job.z
+    const isPastFirstPage = job.z
       .greaterThanEqual(firstPage.x)
-      .and(job.w.greaterThanEqual(firstPage.y))
-      .and(job.z.lessThanEqual(lastPage.x))
+      .and(job.w.greaterThanEqual(firstPage.y));
+    const isBeforeLastPage = job.z
+      .lessThanEqual(lastPage.x)
       .and(job.w.lessThanEqual(lastPage.y));
+    const overlaps = isPastFirstPage.and(isBeforeLastPage);
     If(overlaps, () => {
       const itemIndex = atomicAdd(workCounter.element(WORK_COUNT_INDEX), 1);
       If(itemIndex.lessThan(VSM_CLUSTER_MAX_WORK_ITEMS), () => {
@@ -314,7 +312,8 @@ const markClusterPages = Fn<
         level,
       ).toVar();
       const pageWidth = lastPage.x.sub(firstPage.x).add(1).toVar();
-      const pageCount = pageWidth.mul(lastPage.y.sub(firstPage.y).add(1));
+      const pageHeight = lastPage.y.sub(firstPage.y).add(1);
+      const pageCount = pageWidth.mul(pageHeight);
       Loop(
         { start: 0, end: pageCount, type: "uint" },
         ({ i: pageLoopIndex }) => {
@@ -322,11 +321,12 @@ const markClusterPages = Fn<
           const pageCoordinate = firstPage.add(
             uvec2(pageIndex.mod(pageWidth), pageIndex.div(pageWidth)),
           );
-          If(isPageInWindow(pageCoordinate, windowCenter), () => {
-            const page = pageTable.element(getPageKey(level, pageCoordinate));
-            If(page.w.equal(frame), () => {
-              page.assign(uvec4(page.x, frame, page.z, page.w));
-            });
+          const pageKey = getPageKey(level, pageCoordinate);
+          const page = pageTable.element(pageKey);
+          const isInWindow = isPageInWindow(pageCoordinate, windowCenter);
+          const isActivePage = page.w.equal(frame);
+          If(isInWindow.and(isActivePage), () => {
+            page.assign(uvec4(page.x, frame, page.z, page.w));
           });
         },
       );
@@ -508,16 +508,14 @@ export class VSMClusterBucket {
 
   getWorkCount() {
     const workCount = this.rasterWorkCount.element(WORK_COUNT_INDEX);
-    return workCount
-      .lessThan(VSM_CLUSTER_MAX_WORK_ITEMS)
-      .select(workCount, uint(VSM_CLUSTER_MAX_WORK_ITEMS));
+    const isWithinCapacity = workCount.lessThan(VSM_CLUSTER_MAX_WORK_ITEMS);
+    return isWithinCapacity.select(workCount, uint(VSM_CLUSTER_MAX_WORK_ITEMS));
   }
 
   getWork(index: Node<"uint">): VSMRasterWork {
     const workItem = this.rasterWorkItems.element(index).toVar();
-    const job = this.rasterJobs
-      .element(workItem.x.add(this.jobs.offset))
-      .toVar();
+    const jobIndex = workItem.x.add(this.jobs.offset);
+    const job = this.rasterJobs.element(jobIndex).toVar();
     const instanceCluster = this.rasterInstanceClusters
       .element(workItem.y)
       .toVar();
@@ -533,9 +531,8 @@ export class VSMClusterBucket {
 
   getCorner(work: VSMRasterWork, vertex: Node<"uint">) {
     const local = this.rasterPositions.element(vertex).xyz.toVar();
-    const depthBias = this.rasterMatrices.element(
-      work.instance.mul(4).add(3),
-    ).w;
+    const translationIndex = work.instance.mul(4).add(3);
+    const depthBias = this.rasterMatrices.element(translationIndex).w;
     const world = getWorldPosition(
       this.rasterMatrices,
       work.instance,
@@ -583,12 +580,10 @@ export class VSMClusterBucket {
       if (this.positionNode) continue;
       const geometry = mesh.geometry;
       if (!geometry.boundingBox) geometry.computeBoundingBox();
-      if (geometry.boundingBox)
-        this.bounds.union(
-          this.instanceBounds
-            .copy(geometry.boundingBox)
-            .applyMatrix4(this.worldMatrix),
-        );
+      if (!geometry.boundingBox) continue;
+      this.instanceBounds.copy(geometry.boundingBox);
+      this.instanceBounds.applyMatrix4(this.worldMatrix);
+      this.bounds.union(this.instanceBounds);
     }
     this.matricesAttribute.needsUpdate = true;
     this.hasDirtyBounds = true;

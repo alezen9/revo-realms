@@ -95,9 +95,8 @@ const loadReceiver = (
   depthSize: Node<"vec2">,
   pixel: Node<"uvec2">,
 ) => {
-  const isInside = pixel.x
-    .lessThan(uint(depthSize.x))
-    .and(pixel.y.lessThan(uint(depthSize.y)));
+  const isInsideX = pixel.x.lessThan(uint(depthSize.x));
+  const isInsideY = pixel.y.lessThan(uint(depthSize.y));
   const pixelDepth = textureLoad(depth, pixel).level(uint(0)).r;
   const uv = vec2(pixel).add(0.5).div(depthSize);
   const viewPosition = getViewPosition(
@@ -117,12 +116,11 @@ const loadReceiver = (
     getReceiverLevel(viewDistance),
   );
   const upperSoftLevel = uint(softLevel.add(1).min(VSM_LEVEL_COUNT - 1));
-  return {
-    isValid: isInside.and(pixelDepth.lessThan(1)),
-    level,
-    upperLevel: isSoftReceiver.select(upperSoftLevel, level),
-    lightPosition: getLightPosition(worldPosition, context.lightBasis),
-  };
+  const upperLevel = isSoftReceiver.select(upperSoftLevel, level);
+  const isSurface = pixelDepth.lessThan(1);
+  const isValid = isInsideX.and(isInsideY).and(isSurface);
+  const lightPosition = getLightPosition(worldPosition, context.lightBasis);
+  return { isValid, level, upperLevel, lightPosition };
 };
 
 const requestPages = (
@@ -154,9 +152,8 @@ const requestPages = (
       const word = requestBits.element(key.div(32));
       const bit = uint(1).shiftLeft(key.mod(32)).toVar();
       const isInWindow = isPageInWindow(pageCoordinate, windowCenter);
-      const isNewRequest = isInWindow.and(
-        atomicLoad(word).bitAnd(bit).equal(0),
-      );
+      const isBitClear = atomicLoad(word).bitAnd(bit).equal(0);
+      const isNewRequest = isInWindow.and(isBitClear);
       If(isNewRequest, () => {
         atomicOr(word, bit);
       });
@@ -216,27 +213,26 @@ const invalidatePages = Fn<
 >(([context, invalidationRects, invalidationCount]) => {
   const { cameraPosition, lightBasis } = context;
   const metadata = context.slotMetadataNode.element(instanceIndex);
-  const isCurrentPage = metadata.x
-    .notEqual(VSM_INVALID_PAGE_KEY)
-    .and(metadata.w.equal(context.pageGeneration));
-  If(isCurrentPage, () => {
+  const hasPage = metadata.x.notEqual(VSM_INVALID_PAGE_KEY);
+  const isCurrentGeneration = metadata.w.equal(context.pageGeneration);
+  If(hasPage.and(isCurrentGeneration), () => {
     const level = metadata.x.div(VSM_PAGES_PER_LEVEL).toVar();
-    const pageCoordinate = getWindowPage(
-      metadata.x,
-      getWindowCenter(cameraPosition, lightBasis, level),
-    ).toVar();
-    const isInvalid = getPageTag(pageCoordinate).notEqual(metadata.y).toVar();
+    const windowCenter = getWindowCenter(cameraPosition, lightBasis, level);
+    const pageCoordinate = getWindowPage(metadata.x, windowCenter).toVar();
+    const hasLeftWindow = getPageTag(pageCoordinate).notEqual(metadata.y);
+    const isInvalid = hasLeftWindow.toVar();
     Loop(
       { start: uint(0), end: invalidationCount, type: "uint" },
       ({ i: boxIndex }) => {
-        const rect = invalidationRects.element(
-          boxIndex.mul(VSM_LEVEL_COUNT).add(level),
-        );
-        const isInRect = pageCoordinate.x
+        const rectIndex = boxIndex.mul(VSM_LEVEL_COUNT).add(level);
+        const rect = invalidationRects.element(rectIndex);
+        const isPastRectStart = pageCoordinate.x
           .greaterThanEqual(rect.x)
-          .and(pageCoordinate.y.greaterThanEqual(rect.y))
-          .and(pageCoordinate.x.lessThanEqual(rect.z))
+          .and(pageCoordinate.y.greaterThanEqual(rect.y));
+        const isBeforeRectEnd = pageCoordinate.x
+          .lessThanEqual(rect.z)
           .and(pageCoordinate.y.lessThanEqual(rect.w));
+        const isInRect = isPastRectStart.and(isBeforeRectEnd);
         isInvalid.assign(isInvalid.or(isInRect));
       },
     );
@@ -258,39 +254,33 @@ const collectRequestedPages = Fn<
 >(([context, requestBits, counters, pageJobs, lists]) => {
   const { cameraPosition, lightBasis } = context;
   const word = atomicLoad(requestBits.element(instanceIndex));
-  If(word.notEqual(0), () => {
+  const hasRequests = word.notEqual(0);
+  If(hasRequests, () => {
     Loop({ start: 0, end: 32, type: "uint" }, ({ i: bitIndex }) => {
-      If(word.shiftRight(bitIndex).bitAnd(1).notEqual(0), () => {
+      const isRequested = word.shiftRight(bitIndex).bitAnd(1).notEqual(0);
+      If(isRequested, () => {
         const pageKey = instanceIndex.mul(32).add(bitIndex);
         const level = pageKey.div(VSM_PAGES_PER_LEVEL);
-        const pageCoordinate = getWindowPage(
-          pageKey,
-          getWindowCenter(cameraPosition, lightBasis, level),
-        );
+        const windowCenter = getWindowCenter(cameraPosition, lightBasis, level);
+        const pageCoordinate = getWindowPage(pageKey, windowCenter);
         const pageTag = getPageTag(pageCoordinate);
         const { slot, isResident } = context.resolvePage(pageKey, pageTag);
         If(isResident, () => {
-          context.slotMetadataNode
-            .element(slot)
-            .assign(
-              uvec4(pageKey, pageTag, context.frame, context.pageGeneration),
-            );
-          const activeIndex = atomicAdd(
-            counters.element(VSM_COUNTER_ACTIVE),
-            1,
-          );
-          pageJobs
-            .element(activeIndex.add(VSM_JOBS_ACTIVE))
-            .assign(uvec4(pageKey, slot, pageCoordinate));
+          const { frame, pageGeneration } = context;
+          const metadata = uvec4(pageKey, pageTag, frame, pageGeneration);
+          context.slotMetadataNode.element(slot).assign(metadata);
+          const activeCounter = counters.element(VSM_COUNTER_ACTIVE);
+          const activeIndex = atomicAdd(activeCounter, 1);
+          const activeJob = pageJobs.element(activeIndex.add(VSM_JOBS_ACTIVE));
+          activeJob.assign(uvec4(pageKey, slot, pageCoordinate));
         }).Else(() => {
-          const missIndex = atomicAdd(
-            counters.element(level.add(VSM_COUNTER_LEVEL_MISSES)),
-            1,
+          const missCounter = counters.element(
+            level.add(VSM_COUNTER_LEVEL_MISSES),
           );
+          const missIndex = atomicAdd(missCounter, 1);
+          const missListIndex = level.mul(VSM_POOL_CAPACITY).add(missIndex);
           If(missIndex.lessThan(VSM_POOL_CAPACITY), () => {
-            lists
-              .element(level.mul(VSM_POOL_CAPACITY).add(missIndex))
-              .assign(pageKey);
+            lists.element(missListIndex).assign(pageKey);
           });
         });
       });
@@ -303,10 +293,11 @@ const freeStaleSlots = Fn<
   void
 >(([context, counters, lists]) => {
   const metadata = context.slotMetadataNode.element(instanceIndex);
-  If(metadata.z.notEqual(context.frame), () => {
-    const isEmptySlot = metadata.x
-      .equal(VSM_INVALID_PAGE_KEY)
-      .or(metadata.w.notEqual(context.pageGeneration));
+  const isUnusedThisFrame = metadata.z.notEqual(context.frame);
+  If(isUnusedThisFrame, () => {
+    const hasNoPage = metadata.x.equal(VSM_INVALID_PAGE_KEY);
+    const isOldGeneration = metadata.w.notEqual(context.pageGeneration);
+    const isEmptySlot = hasNoPage.or(isOldGeneration);
     If(isEmptySlot, () => {
       const index = atomicAdd(counters.element(VSM_COUNTER_EMPTY), 1);
       lists.element(index.add(EMPTY_LIST_OFFSET)).assign(instanceIndex);
@@ -339,42 +330,33 @@ const allocateMissingPages = Fn<
       const finerMisses = atomicLoad(
         counters.element(finer.add(VSM_COUNTER_LEVEL_MISSES)),
       );
-      rank.addAssign(
-        finerMisses
-          .lessThan(VSM_POOL_CAPACITY)
-          .select(finerMisses, uint(VSM_POOL_CAPACITY)),
+      const isWithinPool = finerMisses.lessThan(VSM_POOL_CAPACITY);
+      const cappedMisses = isWithinPool.select(
+        finerMisses,
+        uint(VSM_POOL_CAPACITY),
       );
+      rank.addAssign(cappedMisses);
     });
     const emptyCount = atomicLoad(counters.element(VSM_COUNTER_EMPTY));
     const reusableCount = atomicLoad(counters.element(VSM_COUNTER_REUSABLE));
-    If(rank.lessThan(emptyCount.add(reusableCount)), () => {
+    const hasFreeSlot = rank.lessThan(emptyCount.add(reusableCount));
+    If(hasFreeSlot, () => {
       const isEmpty = rank.lessThan(emptyCount);
-      const listIndex = isEmpty.select(
-        rank.add(EMPTY_LIST_OFFSET),
-        rank.sub(emptyCount).add(REUSABLE_LIST_OFFSET),
-      );
+      const emptyListIndex = rank.add(EMPTY_LIST_OFFSET);
+      const reusableListIndex = rank.sub(emptyCount).add(REUSABLE_LIST_OFFSET);
+      const listIndex = isEmpty.select(emptyListIndex, reusableListIndex);
       const slot = lists.element(listIndex).toVar();
-      const pageKey = lists
-        .element(level.mul(VSM_POOL_CAPACITY).add(missIndex))
-        .toVar();
-      const pageCoordinate = getWindowPage(
-        pageKey,
-        getWindowCenter(cameraPosition, lightBasis, level),
-      );
-      context.slotMetadataNode
-        .element(slot)
-        .assign(
-          uvec4(
-            pageKey,
-            getPageTag(pageCoordinate),
-            context.frame,
-            context.pageGeneration,
-          ),
-        );
-      context.pageTableNode
-        .element(pageKey)
-        .assign(uvec4(slot.add(1), 0, 0, 0));
-      context.slotRenderFramesNode.element(slot).assign(context.frame);
+      const missListIndex = level.mul(VSM_POOL_CAPACITY).add(missIndex);
+      const pageKey = lists.element(missListIndex).toVar();
+      const windowCenter = getWindowCenter(cameraPosition, lightBasis, level);
+      const pageCoordinate = getWindowPage(pageKey, windowCenter);
+      const { frame, pageGeneration } = context;
+      const pageTag = getPageTag(pageCoordinate);
+      const metadata = uvec4(pageKey, pageTag, frame, pageGeneration);
+      context.slotMetadataNode.element(slot).assign(metadata);
+      const pageTableEntry = uvec4(slot.add(1), 0, 0, 0);
+      context.pageTableNode.element(pageKey).assign(pageTableEntry);
+      context.slotRenderFramesNode.element(slot).assign(frame);
       const job = uvec4(pageKey, slot, pageCoordinate);
       const jobIndex = atomicAdd(counters.element(VSM_COUNTER_ALLOCATED), 1);
       pageJobs.element(jobIndex.add(VSM_JOBS_ALLOCATED)).assign(job);

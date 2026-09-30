@@ -161,20 +161,20 @@ const updateParticles = Fn<
     config.FIELD_SIZE,
   ).sub(config.FIELD_HALF_SIZE);
   const isSpawnValid = step(0.001, data.y);
-  const verticalVelocity = flow.g
-    .mul(2)
-    .sub(1)
-    .mul(mix(0.35, 0.9, seed))
+  const verticalFlow = flow.g.mul(2).sub(1);
+  const seedResponse = mix(0.35, 0.9, seed);
+  const windResponse = mix(0.45, 1.1, wind.uIntensityDirectional);
+  const verticalVelocity = verticalFlow
+    .mul(seedResponse)
     .mul(uniforms.uTurbulence)
     .mul(uniforms.uSpeed)
-    .mul(mix(0.45, 1.1, wind.uIntensityDirectional));
+    .mul(windResponse);
   const maxHeight = uniforms.uHeight.add(maxTerrainHeight);
+  const verticalStep = verticalVelocity.mul(uniforms.uDelta).mul(isAlive);
+  const nextHeight = data.y.add(verticalStep).clamp(0.12, maxHeight);
 
   data.x = positionX;
-  data.y = data.y
-    .add(verticalVelocity.mul(uniforms.uDelta).mul(isAlive))
-    .clamp(0.12, maxHeight)
-    .mul(isSpawnValid);
+  data.y = nextHeight.mul(isSpawnValid);
   data.z = positionZ;
   data.w = age;
 
@@ -348,9 +348,9 @@ class WindParticleMaterial extends SpriteNodeMaterial {
       variation,
     );
     const lifeProgress = data.w.div(lifetime).clamp();
-    const lifeFade = smoothstep(0, 0.14, lifeProgress).mul(
-      float(1).sub(smoothstep(0.78, 1, lifeProgress)),
-    );
+    const lifeFadeIn = smoothstep(0, 0.14, lifeProgress);
+    const lifeFadeOut = float(1).sub(smoothstep(0.78, 1, lifeProgress));
+    const lifeFade = lifeFadeIn.mul(lifeFadeOut);
     const smallSize = mix(0.03, 0.076, seed);
     const largeSize = mix(0.09, 0.18, variation);
     const isLargeParticle = step(0.66, seed);

@@ -250,7 +250,8 @@ export class WaterMaterial extends MeshBasicNodeMaterial {
       .mul(grazingAngle)
       .mul(grazingAngle)
       .mul(grazingAngle);
-    const fresnelSchlick = F0.add(float(1).sub(F0).mul(grazingAnglePow5));
+    const reflectanceRange = float(1).sub(F0);
+    const fresnelSchlick = F0.add(reflectanceRange.mul(grazingAnglePow5));
     const fresnelWeight = fresnelSchlick
       .mul(this.uniforms.uFresnelScale)
       .clamp();
@@ -263,9 +264,7 @@ export class WaterMaterial extends MeshBasicNodeMaterial {
     const tintColor = this.uniforms.uInscatterTint.mul(
       this.uniforms.uInscatterStrength,
     );
-    const throughWater = tintColor
-      .mul(float(1).sub(transmittance))
-      .add(screenColor.mul(transmittance));
+    const throughWater = mix(tintColor, screenColor, transmittance);
 
     const tsnHighlights = vec3(
       blendedTsn.xy.mul(this.uniforms.uHighlightsSpread),

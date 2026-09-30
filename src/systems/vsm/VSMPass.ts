@@ -45,6 +45,17 @@ import {
 import { VSMPages } from "./VSMPages";
 import { VSMSampler } from "./VSMSampler";
 
+const SKY_COLOR = vec3(0);
+const MISSING_PAGE_COLOR = vec3(1, 0, 0);
+const MISSING_HEAT_COLOR = vec3(1, 0, 1);
+const PAGE_EDGE_COLOR = vec3(1);
+const LEVEL_HUE_STEPS = vec3(0.37, 0.61, 0.83);
+const HEAT_NEW_COLOR = vec3(1, 0.1, 0.05);
+const HEAT_HOT_COLOR = vec3(1, 0.5, 0.05);
+const HEAT_WARM_COLOR = vec3(0.95, 0.85, 0.1);
+const HEAT_COOL_COLOR = vec3(0.2, 0.6, 0.3);
+const HEAT_COLD_COLOR = vec3(0.12, 0.16, 0.3);
+
 export type VSMDependencies = {
   lighting: Lighting;
   assets: Assets;
@@ -206,22 +217,13 @@ export class VSMPass {
 
   private resolveShadows(sceneColor: Node<"vec4">, uv: Node<"vec2">) {
     const visibility = this.sampler.resolveVisibility(uv);
-    return sceneColor
-      .sub(
-        vec4(
-          this.scene.directSun
-            .sample(uv)
-            .rgb.mul(
-              float(1).sub(
-                this.uSunVisibility.mul(
-                  mix(float(1), visibility, this.uShadowIntensity),
-                ),
-              ),
-            ),
-          0,
-        ),
-      )
-      .max(0);
+    const directSun = this.scene.directSun.sample(uv).rgb;
+    const shadowVisibility = mix(float(1), visibility, this.uShadowIntensity);
+    const sunOcclusion = float(1).sub(
+      this.uSunVisibility.mul(shadowVisibility),
+    );
+    const occludedSun = directSun.mul(sunOcclusion);
+    return sceneColor.sub(vec4(occludedSun, 0)).max(0);
   }
 
   private getDebugPage() {
@@ -251,20 +253,19 @@ export class VSMPass {
       this.getDebugPage();
     const { isResident } = this.context.resolvePage(pageKey, pageTag);
     const pageUv = pagePosition.fract();
-    const pageColor = vec3(
-      float(level).mul(0.37).fract().mul(0.6).add(0.3),
-      float(level).mul(0.61).fract().mul(0.6).add(0.3),
-      float(level).mul(0.83).fract().mul(0.6).add(0.3),
+    const levelHue = LEVEL_HUE_STEPS.mul(float(level)).fract();
+    const pageColor = levelHue.mul(0.6).add(0.3);
+    const edgeOffset = pageUv.min(float(1).sub(pageUv));
+    const edgeDistance = edgeOffset.x.min(edgeOffset.y);
+    const edgeHighlight = step(edgeDistance, 0.025).mul(0.7);
+    const outlinedPageColor = mix(pageColor, PAGE_EDGE_COLOR, edgeHighlight);
+    const isSky = depth.greaterThanEqual(1);
+    const residentColor = mix(
+      MISSING_PAGE_COLOR,
+      outlinedPageColor,
+      float(isResident),
     );
-    const edgeDistance = pageUv.x
-      .min(float(1).sub(pageUv.x))
-      .min(pageUv.y)
-      .min(float(1).sub(pageUv.y));
-    const pageCoverage = isResident.select(
-      mix(pageColor, vec3(1), step(edgeDistance, 0.025).mul(0.7)),
-      vec3(1, 0, 0),
-    );
-    const color = depth.greaterThanEqual(1).select(vec3(0), pageCoverage);
+    const color = mix(residentColor, SKY_COLOR, float(isSky));
     return renderOutput(vec4(color, 1), NoToneMapping);
   }
 
@@ -272,12 +273,9 @@ export class VSMPass {
     const { depth, pagePosition, pageKey, pageTag } = this.getDebugPage();
     const { slot, dynamicSlot, isResident, hasDynamic } =
       this.context.resolvePage(pageKey, pageTag);
+    const pageTexelPosition = pagePosition.fract().mul(VSM_PAGE_TEXELS);
     const texel = uvec2(
-      pagePosition
-        .fract()
-        .mul(VSM_PAGE_TEXELS)
-        .floor()
-        .clamp(0, VSM_PAGE_TEXELS - 1),
+      pageTexelPosition.floor().clamp(0, VSM_PAGE_TEXELS - 1),
     );
     let layerSlot = slot;
     let hasPage = isResident;
@@ -287,39 +285,32 @@ export class VSMPass {
     }
     const layerDepth = layer.loadDepth(layerSlot, texel);
     const visualDepth = layerDepth.sub(0.65).mul(5).clamp();
-    const color = depth
-      .greaterThanEqual(1)
-      .select(vec3(0), hasPage.select(vec3(visualDepth), vec3(1, 0, 0)));
+    const isSky = depth.greaterThanEqual(1);
+    const pageColor = mix(
+      MISSING_PAGE_COLOR,
+      vec3(visualDepth),
+      float(hasPage),
+    );
+    const color = mix(pageColor, SKY_COLOR, float(isSky));
     return renderOutput(vec4(color, 1), NoToneMapping);
   }
 
   private makePageHeatOutput() {
     const { depth, pageKey, pageTag } = this.getDebugPage();
+    const { frame, slotRenderFramesNode } = this.context;
     const { slot, isResident } = this.context.resolvePage(pageKey, pageTag);
-    const age = this.context.frame.sub(
-      this.context.slotRenderFramesNode.element(slot),
-    );
-    const heatColor = age
-      .lessThan(2)
-      .select(
-        vec3(1, 0.1, 0.05),
-        age
-          .lessThan(30)
-          .select(
-            vec3(1, 0.5, 0.05),
-            age
-              .lessThan(120)
-              .select(
-                vec3(0.95, 0.85, 0.1),
-                age
-                  .lessThan(600)
-                  .select(vec3(0.2, 0.6, 0.3), vec3(0.12, 0.16, 0.3)),
-              ),
-          ),
-      );
-    const color = depth
-      .greaterThanEqual(1)
-      .select(vec3(0), isResident.select(heatColor, vec3(1, 0, 1)));
+    const age = frame.sub(slotRenderFramesNode.element(slot));
+    const isNew = age.lessThan(2);
+    const isHot = age.lessThan(10);
+    const isWarm = age.lessThan(30);
+    const isCool = age.lessThan(120);
+    const coolColor = mix(HEAT_COLD_COLOR, HEAT_COOL_COLOR, float(isCool));
+    const warmColor = mix(coolColor, HEAT_WARM_COLOR, float(isWarm));
+    const hotColor = mix(warmColor, HEAT_HOT_COLOR, float(isHot));
+    const heatColor = mix(hotColor, HEAT_NEW_COLOR, float(isNew));
+    const isSky = depth.greaterThanEqual(1);
+    const residentColor = mix(MISSING_HEAT_COLOR, heatColor, float(isResident));
+    const color = mix(residentColor, SKY_COLOR, float(isSky));
     return renderOutput(vec4(color, 1), NoToneMapping);
   }
 }

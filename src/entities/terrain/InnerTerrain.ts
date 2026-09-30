@@ -91,17 +91,15 @@ export class InnerTerrain {
     const heightmapData = new Float32Array(heights.length);
     let min = 0;
     let max = 0;
-    for (let z = 0; z < gridSize; z++) {
-      for (let x = 0; x < gridSize; x++) {
-        const sourceZ = gridSize - 1 - z;
-        const sourceX = x;
-        const sourceIndex = sourceZ + sourceX * gridSize;
-        const targetIndex = x + z * gridSize;
-        const height = heights[sourceIndex] - displacement;
-        heightmapData[targetIndex] = height;
-        if (height < min) min = height;
-        if (height > max) max = height;
-      }
+    for (let targetIndex = 0; targetIndex < heights.length; targetIndex++) {
+      const x = targetIndex % gridSize;
+      const z = Math.floor(targetIndex / gridSize);
+      const sourceZ = gridSize - 1 - z;
+      const sourceIndex = sourceZ + x * gridSize;
+      const height = heights[sourceIndex] - displacement;
+      heightmapData[targetIndex] = height;
+      if (height < min) min = height;
+      if (height > max) max = height;
     }
 
     const heightmap = new DataTexture(

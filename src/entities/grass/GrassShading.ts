@@ -57,14 +57,11 @@ export const getGrassViewSide = (viewDirectionXZ: Node<"vec2">) =>
 
 export const getGrassNormal = (input: GrassNormalInput) => {
   const { clumpRadial, height, widthCoordinate, viewSide } = input;
-  return vec3(
-    clumpRadial.x.mul(uniforms.uTuftRoundness),
-    height.add(0.5),
-    clumpRadial.y.mul(uniforms.uTuftRoundness),
-  )
-    .normalize()
-    .add(viewSide.mul(widthCoordinate.mul(uniforms.uWidthRoundness)))
-    .normalize();
+  const tuftRadial = clumpRadial.mul(uniforms.uTuftRoundness);
+  const tuftNormal = vec3(tuftRadial.x, height.add(0.5), tuftRadial.y);
+  const widthBend = widthCoordinate.mul(uniforms.uWidthRoundness);
+  const widthNormal = viewSide.mul(widthBend);
+  return tuftNormal.normalize().add(widthNormal).normalize();
 };
 
 export const getGrassColor = Fn<[positionNoise: Node<"float">], Node<"vec3">>(
@@ -107,10 +104,11 @@ export const getGrassAlbedo = (color: Node<"vec3">, height: Node<"float">) =>
     smoothstep(0.25, 1, height).mul(uniforms.uColorMixFactor),
   );
 
-const getGrassSkyLight = (skyFacing: Node<"float">) =>
-  mix(lighting.uHemiGroundColor, lighting.uHemiSkyColor, skyFacing)
-    .mul(lighting.uHemiIntensity)
-    .mul(uniforms.uLightExposure);
+const getGrassSkyLight = (skyFacing: Node<"float">) => {
+  const { uHemiGroundColor, uHemiSkyColor, uHemiIntensity } = lighting;
+  const skyColor = mix(uHemiGroundColor, uHemiSkyColor, skyFacing);
+  return skyColor.mul(uHemiIntensity).mul(uniforms.uLightExposure);
+};
 
 export const getGrassLight = (input: GrassLightInput) => {
   const { normal, viewDirection, viewDirectionXZ } = input;
@@ -119,23 +117,20 @@ export const getGrassLight = (input: GrassLightInput) => {
 
   const diffuseFacing = mix(0.65, signedNdotL.abs(), uniforms.uDiffuseContrast);
 
+  const diffuseLight = mix(0.35, 1, diffuseFacing);
   const sunLight = lighting.uSunRadiance
-    .mul(mix(0.35, 1, diffuseFacing))
+    .mul(diffuseLight)
     .mul(uniforms.uLightExposure);
 
   const skyFacing = normal.y.mul(0.5).add(0.5);
+  const sceneLight = getGrassSkyLight(skyFacing).add(sunLight);
+  const viewFacing = normal.dot(viewDirection).abs().clamp();
+  const grazing = float(1).sub(viewFacing);
+  const backlight = saturate(signedNdotL.negate());
+  const viewSunDot = viewDirectionXZ.dot(lighting.uSunDirXZ);
+  const viewSunAlignment = viewSunDot.mul(0.5).add(0.5).clamp();
 
-  return {
-    sceneLight: getGrassSkyLight(skyFacing).add(sunLight),
-    skyFacing,
-    grazing: float(1).sub(normal.dot(viewDirection).abs().clamp()),
-    backlight: saturate(signedNdotL.negate()),
-    viewSunAlignment: viewDirectionXZ
-      .dot(lighting.uSunDirXZ)
-      .mul(0.5)
-      .add(0.5)
-      .clamp(),
-  };
+  return { sceneLight, skyFacing, grazing, backlight, viewSunAlignment };
 };
 
 export const shadeGrassSurface = (input: GrassSurfaceInput) => {
@@ -152,20 +147,21 @@ export const shadeGrassSurface = (input: GrassSurfaceInput) => {
 
   const detailStrength = smoothstep(0.1, 0.9, height);
 
-  const sheen = lighting.uSunRadiance.mul(
-    grazing
-      .mul(grazing)
-      .mul(mix(0.25, 1, viewSunAlignment))
-      .mul(uniforms.uHighlightStrength)
-      .mul(detailStrength),
-  );
+  const sheenAlignment = mix(0.25, 1, viewSunAlignment);
+  const sheenStrength = grazing
+    .mul(grazing)
+    .mul(sheenAlignment)
+    .mul(uniforms.uHighlightStrength)
+    .mul(detailStrength);
+  const sheen = lighting.uSunRadiance.mul(sheenStrength);
 
-  const transmitted = mix(albedo, lighting.uSunColor, 0.55).mul(
-    viewSunAlignment
-      .mul(mix(0.35, 1, backlight))
-      .mul(uniforms.uBacklightStrength)
-      .mul(detailStrength),
-  );
+  const transmittedColor = mix(albedo, lighting.uSunColor, 0.55);
+  const backlightResponse = mix(0.35, 1, backlight);
+  const transmittedStrength = viewSunAlignment
+    .mul(backlightResponse)
+    .mul(uniforms.uBacklightStrength)
+    .mul(detailStrength);
+  const transmitted = transmittedColor.mul(transmittedStrength);
 
   const litAlbedo = albedo.mul(occlusion);
   const sunLight = sceneLight.sub(getGrassSkyLight(skyFacing));
@@ -220,11 +216,9 @@ export const shadeGrassGround = (input: GrassGroundInput) => {
   });
 
   const sunDirection = lighting.uSunDir.negate();
-  const relief = normal
-    .dot(sunDirection)
-    .max(0)
-    .div(geometryNormal.dot(sunDirection).max(0.05))
-    .clamp(0, 2);
+  const detailSunFacing = normal.dot(sunDirection).max(0);
+  const surfaceSunFacing = geometryNormal.dot(sunDirection).max(0.05);
+  const relief = detailSunFacing.div(surfaceSunFacing).clamp(0, 2);
 
   return {
     color: ground.color.mul(relief),

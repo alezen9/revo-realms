@@ -62,7 +62,8 @@ const computeCausticsColor = Fn<CausticsArgs, Node<"vec3">>(
       const caustics = noiseA.add(noiseB);
       const causticsCubed = caustics.mul(caustics).mul(caustics);
       const depthFalloff = smoothstep(-1, 7.5, waterDepth);
-      const adjustedCaustics = causticsCubed.mul(float(1).sub(depthFalloff));
+      const depthFade = float(1).sub(depthFalloff);
+      const adjustedCaustics = causticsCubed.mul(depthFade);
       const causticsHighlightColor = vec3(0.3, 0.4, 0.5).mul(
         uniforms.uCausticsHighlightScale,
       );
@@ -116,14 +117,16 @@ export class TerrainMaterial extends VSMReceiverLambertMaterial {
     );
     this.normalNode = normalMap(normalAoSample.rgb, normalScale);
     this.aoNode = normalAoSample.a;
-    const groundWeight = grassBlend.mul(float(1).sub(waterMask));
+    const dryMask = float(1).sub(waterMask);
+    const groundWeight = grassBlend.mul(dryMask);
     const ground = shadeGrassGround({
       albedo: vec3(1).mul(uniforms.uGrassGroundColor),
       normal: normalWorld,
       geometryNormal: normalWorldGeometry,
       worldPosition: positionWorld,
     });
-    this.colorNode = surfaceColor.mul(float(1).sub(groundWeight));
+    const surfaceWeight = float(1).sub(groundWeight);
+    this.colorNode = surfaceColor.mul(surfaceWeight);
     this.emissiveNode = ground.color.mul(groundWeight);
     this.extraDirectSun = ground.directSun.mul(groundWeight);
   }

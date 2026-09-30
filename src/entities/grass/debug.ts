@@ -311,7 +311,7 @@ export const debugGrass = (uniforms: GrassUniforms, config: GrassConfig) => {
       label: "Show LOD colors",
     })
     .on("change", ({ value }) => {
-      uniforms.uLodDebugEnabled.value = value ? 1 : 0;
+      uniforms.uLodDebugEnabled.value = Number(value);
     });
   lod
     .addBinding(uniforms.uLod0Radius, "value", {

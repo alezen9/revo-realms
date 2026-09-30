@@ -46,18 +46,19 @@ const getFlowerLocalPosition = (
   const windEvent = wind.uIntensityDirectional;
   const timer = gameTime.mul(uniforms.uWindSwaySpeed);
   const windTravel = x.mul(windDirection.x).add(z.mul(windDirection.y));
-  const travelWave = sin(
-    windTravel.mul(0.16).sub(timer.mul(2.2)).add(rand3.mul(PI2)),
-  )
-    .mul(0.5)
-    .add(0.5);
+  const travelPhase = windTravel
+    .mul(0.16)
+    .sub(timer.mul(2.2))
+    .add(rand3.mul(PI2));
+  const travelWave = sin(travelPhase).mul(0.5).add(0.5);
   const directionalWave = smoothstep(0.28, 0.88, travelWave);
-  const responseVariation = mix(0.55, 1.15, noise.g).mul(
-    mix(0.72, 1.05, rand1),
-  );
+  const noiseResponse = mix(0.55, 1.15, noise.g);
+  const randomResponse = mix(0.72, 1.05, rand1);
+  const responseVariation = noiseResponse.mul(randomResponse);
   const ambientPhase = timer.add(rand1.mul(100)).add(noise.b.mul(12));
+  const ambientVariation = mix(0.45, 1, noise.a);
   const ambientSway = uniforms.uWindAmbientStrength
-    .mul(mix(0.45, 1, noise.a))
+    .mul(ambientVariation)
     .mul(grassScale);
   const directionalSway = uniforms.uWindDirectionalStrength
     .mul(windEvent)
@@ -65,29 +66,23 @@ const getFlowerLocalPosition = (
     .mul(responseVariation)
     .mul(grassScale);
   const sideDirection = vec2(windDirection.y.negate(), windDirection.x);
+  const sideVariation = mix(0.12, 0.42, rand2);
   const sideSway = sin(ambientPhase.mul(1.35))
     .mul(ambientSway)
-    .mul(mix(0.12, 0.42, rand2));
+    .mul(sideVariation);
   const windLean = windDirection.mul(directionalSway);
+  const forwardSway = sin(ambientPhase).mul(ambientSway);
   const ambientLean = windDirection
-    .mul(sin(ambientPhase).mul(ambientSway))
+    .mul(forwardSway)
     .add(sideDirection.mul(sideSway));
-  const swayOffset = vec3(
-    ambientLean.x.add(windLean.x),
-    rand2
-      .mul(0.28)
-      .add(
-        sin(ambientPhase.mul(1.7).add(rand3.mul(PI2))).mul(
-          uniforms.uWindVerticalBobStrength.mul(grassScale),
-        ),
-      ),
-    ambientLean.y.add(windLean.y),
-  );
+  const bobPhase = ambientPhase.mul(1.7).add(rand3.mul(PI2));
+  const bobStrength = uniforms.uWindVerticalBobStrength.mul(grassScale);
+  const verticalBob = rand2.mul(0.28).add(sin(bobPhase).mul(bobStrength));
+  const lean = ambientLean.add(windLean);
+  const swayOffset = vec3(lean.x, verticalBob, lean.y);
   const baseHeight = rand1.add(rand2).add(0.25).clamp().mul(grassScale);
-  return sourcePosition
-    .mul(scale)
-    .add(vec3(x, y.add(baseHeight), z))
-    .add(swayOffset);
+  const flowerBase = vec3(x, y.add(baseHeight), z);
+  return sourcePosition.mul(scale).add(flowerBase).add(swayOffset);
 };
 
 export class FlowerMaterial extends MeshBasicNodeMaterial {
@@ -110,13 +105,13 @@ export class FlowerMaterial extends MeshBasicNodeMaterial {
     const tint = mix(uniforms.uColor1, uniforms.uColor2, rand2);
     const flowerColor = tint.mul(flower.rgb).mul(uniforms.uBrightness);
     this.colorNode = flowerColor;
-    const ambientRadiance = lighting.uHemiSkyColor.rgb
-      .add(lighting.uHemiGroundColor.rgb)
-      .mul(lighting.uHemiIntensity.mul(0.5));
-    const sunRadiance = lighting.uSunRadiance.rgb;
-    const directFraction = sunRadiance.div(
-      sunRadiance.add(ambientRadiance).max(0.0001),
+    const hemiRadiance = lighting.uHemiSkyColor.rgb.add(
+      lighting.uHemiGroundColor.rgb,
     );
+    const ambientRadiance = hemiRadiance.mul(lighting.uHemiIntensity.mul(0.5));
+    const sunRadiance = lighting.uSunRadiance.rgb;
+    const totalRadiance = sunRadiance.add(ambientRadiance).max(0.0001);
+    const directFraction = sunRadiance.div(totalRadiance);
     this.mrtNode = mrt({
       directSun: vec4(flowerColor.mul(directFraction), 1),
       softShadow: vec4(1),

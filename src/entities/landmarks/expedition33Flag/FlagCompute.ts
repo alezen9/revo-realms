@@ -113,7 +113,8 @@ const clampToTether = Fn<
   const anchorDistance = fromAnchor.length().max(EPSILON);
   const reach = widthRatio.mul(config.FLAG_WIDTH * config.TETHER_SLACK);
   const clampedDistance = anchorDistance.min(reach);
-  return anchor.add(fromAnchor.mul(clampedDistance.div(anchorDistance)));
+  const reachScale = clampedDistance.div(anchorDistance);
+  return anchor.add(fromAnchor.mul(reachScale));
 });
 
 const pushOutOfPlayer = Fn<[position: Node<"vec3">], Node<"vec3">>(
@@ -122,9 +123,8 @@ const pushOutOfPlayer = Fn<[position: Node<"vec3">], Node<"vec3">>(
     const distance = fromPlayer.length().max(EPSILON);
     const safeRadius = uniforms.uPlayerRadius.add(uniforms.uCollisionPadding);
     const safeDistance = distance.max(safeRadius);
-    return uniforms.uPlayerLocalPosition.add(
-      fromPlayer.mul(safeDistance.div(distance)),
-    );
+    const pushScale = safeDistance.div(distance);
+    return uniforms.uPlayerLocalPosition.add(fromPlayer.mul(pushScale));
   },
 );
 
@@ -143,12 +143,10 @@ const getWindAcceleration = Fn<
   const heightRatio = coordinates.w;
   const windDirection = vec3(wind.uDirection.x, 0, wind.uDirection.y);
 
-  const gustUv = vec2(
-    gameTime
-      .mul(uniforms.uGustSpeed)
-      .sub(widthRatio.mul(GUST_TRAVEL_ACROSS_WIDTH)),
-    heightRatio.mul(GUST_BAND_HEIGHT).add(GUST_BAND_OFFSET),
-  );
+  const gustTime = gameTime.mul(uniforms.uGustSpeed);
+  const gustU = gustTime.sub(widthRatio.mul(GUST_TRAVEL_ACROSS_WIDTH));
+  const gustV = heightRatio.mul(GUST_BAND_HEIGHT).add(GUST_BAND_OFFSET);
+  const gustUv = vec2(gustU, gustV);
   const gustNoise = texture(assets.resources.noiseAtlas, gustUv).r;
   const calmGust = float(1).sub(uniforms.uGustStrength);
   const strongGust = float(1).add(uniforms.uGustStrength);
@@ -161,13 +159,13 @@ const getWindAcceleration = Fn<
   const normal = getParticleNormal(positions, index);
   const facing = normal.dot(relativeWind).div(relativeSpeed);
 
-  const drag = relativeWind.mul(
-    facing.abs().mul(relativeSpeed).mul(uniforms.uDrag),
-  );
-  const acrossWind = normal.sub(relativeWind.mul(facing.div(relativeSpeed)));
-  const lift = acrossWind.mul(
-    facing.mul(relativeSpeed.mul(relativeSpeed)).mul(uniforms.uLift),
-  );
+  const dragStrength = facing.abs().mul(relativeSpeed).mul(uniforms.uDrag);
+  const drag = relativeWind.mul(dragStrength);
+  const windAlongNormal = relativeWind.mul(facing.div(relativeSpeed));
+  const acrossWind = normal.sub(windAlongNormal);
+  const relativeSpeedSquared = relativeSpeed.mul(relativeSpeed);
+  const liftStrength = facing.mul(relativeSpeedSquared).mul(uniforms.uLift);
+  const lift = acrossWind.mul(liftStrength);
   return drag.add(lift);
 });
 
@@ -313,8 +311,9 @@ const initParticles = Fn<
 >(([positions, previousPositions]) => {
   const coordinates = getGridCoordinates(instanceIndex);
   const windDirection = vec3(wind.uDirection.x, 0, wind.uDirection.y);
+  const distanceFromStaff = coordinates.z.mul(config.FLAG_WIDTH);
   const restPosition = getStaffAnchor(coordinates.w).add(
-    windDirection.mul(coordinates.z.mul(config.FLAG_WIDTH)),
+    windDirection.mul(distanceFromStaff),
   );
   positions.element(instanceIndex).assign(vec4(restPosition, 0));
   previousPositions.element(instanceIndex).assign(vec4(restPosition, 0));
