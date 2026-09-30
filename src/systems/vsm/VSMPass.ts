@@ -56,6 +56,12 @@ const HEAT_WARM_COLOR = vec3(0.95, 0.85, 0.1);
 const HEAT_COOL_COLOR = vec3(0.2, 0.6, 0.3);
 const HEAT_COLD_COLOR = vec3(0.12, 0.16, 0.3);
 
+const formatLegend = (entries: [color: string, meaning: string][]) => {
+  const lines: string[] = [];
+  for (const [color, meaning] of entries) lines.push(color.padEnd(9) + meaning);
+  return lines.join("\n");
+};
+
 export type VSMDependencies = {
   lighting: Lighting;
   assets: Assets;
@@ -200,6 +206,47 @@ export class VSMPass {
       max: 4,
       step: 1,
     });
+  }
+
+  createDebugLegends(): Record<string, string> {
+    return {
+      Pages: formatLegend([
+        ["WHITE", "page border"],
+        ["RED", "missing page"],
+        ["COLORS", "clipmap level"],
+        ["------", ""],
+        ["GREY", "level 0, 0.5 m pages"],
+        ["STEEL", "level 1, 1 m"],
+        ["LILAC", "level 2, 2 m"],
+        ["MINT", "level 3, 4 m"],
+        ["BEIGE", "level 4, 8 m"],
+        ["PINK", "level 5, 16 m"],
+        ["SKY", "level 6, 32 m"],
+      ]),
+      "Page heat": formatLegend([
+        ["RED", "drawn this frame"],
+        ["ORANGE", "last 10 frames"],
+        ["YELLOW", "last 30 frames"],
+        ["GREEN", "last 120 frames"],
+        ["BLUE", "older, cached"],
+        ["MAGENTA", "missing page"],
+      ]),
+      Shadow: formatLegend([
+        ["WHITE", "lit"],
+        ["BLACK", "shadow"],
+        ["GREY", "penumbra"],
+      ]),
+      "Static depth": formatLegend([
+        ["GREY", "caster, darker is higher"],
+        ["WHITE", "no caster"],
+        ["RED", "missing page"],
+      ]),
+      "Dynamic depth": formatLegend([
+        ["GREY", "moving caster, darker is higher"],
+        ["WHITE", "no caster in page"],
+        ["RED", "no moving page"],
+      ]),
+    };
   }
 
   createDebugOutputs() {

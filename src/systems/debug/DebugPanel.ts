@@ -9,7 +9,8 @@ import { TOOLING_FLAGS } from "./toolingFlags";
 type BindingTarget = Parameters<FolderApi["addBinding"]>[0];
 type ChangeHandler<T> = (event: TpChangeEvent<T>) => void;
 
-type DebugBinding<T> = {
+export type DebugBinding<T> = {
+  hidden: boolean;
   on: (eventName: "change", handler: ChangeHandler<T>) => DebugBinding<T>;
 };
 
@@ -23,6 +24,7 @@ export type DebugFolder = {
 };
 
 class DeadBinding<T> implements DebugBinding<T> {
+  hidden = false;
   on = () => this;
 }
 
@@ -36,6 +38,16 @@ class DeadFolder implements DebugFolder {
 class PendingBinding<T> implements DebugBinding<T> {
   private handlers: ChangeHandler<T>[] = [];
   private binding?: DebugBinding<T>;
+  private isHidden = false;
+
+  get hidden() {
+    return this.isHidden;
+  }
+
+  set hidden(isHidden: boolean) {
+    this.isHidden = isHidden;
+    if (this.binding) this.binding.hidden = isHidden;
+  }
 
   on = (eventName: "change", handler: ChangeHandler<T>) => {
     const { binding } = this;
@@ -46,6 +58,7 @@ class PendingBinding<T> implements DebugBinding<T> {
 
   attach(binding: DebugBinding<T>) {
     this.binding = binding;
+    binding.hidden = this.isHidden;
     for (const handler of this.handlers) binding.on("change", handler);
     this.handlers = [];
   }

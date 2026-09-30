@@ -1,7 +1,11 @@
 import { ColorManagement, NoToneMapping } from "three";
 import { RenderPipeline, WebGPURenderer, type Node } from "three/webgpu";
 import type { renderOutput } from "three/tsl";
-import type { DebugFolder, DebugPanel } from "../debug/DebugPanel";
+import type {
+  DebugBinding,
+  DebugFolder,
+  DebugPanel,
+} from "../debug/DebugPanel";
 import type { EventBus } from "../events/EventBus";
 import type { Stage } from "../scene/Stage";
 import { VSMPass, type VSMDependencies } from "../vsm/VSMPass";
@@ -37,6 +41,9 @@ export class FramePipeline extends RenderPipeline {
     target: "Scene",
   };
   private debugOutputs: Record<string, ReturnType<typeof renderOutput>>;
+  private debugLegends: Record<string, string>;
+  private debugLegend = { text: "" };
+  private debugLegendBinding: DebugBinding<string>;
 
   constructor(
     renderer: WebGPURenderer,
@@ -81,7 +88,8 @@ export class FramePipeline extends RenderPipeline {
       Scene: this.chain.output,
       ...this.vsmPass.createDebugOutputs(),
     };
-    this.addBindings();
+    this.debugLegends = this.vsmPass.createDebugLegends();
+    this.debugLegendBinding = this.addBindings();
     this.selectDebugView();
 
     this.eventBus.on("engine-camera-change", this.onCameraChange);
@@ -125,12 +133,24 @@ export class FramePipeline extends RenderPipeline {
         options: viewOptions,
       })
       .on("change", this.selectDebugView);
+    let rows = 1;
+    for (const legend of Object.values(this.debugLegends))
+      rows = Math.max(rows, legend.split("\n").length);
+    return this.debugFolder.addBinding(this.debugLegend, "text", {
+      label: undefined,
+      readonly: true,
+      multiline: true,
+      rows,
+    });
   }
 
   private selectDebugView = () => {
-    this.outputNode =
-      this.debugOutputs[this.debugView.target] ?? this.debugOutputs.Scene;
+    const { target } = this.debugView;
+    this.outputNode = this.debugOutputs[target] ?? this.debugOutputs.Scene;
     this.needsUpdate = true;
+    const legend = this.debugLegends[target];
+    this.debugLegend.text = legend ?? "";
+    this.debugLegendBinding.hidden = !legend;
   };
 
   async compileAsync() {
