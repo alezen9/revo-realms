@@ -50,7 +50,7 @@ const getHenyeyGreenstein = (cosTheta: FloatNode, anisotropy: FloatNode) => {
 const createHistoryTarget = () =>
   new RenderTarget(1, 1, { type: HalfFloatType, depthBuffer: false });
 
-export class VSMLightShafts {
+export class VSMVolumetricLight {
   private readonly intensity = uniform(1);
   private readonly density = uniform(0.01);
   private readonly anisotropy = uniform(0.6);
@@ -65,7 +65,7 @@ export class VSMLightShafts {
   private historyTargets = [createHistoryTarget(), createHistoryTarget()];
   private history: TextureNode;
   private resolved: TextureNode;
-  private shaftsQuad: QuadMesh;
+  private volumetricQuad: QuadMesh;
   private drawingBufferSize = new Vector2();
   private viewProjection = new Matrix4();
   private frame = 0;
@@ -85,11 +85,11 @@ export class VSMLightShafts {
     const [current, previous] = this.historyTargets;
     this.resolved = texture(current.texture);
     this.history = texture(previous.texture);
-    const shaftsMaterial = new NodeMaterial();
-    shaftsMaterial.name = "Light shafts";
-    shaftsMaterial.fragmentNode = this.computeShafts();
-    this.shaftsQuad = new QuadMesh(shaftsMaterial);
-    this.shaftsQuad.name = "Light shafts";
+    const volumetricMaterial = new NodeMaterial();
+    volumetricMaterial.name = "Volumetric light";
+    volumetricMaterial.fragmentNode = this.computeVolumetricLight();
+    this.volumetricQuad = new QuadMesh(volumetricMaterial);
+    this.volumetricQuad.name = "Volumetric light";
   }
 
   setCamera(camera: Camera) {
@@ -128,7 +128,7 @@ export class VSMLightShafts {
     this.history.value = previous.texture;
     const previousRenderTarget = this.renderer.getRenderTarget();
     this.renderer.setRenderTarget(current);
-    this.shaftsQuad.render(this.renderer);
+    this.volumetricQuad.render(this.renderer);
     this.renderer.setRenderTarget(previousRenderTarget);
     this.resolved.value = current.texture;
     this.historyTargets.reverse();
@@ -192,7 +192,7 @@ export class VSMLightShafts {
       .mul(this.intensity);
   });
 
-  private computeShafts = Fn<[], Node<"vec4">>(() => {
+  private computeVolumetricLight = Fn<[], Node<"vec4">>(() => {
     const { depth, worldPosition, viewDistance } =
       this.sampler.getReceiver(screenUV);
     const inScattering = this.computeInScattering(

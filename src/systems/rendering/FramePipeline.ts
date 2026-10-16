@@ -80,7 +80,7 @@ export class FramePipeline extends RenderPipeline {
     this.chain = PostChain.from(this.scenePass)
       .pipe(this.vsmPass)
       .pipe(this.waterPass)
-      .pipe(this.vsmPass.lightShafts)
+      .pipe(this.vsmPass.volumetricLight)
       .pipe(this.hdrPass)
       .pipe(this.dualKawaseBloomPass)
       .pipe(this.acesToneMappingPass);
@@ -155,11 +155,11 @@ export class FramePipeline extends RenderPipeline {
       expanded: false,
     });
     this.vsmPass.addBindings(shadowsFolder);
-    const lightShaftsFolder = this.debugFolder.addFolder({
-      title: "Light shafts",
+    const volumetricLightFolder = this.debugFolder.addFolder({
+      title: "Volumetric light",
       expanded: false,
     });
-    this.vsmPass.lightShafts.addBindings(lightShaftsFolder);
+    this.vsmPass.volumetricLight.addBindings(volumetricLightFolder);
     return legendBinding;
   }
 

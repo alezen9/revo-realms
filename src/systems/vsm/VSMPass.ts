@@ -29,7 +29,7 @@ import {
 } from "./VSMContext";
 import { VSMDepthPool } from "./VSMDepthPool";
 import { VSMDynamicLayer } from "./VSMDynamicLayer";
-import { VSMLightShafts } from "./VSMLightShafts";
+import { VSMVolumetricLight } from "./VSMVolumetricLight";
 import {
   VSM_PAGE_TEXELS,
   getLightPosition,
@@ -70,7 +70,7 @@ export type VSMDependencies = {
 };
 
 export class VSMPass {
-  readonly lightShafts: VSMLightShafts;
+  readonly volumetricLight: VSMVolumetricLight;
   private renderer: WebGPURenderer;
   private scene: ScenePass;
   private camera: Camera;
@@ -119,7 +119,7 @@ export class VSMPass {
       this.staticCache,
       this.dynamicLayer.pool,
     );
-    this.lightShafts = new VSMLightShafts(
+    this.volumetricLight = new VSMVolumetricLight(
       renderer,
       camera,
       this.context,
@@ -132,7 +132,7 @@ export class VSMPass {
   setCamera(camera: Camera) {
     this.camera = camera;
     this.context.setCamera(camera);
-    this.lightShafts.setCamera(camera);
+    this.volumetricLight.setCamera(camera);
   }
 
   registerCaster(mesh: Mesh, options?: VSMCasterOptions) {
@@ -269,8 +269,8 @@ export class VSMPass {
       ),
       "Static depth": this.makeDepthOutput(this.staticCache, false),
       "Dynamic depth": this.makeDepthOutput(this.dynamicLayer.pool, true),
-      "Light shafts": renderOutput(
-        vec4(this.lightShafts.sample(), 1),
+      "Volumetric light": renderOutput(
+        vec4(this.volumetricLight.sample(), 1),
         NoToneMapping,
       ),
     };
