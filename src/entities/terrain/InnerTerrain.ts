@@ -14,7 +14,7 @@ import {
 } from "@dimforge/rapier3d";
 import { realmConfig } from "../realmConfig";
 import { RevoColliderType } from "../../systems/physics/colliderTypes";
-import { assets, physicsWorld, stage, graphics } from "../../systems";
+import { assets, physicsWorld, stage } from "../../systems";
 import type { TerrainMaterial } from "./TerrainMaterial";
 
 export class InnerTerrain {
@@ -40,7 +40,6 @@ export class InnerTerrain {
         mesh.geometry.computeBoundingSphere();
         mesh.geometry.computeBoundingBox();
         innerTerrain.add(mesh);
-        graphics.vsmPass.registerCaster(mesh);
       }
     }
 
