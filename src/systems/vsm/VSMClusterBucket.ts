@@ -51,7 +51,7 @@ import {
 export const VSM_CLUSTER_TRIANGLES = 64;
 const VSM_CLUSTER_VERTICES = VSM_CLUSTER_TRIANGLES * 3;
 const VSM_CLUSTER_MAX_WORK_ITEMS = 262144;
-const VSM_MASK_SIZE = 1024;
+const VSM_MASK_SIZE = 256;
 const VSM_MASK_WORDS = (VSM_MASK_SIZE * VSM_MASK_SIZE) / 32;
 // 12 bits per uv axis keep the packed uv an exact integer in a float
 const UV_STEPS = 4096;
