@@ -27,7 +27,7 @@ class GokuStatueMaterial extends VSMReceiverStandardMaterial {
 
 export class GokuStatue {
   private gokuStatue: Mesh;
-  private shadowSettings = { depthBias: 0.2 };
+  private shadowSettings = { depthBias: 0 };
 
   constructor() {
     const gokuStatue = assets.getMesh("goku_statue");
