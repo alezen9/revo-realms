@@ -58,6 +58,7 @@ export type VSMRasterWork = {
   firstVertex: Node<"uint">;
   triangleCount: Node<"uint">;
   instance: Node<"uint">;
+  maskId: Node<"uint">;
 };
 
 type ClusterCaster = {
@@ -88,8 +89,6 @@ type RasterArgs = [
   lightBasis: VSMContext["lightBasis"],
   minimumY: Node<"float">,
   maximumY: Node<"float">,
-  alphaTest: Node<"float">,
-  opacityNode: Node<"float"> | undefined,
 ];
 
 const getEdge = (from: Node<"vec2">, to: Node<"vec2">, point: Node<"vec2">) => {
@@ -136,8 +135,6 @@ const clearPages = Fn<
   );
 });
 
-// opacityNode is only passed for alpha tested casters with uvs, so the opaque
-// raster never reads uvs
 const rasterizeClusters = Fn<RasterArgs, void>(
   ([
     source,
@@ -148,8 +145,6 @@ const rasterizeClusters = Fn<RasterArgs, void>(
     lightBasis,
     minimumY,
     maximumY,
-    alphaTest,
-    opacityNode,
   ]) => {
     Loop(
       {
@@ -180,10 +175,12 @@ const rasterizeClusters = Fn<RasterArgs, void>(
             triangleCorners
               .element<"vec3">(cornerIndex)
               .assign(vec3(texel, cornerDepth));
-            if (opacityNode)
-              triangleUvs
-                .element<"vec2">(cornerIndex)
-                .assign(source.getUv(vertex));
+            if (source.hasMasks)
+              If(work.maskId.notEqual(0), () => {
+                triangleUvs
+                  .element<"vec2">(cornerIndex)
+                  .assign(source.getUv(vertex));
+              });
           });
         });
         workgroupBarrier();
@@ -250,23 +247,25 @@ const rasterizeClusters = Fn<RasterArgs, void>(
                   .min(thirdWeight);
                 const isInside = smallestWeight.greaterThanEqual(0);
                 let isCovered = isInside;
-                if (opacityNode) {
-                  const firstUv = triangleUvs.element<"vec2">(cornerBase);
-                  const secondUv = triangleUvs.element<"vec2">(
-                    cornerBase.add(1),
-                  );
-                  const thirdUv = triangleUvs.element<"vec2">(
-                    cornerBase.add(2),
-                  );
-                  const texelUv = firstUv
-                    .mul(firstWeight)
-                    .add(secondUv.mul(secondWeight))
-                    .add(thirdUv.mul(thirdWeight));
-                  const opacity = opacityNode.context({
-                    forceUVContext: true,
-                    getUV: () => texelUv,
+                if (source.hasMasks) {
+                  const isTexelCovered = isInside.toVar();
+                  // a workgroup is one cluster, so this branch never splits it
+                  If(work.maskId.notEqual(0), () => {
+                    const firstUv = triangleUvs.element<"vec2">(cornerBase);
+                    const secondUv = triangleUvs.element<"vec2">(
+                      cornerBase.add(1),
+                    );
+                    const thirdUv = triangleUvs.element<"vec2">(
+                      cornerBase.add(2),
+                    );
+                    const texelUv = firstUv
+                      .mul(firstWeight)
+                      .add(secondUv.mul(secondWeight))
+                      .add(thirdUv.mul(thirdWeight));
+                    const isSolid = source.isMaskSolid(work, texelUv);
+                    isTexelCovered.assign(isInside.and(isSolid));
                   });
-                  isCovered = isInside.and(opacity.greaterThanEqual(alphaTest));
+                  isCovered = isTexelCovered;
                 }
                 If(isCovered, () => {
                   const weightedDepth = first.z
@@ -462,8 +461,8 @@ export class VSMDepthPool {
     const groups = new Map<string, VSMCaster[]>();
     for (const caster of this.context.casters) {
       if (caster.type !== this.kind) continue;
-      let key = "opaque";
-      if (caster.opacityNode || caster.positionNode) key = caster.mesh.uuid;
+      let key = "shared";
+      if (caster.positionNode) key = caster.mesh.uuid;
       const casters = groups.get(key);
       if (casters) casters.push(caster);
       else groups.set(key, [caster]);
@@ -482,17 +481,12 @@ export class VSMDepthPool {
         clusterCaster.rasterNode.dispose();
         clusterCaster.bucket.dispose();
       }
-      const [{ opacityNode, alphaTest }] = casters;
-      const hasOpacity = !!opacityNode;
       const bucket = new VSMClusterBucket(
         this.context,
         this.jobs,
         casters,
-        hasOpacity,
         this.kind,
       );
-      let rasterOpacityNode: Node<"float"> | undefined;
-      if (bucket.hasUvs) rasterOpacityNode = opacityNode;
       const rasterNode = rasterizeClusters(
         bucket,
         this.depthNode,
@@ -502,8 +496,6 @@ export class VSMDepthPool {
         this.context.lightBasis,
         this.minimumY,
         this.maximumY,
-        float(alphaTest),
-        rasterOpacityNode,
       ).compute(RASTER_WORKGROUPS * VSM_CLUSTER_TRIANGLES, [
         VSM_CLUSTER_TRIANGLES,
       ]);

@@ -1,6 +1,7 @@
 import {
   Box3,
   BufferAttribute,
+  MathUtils,
   Matrix4,
   Vector3,
   type BufferGeometry,
@@ -12,6 +13,8 @@ import type { ComputeNode, Node, StorageBufferNode } from "three/webgpu";
 import {
   atomicAdd,
   atomicStore,
+  bool,
+  float,
   Fn,
   If,
   instanceIndex,
@@ -48,6 +51,11 @@ import {
 export const VSM_CLUSTER_TRIANGLES = 64;
 const VSM_CLUSTER_VERTICES = VSM_CLUSTER_TRIANGLES * 3;
 const VSM_CLUSTER_MAX_WORK_ITEMS = 262144;
+const VSM_MASK_SIZE = 1024;
+const VSM_MASK_WORDS = (VSM_MASK_SIZE * VSM_MASK_SIZE) / 32;
+// 12 bits per uv axis keep the packed uv an exact integer in a float
+const UV_STEPS = 4096;
+const UV_LAST_STEP = UV_STEPS - 1;
 
 type ClusterInstance = {
   mesh: Mesh;
@@ -55,6 +63,7 @@ type ClusterInstance = {
   batchInstanceId?: number;
   firstCluster: number;
   clusterCount: number;
+  maskId: number;
 };
 
 type ClusterGeometry = {
@@ -62,12 +71,17 @@ type ClusterGeometry = {
   clusterCount: number;
 };
 
+type MaskSource = {
+  opacityNode: Node<"float">;
+  alphaTest: number;
+};
+
 type ClusterContent = {
   instances: ClusterInstance[];
   positions: number[];
-  uvs: number[];
   clusterBounds: number[];
   instanceClusters: number[];
+  maskSources: MaskSource[];
 };
 
 export const buildClusterMeshlets = (
@@ -102,7 +116,6 @@ const appendGeometryClusters = (
   geometry: BufferGeometry,
   range: { start: number; count: number },
   positions: number[],
-  uvs: number[] | undefined,
   clusterBounds: number[],
   clusterTriangles: number[],
 ): ClusterGeometry => {
@@ -128,9 +141,15 @@ const appendGeometryClusters = (
       if (isPadding) meshletCorner = lastTriangleCorner;
       const vertexIndex = vertices[triangles[meshletCorner]];
       vertex.fromBufferAttribute(position, vertexIndex);
-      positions.push(vertex.x, vertex.y, vertex.z, 0);
-      if (uvs && uv) uvs.push(uv.getX(vertexIndex), uv.getY(vertexIndex));
-      if (uvs && !uv) uvs.push(0, 0);
+      let packedUv = 0;
+      if (uv) {
+        const u = MathUtils.clamp(uv.getX(vertexIndex), 0, 1);
+        const v = MathUtils.clamp(uv.getY(vertexIndex), 0, 1);
+        const packedU = Math.round(u * UV_LAST_STEP);
+        const packedV = Math.round(v * UV_LAST_STEP);
+        packedUv = packedU + packedV * UV_STEPS;
+      }
+      positions.push(vertex.x, vertex.y, vertex.z, packedUv);
       minimum.min(vertex);
       maximum.max(vertex);
     }
@@ -175,11 +194,14 @@ const createWorkItemsNode = (attribute: StorageBufferAttribute) =>
   storage(attribute, "uvec2", VSM_CLUSTER_MAX_WORK_ITEMS);
 const createWorkCounterNode = (attribute: StorageBufferAttribute) =>
   storage(attribute, "uint", 1).toAtomic();
+const createMasksNode = (attribute: StorageBufferAttribute) =>
+  storage(attribute, "uint", attribute.count);
 
 type Vec4Node = ReturnType<typeof createVec4Node>;
 type Uvec4Node = ReturnType<typeof createUvec4Node>;
 type WorkItemsNode = ReturnType<typeof createWorkItemsNode>;
 type WorkCounterNode = ReturnType<typeof createWorkCounterNode>;
+type MasksNode = ReturnType<typeof createMasksNode>;
 
 const getWorldPosition = (
   matrices: StorageBufferNode<"vec4">,
@@ -274,6 +296,36 @@ const computeClusterLightBounds = Fn<
   },
 );
 
+// opacity is baked once, so it may only depend on uv
+const bakeOpacityMask = Fn<
+  [
+    masks: MasksNode,
+    maskBase: Node<"uint">,
+    opacityNode: Node<"float">,
+    alphaTest: Node<"float">,
+  ],
+  void
+>(([masks, maskBase, opacityNode, alphaTest]) => {
+  const firstTexel = instanceIndex.mul(32).toVar();
+  const word = uint(0).toVar();
+  Loop({ start: 0, end: 32, type: "uint" }, ({ i: bit }) => {
+    const texel = firstTexel.add(bit);
+    const texelCoordinate = vec2(
+      texel.mod(VSM_MASK_SIZE),
+      texel.div(VSM_MASK_SIZE),
+    );
+    const texelUv = texelCoordinate.add(0.5).div(VSM_MASK_SIZE);
+    const opacity = opacityNode.context({
+      forceUVContext: true,
+      getUV: () => texelUv,
+    });
+    const isSolid = opacity.greaterThanEqual(alphaTest);
+    const solidBit = isSolid.select(uint(1), uint(0)).shiftLeft(bit);
+    word.assign(word.bitOr(solidBit));
+  });
+  masks.element(maskBase.add(instanceIndex)).assign(word);
+});
+
 const resetWorkCount = Fn<[workCounter: WorkCounterNode], void>(
   ([workCounter]) => {
     atomicStore(workCounter.element(0), 0);
@@ -365,7 +417,6 @@ const markClusterPages = Fn<
 
 export class VSMClusterBucket {
   readonly positionsAttribute: StorageBufferAttribute;
-  readonly uvsAttribute?: StorageBufferAttribute;
   readonly matricesAttribute: StorageBufferAttribute;
   readonly instanceClustersAttribute: StorageBufferAttribute;
   readonly workCountAttribute = new StorageBufferAttribute(
@@ -377,11 +428,11 @@ export class VSMClusterBucket {
     2,
   );
   readonly bounds = new Box3();
-  readonly hasUvs: boolean;
+  readonly hasMasks: boolean;
   private jobs: VSMJobSource;
   private instances: ClusterInstance[] = [];
+  private maskSources: MaskSource[];
   private positionValues: Float32Array;
-  private uvValues: Float32Array;
   private matrixValues: Float32Array;
   private instanceClusterValues: Uint32Array;
   private clusterBoundValues: Float32Array;
@@ -397,7 +448,9 @@ export class VSMClusterBucket {
   private rasterInstanceClusters;
   private rasterPositions;
   private rasterMatrices;
-  private rasterUvs?: StorageBufferNode<"vec2">;
+  private rasterMasks?: StorageBufferNode<"uint">;
+  private bakeNodes: ComputeNode[] = [];
+  private hasPendingBake = true;
   private batchMatrix = new Matrix4();
   private worldMatrix = new Matrix4();
   private instanceBounds = new Box3();
@@ -407,23 +460,20 @@ export class VSMClusterBucket {
     context: VSMContext,
     jobs: VSMJobSource,
     casters: VSMCaster[],
-    hasUvs: boolean,
     kind: VSMLayerKind,
   ) {
     const { lightBasis } = context;
     this.positionNode = casters[0].positionNode;
-    this.hasUvs = hasUvs;
     this.jobs = jobs;
     const content = this.collectContent(casters);
+    this.maskSources = content.maskSources;
+    this.hasMasks = content.maskSources.length > 0;
     const instanceClusterCapacity = getCapacity(
       content.instanceClusters.length / 4,
     );
     this.positionValues = new Float32Array(
       getCapacity(content.positions.length),
     );
-    let uvCapacity = 2;
-    if (hasUvs) uvCapacity = getCapacity(content.uvs.length);
-    this.uvValues = new Float32Array(uvCapacity);
     this.matrixValues = new Float32Array(
       getCapacity(content.instances.length) * 16,
     );
@@ -435,8 +485,6 @@ export class VSMClusterBucket {
       this.positionValues,
       4,
     );
-    if (hasUvs)
-      this.uvsAttribute = new StorageBufferAttribute(this.uvValues, 2);
     this.instanceClustersAttribute = new StorageBufferAttribute(
       this.instanceClusterValues,
       4,
@@ -476,12 +524,29 @@ export class VSMClusterBucket {
       "vec4",
       this.matricesAttribute.count,
     ).toReadOnly();
-    if (this.uvsAttribute)
-      this.rasterUvs = storage(
-        this.uvsAttribute,
-        "vec2",
-        this.uvsAttribute.count,
+    if (this.hasMasks) {
+      const masksAttribute = new StorageBufferAttribute(
+        new Uint32Array(content.maskSources.length * VSM_MASK_WORDS),
+        1,
+      );
+      this.rasterMasks = storage(
+        masksAttribute,
+        "uint",
+        masksAttribute.count,
       ).toReadOnly();
+      const masks = createMasksNode(masksAttribute);
+      for (let index = 0; index < content.maskSources.length; index++) {
+        const { opacityNode, alphaTest } = content.maskSources[index];
+        const bakeNode = bakeOpacityMask(
+          masks,
+          uint(index * VSM_MASK_WORDS),
+          opacityNode,
+          float(alphaTest),
+        ).compute(VSM_MASK_WORDS, [64]);
+        bakeNode.name = "VSM opacity mask";
+        this.bakeNodes.push(bakeNode);
+      }
+    }
     const lightBoundsAttribute = new StorageBufferAttribute(
       new Float32Array(instanceClusterCapacity * 4),
       4,
@@ -548,6 +613,11 @@ export class VSMClusterBucket {
     const instanceCluster = this.rasterInstanceClusters
       .element(workItem.y)
       .toVar();
+    let maskId: Node<"uint"> = uint(0);
+    if (this.hasMasks) {
+      const columnX = this.rasterMatrices.element(instanceCluster.x.mul(4));
+      maskId = uint(columnX.w);
+    }
     return {
       slot: job.y,
       level: job.x.div(VSM_PAGES_PER_LEVEL),
@@ -555,6 +625,7 @@ export class VSMClusterBucket {
       firstVertex: instanceCluster.y,
       triangleCount: instanceCluster.w,
       instance: instanceCluster.x,
+      maskId,
     };
   }
 
@@ -572,19 +643,44 @@ export class VSMClusterBucket {
   }
 
   getUv(vertex: Node<"uint">) {
-    if (!this.rasterUvs) return vec2(0);
-    return this.rasterUvs.element(vertex);
+    const packedUv = this.rasterPositions.element(vertex).w;
+    const v = packedUv.div(UV_STEPS).floor();
+    const u = packedUv.sub(v.mul(UV_STEPS));
+    return vec2(u, v).div(UV_LAST_STEP);
+  }
+
+  isMaskSolid(work: VSMRasterWork, uv: Node<"vec2">) {
+    if (!this.rasterMasks) return bool(true);
+    const maskTexel = uv
+      .clamp(0, 1)
+      .mul(VSM_MASK_SIZE)
+      .min(VSM_MASK_SIZE - 1);
+    const texel = uvec2(maskTexel);
+    const texelIndex = texel.y.mul(VSM_MASK_SIZE).add(texel.x).toVar();
+    const maskBase = work.maskId.sub(1).mul(VSM_MASK_WORDS);
+    const wordIndex = maskBase.add(texelIndex.shiftRight(5));
+    const word = this.rasterMasks.element(wordIndex);
+    return word.shiftRight(texelIndex.bitAnd(31)).bitAnd(1).notEqual(0);
   }
 
   setCasters(casters: VSMCaster[]) {
     const content = this.collectContent(casters);
+    const { maskSources } = this;
+    // the bake kernels are built per mask, so a different set needs a new bucket
+    let hasSameMasks = content.maskSources.length === maskSources.length;
+    for (let index = 0; hasSameMasks && index < maskSources.length; index++) {
+      const current = maskSources[index];
+      const next = content.maskSources[index];
+      hasSameMasks =
+        current.opacityNode === next.opacityNode &&
+        current.alphaTest === next.alphaTest;
+    }
     const hasRoom =
       content.positions.length <= this.positionValues.length &&
-      content.uvs.length <= this.uvValues.length &&
       content.instances.length * 16 <= this.matrixValues.length &&
       content.instanceClusters.length <= this.instanceClusterValues.length &&
       content.clusterBounds.length <= this.clusterBoundValues.length;
-    if (!hasRoom) return false;
+    if (!hasSameMasks || !hasRoom) return false;
     this.writeContent(content);
     return true;
   }
@@ -597,7 +693,7 @@ export class VSMClusterBucket {
     this.bounds.makeEmpty();
     if (this.positionNode) this.bounds.setFromObject(this.instances[0].mesh);
     for (let index = 0; index < this.instances.length; index++) {
-      const { mesh, caster, batchInstanceId } = this.instances[index];
+      const { mesh, caster, batchInstanceId, maskId } = this.instances[index];
       mesh.updateWorldMatrix(true, false);
       this.worldMatrix.copy(mesh.matrixWorld);
       if (mesh instanceof BatchedMesh && batchInstanceId !== undefined) {
@@ -605,6 +701,7 @@ export class VSMClusterBucket {
         this.worldMatrix.multiply(this.batchMatrix);
       }
       this.matrixValues.set(this.worldMatrix.elements, index * 16);
+      this.matrixValues[index * 16 + 3] = maskId;
       this.matrixValues[index * 16 + 15] = caster.depthBias;
       if (this.positionNode) continue;
       const geometry = mesh.geometry;
@@ -625,6 +722,8 @@ export class VSMClusterBucket {
   }
 
   collectWorkNodes(nodes: ComputeNode[]) {
+    if (this.hasPendingBake) nodes.push(...this.bakeNodes);
+    this.hasPendingBake = false;
     nodes.push(this.resetNode, this.buildNode);
   }
 
@@ -633,16 +732,15 @@ export class VSMClusterBucket {
     this.resetNode.dispose();
     this.buildNode.dispose();
     if (this.markNode) this.markNode.dispose();
+    for (const bakeNode of this.bakeNodes) bakeNode.dispose();
   }
 
   private writeContent(content: ClusterContent) {
     this.instances = content.instances;
     this.positionValues.set(content.positions);
-    this.uvValues.set(content.uvs);
     this.instanceClusterValues.set(content.instanceClusters);
     this.clusterBoundValues.set(content.clusterBounds);
     this.positionsAttribute.needsUpdate = true;
-    if (this.uvsAttribute) this.uvsAttribute.needsUpdate = true;
     this.instanceClustersAttribute.needsUpdate = true;
     this.clusterBoundsAttribute.needsUpdate = true;
     const instanceClusterCount = content.instanceClusters.length / 4;
@@ -657,14 +755,19 @@ export class VSMClusterBucket {
     const content: ClusterContent = {
       instances: [],
       positions: [],
-      uvs: [],
       clusterBounds: [],
       instanceClusters: [],
+      maskSources: [],
     };
     const clusterTriangles: number[] = [];
     const range = { start: 0, count: 0 };
     for (const caster of casters) {
-      const { mesh } = caster;
+      const { mesh, opacityNode, alphaTest } = caster;
+      let maskId = 0;
+      if (opacityNode) {
+        content.maskSources.push({ opacityNode, alphaTest });
+        maskId = content.maskSources.length;
+      }
       for (const batchInstanceId of getInstanceBatchIds(caster)) {
         const isBatchInstance =
           mesh instanceof BatchedMesh && batchInstanceId !== undefined;
@@ -685,13 +788,10 @@ export class VSMClusterBucket {
             range.count = mesh.geometry.getAttribute("position").count;
             if (index) range.count = index.count;
           }
-          let uvs: number[] | undefined;
-          if (this.hasUvs) uvs = content.uvs;
           clusters = appendGeometryClusters(
             mesh.geometry,
             range,
             content.positions,
-            uvs,
             content.clusterBounds,
             clusterTriangles,
           );
@@ -703,6 +803,7 @@ export class VSMClusterBucket {
           batchInstanceId,
           firstCluster: clusters.firstCluster,
           clusterCount: clusters.clusterCount,
+          maskId,
         });
       }
     }
