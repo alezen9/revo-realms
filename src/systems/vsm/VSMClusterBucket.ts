@@ -160,8 +160,9 @@ const getWorldPosition = (
   local: Node<"vec3">,
   positionNode: Node<"vec3"> | undefined,
 ) => {
+  let position = local;
   if (positionNode)
-    return positionNode.context({
+    position = positionNode.context({
       overrideNodes: new Map<Node, () => Node>([
         [instanceIndex, () => instance],
         [positionLocal, () => local],
@@ -174,9 +175,9 @@ const getWorldPosition = (
   const columnZ = matrices.element(matrixOffset.add(2));
   const translation = matrices.element(matrixOffset.add(3));
   const world = columnX
-    .mul(local.x)
-    .add(columnY.mul(local.y))
-    .add(columnZ.mul(local.z))
+    .mul(position.x)
+    .add(columnY.mul(position.y))
+    .add(columnZ.mul(position.z))
     .add(translation);
   return world.xyz;
 };

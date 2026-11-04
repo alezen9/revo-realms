@@ -7,7 +7,7 @@ import {
   Sphere,
   Vector3,
 } from "three";
-import { positionLocal, vec3 } from "three/tsl";
+import { positionLocal } from "three/tsl";
 import { ColliderDesc } from "@dimforge/rapier3d";
 import { type State } from "../../../Game";
 import {
@@ -118,7 +118,7 @@ export class Expedition33Flag {
     );
     graphics.vsmPass.registerCaster(flag, {
       type: "dynamic",
-      positionNode: particlePosition.add(vec3(this.origin)),
+      positionNode: particlePosition,
     });
     return flag;
   }
