@@ -70,7 +70,7 @@ type ClusterContent = {
   instanceClusters: number[];
 };
 
-const buildClusterMeshlets = (
+export const buildClusterMeshlets = (
   geometry: BufferGeometry,
   range: { start: number; count: number },
 ) => {

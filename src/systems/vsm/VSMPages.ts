@@ -479,6 +479,10 @@ export class VSMPages {
     this.allocateNode.name = "VSM page allocate";
   }
 
+  createRequestReadNode() {
+    return storage(this.requestBits, "uint", REQUEST_WORD_COUNT).toReadOnly();
+  }
+
   collectRequestNodes(nodes: ComputeNode[]) {
     const { changes, drawingBufferSize } = this.context;
     if (!changes.shouldRequestPages) return;
