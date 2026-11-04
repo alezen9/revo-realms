@@ -36,7 +36,6 @@ import {
   VSM_COUNTER_EMPTY,
   VSM_COUNTER_LEVEL_MISSES,
   VSM_COUNTER_MISSING,
-  VSM_COUNTER_REDRAWS,
   VSM_COUNTER_REUSABLE,
   VSM_DYNAMIC_CAPACITY,
   VSM_DYNAMIC_COUNTER_TOTAL,
@@ -194,12 +193,9 @@ const requestVisiblePages = Fn<
 
 const resetResidencyCounters = Fn<[counters: CounterNode], void>(
   ([counters]) => {
-    Loop(
-      { start: 0, end: VSM_COUNTER_REDRAWS, type: "uint" },
-      ({ i: index }) => {
-        atomicStore(counters.element(index), 0);
-      },
-    );
+    Loop({ start: 0, end: VSM_COUNTER_COUNT, type: "uint" }, ({ i: index }) => {
+      atomicStore(counters.element(index), 0);
+    });
   },
 );
 
@@ -212,14 +208,19 @@ const invalidatePages = Fn<
   void
 >(([context, invalidationRects, invalidationCount]) => {
   const { cameraPosition, lightBasis } = context;
-  const metadata = context.slotMetadataNode.element(instanceIndex);
-  const hasPage = metadata.x.notEqual(VSM_INVALID_PAGE_KEY);
-  const isCurrentGeneration = metadata.w.equal(context.pageGeneration);
+  const slotMetadataEntry = context.slotMetadataNode.element(instanceIndex);
+  const hasPage = slotMetadataEntry.x.notEqual(VSM_INVALID_PAGE_KEY);
+  const isCurrentGeneration = slotMetadataEntry.w.equal(context.pageGeneration);
   If(hasPage.and(isCurrentGeneration), () => {
-    const level = metadata.x.div(VSM_PAGES_PER_LEVEL).toVar();
+    const level = slotMetadataEntry.x.div(VSM_PAGES_PER_LEVEL).toVar();
     const windowCenter = getWindowCenter(cameraPosition, lightBasis, level);
-    const pageCoordinate = getWindowPage(metadata.x, windowCenter).toVar();
-    const hasLeftWindow = getPageTag(pageCoordinate).notEqual(metadata.y);
+    const pageCoordinate = getWindowPage(
+      slotMetadataEntry.x,
+      windowCenter,
+    ).toVar();
+    const hasLeftWindow = getPageTag(pageCoordinate).notEqual(
+      slotMetadataEntry.y,
+    );
     const isInvalid = hasLeftWindow.toVar();
     Loop(
       { start: uint(0), end: invalidationCount, type: "uint" },
@@ -237,7 +238,9 @@ const invalidatePages = Fn<
       },
     );
     If(isInvalid, () => {
-      metadata.assign(uvec4(metadata.x, metadata.y, metadata.z, 0));
+      slotMetadataEntry.assign(
+        uvec4(slotMetadataEntry.x, slotMetadataEntry.y, slotMetadataEntry.z, 0),
+      );
     });
   });
 });
@@ -267,8 +270,13 @@ const collectRequestedPages = Fn<
         const { slot, isResident } = context.resolvePage(pageKey, pageTag);
         If(isResident, () => {
           const { frame, pageGeneration } = context;
-          const metadata = uvec4(pageKey, pageTag, frame, pageGeneration);
-          context.slotMetadataNode.element(slot).assign(metadata);
+          const slotMetadataEntry = uvec4(
+            pageKey,
+            pageTag,
+            frame,
+            pageGeneration,
+          );
+          context.slotMetadataNode.element(slot).assign(slotMetadataEntry);
           const activeCounter = counters.element(VSM_COUNTER_ACTIVE);
           const activeIndex = atomicAdd(activeCounter, 1);
           const activeJob = pageJobs.element(activeIndex.add(VSM_JOBS_ACTIVE));
@@ -292,11 +300,13 @@ const freeStaleSlots = Fn<
   [context: VSMContext, counters: CounterNode, lists: ListsNode],
   void
 >(([context, counters, lists]) => {
-  const metadata = context.slotMetadataNode.element(instanceIndex);
-  const isUnusedThisFrame = metadata.z.notEqual(context.frame);
+  const slotMetadataEntry = context.slotMetadataNode.element(instanceIndex);
+  const isUnusedThisFrame = slotMetadataEntry.z.notEqual(context.frame);
   If(isUnusedThisFrame, () => {
-    const hasNoPage = metadata.x.equal(VSM_INVALID_PAGE_KEY);
-    const isOldGeneration = metadata.w.notEqual(context.pageGeneration);
+    const hasNoPage = slotMetadataEntry.x.equal(VSM_INVALID_PAGE_KEY);
+    const isOldGeneration = slotMetadataEntry.w.notEqual(
+      context.pageGeneration,
+    );
     const isEmptySlot = hasNoPage.or(isOldGeneration);
     If(isEmptySlot, () => {
       const index = atomicAdd(counters.element(VSM_COUNTER_EMPTY), 1);
@@ -352,16 +362,14 @@ const allocateMissingPages = Fn<
       const pageCoordinate = getWindowPage(pageKey, windowCenter);
       const { frame, pageGeneration } = context;
       const pageTag = getPageTag(pageCoordinate);
-      const metadata = uvec4(pageKey, pageTag, frame, pageGeneration);
-      context.slotMetadataNode.element(slot).assign(metadata);
+      const slotMetadataEntry = uvec4(pageKey, pageTag, frame, pageGeneration);
+      context.slotMetadataNode.element(slot).assign(slotMetadataEntry);
       const pageTableEntry = uvec4(slot.add(1), 0, 0, 0);
       context.pageTableNode.element(pageKey).assign(pageTableEntry);
       context.slotRenderFramesNode.element(slot).assign(frame);
       const job = uvec4(pageKey, slot, pageCoordinate);
       const jobIndex = atomicAdd(counters.element(VSM_COUNTER_ALLOCATED), 1);
       pageJobs.element(jobIndex.add(VSM_JOBS_ALLOCATED)).assign(job);
-      if (TOOLING_FLAGS.monitoring)
-        atomicAdd(counters.element(VSM_COUNTER_REDRAWS), 1);
       const activeIndex = atomicAdd(counters.element(VSM_COUNTER_ACTIVE), 1);
       pageJobs.element(activeIndex.add(VSM_JOBS_ACTIVE)).assign(job);
     }).Else(() => {
@@ -375,12 +383,9 @@ export class VSMPages {
     needed: 0,
     capacity: VSM_POOL_CAPACITY,
     missing: 0,
-    redrawsPerSecond: 0,
     dynamic: 0,
     dynamicCapacity: VSM_DYNAMIC_CAPACITY,
   };
-  private redrawTotal = 0;
-  private redrawReadbackTime = 0;
   private renderer: WebGPURenderer;
   private context: VSMContext;
   private depthSize = uniform(new Vector2(1, 1));
@@ -562,16 +567,8 @@ export class VSMPages {
       const dynamicCounters = new Uint32Array(
         await this.renderer.getArrayBufferAsync(context.dynamicCounters),
       );
-      const now = performance.now();
-      const redrawTotal = residency[VSM_COUNTER_REDRAWS];
-      const elapsedSeconds = (now - this.redrawReadbackTime) / 1000;
       this.stats.needed = residency[VSM_COUNTER_ACTIVE] + this.stats.missing;
-      this.stats.redrawsPerSecond = Math.round(
-        (redrawTotal - this.redrawTotal) / elapsedSeconds,
-      );
       this.stats.dynamic = dynamicCounters[VSM_DYNAMIC_COUNTER_TOTAL];
-      this.redrawTotal = redrawTotal;
-      this.redrawReadbackTime = now;
     } catch (error) {
       console.error("Shadow page stats readback failed", error);
     } finally {

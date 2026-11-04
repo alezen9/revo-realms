@@ -341,8 +341,8 @@ export class VSMDepthPool {
 
   sync(terrainBounds: { min: number; max: number }) {
     const { changes } = this.context;
-    const { hasRosterChanged, hasCasterMoved } = changes[this.kind];
-    const hasMatrixChange = hasRosterChanged || hasCasterMoved;
+    const { hasRosterChanged, hasCasterChanged } = changes[this.kind];
+    const hasMatrixChange = hasRosterChanged || hasCasterChanged;
     if (!hasMatrixChange && !changes.hasSunChanged) return;
 
     if (hasRosterChanged) this.rebuildClusterCasters();

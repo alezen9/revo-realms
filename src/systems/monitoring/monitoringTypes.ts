@@ -73,7 +73,6 @@ export type ShadowPageStats = {
   needed: number;
   capacity: number;
   missing: number;
-  redrawsPerSecond: number;
   dynamic: number;
   dynamicCapacity: number;
 };

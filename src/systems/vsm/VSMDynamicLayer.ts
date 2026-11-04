@@ -65,8 +65,8 @@ const prepareDynamicPages = Fn<
   const activeCount = atomicLoad(counters.element(VSM_COUNTER_ACTIVE));
   If(instanceIndex.lessThan(activeCount), () => {
     const pageKey = pageJobs.element(instanceIndex.add(VSM_JOBS_ACTIVE)).x;
-    const page = pageTable.element(pageKey);
-    page.assign(uvec4(page.x, 0, page.z, frame));
+    const pageTableEntry = pageTable.element(pageKey);
+    pageTableEntry.assign(uvec4(pageTableEntry.x, 0, pageTableEntry.z, frame));
   });
 });
 
@@ -94,6 +94,7 @@ const assignDynamicSlots = Fn<DynamicJobArgs, void>(
     If(instanceIndex.lessThan(activeCount), () => {
       const job = pageJobs.element(instanceIndex.add(VSM_JOBS_ACTIVE));
       const level = job.x.div(VSM_PAGES_PER_LEVEL).toVar();
+      const staticSlot = job.y;
       const isTouched = pageTable.element(job.x).y.equal(frame);
       If(isTouched, () => {
         // finer levels take the first slots so a full pool drops the coarse ones
@@ -125,11 +126,16 @@ const assignDynamicSlots = Fn<DynamicJobArgs, void>(
           pageJobs
             .element(dynamicSlot.add(VSM_JOBS_DYNAMIC))
             .assign(uvec4(job.x, dynamicSlot, job.z, job.w));
-          pageTable
-            .element(job.x)
-            .assign(uvec4(job.y.add(1), frame, dynamicSlot, frame));
+          const pageTableEntry = uvec4(
+            staticSlot.add(1),
+            frame,
+            dynamicSlot,
+            frame,
+          );
+          pageTable.element(job.x).assign(pageTableEntry);
         }).Else(() => {
-          pageTable.element(job.x).assign(uvec4(job.y.add(1), 0, 0, frame));
+          const pageTableEntry = uvec4(staticSlot.add(1), 0, 0, frame);
+          pageTable.element(job.x).assign(pageTableEntry);
         });
       });
     });

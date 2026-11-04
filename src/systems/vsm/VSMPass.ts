@@ -81,7 +81,6 @@ export class VSMPass {
   private staticCache: VSMDepthPool;
   private dynamicLayer: VSMDynamicLayer;
   private sampler: VSMSampler;
-  private uSunVisibility = uniform(1);
   private uShadowIntensity = uniform(0.8);
   private terrainBounds = { min: 0, max: 0 };
   private computeNodes: ComputeNode[] = [];
@@ -174,22 +173,10 @@ export class VSMPass {
   }
 
   addBindings(folder: DebugFolder) {
-    folder.addBinding(this.uSunVisibility, "value", {
-      label: "Sun visibility",
-      min: 0,
-      max: 1,
-      step: 0.05,
-    });
     folder.addBinding(this.uShadowIntensity, "value", {
       label: "Intensity",
       min: 0,
       max: 1,
-      step: 0.05,
-    });
-    folder.addBinding(this.sampler.filter.softness, "value", {
-      label: "Softness",
-      min: 0,
-      max: 3,
       step: 0.05,
     });
     folder.addBinding(this.sampler.filter.lightSize, "value", {
@@ -280,9 +267,7 @@ export class VSMPass {
     const visibility = this.sampler.resolveVisibility(uv);
     const directSun = this.scene.directSun.sample(uv).rgb;
     const shadowVisibility = mix(float(1), visibility, this.uShadowIntensity);
-    const sunOcclusion = float(1).sub(
-      this.uSunVisibility.mul(shadowVisibility),
-    );
+    const sunOcclusion = float(1).sub(shadowVisibility);
     const occludedSun = directSun.mul(sunOcclusion);
     return sceneColor.sub(vec4(occludedSun, 0)).max(0);
   }

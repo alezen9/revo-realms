@@ -25,6 +25,7 @@ import {
 
 export const VSM_POOL_CAPACITY = 512;
 export const VSM_DYNAMIC_CAPACITY = 64;
+// 0 is a valid page key, so empty slots hold the largest uint instead
 export const VSM_INVALID_PAGE_KEY = 0xffffffff;
 export const VSM_JOBS_ALLOCATED = 0;
 export const VSM_JOBS_ACTIVE = VSM_POOL_CAPACITY;
@@ -36,8 +37,7 @@ export const VSM_COUNTER_ACTIVE = 2;
 export const VSM_COUNTER_EMPTY = 3;
 export const VSM_COUNTER_REUSABLE = 4;
 export const VSM_COUNTER_LEVEL_MISSES = 5;
-export const VSM_COUNTER_REDRAWS = VSM_COUNTER_LEVEL_MISSES + VSM_LEVEL_COUNT;
-export const VSM_COUNTER_COUNT = VSM_COUNTER_REDRAWS + 1;
+export const VSM_COUNTER_COUNT = VSM_COUNTER_LEVEL_MISSES + VSM_LEVEL_COUNT;
 export const VSM_DYNAMIC_COUNTER_TOTAL = 0;
 export const VSM_DYNAMIC_COUNTER_LEVEL_COUNTS = 1;
 export const VSM_DYNAMIC_COUNTER_LEVEL_CURSORS =
@@ -74,7 +74,7 @@ export type VSMLayerKind = "static" | "dynamic";
 
 type VSMLayerChanges = {
   hasRosterChanged: boolean;
-  hasCasterMoved: boolean;
+  hasCasterChanged: boolean;
 };
 
 type VSMChanges = Record<VSMLayerKind, VSMLayerChanges> & {
@@ -102,16 +102,16 @@ const CAMERA_MOVE_EPSILON_SQUARED = 0.002 ** 2;
 const CAMERA_TURN_EPSILON = 0.0005;
 const CAMERA_TURN_DOT_THRESHOLD = 1 - Math.cos(CAMERA_TURN_EPSILON / 2);
 
-const initialMetadata = new Uint32Array(VSM_POOL_CAPACITY * 4);
+const initialSlotMetadata = new Uint32Array(VSM_POOL_CAPACITY * 4);
 for (let slot = 0; slot < VSM_POOL_CAPACITY; slot++)
-  initialMetadata[slot * 4] = VSM_INVALID_PAGE_KEY;
+  initialSlotMetadata[slot * 4] = VSM_INVALID_PAGE_KEY;
 
 export class VSMContext {
   readonly changes: VSMChanges = {
     hasSunChanged: true,
     shouldRequestPages: true,
-    static: { hasRosterChanged: true, hasCasterMoved: true },
-    dynamic: { hasRosterChanged: true, hasCasterMoved: true },
+    static: { hasRosterChanged: true, hasCasterChanged: true },
+    dynamic: { hasRosterChanged: true, hasCasterChanged: true },
   };
   readonly frame = uniform(0, "uint");
   readonly pageGeneration = uniform(1, "uint");
@@ -131,7 +131,7 @@ export class VSMContext {
     4,
   );
   readonly pageTableNode = storage(this.pageTable, "uvec4", VSM_PAGE_COUNT);
-  readonly slotMetadata = new StorageBufferAttribute(initialMetadata, 4);
+  readonly slotMetadata = new StorageBufferAttribute(initialSlotMetadata, 4);
   readonly slotMetadataNode = storage(
     this.slotMetadata,
     "uvec4",
@@ -240,7 +240,7 @@ export class VSMContext {
       const current = this.versions[kind];
       const last = previous.versions[kind];
       changes[kind].hasRosterChanged = last.roster !== current.roster;
-      changes[kind].hasCasterMoved = last.revision !== current.revision;
+      changes[kind].hasCasterChanged = last.revision !== current.revision;
       last.roster = current.roster;
       last.revision = current.revision;
     }
@@ -249,7 +249,7 @@ export class VSMContext {
       changes.hasSunChanged ||
       hasLevelBiasChanged ||
       changes.static.hasRosterChanged ||
-      changes.static.hasCasterMoved ||
+      changes.static.hasCasterChanged ||
       changes.dynamic.hasRosterChanged;
 
     previous.camera = camera;
@@ -295,19 +295,19 @@ export class VSMContext {
   }
 
   resolvePage(pageKey: Node<"uint">, pageTag: Node<"uint">) {
-    const entry = this.pageTableNode.element(pageKey);
-    const slotPlusOne = entry.x;
+    const pageTableEntry = this.pageTableNode.element(pageKey);
+    const slotPlusOne = pageTableEntry.x;
     const hasSlot = slotPlusOne
       .greaterThan(0)
       .and(slotPlusOne.lessThanEqual(VSM_POOL_CAPACITY));
     const slot = hasSlot.select(slotPlusOne.sub(1), uint(0));
-    const metadata = this.slotMetadataNode.element(slot);
+    const slotMetadataEntry = this.slotMetadataNode.element(slot);
     const isResident = hasSlot
-      .and(metadata.x.equal(pageKey))
-      .and(metadata.y.equal(pageTag))
-      .and(metadata.w.equal(this.pageGeneration));
-    const hasDynamic = isResident.and(entry.y.equal(this.frame));
-    return { slot, isResident, hasDynamic, dynamicSlot: entry.z };
+      .and(slotMetadataEntry.x.equal(pageKey))
+      .and(slotMetadataEntry.y.equal(pageTag))
+      .and(slotMetadataEntry.w.equal(this.pageGeneration));
+    const hasDynamic = isResident.and(pageTableEntry.y.equal(this.frame));
+    return { slot, isResident, hasDynamic, dynamicSlot: pageTableEntry.z };
   }
 
   registerCaster(mesh: Mesh, options: VSMCasterOptions = {}) {

@@ -183,23 +183,10 @@
 				<span class="category">Shadows</span>
 				<div class="metrics">
 					<span class="cell">
-						<span class="label">Pages</span>
+						<span class="label">Static</span>
 						<span class={["value", headroomClass(shadowPages.needed, shadowPages.capacity)]}>
 							{integerFormat.format(shadowPages.needed)}
 							<span class="aside">/{integerFormat.format(shadowPages.capacity)}</span>
-						</span>
-					</span>
-					<span class="cell">
-						<span class="label">Missing</span>
-						<span class={["value", shadowPages.missing ? "bad" : "good"]}>
-							{integerFormat.format(shadowPages.missing)}
-						</span>
-					</span>
-					<span class="cell">
-						<span class="label">Redraws</span>
-						<span class="value">
-							{integerFormat.format(shadowPages.redrawsPerSecond)}
-							<span class="aside">/s</span>
 						</span>
 					</span>
 					<span class="cell">

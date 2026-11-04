@@ -7,9 +7,9 @@ import {
   dFdy,
   float,
   Fn,
-  fract,
   getViewPosition,
   If,
+  interleavedGradientNoise,
   Loop,
   mix,
   screenCoordinate,
@@ -78,8 +78,6 @@ const MAX_RECEIVER_SLOPE = 4;
 const GOLDEN_ANGLE = 2.399963;
 const SURFACE_SPLIT_RATIO = 0.01;
 const MIN_DETERMINANT = 1e-12;
-const NOISE_WEIGHTS = vec2(0.06711056, 0.00583715);
-const NOISE_SCALE = 52.9829189;
 
 const getReceiverSlope = (lightPosition: Vec2Node, worldHeight: FloatNode) => {
   const lightDx = dFdx(lightPosition);
@@ -113,21 +111,15 @@ const getPointLit = (
   return float(pointDepth.lessThanEqual(storedDepth));
 };
 
-const getInterleavedGradientNoise = (pixel: Vec2Node) => {
-  const pixelHash = pixel.dot(NOISE_WEIGHTS).fract();
-  return fract(pixelHash.mul(NOISE_SCALE));
-};
-
 const getDitheredSoftLevel = (viewDistance: FloatNode, softness: FloatNode) => {
   const softLevel = getSoftReceiverLevel(viewDistance, softness);
-  const noise = getInterleavedGradientNoise(screenCoordinate.xy);
+  const noise = interleavedGradientNoise(screenCoordinate.xy);
   const ditheredLevel = softLevel.add(noise).floor();
   return uint(ditheredLevel.min(VSM_LEVEL_COUNT - 1));
 };
 
 export class VSMSampler {
   readonly filter = {
-    softness: uniform(0.5),
     lightSize: uniform(0.02),
     maxSoftness: uniform(4.5),
   };
@@ -364,7 +356,7 @@ export class VSMSampler {
           );
           weight.assign(1);
         }).Else(() => {
-          const rotation = getInterleavedGradientNoise(screenCoordinate.xy).mul(
+          const rotation = interleavedGradientNoise(screenCoordinate.xy).mul(
             Math.PI * 2,
           );
           for (let tapIndex = 0; tapIndex < PENUMBRA_TAP_COUNT; tapIndex++) {
@@ -502,7 +494,7 @@ export class VSMSampler {
     const rayDistance = averageBlockerHeight.div(sunHeight);
     const penumbraMeters = rayDistance.mul(filter.lightSize);
     const penumbraTexels = penumbraMeters.div(receiver.texelMeters);
-    return penumbraTexels.clamp(filter.softness, filter.maxSoftness).toVar();
+    return penumbraTexels.min(filter.maxSoftness).toVar();
   }
 
   private searchBlockers(
