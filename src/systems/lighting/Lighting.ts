@@ -138,16 +138,25 @@ export class Lighting {
       title: "💡 Light",
       expanded: false,
     });
-    lightFolder
-      .addBinding(config.LIGHT_POSITION_OFFSET, "x", {
-        label: "Sun position X",
-      })
-      .on("change", () => this.syncSunDirection());
-    lightFolder
-      .addBinding(config.LIGHT_POSITION_OFFSET, "z", {
-        label: "Sun position Z",
-      })
-      .on("change", () => this.syncSunDirection());
+    const sunOffset = config.LIGHT_POSITION_OFFSET;
+    const sunHorizontalRadius = Math.hypot(sunOffset.x, sunOffset.z);
+    const sunDirection = {
+      value: new Vector2(sunOffset.x, sunOffset.z).normalize(),
+    };
+    const sunDirectionBinding = lightFolder.addBinding(sunDirection, "value", {
+      label: "Sun direction",
+      picker: "inline",
+      expanded: true,
+      x: { min: -1, max: 1 },
+      y: { min: -1, max: 1 },
+    });
+    sunDirectionBinding.on("change", () => {
+      const { value } = sunDirection;
+      const angle = Math.atan2(value.y, value.x);
+      sunOffset.x = Math.cos(angle) * sunHorizontalRadius;
+      sunOffset.z = Math.sin(angle) * sunHorizontalRadius;
+      this.syncSunDirection();
+    });
     lightFolder
       .addBinding(config.LIGHT_POSITION_OFFSET, "y", {
         label: "Sun height",
