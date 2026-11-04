@@ -53,6 +53,6 @@ export const uniforms = {
   uLift: uniform(1.5),
   uGustStrength: uniform(0.5),
   uGustSpeed: uniform(0.1),
-  uDiffuseScale: uniform(8),
-  uEmissive: uniform(15),
+  uDiffuseScale: uniform(5),
+  uEmissive: uniform(3),
 };
