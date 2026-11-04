@@ -1,9 +1,13 @@
-import { Box3, Matrix4, Vector3, type BufferGeometry, type Mesh } from "three";
 import {
-  BatchedMesh,
-  IndirectStorageBufferAttribute,
-  StorageBufferAttribute,
-} from "three/webgpu";
+  Box3,
+  BufferAttribute,
+  Matrix4,
+  Vector3,
+  type BufferGeometry,
+  type Mesh,
+} from "three";
+import { MeshoptClusterizer } from "meshoptimizer/clusterizer";
+import { BatchedMesh, StorageBufferAttribute } from "three/webgpu";
 import type { ComputeNode, Node, StorageBufferNode } from "three/webgpu";
 import {
   atomicAdd,
@@ -44,15 +48,13 @@ import {
 export const VSM_CLUSTER_TRIANGLES = 64;
 const VSM_CLUSTER_VERTICES = VSM_CLUSTER_TRIANGLES * 3;
 const VSM_CLUSTER_MAX_WORK_ITEMS = 262144;
-// indirect args: x -> vertices per cluster, y -> work item count
-const WORK_COUNT_INDEX = 1;
 
 type ClusterInstance = {
   mesh: Mesh;
+  caster: VSMCaster;
   batchInstanceId?: number;
   firstCluster: number;
   clusterCount: number;
-  depthBias: number;
 };
 
 type ClusterGeometry = {
@@ -68,6 +70,34 @@ type ClusterContent = {
   instanceClusters: number[];
 };
 
+const buildClusterMeshlets = (
+  geometry: BufferGeometry,
+  range: { start: number; count: number },
+) => {
+  const position = geometry.getAttribute("position");
+  if (!(position instanceof BufferAttribute))
+    throw new Error("Cluster positions can't be interleaved");
+  const { array, itemSize } = position;
+  if (!(array instanceof Float32Array))
+    throw new Error("Cluster positions must be floats");
+  const { index } = geometry;
+  const triangleCount = Math.floor(range.count / 3);
+  const indices = new Uint32Array(triangleCount * 3);
+  for (let element = 0; element < indices.length; element++) {
+    let vertexIndex = range.start + element;
+    if (index) vertexIndex = index.getX(vertexIndex);
+    indices[element] = vertexIndex;
+  }
+  return MeshoptClusterizer.buildMeshletsSpatial(
+    indices,
+    array,
+    itemSize,
+    VSM_CLUSTER_VERTICES,
+    VSM_CLUSTER_TRIANGLES,
+    VSM_CLUSTER_TRIANGLES,
+  );
+};
+
 const appendGeometryClusters = (
   geometry: BufferGeometry,
   range: { start: number; count: number },
@@ -78,27 +108,25 @@ const appendGeometryClusters = (
 ): ClusterGeometry => {
   const position = geometry.getAttribute("position");
   const uv = geometry.getAttribute("uv");
-  const index = geometry.index;
   const firstCluster = clusterBounds.length / 8;
-  const triangleCount = Math.floor(range.count / 3);
-  const clusterCount = Math.ceil(triangleCount / VSM_CLUSTER_TRIANGLES);
+  const meshlets = buildClusterMeshlets(geometry, range);
   const minimum = new Vector3();
   const maximum = new Vector3();
   const vertex = new Vector3();
-  for (let cluster = 0; cluster < clusterCount; cluster++) {
+  for (let cluster = 0; cluster < meshlets.meshletCount; cluster++) {
+    const { vertices, triangles } = MeshoptClusterizer.extractMeshlet(
+      meshlets,
+      cluster,
+    );
+    const lastTriangleCorner = triangles.length - 3;
     minimum.setScalar(Infinity);
     maximum.setScalar(-Infinity);
     for (let corner = 0; corner < VSM_CLUSTER_VERTICES; corner++) {
-      const clusterTriangle =
-        cluster * VSM_CLUSTER_TRIANGLES + Math.floor(corner / 3);
-      const triangle = Math.min(clusterTriangle, triangleCount - 1);
-      const isPadding = clusterTriangle >= triangleCount;
+      const isPadding = corner >= triangles.length;
       // padding repeats the last triangle's first corner, a zero area triangle
-      let cornerOffset = corner % 3;
-      if (isPadding) cornerOffset = 0;
-      const element = range.start + triangle * 3 + cornerOffset;
-      let vertexIndex = element;
-      if (index) vertexIndex = index.getX(element);
+      let meshletCorner = corner;
+      if (isPadding) meshletCorner = lastTriangleCorner;
+      const vertexIndex = vertices[triangles[meshletCorner]];
       vertex.fromBufferAttribute(position, vertexIndex);
       positions.push(vertex.x, vertex.y, vertex.z, 0);
       if (uvs && uv) uvs.push(uv.getX(vertexIndex), uv.getY(vertexIndex));
@@ -106,8 +134,7 @@ const appendGeometryClusters = (
       minimum.min(vertex);
       maximum.max(vertex);
     }
-    const remainingTriangles = triangleCount - cluster * VSM_CLUSTER_TRIANGLES;
-    clusterTriangles.push(Math.min(VSM_CLUSTER_TRIANGLES, remainingTriangles));
+    clusterTriangles.push(triangles.length / 3);
     clusterBounds.push(
       minimum.x,
       minimum.y,
@@ -119,7 +146,7 @@ const appendGeometryClusters = (
       0,
     );
   }
-  return { firstCluster, clusterCount };
+  return { firstCluster, clusterCount: meshlets.meshletCount };
 };
 
 const getInstanceBatchIds = (caster: VSMCaster) => {
@@ -147,7 +174,7 @@ const createUvec4Node = (attribute: StorageBufferAttribute, count: number) =>
 const createWorkItemsNode = (attribute: StorageBufferAttribute) =>
   storage(attribute, "uvec2", VSM_CLUSTER_MAX_WORK_ITEMS);
 const createWorkCounterNode = (attribute: StorageBufferAttribute) =>
-  storage(attribute, "uint", 4).toAtomic();
+  storage(attribute, "uint", 1).toAtomic();
 
 type Vec4Node = ReturnType<typeof createVec4Node>;
 type Uvec4Node = ReturnType<typeof createUvec4Node>;
@@ -249,7 +276,7 @@ const computeClusterLightBounds = Fn<
 
 const resetWorkCount = Fn<[workCounter: WorkCounterNode], void>(
   ([workCounter]) => {
-    atomicStore(workCounter.element(WORK_COUNT_INDEX), 0);
+    atomicStore(workCounter.element(0), 0);
   },
 );
 
@@ -278,9 +305,9 @@ const collectClusterWork = Fn<
     const isBeforeLastPage = job.z
       .lessThanEqual(lastPage.x)
       .and(job.w.lessThanEqual(lastPage.y));
-    const overlaps = isPastFirstPage.and(isBeforeLastPage);
-    If(overlaps, () => {
-      const itemIndex = atomicAdd(workCounter.element(WORK_COUNT_INDEX), 1);
+    const hasPageOverlap = isPastFirstPage.and(isBeforeLastPage);
+    If(hasPageOverlap, () => {
+      const itemIndex = atomicAdd(workCounter.element(0), 1);
       If(itemIndex.lessThan(VSM_CLUSTER_MAX_WORK_ITEMS), () => {
         workItems.element(itemIndex).assign(uvec2(jobIndex, instanceIndex));
       });
@@ -323,11 +350,12 @@ const markClusterPages = Fn<
             uvec2(pageIndex.mod(pageWidth), pageIndex.div(pageWidth)),
           );
           const pageKey = getPageKey(level, pageCoordinate);
-          const page = pageTable.element(pageKey);
+          const pageTableEntry = pageTable.element(pageKey);
           const isInWindow = isPageInWindow(pageCoordinate, windowCenter);
-          const isActivePage = page.w.equal(frame);
+          const isActivePage = pageTableEntry.w.equal(frame);
           If(isInWindow.and(isActivePage), () => {
-            page.assign(uvec4(page.x, frame, page.z, page.w));
+            const { x, z, w } = pageTableEntry;
+            pageTableEntry.assign(uvec4(x, frame, z, w));
           });
         },
       );
@@ -340,8 +368,8 @@ export class VSMClusterBucket {
   readonly uvsAttribute?: StorageBufferAttribute;
   readonly matricesAttribute: StorageBufferAttribute;
   readonly instanceClustersAttribute: StorageBufferAttribute;
-  readonly workIndirectAttribute = new IndirectStorageBufferAttribute(
-    new Uint32Array([VSM_CLUSTER_VERTICES, 0, 0, 0]),
+  readonly workCountAttribute = new StorageBufferAttribute(
+    new Uint32Array(1),
     1,
   );
   readonly workItemsAttribute = new StorageBufferAttribute(
@@ -424,9 +452,9 @@ export class VSMClusterBucket {
       VSM_JOB_COUNT,
     ).toReadOnly();
     this.rasterWorkCount = storage(
-      this.workIndirectAttribute,
+      this.workCountAttribute,
       "uint",
-      4,
+      1,
     ).toReadOnly();
     this.rasterWorkItems = storage(
       this.workItemsAttribute,
@@ -462,7 +490,7 @@ export class VSMClusterBucket {
       lightBoundsAttribute,
       instanceClusterCapacity,
     );
-    const workCounter = createWorkCounterNode(this.workIndirectAttribute);
+    const workCounter = createWorkCounterNode(this.workCountAttribute);
     const jobCounts = storage(
       jobs.countAttribute,
       "uint",
@@ -508,7 +536,7 @@ export class VSMClusterBucket {
   }
 
   getWorkCount() {
-    const workCount = this.rasterWorkCount.element(WORK_COUNT_INDEX);
+    const workCount = this.rasterWorkCount.element(0);
     const isWithinCapacity = workCount.lessThan(VSM_CLUSTER_MAX_WORK_ITEMS);
     return isWithinCapacity.select(workCount, uint(VSM_CLUSTER_MAX_WORK_ITEMS));
   }
@@ -569,7 +597,7 @@ export class VSMClusterBucket {
     this.bounds.makeEmpty();
     if (this.positionNode) this.bounds.setFromObject(this.instances[0].mesh);
     for (let index = 0; index < this.instances.length; index++) {
-      const { mesh, batchInstanceId, depthBias } = this.instances[index];
+      const { mesh, caster, batchInstanceId } = this.instances[index];
       mesh.updateWorldMatrix(true, false);
       this.worldMatrix.copy(mesh.matrixWorld);
       if (mesh instanceof BatchedMesh && batchInstanceId !== undefined) {
@@ -577,7 +605,7 @@ export class VSMClusterBucket {
         this.worldMatrix.multiply(this.batchMatrix);
       }
       this.matrixValues.set(this.worldMatrix.elements, index * 16);
-      this.matrixValues[index * 16 + 15] = depthBias;
+      this.matrixValues[index * 16 + 15] = caster.depthBias;
       if (this.positionNode) continue;
       const geometry = mesh.geometry;
       if (!geometry.boundingBox) geometry.computeBoundingBox();
@@ -671,10 +699,10 @@ export class VSMClusterBucket {
         }
         content.instances.push({
           mesh,
+          caster,
           batchInstanceId,
           firstCluster: clusters.firstCluster,
           clusterCount: clusters.clusterCount,
-          depthBias: caster.depthBias,
         });
       }
     }

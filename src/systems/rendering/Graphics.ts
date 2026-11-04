@@ -1,4 +1,5 @@
 import { type ComputeNode, type Node, WebGPURenderer } from "three/webgpu";
+import { MeshoptClusterizer } from "meshoptimizer/clusterizer";
 import { FramePipeline } from "./FramePipeline";
 import type { VSMDependencies } from "../vsm/VSMPass";
 import { type DebugPanel } from "../debug/DebugPanel";
@@ -62,7 +63,7 @@ export class Graphics {
   }
 
   async init() {
-    await this.renderer.init();
+    await Promise.all([this.renderer.init(), MeshoptClusterizer.ready]);
   }
 
   initFramePipeline(vsmDependencies: VSMDependencies) {
