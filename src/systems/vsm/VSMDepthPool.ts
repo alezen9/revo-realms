@@ -316,6 +316,7 @@ export class VSMDepthPool {
       new Uint32Array(texelCount),
       1,
     );
+    depthAttribute.name = `VSM ${kind} depth`;
     this.depthNode = createDepthNode(depthAttribute, texelCount);
     this.readDepthNode = storage(
       depthAttribute,

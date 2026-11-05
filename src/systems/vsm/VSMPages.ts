@@ -423,6 +423,9 @@ export class VSMPages {
     softReceiverTexture: Texture,
   ) {
     this.renderer = renderer;
+    this.requestBits.name = "VSM page request bits";
+    this.lists.name = "VSM page lists";
+    this.invalidationRects.name = "VSM page invalidation rects";
     this.context = context;
     const requestBits = createCounterNode(this.requestBits, REQUEST_WORD_COUNT);
     const counters = createCounterNode(context.counters, VSM_COUNTER_COUNT);

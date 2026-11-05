@@ -494,6 +494,12 @@ export class VSMClusterBucket {
       this.clusterBoundValues,
       4,
     );
+    this.positionsAttribute.name = `VSM ${kind} cluster positions`;
+    this.instanceClustersAttribute.name = `VSM ${kind} cluster table`;
+    this.matricesAttribute.name = `VSM ${kind} caster matrices`;
+    this.clusterBoundsAttribute.name = `VSM ${kind} cluster bounds`;
+    this.workCountAttribute.name = `VSM ${kind} cluster work count`;
+    this.workItemsAttribute.name = `VSM ${kind} cluster work`;
     this.rasterJobs = storage(
       context.pageJobs,
       "uvec4",
@@ -529,6 +535,7 @@ export class VSMClusterBucket {
         new Uint32Array(content.maskSources.length * VSM_MASK_WORDS),
         1,
       );
+      masksAttribute.name = `VSM ${kind} opacity masks`;
       this.rasterMasks = storage(
         masksAttribute,
         "uint",
@@ -551,6 +558,7 @@ export class VSMClusterBucket {
       new Float32Array(instanceClusterCapacity * 4),
       4,
     );
+    lightBoundsAttribute.name = `VSM ${kind} cluster light bounds`;
     const lightBounds = createVec4Node(
       lightBoundsAttribute,
       instanceClusterCapacity,

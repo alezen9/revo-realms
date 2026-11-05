@@ -195,6 +195,12 @@ export class VSMContext {
   constructor(renderer: WebGPURenderer, sunDirection: Node<"vec3">) {
     this.renderer = renderer;
     this.sunDirection = sunDirection;
+    this.pageTable.name = "VSM page table";
+    this.slotMetadata.name = "VSM slot metadata";
+    this.slotRenderFrames.name = "VSM slot render frames";
+    this.pageJobs.name = "VSM page jobs";
+    this.counters.name = "VSM counters";
+    this.dynamicCounters.name = "VSM dynamic counters";
   }
 
   get casters() {
