@@ -91,10 +91,14 @@ type RasterArgs = [
   maximumY: Node<"float">,
 ];
 
-const getEdge = (from: Node<"vec2">, to: Node<"vec2">, point: Node<"vec2">) => {
+const getEdgeValue = (
+  from: Node<"vec2">,
+  to: Node<"vec2">,
+  point: Node<"vec2">,
+) => {
   const edge = to.sub(from);
-  const offset = point.sub(from);
-  return edge.x.mul(offset.y).sub(edge.y.mul(offset.x));
+  const toPoint = point.sub(from);
+  return edge.x.mul(toPoint.y).sub(edge.y.mul(toPoint.x));
 };
 
 const clearPages = Fn<
@@ -196,7 +200,7 @@ const rasterizeClusters = Fn<RasterArgs, void>(
             const third = triangleCorners
               .element<"vec3">(cornerBase.add(2))
               .toVar();
-            const area = getEdge(first.xy, second.xy, third.xy).toVar();
+            const area = getEdgeValue(first.xy, second.xy, third.xy).toVar();
             const minimum = first.xy.min(second.xy).min(third.xy).sub(0.5);
             const maximum = first.xy.max(second.xy).max(third.xy).sub(0.5);
             const isPastPageStart = maximum.x
@@ -233,13 +237,13 @@ const rasterizeClusters = Fn<RasterArgs, void>(
                 const x = firstTexel.x.add(texelIndex.mod(width)).toVar();
                 const y = firstTexel.y.add(texelIndex.div(width)).toVar();
                 const center = vec2(x, y).add(0.5);
-                const firstWeight = getEdge(second.xy, third.xy, center)
+                const firstWeight = getEdgeValue(second.xy, third.xy, center)
                   .div(area)
                   .toVar();
-                const secondWeight = getEdge(third.xy, first.xy, center)
+                const secondWeight = getEdgeValue(third.xy, first.xy, center)
                   .div(area)
                   .toVar();
-                const thirdWeight = getEdge(first.xy, second.xy, center)
+                const thirdWeight = getEdgeValue(first.xy, second.xy, center)
                   .div(area)
                   .toVar();
                 const smallestWeight = firstWeight
