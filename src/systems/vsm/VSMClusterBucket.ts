@@ -112,6 +112,17 @@ const buildClusterMeshlets = (
   );
 };
 
+const hasSameMaskSources = (current: MaskSource[], next: MaskSource[]) => {
+  if (current.length !== next.length) return false;
+  for (let index = 0; index < current.length; index++) {
+    const isSameOpacity =
+      current[index].opacityNode === next[index].opacityNode;
+    const isSameAlphaTest = current[index].alphaTest === next[index].alphaTest;
+    if (!isSameOpacity || !isSameAlphaTest) return false;
+  }
+  return true;
+};
+
 const appendGeometryClusters = (
   geometry: BufferGeometry,
   range: { start: number; count: number },
@@ -679,16 +690,11 @@ export class VSMClusterBucket {
 
   setCasters(casters: VSMCaster[]) {
     const content = this.collectContent(casters);
-    const { maskSources } = this;
     // the bake kernels are built per mask, so a different set needs a new bucket
-    let hasSameMasks = content.maskSources.length === maskSources.length;
-    for (let index = 0; hasSameMasks && index < maskSources.length; index++) {
-      const current = maskSources[index];
-      const next = content.maskSources[index];
-      hasSameMasks =
-        current.opacityNode === next.opacityNode &&
-        current.alphaTest === next.alphaTest;
-    }
+    const hasSameMasks = hasSameMaskSources(
+      this.maskSources,
+      content.maskSources,
+    );
     const hasRoom =
       content.positions.length <= this.positionValues.length &&
       content.instances.length * 16 <= this.matrixValues.length &&
@@ -715,6 +721,7 @@ export class VSMClusterBucket {
         this.worldMatrix.multiply(this.batchMatrix);
       }
       this.matrixValues.set(this.worldMatrix.elements, index * 16);
+      // the w of the x column and of the translation are spare, only xyz is read back
       this.matrixValues[index * 16 + 3] = maskId;
       this.matrixValues[index * 16 + 15] = caster.depthBias;
       if (this.positionNode) continue;

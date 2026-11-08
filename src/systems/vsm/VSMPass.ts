@@ -1,4 +1,12 @@
-import { NoToneMapping, type Camera, type Mesh } from "three";
+import {
+  Matrix4,
+  NoToneMapping,
+  OrthographicCamera,
+  Vector3,
+  type Camera,
+  type Mesh,
+  type Scene,
+} from "three";
 import type {
   ComputeNode,
   Node,
@@ -7,7 +15,11 @@ import type {
 } from "three/webgpu";
 import {
   float,
+  getViewPosition,
   mix,
+  mrt,
+  pass,
+  positionWorld,
   renderOutput,
   screenUV,
   step,
@@ -60,6 +72,19 @@ const HEAT_HOT_COLOR = vec3(1, 0.5, 0.05);
 const HEAT_WARM_COLOR = vec3(0.95, 0.85, 0.1);
 const HEAT_COOL_COLOR = vec3(0.2, 0.6, 0.3);
 const HEAT_COLD_COLOR = vec3(0.12, 0.16, 0.3);
+const CAMERA_FOOTPRINT_COLOR = vec3(1, 0.85, 0.1);
+const SUN_VIEW_DISTANCE = 3000;
+const SUN_VIEW_RANGE = 190;
+const SUN_VIEWS = new Set(["Sun view", "Sun view pages"]);
+
+const getOutlinedPageColor = (level: Node<"uint">, pageUv: Node<"vec2">) => {
+  const levelHue = LEVEL_HUE_STEPS.mul(float(level)).fract();
+  const pageColor = levelHue.mul(0.6).add(0.3);
+  const edgeOffset = pageUv.min(float(1).sub(pageUv));
+  const edgeDistance = edgeOffset.x.min(edgeOffset.y);
+  const edgeHighlight = step(edgeDistance, 0.025).mul(0.7);
+  return mix(pageColor, PAGE_EDGE_COLOR, edgeHighlight);
+};
 
 const formatLegend = (entries: [color: string, meaning: string][]) => {
   const lines: string[] = [];
@@ -88,6 +113,21 @@ export class VSMPass {
   private uShadowIntensity = uniform(0.8);
   private terrainBounds = { min: 0, max: 0 };
   private computeNodes: ComputeNode[] = [];
+  private sunView = { size: 60 };
+  private isSunViewActive = false;
+  private sunViewCamera = new OrthographicCamera(
+    -1,
+    1,
+    1,
+    -1,
+    1,
+    SUN_VIEW_DISTANCE * 2,
+  );
+  private sunViewFocus = new Vector3();
+  private uSunViewFocus = uniform(new Vector3());
+  private uSunViewProjectionInverse = uniform(new Matrix4());
+  private uSunViewCameraWorld = uniform(new Matrix4());
+  private uMainViewProjection = uniform(new Matrix4());
 
   constructor(
     renderer: WebGPURenderer,
@@ -170,40 +210,11 @@ export class VSMPass {
     if (hasResidencyWork) this.staticCache.collectComputeNodes(computeNodes);
     this.dynamicLayer.collectComputeNodes(computeNodes);
     this.renderer.compute(computeNodes);
+    if (this.isSunViewActive) this.updateSunView();
   }
 
-  getWorldPosition(uv: Node<"vec2">) {
-    return this.sampler.getReceiver(uv).worldPosition;
-  }
-
-  getRequestedPageColor(worldPosition: Node<"vec3">) {
-    const { cameraPosition, lightBasis } = this.context;
-    const requestBits = this.pages.createRequestReadNode();
-    const lightPosition = getLightPosition(worldPosition, lightBasis);
-    let color: Node<"vec3"> = vec3(0);
-    let coverage: Node<"float"> = float(0);
-    for (let levelIndex = VSM_LEVEL_COUNT - 1; levelIndex >= 0; levelIndex--) {
-      const level = uint(levelIndex);
-      const pagePosition = lightPosition.div(getPageSize(level));
-      const pageCoordinate = getPageCoordinate(pagePosition);
-      const pageKey = getPageKey(level, pageCoordinate);
-      const word = requestBits.element(pageKey.div(32));
-      const bit = uint(1).shiftLeft(pageKey.mod(32));
-      const hasBit = word.bitAnd(bit).notEqual(0);
-      const windowCenter = getWindowCenter(cameraPosition, lightBasis, level);
-      const isInWindow = isPageInWindow(pageCoordinate, windowCenter);
-      const isRequested = float(hasBit.and(isInWindow));
-      const pageUv = pagePosition.fract();
-      const levelHue = LEVEL_HUE_STEPS.mul(float(levelIndex)).fract();
-      const pageColor = levelHue.mul(0.6).add(0.3);
-      const edgeOffset = pageUv.min(float(1).sub(pageUv));
-      const edgeDistance = edgeOffset.x.min(edgeOffset.y);
-      const edgeHighlight = step(edgeDistance, 0.025).mul(0.7);
-      const outlinedPageColor = mix(pageColor, PAGE_EDGE_COLOR, edgeHighlight);
-      color = mix(color, outlinedPageColor, isRequested);
-      coverage = coverage.max(isRequested);
-    }
-    return { color, coverage };
+  setDebugView(view: string) {
+    this.isSunViewActive = SUN_VIEWS.has(view);
   }
 
   sampleShadowedColor(uv: Node<"vec2">) {
@@ -239,6 +250,12 @@ export class VSMPass {
       label: "Resolution bias",
       min: 0,
       max: 4,
+      step: 1,
+    });
+    folder.addBinding(this.sunView, "size", {
+      label: "Sun view size",
+      min: 5,
+      max: 1500,
       step: 1,
     });
   }
@@ -284,7 +301,7 @@ export class VSMPass {
     };
   }
 
-  createDebugOutputs() {
+  createDebugOutputs(scene: Scene) {
     return {
       Pages: this.makePageOutput(),
       "Page heat": this.makePageHeatOutput(),
@@ -298,6 +315,7 @@ export class VSMPass {
         vec4(this.volumetricLight.sample(), 1),
         NoToneMapping,
       ),
+      ...this.makeSunViewOutputs(scene),
     };
   }
 
@@ -336,13 +354,7 @@ export class VSMPass {
     const { depth, level, pagePosition, pageKey, pageTag } =
       this.getDebugPage();
     const { isResident } = this.context.resolvePage(pageKey, pageTag);
-    const pageUv = pagePosition.fract();
-    const levelHue = LEVEL_HUE_STEPS.mul(float(level)).fract();
-    const pageColor = levelHue.mul(0.6).add(0.3);
-    const edgeOffset = pageUv.min(float(1).sub(pageUv));
-    const edgeDistance = edgeOffset.x.min(edgeOffset.y);
-    const edgeHighlight = step(edgeDistance, 0.025).mul(0.7);
-    const outlinedPageColor = mix(pageColor, PAGE_EDGE_COLOR, edgeHighlight);
+    const outlinedPageColor = getOutlinedPageColor(level, pagePosition.fract());
     const isSky = depth.greaterThanEqual(1);
     const residentColor = mix(
       MISSING_PAGE_COLOR,
@@ -396,5 +408,115 @@ export class VSMPass {
     const residentColor = mix(MISSING_HEAT_COLOR, heatColor, float(isResident));
     const color = mix(residentColor, SKY_COLOR, float(isSky));
     return renderOutput(vec4(color, 1), NoToneMapping);
+  }
+
+  private updateSunView() {
+    const { width, height } = this.renderer.domElement;
+    const aspect = width / height;
+    const { size } = this.sunView;
+    const camera = this.sunViewCamera;
+    camera.left = -size * aspect;
+    camera.right = size * aspect;
+    camera.top = size;
+    camera.bottom = -size;
+    camera.updateProjectionMatrix();
+    const focus = this.sunViewFocus;
+    this.camera.getWorldPosition(focus);
+    this.uSunViewFocus.value.copy(focus);
+    camera.position.copy(this.lighting.sunDirection);
+    camera.position.multiplyScalar(-SUN_VIEW_DISTANCE);
+    camera.position.add(focus);
+    camera.lookAt(focus);
+    camera.updateMatrixWorld();
+    this.uSunViewProjectionInverse.value.copy(camera.projectionMatrixInverse);
+    this.uSunViewCameraWorld.value.copy(camera.matrixWorld);
+    this.uMainViewProjection.value.multiplyMatrices(
+      this.camera.projectionMatrix,
+      this.camera.matrixWorldInverse,
+    );
+  }
+
+  private makeSunViewOutputs(scene: Scene) {
+    const sunViewDepth = positionWorld
+      .sub(this.uSunViewFocus)
+      .dot(this.lighting.uSunDir)
+      .div(SUN_VIEW_RANGE * 2)
+      .add(0.5)
+      .clamp();
+    const sunViewPass = pass(scene, this.sunViewCamera);
+    sunViewPass.setMRT(mrt({ output: vec4(vec3(sunViewDepth), 1) }));
+    const sunView = sunViewPass.getTextureNode("output");
+    const sunViewPixelDepth = sunViewPass
+      .getTextureNode("depth")
+      .sample(screenUV).r;
+    const sunViewSurface = getViewPosition(
+      screenUV,
+      sunViewPixelDepth,
+      this.uSunViewProjectionInverse,
+    );
+    const sunSurfaceWorld = this.uSunViewCameraWorld.mul(
+      vec4(sunViewSurface, 1),
+    ).xyz;
+    const requestedPages = this.getRequestedPageColor(sunSurfaceWorld);
+    const mainClip = this.uMainViewProjection.mul(vec4(sunSurfaceWorld, 1));
+    const mainNdc = mainClip.xy.div(mainClip.w);
+    const mainUv = vec2(
+      mainNdc.x.mul(0.5).add(0.5),
+      mainNdc.y.mul(-0.5).add(0.5),
+    );
+    const isInsideMainView = mainClip.w
+      .greaterThan(0)
+      .and(mainUv.greaterThanEqual(vec2(0)).all())
+      .and(mainUv.lessThanEqual(vec2(1)).all());
+    const mainSurfaceWorld = this.sampler.getReceiver(mainUv).worldPosition;
+    const cameraDistance = sunSurfaceWorld.distance(this.uSunViewFocus);
+    const footprintTolerance = cameraDistance.mul(0.02).add(0.15);
+    const isSeenByCamera = isInsideMainView.and(
+      mainSurfaceWorld.distance(sunSurfaceWorld).lessThan(footprintTolerance),
+    );
+    const pageCoverage = requestedPages.coverage.mul(sunView.a);
+    const footprintCoverage = float(isSeenByCamera).mul(sunView.a);
+    const sunViewBase = mix(vec3(1), sunView.rgb, sunView.a);
+    const sunViewWithPages = mix(
+      sunViewBase,
+      requestedPages.color,
+      pageCoverage.mul(0.6),
+    );
+    const sunViewWithFootprint = mix(
+      sunViewWithPages,
+      CAMERA_FOOTPRINT_COLOR,
+      footprintCoverage.mul(0.45),
+    );
+    return {
+      "Sun view": renderOutput(vec4(sunViewBase, 1), NoToneMapping),
+      "Sun view pages": renderOutput(
+        vec4(sunViewWithFootprint, 1),
+        NoToneMapping,
+      ),
+    };
+  }
+
+  private getRequestedPageColor(worldPosition: Node<"vec3">) {
+    const { cameraPosition, lightBasis } = this.context;
+    const requestBits = this.pages.createRequestReadNode();
+    const lightPosition = getLightPosition(worldPosition, lightBasis);
+    let color: Node<"vec3"> = vec3(0);
+    let coverage: Node<"float"> = float(0);
+    for (let levelIndex = VSM_LEVEL_COUNT - 1; levelIndex >= 0; levelIndex--) {
+      const level = uint(levelIndex);
+      const pagePosition = lightPosition.div(getPageSize(level));
+      const pageCoordinate = getPageCoordinate(pagePosition);
+      const pageKey = getPageKey(level, pageCoordinate);
+      const word = requestBits.element(pageKey.div(32));
+      const bit = uint(1).shiftLeft(pageKey.mod(32));
+      const hasBit = word.bitAnd(bit).notEqual(0);
+      const windowCenter = getWindowCenter(cameraPosition, lightBasis, level);
+      const isInWindow = isPageInWindow(pageCoordinate, windowCenter);
+      const isRequested = float(hasBit.and(isInWindow));
+      const pageColor = getOutlinedPageColor(level, pagePosition.fract());
+      color = mix(color, pageColor, isRequested);
+      coverage = coverage.max(isRequested);
+    }
+    return { color, coverage };
   }
 }

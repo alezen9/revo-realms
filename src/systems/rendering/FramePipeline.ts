@@ -1,27 +1,6 @@
-import {
-  ColorManagement,
-  NoToneMapping,
-  Matrix4,
-  OrthographicCamera,
-  Vector3,
-} from "three";
+import { ColorManagement, NoToneMapping } from "three";
 import { RenderPipeline, WebGPURenderer, type Node } from "three/webgpu";
-import {
-  float,
-  getViewPosition,
-  mix,
-  mrt,
-  pass,
-  positionWorld,
-  renderOutput,
-  screenUV,
-  uniform,
-  vec2,
-  vec3,
-  vec4,
-} from "three/tsl";
-import type { State } from "../../Game";
-import type { Lighting } from "../lighting/Lighting";
+import { renderOutput, screenUV, vec3, vec4 } from "three/tsl";
 import type {
   DebugBinding,
   DebugFolder,
@@ -36,10 +15,6 @@ import { ScenePass } from "./passes/ScenePass";
 import { TexturePass } from "./passes/TexturePass";
 import { ACESToneMappingPass } from "./passes/ACESToneMappingPass";
 import { WaterPass } from "./passes/WaterPass";
-
-const SUN_VIEW_DISTANCE = 3000;
-const SUN_VIEW_RANGE = 190;
-const CAMERA_FOOTPRINT_COLOR = vec3(1, 0.85, 0.1);
 
 const BLOOM_OPTIONS = {
   strength: 0.8,
@@ -69,21 +44,6 @@ export class FramePipeline extends RenderPipeline {
   private debugLegends: Record<string, string>;
   private debugLegend = { text: "" };
   private debugLegendBinding: DebugBinding<string>;
-  private lighting: Lighting;
-  private sunView = { halfSize: 60 };
-  private sunViewCamera = new OrthographicCamera(
-    -1,
-    1,
-    1,
-    -1,
-    1,
-    SUN_VIEW_DISTANCE * 2,
-  );
-  private uSunViewFocus = uniform(new Vector3());
-  private uSunViewProjectionInverse = uniform(new Matrix4());
-  private uSunViewCameraWorld = uniform(new Matrix4());
-  private uMainViewProjection = uniform(new Matrix4());
-  private uMainCameraPosition = uniform(new Vector3());
 
   constructor(
     renderer: WebGPURenderer,
@@ -98,7 +58,6 @@ export class FramePipeline extends RenderPipeline {
     this.stage = stage;
     this.eventBus = eventBus;
     this.debugPanel = debugPanel;
-    this.lighting = vsmDependencies.lighting;
 
     this.debugFolder = this.debugPanel.panel.addFolder({
       title: "⭐️ Postprocessing",
@@ -126,56 +85,6 @@ export class FramePipeline extends RenderPipeline {
       .pipe(this.dualKawaseBloomPass)
       .pipe(this.acesToneMappingPass);
 
-    const sunViewDepth = positionWorld
-      .sub(this.uSunViewFocus)
-      .dot(this.lighting.uSunDir)
-      .div(SUN_VIEW_RANGE * 2)
-      .add(0.5)
-      .clamp();
-    const sunViewPass = pass(stage.mainScene, this.sunViewCamera);
-    sunViewPass.setMRT(mrt({ output: vec4(vec3(sunViewDepth), 1) }));
-    const sunView = sunViewPass.getTextureNode("output");
-    const sunViewPixelDepth = sunViewPass
-      .getTextureNode("depth")
-      .sample(screenUV).r;
-    const sunViewSurface = getViewPosition(
-      screenUV,
-      sunViewPixelDepth,
-      this.uSunViewProjectionInverse,
-    );
-    const sunSurfaceWorld = this.uSunViewCameraWorld.mul(
-      vec4(sunViewSurface, 1),
-    ).xyz;
-    const requestedPages = this.vsmPass.getRequestedPageColor(sunSurfaceWorld);
-    const mainClip = this.uMainViewProjection.mul(vec4(sunSurfaceWorld, 1));
-    const mainNdc = mainClip.xy.div(mainClip.w);
-    const mainUv = vec2(
-      mainNdc.x.mul(0.5).add(0.5),
-      mainNdc.y.mul(-0.5).add(0.5),
-    );
-    const isInsideMainView = mainClip.w
-      .greaterThan(0)
-      .and(mainUv.greaterThanEqual(vec2(0)).all())
-      .and(mainUv.lessThanEqual(vec2(1)).all());
-    const mainSurfaceWorld = this.vsmPass.getWorldPosition(mainUv);
-    const cameraDistance = sunSurfaceWorld.distance(this.uMainCameraPosition);
-    const footprintTolerance = cameraDistance.mul(0.02).add(0.15);
-    const isSeenByCamera = isInsideMainView.and(
-      mainSurfaceWorld.distance(sunSurfaceWorld).lessThan(footprintTolerance),
-    );
-    const pageCoverage = requestedPages.coverage.mul(sunView.a);
-    const footprintCoverage = float(isSeenByCamera).mul(sunView.a);
-    const sunViewBase = mix(vec3(1), sunView.rgb, sunView.a);
-    const sunViewWithPages = mix(
-      sunViewBase,
-      requestedPages.color,
-      pageCoverage.mul(0.6),
-    );
-    const sunViewWithFootprint = mix(
-      sunViewWithPages,
-      CAMERA_FOOTPRINT_COLOR,
-      footprintCoverage.mul(0.45),
-    );
     this.debugOutputs = {
       Scene: this.chain.output,
       "Direct sun": renderOutput(
@@ -186,15 +95,7 @@ export class FramePipeline extends RenderPipeline {
         vec4(vec3(this.scenePass.softShadow.sample(screenUV).r), 1),
         NoToneMapping,
       ),
-      ...this.vsmPass.createDebugOutputs(),
-      "Sun view": renderOutput(
-        vec4(mix(vec3(1), sunView.rgb, sunView.a), 1),
-        NoToneMapping,
-      ),
-      "Sun view pages": renderOutput(
-        vec4(sunViewWithFootprint, 1),
-        NoToneMapping,
-      ),
+      ...this.vsmPass.createDebugOutputs(stage.mainScene),
     };
     this.debugLegends = this.vsmPass.createDebugLegends();
     this.debugLegendBinding = this.addBindings();
@@ -217,30 +118,7 @@ export class FramePipeline extends RenderPipeline {
     if (isEnabled) this.saturationTarget = 0;
   };
 
-  private onEngineUpdate = ({ delta, player }: State) => {
-    const { width, height } = this.renderer.domElement;
-    const { halfSize } = this.sunView;
-    const camera = this.sunViewCamera;
-    camera.left = -halfSize * (width / height);
-    camera.right = halfSize * (width / height);
-    camera.top = halfSize;
-    camera.bottom = -halfSize;
-    camera.updateProjectionMatrix();
-    this.uSunViewFocus.value.copy(player.position);
-    camera.position
-      .copy(this.lighting.sunDirection)
-      .multiplyScalar(-SUN_VIEW_DISTANCE)
-      .add(player.position);
-    camera.lookAt(player.position);
-    camera.updateMatrixWorld();
-    this.uSunViewProjectionInverse.value.copy(camera.projectionMatrixInverse);
-    this.uSunViewCameraWorld.value.copy(camera.matrixWorld);
-    const { renderCamera } = this.stage;
-    this.uMainViewProjection.value.multiplyMatrices(
-      renderCamera.projectionMatrix,
-      renderCamera.matrixWorldInverse,
-    );
-    renderCamera.getWorldPosition(this.uMainCameraPosition.value);
+  private onEngineUpdate = ({ delta }: { delta: number }) => {
     const { saturation } = this.acesToneMappingPass;
     if (saturation.value === this.saturationTarget) return;
     const t = 1 - Math.exp(-this.saturationLerpSpeed * delta);
@@ -285,16 +163,6 @@ export class FramePipeline extends RenderPipeline {
       expanded: false,
     });
     this.vsmPass.addBindings(shadowsFolder);
-    const sunViewFolder = this.debugFolder.addFolder({
-      title: "Sun view",
-      expanded: false,
-    });
-    sunViewFolder.addBinding(this.sunView, "halfSize", {
-      label: "Size",
-      min: 5,
-      max: 1500,
-      step: 1,
-    });
     const volumetricLightFolder = this.debugFolder.addFolder({
       title: "Volumetric light",
       expanded: false,
@@ -306,6 +174,7 @@ export class FramePipeline extends RenderPipeline {
   private selectDebugView = () => {
     const { target } = this.debugView;
     this.outputNode = this.debugOutputs[target] ?? this.debugOutputs.Scene;
+    this.vsmPass.setDebugView(target);
     this.needsUpdate = true;
     const legend = this.debugLegends[target];
     this.debugLegend.text = legend ?? "";

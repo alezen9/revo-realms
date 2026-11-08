@@ -99,7 +99,7 @@ const getReceiverSlope = (lightPosition: Vec2Node, worldHeight: FloatNode) => {
   return hasSlope.select(clampedSlope, vec2(0));
 };
 
-const getPointLit = (
+const getPointVisibility = (
   pool: VSMDepthPool,
   slot: Node<"uint">,
   texel: Node<"uvec2">,
@@ -251,20 +251,24 @@ export class VSMSampler {
         If(page.isResident, () => {
           const pageTexel = pagePosition.fract().mul(VSM_PAGE_TEXELS).floor();
           const texel = uvec2(pageTexel.clamp(0, VSM_PAGE_TEXELS - 1));
-          const staticLit = getPointLit(
-            this.staticPool,
-            page.slot,
-            texel,
-            worldPosition.y,
+          visibility.assign(
+            getPointVisibility(
+              this.staticPool,
+              page.slot,
+              texel,
+              worldPosition.y,
+            ),
           );
-          const dynamicLit = getPointLit(
-            this.dynamicPool,
-            page.dynamicSlot,
-            texel,
-            worldPosition.y,
-          );
-          const dynamicVisibility = mix(1, dynamicLit, float(page.hasDynamic));
-          visibility.assign(staticLit.mul(dynamicVisibility));
+          If(page.hasDynamic, () => {
+            visibility.mulAssign(
+              getPointVisibility(
+                this.dynamicPool,
+                page.dynamicSlot,
+                texel,
+                worldPosition.y,
+              ),
+            );
+          });
           Break();
         });
       },
