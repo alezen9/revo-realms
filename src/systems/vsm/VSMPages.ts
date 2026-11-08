@@ -209,18 +209,19 @@ const invalidatePages = Fn<
 >(([context, invalidationRects, invalidationCount]) => {
   const { cameraPosition, lightBasis } = context;
   const slotMetadataEntry = context.slotMetadataNode.element(instanceIndex);
-  const hasPage = slotMetadataEntry.x.notEqual(VSM_INVALID_PAGE_KEY);
-  const isCurrentGeneration = slotMetadataEntry.w.equal(context.pageGeneration);
+  const {
+    x: slotPageKey,
+    y: slotPageTag,
+    z: requestedFrame,
+    w: slotGeneration,
+  } = slotMetadataEntry;
+  const hasPage = slotPageKey.notEqual(VSM_INVALID_PAGE_KEY);
+  const isCurrentGeneration = slotGeneration.equal(context.pageGeneration);
   If(hasPage.and(isCurrentGeneration), () => {
-    const level = slotMetadataEntry.x.div(VSM_PAGES_PER_LEVEL).toVar();
+    const level = slotPageKey.div(VSM_PAGES_PER_LEVEL).toVar();
     const windowCenter = getWindowCenter(cameraPosition, lightBasis, level);
-    const pageCoordinate = getWindowPage(
-      slotMetadataEntry.x,
-      windowCenter,
-    ).toVar();
-    const hasLeftWindow = getPageTag(pageCoordinate).notEqual(
-      slotMetadataEntry.y,
-    );
+    const pageCoordinate = getWindowPage(slotPageKey, windowCenter).toVar();
+    const hasLeftWindow = getPageTag(pageCoordinate).notEqual(slotPageTag);
     const isInvalid = hasLeftWindow.toVar();
     Loop(
       { start: uint(0), end: invalidationCount, type: "uint" },
@@ -239,7 +240,7 @@ const invalidatePages = Fn<
     );
     If(isInvalid, () => {
       slotMetadataEntry.assign(
-        uvec4(slotMetadataEntry.x, slotMetadataEntry.y, slotMetadataEntry.z, 0),
+        uvec4(slotPageKey, slotPageTag, requestedFrame, 0),
       );
     });
   });
@@ -300,13 +301,15 @@ const freeStaleSlots = Fn<
   [context: VSMContext, counters: CounterNode, lists: ListsNode],
   void
 >(([context, counters, lists]) => {
-  const slotMetadataEntry = context.slotMetadataNode.element(instanceIndex);
-  const isUnusedThisFrame = slotMetadataEntry.z.notEqual(context.frame);
+  const {
+    x: slotPageKey,
+    z: requestedFrame,
+    w: slotGeneration,
+  } = context.slotMetadataNode.element(instanceIndex);
+  const isUnusedThisFrame = requestedFrame.notEqual(context.frame);
   If(isUnusedThisFrame, () => {
-    const hasNoPage = slotMetadataEntry.x.equal(VSM_INVALID_PAGE_KEY);
-    const isOldGeneration = slotMetadataEntry.w.notEqual(
-      context.pageGeneration,
-    );
+    const hasNoPage = slotPageKey.equal(VSM_INVALID_PAGE_KEY);
+    const isOldGeneration = slotGeneration.notEqual(context.pageGeneration);
     const isEmptySlot = hasNoPage.or(isOldGeneration);
     If(isEmptySlot, () => {
       const index = atomicAdd(counters.element(VSM_COUNTER_EMPTY), 1);

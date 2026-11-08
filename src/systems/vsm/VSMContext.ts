@@ -301,19 +301,26 @@ export class VSMContext {
   }
 
   resolvePage(pageKey: Node<"uint">, pageTag: Node<"uint">) {
-    const pageTableEntry = this.pageTableNode.element(pageKey);
-    const slotPlusOne = pageTableEntry.x;
-    const hasSlot = slotPlusOne
+    const {
+      x: staticSlotPlusOne,
+      y: touchedFrame,
+      z: dynamicSlot,
+    } = this.pageTableNode.element(pageKey);
+    const hasSlot = staticSlotPlusOne
       .greaterThan(0)
-      .and(slotPlusOne.lessThanEqual(VSM_POOL_CAPACITY));
-    const slot = hasSlot.select(slotPlusOne.sub(1), uint(0));
-    const slotMetadataEntry = this.slotMetadataNode.element(slot);
+      .and(staticSlotPlusOne.lessThanEqual(VSM_POOL_CAPACITY));
+    const slot = hasSlot.select(staticSlotPlusOne.sub(1), uint(0));
+    const {
+      x: slotPageKey,
+      y: slotPageTag,
+      w: slotGeneration,
+    } = this.slotMetadataNode.element(slot);
     const isResident = hasSlot
-      .and(slotMetadataEntry.x.equal(pageKey))
-      .and(slotMetadataEntry.y.equal(pageTag))
-      .and(slotMetadataEntry.w.equal(this.pageGeneration));
-    const hasDynamic = isResident.and(pageTableEntry.y.equal(this.frame));
-    return { slot, isResident, hasDynamic, dynamicSlot: pageTableEntry.z };
+      .and(slotPageKey.equal(pageKey))
+      .and(slotPageTag.equal(pageTag))
+      .and(slotGeneration.equal(this.pageGeneration));
+    const hasDynamic = isResident.and(touchedFrame.equal(this.frame));
+    return { slot, isResident, hasDynamic, dynamicSlot };
   }
 
   registerCaster(mesh: Mesh, options: VSMCasterOptions = {}) {

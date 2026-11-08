@@ -66,7 +66,8 @@ const prepareDynamicPages = Fn<
   If(instanceIndex.lessThan(activeCount), () => {
     const pageKey = pageJobs.element(instanceIndex.add(VSM_JOBS_ACTIVE)).x;
     const pageTableEntry = pageTable.element(pageKey);
-    pageTableEntry.assign(uvec4(pageTableEntry.x, 0, pageTableEntry.z, frame));
+    const { x: staticSlotPlusOne, z: dynamicSlot } = pageTableEntry;
+    pageTableEntry.assign(uvec4(staticSlotPlusOne, 0, dynamicSlot, frame));
   });
 });
 
@@ -77,7 +78,8 @@ const countTouchedPages = Fn<DynamicJobArgs, void>(
     If(instanceIndex.lessThan(activeCount), () => {
       const job = pageJobs.element(instanceIndex.add(VSM_JOBS_ACTIVE));
       const level = job.x.div(VSM_PAGES_PER_LEVEL);
-      const isTouched = pageTable.element(job.x).y.equal(frame);
+      const touchedFrame = pageTable.element(job.x).y;
+      const isTouched = touchedFrame.equal(frame);
       If(isTouched, () => {
         const levelCount = dynamicCounters.element(
           level.add(VSM_DYNAMIC_COUNTER_LEVEL_COUNTS),
@@ -95,7 +97,8 @@ const assignDynamicSlots = Fn<DynamicJobArgs, void>(
       const job = pageJobs.element(instanceIndex.add(VSM_JOBS_ACTIVE));
       const level = job.x.div(VSM_PAGES_PER_LEVEL).toVar();
       const staticSlot = job.y;
-      const isTouched = pageTable.element(job.x).y.equal(frame);
+      const touchedFrame = pageTable.element(job.x).y;
+      const isTouched = touchedFrame.equal(frame);
       If(isTouched, () => {
         // finer levels take the first slots so a full pool drops the coarse ones
         const firstSlot = uint(0).toVar();

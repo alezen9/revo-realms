@@ -29,7 +29,7 @@ import {
   vec3,
   vec4,
 } from "three/tsl";
-import type { VSMRasterWork } from "./VSMDepthPool";
+import type { VSMRasterEntry } from "./VSMDepthPool";
 import {
   VSM_LEVEL_COUNT,
   VSM_PAGES_PER_LEVEL,
@@ -403,11 +403,17 @@ const markClusterPages = Fn<
           );
           const pageKey = getPageKey(level, pageCoordinate);
           const pageTableEntry = pageTable.element(pageKey);
+          const {
+            x: staticSlotPlusOne,
+            z: dynamicSlot,
+            w: activeFrame,
+          } = pageTableEntry;
           const isInWindow = isPageInWindow(pageCoordinate, windowCenter);
-          const isActivePage = pageTableEntry.w.equal(frame);
+          const isActivePage = activeFrame.equal(frame);
           If(isInWindow.and(isActivePage), () => {
-            const { x, z, w } = pageTableEntry;
-            pageTableEntry.assign(uvec4(x, frame, z, w));
+            pageTableEntry.assign(
+              uvec4(staticSlotPlusOne, frame, dynamicSlot, activeFrame),
+            );
           });
         },
       );
@@ -608,13 +614,13 @@ export class VSMClusterBucket {
     this.writeContent(content);
   }
 
-  getWorkCount() {
+  getEntryCount() {
     const workCount = this.rasterWorkCount.element(0);
     const isWithinCapacity = workCount.lessThan(VSM_CLUSTER_MAX_WORK_ITEMS);
     return isWithinCapacity.select(workCount, uint(VSM_CLUSTER_MAX_WORK_ITEMS));
   }
 
-  getWork(index: Node<"uint">): VSMRasterWork {
+  getEntry(index: Node<"uint">): VSMRasterEntry {
     const workItem = this.rasterWorkItems.element(index).toVar();
     const jobIndex = workItem.x.add(this.jobs.offset);
     const job = this.rasterJobs.element(jobIndex).toVar();
@@ -637,27 +643,27 @@ export class VSMClusterBucket {
     };
   }
 
-  getCorner(work: VSMRasterWork, vertex: Node<"uint">) {
-    const local = this.rasterPositions.element(vertex).xyz.toVar();
-    const translationIndex = work.instance.mul(4).add(3);
+  getVertex(entry: VSMRasterEntry, vertexIndex: Node<"uint">) {
+    const local = this.rasterPositions.element(vertexIndex).xyz.toVar();
+    const translationIndex = entry.instance.mul(4).add(3);
     const depthBias = this.rasterMatrices.element(translationIndex).w;
     const world = getWorldPosition(
       this.rasterMatrices,
-      work.instance,
+      entry.instance,
       local,
       this.positionNode,
     );
     return vec4(world, depthBias);
   }
 
-  getUv(vertex: Node<"uint">) {
-    const packedUv = this.rasterPositions.element(vertex).w;
+  getUv(vertexIndex: Node<"uint">) {
+    const packedUv = this.rasterPositions.element(vertexIndex).w;
     const v = packedUv.div(UV_STEPS).floor();
     const u = packedUv.sub(v.mul(UV_STEPS));
     return vec2(u, v).div(UV_LAST_STEP);
   }
 
-  isMaskSolid(work: VSMRasterWork, uv: Node<"vec2">) {
+  isMaskSolid(entry: VSMRasterEntry, uv: Node<"vec2">) {
     if (!this.rasterMasks) return bool(true);
     const maskTexel = uv
       .clamp(0, 1)
@@ -665,7 +671,7 @@ export class VSMClusterBucket {
       .min(VSM_MASK_SIZE - 1);
     const texel = uvec2(maskTexel);
     const texelIndex = texel.y.mul(VSM_MASK_SIZE).add(texel.x).toVar();
-    const maskBase = work.maskId.sub(1).mul(VSM_MASK_WORDS);
+    const maskBase = entry.maskId.sub(1).mul(VSM_MASK_WORDS);
     const wordIndex = maskBase.add(texelIndex.shiftRight(5));
     const word = this.rasterMasks.element(wordIndex);
     return word.shiftRight(texelIndex.bitAnd(31)).bitAnd(1).notEqual(0);
