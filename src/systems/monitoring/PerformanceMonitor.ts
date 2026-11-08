@@ -65,38 +65,6 @@ const createAccumulator = (): DeviceAccumulator => ({
   passDurations: new Map(),
 });
 
-type TimingSummary = {
-  averageMs: number;
-  p95Ms: number;
-  p99Ms: number;
-  maxMs: number;
-};
-
-const summarizeTimings = (samples: number[]): TimingSummary => {
-  if (samples.length === 0)
-    return { averageMs: 0, p95Ms: 0, p99Ms: 0, maxMs: 0 };
-
-  const sorted = [...samples].sort((a, b) => a - b);
-  let sum = 0;
-  for (const sample of samples) sum += sample;
-
-  const p95Index = Math.min(
-    sorted.length - 1,
-    Math.ceil(sorted.length * 0.95) - 1,
-  );
-  const p99Index = Math.min(
-    sorted.length - 1,
-    Math.ceil(sorted.length * 0.99) - 1,
-  );
-
-  return {
-    averageMs: sum / samples.length,
-    p95Ms: sorted[p95Index],
-    p99Ms: sorted[p99Index],
-    maxMs: sorted[sorted.length - 1],
-  };
-};
-
 export class PerformanceMonitor {
   private eventBus: EventBus;
   private graphics: Graphics;
@@ -108,7 +76,6 @@ export class PerformanceMonitor {
   private lastRenderSampleTime = 0;
   private frameCount = 0;
   private missedFrames = 0;
-  private frameIntervals: number[] = [];
   private physicsStepCount = 0;
   private physicsMaxSteps = 0;
   private physicsCatchUpSteps = 0;
@@ -204,7 +171,6 @@ export class PerformanceMonitor {
     const budgetMs = 1000 / this.frameScheduler.effectiveFps;
     if (this.lastRenderSampleTime > 0) {
       const frameIntervalMs = renderTimestamp - this.lastRenderSampleTime;
-      this.frameIntervals.push(frameIntervalMs);
       const elapsedRefreshPeriods = Math.max(
         1,
         Math.round(frameIntervalMs / budgetMs),
@@ -378,7 +344,6 @@ export class PerformanceMonitor {
 
     const { effectiveFps, refreshHz } = this.frameScheduler;
     const grass = this.grassStats;
-    const frameIntervals = summarizeTimings(this.frameIntervals);
     const { canvas, renderer } = this.graphics;
     let sceneTriangles = this.lastSceneTriangles;
     if (grass)
@@ -392,12 +357,6 @@ export class PerformanceMonitor {
         target: effectiveFps,
         refreshHz,
         missedFrames: this.missedFrames,
-      },
-      frame: {
-        intervalAverageMs: frameIntervals.averageMs,
-        intervalP95Ms: frameIntervals.p95Ms,
-        intervalP99Ms: frameIntervals.p99Ms,
-        intervalMaxMs: frameIntervals.maxMs,
       },
       physics: {
         rate: this.physicsStepCount / (elapsedMs / 1_000),
@@ -423,7 +382,6 @@ export class PerformanceMonitor {
     this.lastSnapshotUpdate = now;
     this.frameCount = 0;
     this.missedFrames = 0;
-    this.frameIntervals = [];
     this.physicsStepCount = 0;
     this.physicsMaxSteps = 0;
     this.physicsCatchUpSteps = 0;

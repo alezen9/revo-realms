@@ -61,12 +61,6 @@
 		return `${format} ${width}x${height}${samples}`
 	}
 
-	const paceClass = (value: number, budget: number) => {
-		if (value <= budget * 1.05) return "good"
-		if (value <= budget * 1.25) return "warn"
-		return "bad"
-	}
-
 	const headroomClass = (value: number, budget: number) => {
 		if (value <= budget * 0.75) return "good"
 		if (value <= budget) return "warn"
@@ -86,7 +80,6 @@
 	{@const grass = snapshot.grass}
 	{@const shadowPages = snapshot.shadowPages}
 	{@const budgetMs = snapshot.frameBudgetMs}
-	{@const frame = snapshot.frame}
 	{@const physics = snapshot.physics}
 	{@const output = snapshot.output}
 	{@const isOnTarget = snapshot.fps.live >= snapshot.fps.target * 0.95}
@@ -108,12 +101,6 @@
 				<span class="cell">
 					<span class="label">Target</span>
 					<span class="value">{rateFormat.format(snapshot.fps.target)}</span>
-				</span>
-				<span class="cell">
-					<span class="label">P99</span>
-					<span class={["value", paceClass(frame.intervalP99Ms, budgetMs)]}>
-						{msFormat.format(frame.intervalP99Ms)}
-					</span>
 				</span>
 				<span class="cell">
 					<span class="label">Missed</span>

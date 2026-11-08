@@ -43,12 +43,6 @@ export type MonitoringSnapshot = {
     refreshHz: number;
     missedFrames: number;
   };
-  frame: {
-    intervalAverageMs: number;
-    intervalP95Ms: number;
-    intervalP99Ms: number;
-    intervalMaxMs: number;
-  };
   physics: {
     rate: number;
     maxSteps: number;
