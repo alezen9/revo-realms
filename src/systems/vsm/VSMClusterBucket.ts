@@ -84,7 +84,7 @@ type ClusterContent = {
   maskSources: MaskSource[];
 };
 
-export const buildClusterMeshlets = (
+const buildClusterMeshlets = (
   geometry: BufferGeometry,
   range: { start: number; count: number },
 ) => {

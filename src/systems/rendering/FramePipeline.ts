@@ -38,6 +38,7 @@ import { ACESToneMappingPass } from "./passes/ACESToneMappingPass";
 import { WaterPass } from "./passes/WaterPass";
 
 const SUN_VIEW_DISTANCE = 3000;
+const SUN_VIEW_RANGE = 190;
 const CAMERA_FOOTPRINT_COLOR = vec3(1, 0.85, 0.1);
 
 const BLOOM_OPTIONS = {
@@ -79,9 +80,6 @@ export class FramePipeline extends RenderPipeline {
     SUN_VIEW_DISTANCE * 2,
   );
   private uSunViewFocus = uniform(new Vector3());
-  private uSunViewRange = uniform(190);
-  private uDepthViewRange = uniform(150);
-  private uSunViewProjection = uniform(new Matrix4());
   private uSunViewProjectionInverse = uniform(new Matrix4());
   private uSunViewCameraWorld = uniform(new Matrix4());
   private uMainViewProjection = uniform(new Matrix4());
@@ -131,35 +129,12 @@ export class FramePipeline extends RenderPipeline {
     const sunViewDepth = positionWorld
       .sub(this.uSunViewFocus)
       .dot(this.lighting.uSunDir)
-      .div(this.uSunViewRange.mul(2))
+      .div(SUN_VIEW_RANGE * 2)
       .add(0.5)
       .clamp();
     const sunViewPass = pass(stage.mainScene, this.sunViewCamera);
     sunViewPass.setMRT(mrt({ output: vec4(vec3(sunViewDepth), 1) }));
     const sunView = sunViewPass.getTextureNode("output");
-    const isSky = this.scenePass.depth.sample(screenUV).r.greaterThanEqual(1);
-    const receiverWorld = this.vsmPass.getWorldPosition(screenUV);
-    const receiverSunDepth = receiverWorld
-      .sub(this.uSunViewFocus)
-      .dot(this.lighting.uSunDir)
-      .div(this.uSunViewRange.mul(2))
-      .add(0.5)
-      .clamp();
-    const receiverSunClip = this.uSunViewProjection.mul(vec4(receiverWorld, 1));
-    const receiverSunUv = vec2(
-      receiverSunClip.x.mul(0.5).add(0.5),
-      receiverSunClip.y.mul(-0.5).add(0.5),
-    );
-    const isInsideSunView = receiverSunUv
-      .greaterThanEqual(vec2(0))
-      .all()
-      .and(receiverSunUv.lessThanEqual(vec2(1)).all());
-    const storedSunView = sunView.sample(receiverSunUv);
-    const storedSunDepth = mix(
-      vec3(1),
-      storedSunView.rgb,
-      storedSunView.a.mul(isInsideSunView.toFloat()),
-    );
     const sunViewPixelDepth = sunViewPass
       .getTextureNode("depth")
       .sample(screenUV).r;
@@ -201,30 +176,6 @@ export class FramePipeline extends RenderPipeline {
       CAMERA_FOOTPRINT_COLOR,
       footprintCoverage.mul(0.45),
     );
-    const sunLevelGrid = this.vsmPass.getLevelGridColor(
-      sunSurfaceWorld,
-      this.uSunViewFocus,
-    );
-    const sunViewWithLevels = mix(
-      sunViewBase,
-      sunLevelGrid.color,
-      sunLevelGrid.coverage.mul(sunView.a).mul(0.6),
-    );
-    const sceneLevelGrid = this.vsmPass.getLevelGridColor(
-      this.vsmPass.getWorldPosition(screenUV),
-      this.uSunViewFocus,
-    );
-    const sceneLevelCoverage = sceneLevelGrid.coverage
-      .mul(float(1).sub(float(isSky)))
-      .mul(0.55);
-    const sceneWithLevels = mix(
-      this.chain.output.rgb.pow(2.2),
-      sceneLevelGrid.color,
-      sceneLevelCoverage,
-    );
-    const sceneDistance = this.vsmPass
-      .getWorldPosition(screenUV)
-      .distance(this.uMainCameraPosition);
     this.debugOutputs = {
       Scene: this.chain.output,
       "Direct sun": renderOutput(
@@ -235,15 +186,6 @@ export class FramePipeline extends RenderPipeline {
         vec4(vec3(this.scenePass.softShadow.sample(screenUV).r), 1),
         NoToneMapping,
       ),
-      Depth: renderOutput(
-        vec4(vec3(sceneDistance.div(this.uDepthViewRange).clamp(0, 1)), 1),
-        NoToneMapping,
-      ),
-      Levels: renderOutput(vec4(sceneWithLevels, 1), NoToneMapping),
-      "Levels (sun view)": renderOutput(
-        vec4(sunViewWithLevels, 1),
-        NoToneMapping,
-      ),
       ...this.vsmPass.createDebugOutputs(),
       "Sun view": renderOutput(
         vec4(mix(vec3(1), sunView.rgb, sunView.a), 1),
@@ -251,14 +193,6 @@ export class FramePipeline extends RenderPipeline {
       ),
       "Sun view pages": renderOutput(
         vec4(sunViewWithFootprint, 1),
-        NoToneMapping,
-      ),
-      "Sun depth (receiver)": renderOutput(
-        vec4(mix(vec3(receiverSunDepth), vec3(1), isSky.toFloat()), 1),
-        NoToneMapping,
-      ),
-      "Sun depth (stored)": renderOutput(
-        vec4(mix(storedSunDepth, vec3(1), isSky.toFloat()), 1),
         NoToneMapping,
       ),
     };
@@ -299,10 +233,6 @@ export class FramePipeline extends RenderPipeline {
       .add(player.position);
     camera.lookAt(player.position);
     camera.updateMatrixWorld();
-    this.uSunViewProjection.value.multiplyMatrices(
-      camera.projectionMatrix,
-      camera.matrixWorldInverse,
-    );
     this.uSunViewProjectionInverse.value.copy(camera.projectionMatrixInverse);
     this.uSunViewCameraWorld.value.copy(camera.matrixWorld);
     const { renderCamera } = this.stage;
@@ -345,12 +275,6 @@ export class FramePipeline extends RenderPipeline {
       max: 10,
       step: 0.01,
     });
-    this.debugFolder.addBinding(this.uDepthViewRange, "value", {
-      label: "Depth range",
-      min: 1,
-      max: 1000,
-      step: 1,
-    });
     const bloomFolder = this.debugFolder.addFolder({
       title: "Bloom",
       expanded: false,
@@ -369,12 +293,6 @@ export class FramePipeline extends RenderPipeline {
       label: "Size",
       min: 5,
       max: 1500,
-      step: 1,
-    });
-    sunViewFolder.addBinding(this.uSunViewRange, "value", {
-      label: "Depth range",
-      min: 1,
-      max: 300,
       step: 1,
     });
     const volumetricLightFolder = this.debugFolder.addFolder({

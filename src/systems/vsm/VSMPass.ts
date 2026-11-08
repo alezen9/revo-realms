@@ -7,11 +7,9 @@ import type {
 } from "three/webgpu";
 import {
   float,
-  fwidth,
   mix,
   renderOutput,
   screenUV,
-  smoothstep,
   step,
   uint,
   uniform,
@@ -43,8 +41,6 @@ import {
   getWindowCenter,
   isPageInWindow,
   VSM_LEVEL_COUNT,
-  VSM_PAGE_GRID_SIZE,
-  VSM_PAGE_OFFSET,
   VSM_SOFT_RECEIVER_THRESHOLD,
   getReceiverLevel,
   getSoftReceiverLevel,
@@ -206,56 +202,6 @@ export class VSMPass {
       const outlinedPageColor = mix(pageColor, PAGE_EDGE_COLOR, edgeHighlight);
       color = mix(color, outlinedPageColor, isRequested);
       coverage = coverage.max(isRequested);
-    }
-    return { color, coverage };
-  }
-
-  getLevelGridColor(worldPosition: Node<"vec3">, center: Node<"vec3">) {
-    const { lightBasis } = this.context;
-    const lightPosition = getLightPosition(worldPosition, lightBasis);
-    let color: Node<"vec3"> = vec3(0);
-    let coverage: Node<"float"> = float(0);
-    for (let levelIndex = VSM_LEVEL_COUNT - 1; levelIndex >= 0; levelIndex--) {
-      const level = uint(levelIndex);
-      const pagePosition = lightPosition.div(getPageSize(level));
-      const windowCenter = vec2(getWindowCenter(center, lightBasis, level));
-      const windowStart = windowCenter.sub(
-        VSM_PAGE_OFFSET + VSM_PAGE_GRID_SIZE / 2,
-      );
-      const windowPosition = pagePosition.sub(windowStart);
-      const isAfterStart = windowPosition.greaterThanEqual(vec2(0)).all();
-      const isBeforeEnd = windowPosition
-        .lessThanEqual(vec2(VSM_PAGE_GRID_SIZE))
-        .all();
-      const isInWindow = float(isAfterStart.and(isBeforeEnd));
-      const pageFootprint = fwidth(pagePosition);
-      const pixelsPerPage = float(1).div(
-        pageFootprint.x.max(pageFootprint.y).max(0.000001),
-      );
-      const pageUv = pagePosition.fract();
-      const pageEdge = pageUv.min(float(1).sub(pageUv));
-      const pageEdgePixels = pageEdge.x.min(pageEdge.y).mul(pixelsPerPage);
-      const gridFade = smoothstep(4, 10, pixelsPerPage);
-      const gridLine = float(1)
-        .sub(smoothstep(0.5, 1.5, pageEdgePixels))
-        .mul(gridFade)
-        .mul(0.5);
-      const windowEdge = windowPosition.min(
-        float(VSM_PAGE_GRID_SIZE).sub(windowPosition),
-      );
-      const windowEdgePixels = windowEdge.x
-        .min(windowEdge.y)
-        .mul(pixelsPerPage);
-      const outline = float(1).sub(smoothstep(1, 3, windowEdgePixels));
-      const levelHue = LEVEL_HUE_STEPS.mul(float(levelIndex)).fract();
-      const levelColor = levelHue.mul(0.6).add(0.3);
-      const linedColor = mix(
-        levelColor,
-        PAGE_EDGE_COLOR,
-        gridLine.max(outline),
-      );
-      color = mix(color, linedColor, isInWindow);
-      coverage = coverage.max(isInWindow);
     }
     return { color, coverage };
   }

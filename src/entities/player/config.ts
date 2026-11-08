@@ -9,7 +9,6 @@ const POSITIONS = {
   lake: [-222.5, 0.5, 170],
   dragonball: [150, 0.5, 80],
   pitch: [-15, 0.5, -165],
-  custom: [140, 0.5, 90],
 } as const;
 
 export const playerConfig = {

@@ -3,7 +3,7 @@ import type { Node } from "three/webgpu";
 import { ceil, float, log2, uint, uniform, uvec2, vec2 } from "three/tsl";
 
 export const VSM_PAGE_TEXELS = 128;
-export const VSM_PAGE_GRID_SIZE = 128;
+const VSM_PAGE_GRID_SIZE = 128;
 const VSM_PAGE_WINDOW_HALF = VSM_PAGE_GRID_SIZE / 2;
 export const VSM_PAGES_PER_LEVEL = VSM_PAGE_GRID_SIZE ** 2;
 const VSM_FIRST_LEVEL = 5;

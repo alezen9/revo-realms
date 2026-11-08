@@ -12,7 +12,6 @@ import { Water } from "./water/Water";
 import { Campfire } from "./landmarks/campfire/Campfire";
 import { FootballPitch } from "./landmarks/FootballPitch";
 import { FEATURE_FLAGS } from "../systems/debug/toolingFlags";
-import { ClusterView } from "./ClusterView";
 
 export class RevoRealm {
   constructor() {
@@ -29,6 +28,5 @@ export class RevoRealm {
     new Water();
     new Campfire();
     new FootballPitch();
-    new ClusterView();
   }
 }
