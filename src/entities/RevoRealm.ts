@@ -11,7 +11,6 @@ import { Expedition33Flag } from "./landmarks/expedition33Flag/Expedition33Flag"
 import { Water } from "./water/Water";
 import { Campfire } from "./landmarks/campfire/Campfire";
 import { FootballPitch } from "./landmarks/FootballPitch";
-import { FEATURE_FLAGS } from "../systems/debug/toolingFlags";
 
 export class RevoRealm {
   constructor() {
@@ -24,7 +23,7 @@ export class RevoRealm {
     new LeviathanAxe();
     new DragonSlayerSword();
     new GokuStatue();
-    if (FEATURE_FLAGS.expedition33) new Expedition33Flag();
+    new Expedition33Flag();
     new Water();
     new Campfire();
     new FootballPitch();
