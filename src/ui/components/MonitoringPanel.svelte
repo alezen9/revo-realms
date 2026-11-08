@@ -122,10 +122,6 @@
 						<span class={["value", gpuClass]}>{msFormat.format(gpuElapsedMs)}</span>
 					</span>
 					<span class="cell">
-						<span class="label">Headroom</span>
-						<span class={["value", gpuClass]}>{msFormat.format(budgetMs - gpuElapsedMs)}</span>
-					</span>
-					<span class="cell">
 						<span class="label">Render</span>
 						<span class="value">{msFormat.format(gpu.renderAverageMs)}</span>
 					</span>
