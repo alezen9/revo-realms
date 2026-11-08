@@ -83,7 +83,9 @@ export const getParticleNormal = Fn<
   const right = positions.element(getParticleIndex(column.add(1), row)).xyz;
   const up = positions.element(getParticleIndex(column, row.sub(1))).xyz;
   const down = positions.element(getParticleIndex(column, row.add(1))).xyz;
-  return down.sub(up).cross(right.sub(left)).normalize();
+  const cross = down.sub(up).cross(right.sub(left));
+  // folds give a zero cross, normalize -> nan
+  return cross.div(cross.length().max(EPSILON));
 });
 
 // shadow rasterization reads the rest plane, so each plane vertex maps back to its particle

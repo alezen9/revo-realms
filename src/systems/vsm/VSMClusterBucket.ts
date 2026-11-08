@@ -39,6 +39,7 @@ import {
   getPageSize,
   getWindowCenter,
   isPageInWindow,
+  VSM_PAGE_GRID_SIZE,
 } from "./VSMMath";
 import {
   VSM_JOB_COUNT,
@@ -403,8 +404,15 @@ const markClusterPages = Fn<
         level,
       ).toVar();
       const pageWidth = lastPage.x.sub(firstPage.x).add(1).toVar();
-      const pageHeight = lastPage.y.sub(firstPage.y).add(1);
-      const pageCount = pageWidth.mul(pageHeight);
+      const pageHeight = lastPage.y.sub(firstPage.y).add(1).toVar();
+      // inverted/nan box wraps to billions of pages -> gpu hang
+      const isWindowSized = pageWidth
+        .lessThanEqual(VSM_PAGE_GRID_SIZE)
+        .and(pageHeight.lessThanEqual(VSM_PAGE_GRID_SIZE));
+      const pageCount = isWindowSized.select(
+        pageWidth.mul(pageHeight),
+        uint(0),
+      );
       Loop(
         { start: 0, end: pageCount, type: "uint" },
         ({ i: pageLoopIndex }) => {
