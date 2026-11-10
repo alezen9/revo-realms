@@ -36,6 +36,12 @@ export const debugGrass = (uniforms: GrassUniforms, config: GrassConfig) => {
     max: 1,
     step: 0.01,
   });
+  color.addBinding(uniforms.uGustBrightness, "value", {
+    label: "Gust brightness",
+    min: 1,
+    max: 2,
+    step: 0.01,
+  });
 
   const lighting = folder.addFolder({
     title: "Lighting",

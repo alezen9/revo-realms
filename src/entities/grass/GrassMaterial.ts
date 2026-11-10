@@ -141,7 +141,9 @@ export class GrassMaterial extends SpriteNodeMaterial {
       .mul(0.25)
       .mul(nearDetailMask);
 
-    const variedColor = getGrassColor(positionNoise);
+    const gustExposure = smoothstep(0.01, 0.36, bendLengthSquared);
+    const gustBrightness = mix(1, uniforms.uGustBrightness, gustExposure);
+    const variedColor = getGrassColor(positionNoise).mul(gustBrightness);
 
     const viewOffset = cameraPosition.sub(worldPosition);
     const viewDirection = viewOffset.normalize();

@@ -108,6 +108,7 @@ export const uniforms = {
   uTipColor: uniform(new Color(0.42, 0.5, 0.3).convertSRGBToLinear()),
   uColorMixFactor: uniform(0.35),
   uColorVariationStrength: uniform(0.7),
+  uGustBrightness: uniform(1.4),
 
   uAoScale: uniform(3),
   uAoRimSmoothness: uniform(5),
