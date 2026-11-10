@@ -12,6 +12,7 @@ import { Line2NodeMaterial } from "three/webgpu";
 import type { DebugPanel } from "../debug/DebugPanel";
 import type { Stage } from "../scene/Stage";
 import type { Sound } from "../audio/Sound";
+import { FIXED_DELTA } from "../time/PhysicsScheduler";
 
 const MIN_IMPACT_SPEED_SQUARED = 5;
 const MAX_IMPACT_SPEED_SQUARED = 400;
@@ -40,7 +41,7 @@ export class PhysicsWorld {
     await import("@dimforge/rapier3d");
     this.world = new World({ x: 0, y: -9.81, z: 0 });
     this.eventQueue = new EventQueue(true);
-    this.world.timestep = 1 / 60;
+    this.world.timestep = FIXED_DELTA;
   }
 
   private setupDebug(debugPanel: DebugPanel) {

@@ -1,4 +1,4 @@
-const FIXED_DELTA = 1 / 60;
+export const FIXED_DELTA = 1 / 60;
 export const MAX_CATCH_UP_SECONDS = 1 / 15;
 const MAX_STEPS_PER_FRAME = Math.floor(MAX_CATCH_UP_SECONDS / FIXED_DELTA);
 
