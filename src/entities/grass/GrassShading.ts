@@ -72,28 +72,7 @@ export const getGrassColor = Fn<[positionNoise: Node<"float">], Node<"vec3">>(
       uniforms.uColorVariationStrength,
     );
 
-    const greenColor = mix(
-      uniforms.uBaseColorDark,
-      uniforms.uBaseColor,
-      colorVariation,
-    );
-
-    const rustMask = positionNoise
-      .mul(float(1).sub(positionNoise))
-      .mul(4)
-      .mul(uniforms.uRustVariationStrength);
-
-    const warmMask = positionNoise
-      .sub(0.6)
-      .mul(2.5)
-      .clamp()
-      .mul(uniforms.uWarmVariationStrength);
-
-    return mix(
-      mix(greenColor, uniforms.uRustColor, rustMask),
-      uniforms.uWarmColor,
-      warmMask,
-    );
+    return mix(uniforms.uBaseColorDark, uniforms.uBaseColor, colorVariation);
   },
 );
 

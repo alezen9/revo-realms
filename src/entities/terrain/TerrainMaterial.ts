@@ -25,7 +25,7 @@ import { computeMapUvByPosition } from "../../shaders/mapping";
 const GRASS_GROUND_SOFTNESS = 0.25;
 
 const uniforms = {
-  uGrassGroundColor: uniform(new Color(0.25, 0.27, 0.18).convertSRGBToLinear()),
+  uGrassGroundColor: uniform(new Color(0.2, 0.29, 0.11).convertSRGBToLinear()),
   uUnderwaterSandColor: uniform(
     new Color(0.95, 0.87, 0.68).convertSRGBToLinear(),
   ),
