@@ -63,11 +63,9 @@ const bootstrap = async () => {
     const game = new Game();
     eventBus.emit("engine-loading-core-progress", 90);
 
-    const { completed, timedOut, error } =
-      await pipelineWarmup.runStartupPrewarmAsync();
+    const { completed, error } = await pipelineWarmup.runStartupPrewarmAsync();
     if (completed && import.meta.env.DEV)
       console.info("[main] Prewarm completed.");
-    if (timedOut) console.warn("[main] Prewarm timed out. Continuing startup.");
     if (error)
       console.error("[main] Prewarm failed. Continuing startup.", error);
 

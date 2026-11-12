@@ -2,11 +2,8 @@ import { Object3D } from "three";
 import type { Graphics } from "./Graphics";
 import type { Stage } from "../scene/Stage";
 
-const PREWARM_TIMEOUT_MS = 2500;
-
 type StartupPrewarmResult = {
   completed: boolean;
-  timedOut: boolean;
   error?: unknown;
 };
 
@@ -25,9 +22,6 @@ export class PipelineWarmup {
   private stage: Stage;
   private tasks: PrewarmTask[] = [];
   private frustumCullStates: FrustumCullState[] = [];
-  private timeoutId?: ReturnType<typeof setTimeout>;
-  private hasTimedOut = false;
-  private isRestored = false;
 
   constructor(graphics: Graphics, stage: Stage) {
     this.graphics = graphics;
@@ -38,30 +32,19 @@ export class PipelineWarmup {
     this.tasks.push(task);
   }
 
-  runStartupPrewarmAsync() {
+  // three builds materials against the renderer's current render target and mrt
+  // between its awaits, so nothing may render until the compile has finished
+  async runStartupPrewarmAsync(): Promise<StartupPrewarmResult> {
     this.disableFrustumCulling();
-    const timeoutPromise = new Promise<StartupPrewarmResult>((resolve) => {
-      this.timeoutId = setTimeout(() => {
-        this.hasTimedOut = true;
-        this.restoreOnce();
-        resolve({ completed: false, timedOut: true });
-      }, PREWARM_TIMEOUT_MS);
-    });
-    return Promise.race([this.prewarmAsync(), timeoutPromise]);
-  }
-
-  private async prewarmAsync(): Promise<StartupPrewarmResult> {
     try {
       for (const task of this.tasks) await task.prepare();
       await this.graphics.compileScenesOnceAsync();
-      if (!this.hasTimedOut) this.graphics.render();
-      this.restoreOnce();
-      return { completed: !this.hasTimedOut, timedOut: this.hasTimedOut };
+      this.graphics.render();
+      return { completed: true };
     } catch (error) {
-      this.restoreOnce();
-      return { completed: false, timedOut: false, error };
+      return { completed: false, error };
     } finally {
-      clearTimeout(this.timeoutId);
+      this.restore();
     }
   }
 
@@ -77,9 +60,7 @@ export class PipelineWarmup {
       });
   }
 
-  private restoreOnce() {
-    if (this.isRestored) return;
-    this.isRestored = true;
+  private restore() {
     for (const task of this.tasks) task.restore();
     for (const { object, frustumCulled } of this.frustumCullStates)
       object.frustumCulled = frustumCulled;
