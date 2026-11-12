@@ -10,6 +10,7 @@ import {
 import { ColliderDesc } from "@dimforge/rapier3d";
 import { VSMReceiverStandardMaterial } from "../../../systems/vsm/VSMReceiverMaterials";
 import { normalMap, texture, uv } from "three/tsl";
+import { placeAtAnchor } from "../placeAtAnchor";
 
 class CampfireMaterial extends VSMReceiverStandardMaterial {
   constructor() {
@@ -27,7 +28,23 @@ class CampfireMaterial extends VSMReceiverStandardMaterial {
 
 export class Campfire {
   constructor() {
-    const campfire = assets.getMesh("campfire");
+    const { campfireModel } = assets.resources;
+    const campfire = assets.getMesh("campfire", campfireModel);
+    const fireColliderMesh = assets.getMesh("fire-collider", campfireModel);
+    const shortLogColliderMesh = assets.getMesh(
+      "log-short-collider",
+      campfireModel,
+    );
+    const longLogColliderMesh = assets.getMesh(
+      "log-long-collider",
+      campfireModel,
+    );
+    placeAtAnchor("campfire", [
+      campfire,
+      fireColliderMesh,
+      shortLogColliderMesh,
+      longLogColliderMesh,
+    ]);
     campfire.material = new CampfireMaterial();
 
     const fire = new Fire();
@@ -36,10 +53,9 @@ export class Campfire {
     stage.mainScene.add(campfire, fire);
     graphics.vsmPass.registerCaster(campfire);
 
-    const fireColliderMesh = assets.getMesh("fire_collider");
     const fireColliderBounds = fireColliderMesh.geometry.boundingBox;
     if (!fireColliderBounds)
-      throw new Error("fire_collider has no bounding box");
+      throw new Error("fire-collider has no bounding box");
     const { min: fireMin, max: fireMax } = fireColliderBounds;
     const fireRadius =
       0.5 * (fireMax.x - fireMin.x) * Math.abs(fireColliderMesh.scale.x);
@@ -51,10 +67,9 @@ export class Campfire {
       type: RevoColliderType.Stone,
     };
 
-    const shortLogColliderMesh = assets.getMesh("log_short_collider");
     const shortLogColliderBounds = shortLogColliderMesh.geometry.boundingBox;
     if (!shortLogColliderBounds)
-      throw new Error("log_short_collider has no bounding box");
+      throw new Error("log-short-collider has no bounding box");
     const { min: shortLogMin, max: shortLogMax } = shortLogColliderBounds;
     const shortLogRadius =
       0.5 *
@@ -79,10 +94,9 @@ export class Campfire {
       type: RevoColliderType.Wood,
     };
 
-    const longLogColliderMesh = assets.getMesh("log_long_collider");
     const longLogColliderBounds = longLogColliderMesh.geometry.boundingBox;
     if (!longLogColliderBounds)
-      throw new Error("log_long_collider has no bounding box");
+      throw new Error("log-long-collider has no bounding box");
     const { min: longLogMin, max: longLogMax } = longLogColliderBounds;
     const longLogRadius =
       0.5 *

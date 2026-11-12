@@ -90,7 +90,7 @@ const initParticles = Fn<[particles: ParticleBuffer], void>(([particles]) => {
   const heightUv = vec2(mapUv.x, float(1).sub(mapUv.y));
   const terrainHeight = texture(assets.resources.heightmap, heightUv).r;
   const grassMapValue = texture(
-    assets.resources.terrainMaps,
+    assets.resources.terrainMasks,
     computeMapUvByPosition(worldPosition.xz),
   ).g;
   const isSpawnValid = step(0.25, grassMapValue);
@@ -202,7 +202,7 @@ const updateParticles = Fn<
     const spawnHeightUv = vec2(spawnMapUv.x, float(1).sub(spawnMapUv.y));
     const terrainHeight = texture(assets.resources.heightmap, spawnHeightUv).r;
     const spawnGrassMapValue = texture(
-      assets.resources.terrainMaps,
+      assets.resources.terrainMasks,
       computeMapUvByPosition(spawnWorldPosition.xz),
     ).g;
     const isSpawnValid = step(0.25, spawnGrassMapValue);

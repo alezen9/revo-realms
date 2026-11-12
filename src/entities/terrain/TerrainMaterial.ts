@@ -83,7 +83,7 @@ export class TerrainMaterial extends VSMReceiverLambertMaterial {
   private createMaterial() {
     const worldUv = computeMapUvByPosition(positionWorld.xz);
     const mapUv = varying(worldUv);
-    const terrainMapSample = texture(assets.resources.terrainMaps, mapUv);
+    const terrainMapSample = texture(assets.resources.terrainMasks, mapUv);
     const grassMask = terrainMapSample.g;
     const grassBlend = smoothstep(0.05, 0.35, grassMask);
     this.softShadowNode = grassBlend.mul(GRASS_GROUND_SOFTNESS);
@@ -102,7 +102,7 @@ export class TerrainMaterial extends VSMReceiverLambertMaterial {
     const waterColor = waterBaseColor.add(causticsColor);
     const surfaceColor = mix(uniforms.uSandColor, waterColor, waterMask);
     const normalAoSample = texture(
-      assets.resources.terrainNormAo,
+      assets.resources.woodChipsNormalAo,
       mapUv.mul(41.7),
     );
     const landNormalScale = mix(

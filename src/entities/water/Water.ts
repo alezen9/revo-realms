@@ -7,7 +7,10 @@ export class Water {
   private unsubscribeAudioProgress?: VoidFunction;
 
   constructor() {
-    const lakeSurface = assets.getMesh("lake-surface");
+    const lakeSurface = assets.getMesh(
+      "lake-surface",
+      assets.resources.terrainModel,
+    );
     this.lakeSurface = lakeSurface;
 
     lakeSurface.material = new WaterMaterial(lakeSurface.matrixWorld);

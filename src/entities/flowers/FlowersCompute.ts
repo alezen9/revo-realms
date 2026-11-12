@@ -41,13 +41,17 @@ export const getYOffset = Fn<[data: FlowerData], Node<"float">>(([data]) =>
     data.z,
     0,
     12,
-    0,
+    Math.floor(assets.resources.heightmap.userData.min),
     Math.ceil(assets.resources.heightmap.userData.max),
   ),
 );
 
 export const getGrassScale = Fn<[data: FlowerData], Node<"float">>(([data]) =>
   unpackUnit(data.z, 13, 6),
+);
+
+export const getSpecies = Fn<[data: FlowerData], Node<"float">>(([data]) =>
+  unpackUnits(data.z, 19, 2, 0, config.SPECIES_COUNT - 1),
 );
 
 export const getNoise = Fn<[data: FlowerData], Node<"vec4">>(([data]) =>
@@ -66,7 +70,7 @@ const setYOffset = Fn<[data: FlowerData, value: Node<"float">], FlowerData>(
       0,
       12,
       value,
-      0,
+      Math.floor(assets.resources.heightmap.userData.min),
       Math.ceil(assets.resources.heightmap.userData.max),
     );
     return data;
@@ -83,6 +87,13 @@ const setVisibility = Fn<[data: FlowerData, value: Node<"float">], FlowerData>(
 const setGrassScale = Fn<[data: FlowerData, value: Node<"float">], FlowerData>(
   ([data, value]) => {
     data.z = packUnit(data.z, 13, 6, value);
+    return data;
+  },
+);
+
+const setSpecies = Fn<[data: FlowerData, value: Node<"float">], FlowerData>(
+  ([data, value]) => {
+    data.z = packUnits(data.z, 19, 2, value, 0, config.SPECIES_COUNT - 1);
     return data;
   },
 );
@@ -168,19 +179,33 @@ const updateFlowers = Fn<
     const yOffset = texture(assets.resources.heightmap, heightUv).r;
     data.assign(setYOffset(data, yOffset));
 
-    const grassMapValue = texture(
-      assets.resources.terrainMaps,
-      computeMapUvByPosition(worldPos.xz),
-    ).g;
-    const grassScale = grassMapValue
+    const masks = texture(assets.resources.terrainMasks, mapUv);
+    const grassScale = masks.g
       .sub(0.5)
       .div(1 - 0.5)
       .clamp();
     const grassVisibility = step(0.05, grassScale);
+    // the flowers mask is the chance to bloom, so drifts fill in and the rest stays sparse
+    const isBlooming = step(hash(instanceIndex.add(7919)), masks.r);
+    const isDrawn = grassVisibility.mul(isBlooming).mul(isVisible);
     data.assign(setGrassScale(data, grassScale));
-    data.assign(setVisibility(data, grassVisibility.mul(isVisible)));
+    data.assign(setVisibility(data, isDrawn));
 
-    If(isVisible, () => {
+    // neighbours share a species with a little mixing where two drifts meet
+    const speciesNoise = texture(
+      assets.resources.noiseAtlas,
+      worldPos.xz.div(config.SPECIES_WAVELENGTH),
+    ).g;
+    const species = speciesNoise
+      .add(hash(instanceIndex.add(271)).sub(0.5).mul(0.03))
+      .toVar();
+    const [first, second, third] = config.SPECIES_THRESHOLDS;
+    const speciesIndex = step(first, species)
+      .add(step(second, species))
+      .add(step(third, species));
+    data.assign(setSpecies(data, speciesIndex));
+
+    If(isDrawn, () => {
       const drawIndex = atomicAdd(visibleCount, 1);
       visibleIndices.element(drawIndex).assign(instanceIndex);
     });
@@ -196,7 +221,7 @@ const resetVisibleCount = Fn<[visibleCount: Counter], void>(
 export class FlowersCompute {
   // x -> offsetX (0 unused)
   // y -> offsetZ (0 unused)
-  // z -> 0/12 offsetY - 12/1 visibility - 13/6 grass scale (5 unused)
+  // z -> 0/12 offsetY - 12/1 visibility - 13/6 grass scale - 19/2 species (3 unused)
   // w -> noise (0 unused - also not used currently)
   readonly flowers = createFlowerBuffer();
   readonly visibleFlowerIndices = createIndexBuffer();

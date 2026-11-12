@@ -18,6 +18,16 @@ export const debugFlowers = () => {
     view: "color",
     color: { type: "float" },
   });
+  folder.addBinding(srgbColorTarget(uniforms.uColor3.value), "value", {
+    label: "Color 3",
+    view: "color",
+    color: { type: "float" },
+  });
+  folder.addBinding(srgbColorTarget(uniforms.uColor4.value), "value", {
+    label: "Color 4",
+    view: "color",
+    color: { type: "float" },
+  });
   folder.addBinding(uniforms.uBrightness, "value", {
     label: "Brightness",
     min: 0,

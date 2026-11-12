@@ -1,7 +1,7 @@
 import {
+  BatchedMesh,
   DataTexture,
   FloatType,
-  Group,
   LinearFilter,
   Mesh,
   NoColorSpace,
@@ -18,87 +18,73 @@ import { assets, physicsWorld, stage } from "../../systems";
 import type { TerrainMaterial } from "./TerrainMaterial";
 
 export class InnerTerrain {
-  constructor(material: TerrainMaterial) {
-    const innerTerrain = this.createInnerTerrain(material);
+  constructor(terrainMaterial: TerrainMaterial) {
+    const innerTerrain = this.createInnerTerrainMesh();
+    innerTerrain.material = terrainMaterial;
     stage.mainScene.add(innerTerrain);
+    this.createHeightfieldPhysics();
   }
 
-  private createInnerTerrain(material: TerrainMaterial) {
-    const terrainMeshes = assets.resources.worldModel.scene.children.filter(
-      (object): object is Mesh =>
-        object instanceof Mesh &&
-        object.name.startsWith("terrain-") &&
-        object.name !== "terrain-outer",
-    );
-    let heightfieldMesh: Mesh | undefined;
-    const innerTerrain = new Group();
-    for (const mesh of terrainMeshes) {
-      if (mesh.name === "terrain-heightfield") {
-        heightfieldMesh = mesh;
-      } else {
-        mesh.material = material;
-        mesh.geometry.computeBoundingSphere();
-        mesh.geometry.computeBoundingBox();
-        innerTerrain.add(mesh);
-      }
+  private createInnerTerrainMesh() {
+    const terrain = assets.getObject("terrain", assets.resources.terrainModel);
+    terrain.updateMatrixWorld(true);
+
+    const tiles: Mesh[] = [];
+    let vertexCount = 0;
+    let indexCount = 0;
+    for (const tile of terrain.children) {
+      if (!(tile instanceof Mesh))
+        throw new Error(`Terrain tile "${tile.name}" is not a mesh`);
+      const { index, attributes } = tile.geometry;
+      if (!index) throw new Error(`Terrain tile "${tile.name}" has no index`);
+      tiles.push(tile);
+      vertexCount += attributes.position.count;
+      indexCount += index.count;
     }
 
-    if (!heightfieldMesh) {
-      throw new Error("No heightfield");
+    const innerTerrain = new BatchedMesh(tiles.length, vertexCount, indexCount);
+    innerTerrain.name = "terrain";
+    innerTerrain.perObjectFrustumCulled = true;
+    innerTerrain.sortObjects = false;
+    for (const tile of tiles) {
+      const geometryId = innerTerrain.addGeometry(tile.geometry);
+      const instanceId = innerTerrain.addInstance(geometryId);
+      innerTerrain.setMatrixAt(instanceId, tile.matrixWorld);
     }
-
-    this.createHeightfieldPhysics(heightfieldMesh);
+    innerTerrain.computeBoundingSphere();
     return innerTerrain;
   }
 
-  private getHeightfieldData(mesh: Mesh) {
-    // every vertex stores the same displacement
-    const displacement = mesh.geometry.attributes._displacement.array[0];
-    const positionAttribute = mesh.geometry.attributes.position;
-    mesh.geometry.computeBoundingBox();
-    const { boundingBox } = mesh.geometry;
-    if (!boundingBox) throw new Error("Terrain mesh has no bounding box");
-    const vertexCount = positionAttribute.count;
-    const gridSize = Math.sqrt(vertexCount);
-
-    // the plane is a square centered at the origin in blender
-    const halfExtent = boundingBox.max.x;
-    const heights = new Float32Array(vertexCount);
-    for (let vertexIndex = 0; vertexIndex < vertexCount; vertexIndex++) {
-      const positionOffset = vertexIndex * 3;
-      const x = positionAttribute.array[positionOffset];
-      const y = positionAttribute.array[positionOffset + 1];
-      const z = positionAttribute.array[positionOffset + 2];
-      const gridX = Math.round((x / (halfExtent * 2) + 0.5) * (gridSize - 1));
-      const gridZ = Math.round((z / (halfExtent * 2) + 0.5) * (gridSize - 1));
-      const heightIndex = gridZ + gridX * gridSize;
-      heights[heightIndex] = y;
-    }
-
-    return {
-      gridSize,
-      heights,
-      displacement,
-    };
+  private getHeights() {
+    const { buffer, byteOffset, byteLength } = assets.resources.heightmapData;
+    const heights = new Float32Array(
+      buffer,
+      byteOffset,
+      byteLength / Float32Array.BYTES_PER_ELEMENT,
+    );
+    const gridSize = realmConfig.HEIGHTMAP_GRID_SIZE;
+    const hasFullGrid = heights.length === gridSize * gridSize;
+    if (!hasFullGrid)
+      throw new Error(
+        `Heightmap has ${heights.length} heights, expected ${gridSize}x${gridSize}`,
+      );
+    return heights;
   }
 
-  private createHeightmapTexture(
-    gridSize: number,
-    heights: Float32Array,
-    displacement: number,
-  ) {
+  private createHeightmapTexture(heights: Float32Array) {
+    const gridSize = realmConfig.HEIGHTMAP_GRID_SIZE;
     const heightmapData = new Float32Array(heights.length);
-    let min = 0;
-    let max = 0;
+    let minHeight = Infinity;
+    let maxHeight = -Infinity;
     for (let targetIndex = 0; targetIndex < heights.length; targetIndex++) {
       const x = targetIndex % gridSize;
       const z = Math.floor(targetIndex / gridSize);
       const sourceZ = gridSize - 1 - z;
       const sourceIndex = sourceZ + x * gridSize;
-      const height = heights[sourceIndex] - displacement;
+      const height = heights[sourceIndex];
       heightmapData[targetIndex] = height;
-      if (height < min) min = height;
-      if (height > max) max = height;
+      minHeight = Math.min(minHeight, height);
+      maxHeight = Math.max(maxHeight, height);
     }
 
     const heightmap = new DataTexture(
@@ -113,26 +99,18 @@ export class InnerTerrain {
     heightmap.magFilter = LinearFilter;
     heightmap.minFilter = LinearFilter;
     heightmap.generateMipmaps = false;
+    heightmap.userData = { min: minHeight, max: maxHeight };
     heightmap.needsUpdate = true;
-    heightmap.userData = {
-      min,
-      max,
-    };
     return heightmap;
   }
 
-  private createHeightfieldPhysics(heightfieldMesh: Mesh) {
-    const { gridSize, heights, displacement } =
-      this.getHeightfieldData(heightfieldMesh);
-    const heightmap = this.createHeightmapTexture(
-      gridSize,
-      heights,
-      displacement,
-    );
-    assets.resources.heightmap.copy(heightmap);
+  private createHeightfieldPhysics() {
+    const heights = this.getHeights();
+    assets.resources.heightmap.copy(this.createHeightmapTexture(heights));
+    const cellCount = realmConfig.HEIGHTMAP_GRID_SIZE - 1;
     const colliderDesc = ColliderDesc.heightfield(
-      gridSize - 1,
-      gridSize - 1,
+      cellCount,
+      cellCount,
       heights,
       {
         x: realmConfig.MAP_SIZE,
@@ -141,7 +119,6 @@ export class InnerTerrain {
       },
       HeightFieldFlags.FIX_INTERNAL_EDGES,
     )
-      .setTranslation(0, -displacement, 0)
       .setFriction(1)
       .setFrictionCombineRule(CoefficientCombineRule.Max)
       .setRestitution(0.2);

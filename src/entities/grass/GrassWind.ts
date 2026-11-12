@@ -1,7 +1,6 @@
 import {
   Fn,
   TWO_PI,
-  cos,
   float,
   hash,
   max,
@@ -88,7 +87,7 @@ export const computeDetailedWind = Fn<
 
   const targetWindXZ = targetDirection.mul(windStrength);
 
-  const responseRate = mix(3.5, 11, positionNoise).mul(mix(0.3, 1, gust));
+  const responseRate = mix(2, 5, positionNoise).mul(mix(0.3, 1, gust));
 
   const responseFactor = min(responseRate.mul(gameDeltaTime), 1);
 
@@ -112,8 +111,6 @@ export const computeBladeDeformation = Fn<
   Node<"vec2">
 >(([windXZ, gust, worldPos, scaleY, bladeIndex]) => {
   const bladeSeed = hash(bladeIndex);
-  const randomPhase = bladeSeed.mul(6.2825).sub(3.14125);
-  const swayRateNoise = bladeSeed.mul(31.7).fract();
 
   const scaleWindResponse = computeWindResponse(scaleY);
 
@@ -125,39 +122,34 @@ export const computeBladeDeformation = Fn<
 
   const swayEnvelope = mix(0.75, 1.35, windActivity);
   const heightPhase = swayEnvelope.mul(0.55);
-  const swayRate = mix(0.7, 1.45, swayRateNoise);
-
-  const swayAPhase = gameTime
-    .mul(swayRate.mul(1.35))
-    .add(randomPhase)
-    .add(heightPhase);
-
-  const swayA = sin(swayAPhase);
-
-  const swayBPhase = gameTime
-    .mul(swayRate.mul(2.15))
-    .add(worldPos.x.mul(0.17))
-    .add(worldPos.z.mul(0.11))
-    .add(randomPhase.mul(1.7))
-    .add(heightPhase.mul(1.6));
-
-  const swayB = sin(swayBPhase).mul(0.45);
-
-  const ambientAngle = bladeSeed.mul(53.3).fract().mul(TWO_PI);
-
-  const ambientDirection = vec2(cos(ambientAngle), sin(ambientAngle));
-
-  const ambientStrength = swayA
-    .add(swayB)
-    .mul(uniforms.uAmbientSwayStrength)
-    .mul(swayEnvelope);
-
-  const ambientOffset = ambientDirection.mul(ambientStrength);
 
   const perpendicularDirection = vec2(
     wind.uDirection.y.negate(),
     wind.uDirection.x,
   );
+  const downwindDistance = worldPos.xz.dot(wind.uDirection);
+  const crossWindDistance = worldPos.xz.dot(perpendicularDirection);
+  const bladeLag = bladeSeed.mul(0.8);
+
+  const swellPhase = downwindDistance
+    .mul(0.3)
+    .sub(gameTime.mul(1.4))
+    .add(bladeLag);
+  const ripplePhase = downwindDistance
+    .mul(0.8)
+    .add(crossWindDistance.mul(0.5))
+    .sub(gameTime.mul(2.3))
+    .add(bladeLag.mul(2));
+  const crossSwayPhase = swellPhase.mul(0.6).add(crossWindDistance.mul(0.2));
+
+  const downwindSway = sin(swellPhase).add(sin(ripplePhase).mul(0.4));
+  const crossSway = sin(crossSwayPhase).mul(0.35);
+
+  const ambientOffset = wind.uDirection
+    .mul(downwindSway)
+    .add(perpendicularDirection.mul(crossSway))
+    .mul(uniforms.uAmbientSwayStrength)
+    .mul(swayEnvelope);
 
   const bendStrength = uniforms.uBaseBending.mul(scaleWindResponse);
 

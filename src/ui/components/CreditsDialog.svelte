@@ -88,6 +88,60 @@
 		</div>
 
 		<div class="asset">
+			<h2>🪨 Lake rocks <span>[3d model]</span></h2>
+			<p>
+				This work is based on
+				<a
+					target="_blank"
+					href="https://sketchfab.com/3d-models/set-of-modular-rocks-f435208fadd24363ad285d8e505a794d"
+					>Set of Modular Rocks</a
+				>
+				by
+				<a target="_blank" href="https://sketchfab.com/CleuzaCosta">Cleuza Costa</a>
+				licensed under
+				<a target="_blank" href="http://creativecommons.org/licenses/by/4.0/"
+					>CC-BY-4.0</a
+				>
+			</p>
+		</div>
+
+		<div class="asset">
+			<h2>🪨 Lake rock surface <span>[texture]</span></h2>
+			<p>
+				This work is based on
+				<a
+					target="_blank"
+					href="https://sketchfab.com/3d-models/rocks-3b2f2fefc2e143af8292689e9c4bb9ec"
+					>Rocks</a
+				>
+				by
+				<a target="_blank" href="https://sketchfab.com/AspectStudio">AspectStudios</a>
+				licensed under
+				<a target="_blank" href="http://creativecommons.org/licenses/by/4.0/"
+					>CC-BY-4.0</a
+				>
+			</p>
+		</div>
+
+		<div class="asset">
+			<h2>🐟 Koi <span>[3d model]</span></h2>
+			<p>
+				This work is based on
+				<a
+					target="_blank"
+					href="https://sketchfab.com/3d-models/koi-fish-236859b809984f52b70c94fd040b9c59"
+					>Koi Fish</a
+				>
+				by
+				<a target="_blank" href="https://sketchfab.com/7plus">7PLUS</a>
+				licensed under
+				<a target="_blank" href="http://creativecommons.org/licenses/by/4.0/"
+					>CC-BY-4.0</a
+				>
+			</p>
+		</div>
+
+		<div class="asset">
 			<h2>🐉 Goku's hair <span>[3d model]</span></h2>
 			<p>
 				This work is based on

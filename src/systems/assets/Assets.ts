@@ -7,7 +7,7 @@ import {
   Texture,
   TextureLoader,
 } from "three";
-import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { GLTFLoader, type GLTF } from "three/addons/loaders/GLTFLoader.js";
 import {
   DRACOLoader,
   DRACO_GLTF_CONFIG,
@@ -67,10 +67,16 @@ export class Assets {
     return this.completeResources;
   }
 
-  getMesh(name: string): Mesh {
-    const object = this.resources.worldModel.scene.getObjectByName(name);
+  getObject(name: string, model: GLTF) {
+    const object = model.scene.getObjectByName(name);
+    if (!object) throw new Error(`Model has no object named "${name}"`);
+    return object;
+  }
+
+  getMesh(name: string, model: GLTF): Mesh {
+    const object = this.getObject(name, model);
     if (!(object instanceof Mesh))
-      throw new Error(`World model has no mesh named "${name}"`);
+      throw new Error(`Model object "${name}" is not a mesh`);
     return object;
   }
 

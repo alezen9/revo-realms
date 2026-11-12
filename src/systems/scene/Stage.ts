@@ -1,5 +1,12 @@
-import { PerspectiveCamera, Scene, Matrix4, Vector3 } from "three";
-import { uniform } from "three/tsl";
+import {
+  Frustum,
+  PerspectiveCamera,
+  Scene,
+  Matrix4,
+  Vector3,
+  Vector4,
+} from "three";
+import { uniform, uniformArray } from "three/tsl";
 import { type EventBus } from "../events/EventBus";
 
 export class Stage {
@@ -11,6 +18,10 @@ export class Stage {
   readonly uFy = uniform(1);
   readonly uCameraMatrix = uniform(new Matrix4());
   readonly uPlayerCameraPosition = uniform(new Vector3());
+  // xyz is the plane normal and w its constant, in world space
+  private frustumPlanes = Array.from({ length: 6 }, () => new Vector4());
+  readonly uFrustumPlanes = uniformArray<"vec4">(this.frustumPlanes, "vec4");
+  private frustum = new Frustum();
 
   constructor(eventBus: EventBus) {
     const aspect = window.innerWidth / window.innerHeight;
@@ -40,5 +51,13 @@ export class Stage {
       projectionMatrix,
       matrixWorldInverse,
     );
+    this.frustum.setFromProjectionMatrix(
+      this.uCameraMatrix.value,
+      this.playerCamera.coordinateSystem,
+      this.playerCamera.reversedDepth,
+    );
+    this.frustum.planes.forEach(({ normal, constant }, index) => {
+      this.frustumPlanes[index].set(normal.x, normal.y, normal.z, constant);
+    });
   }
 }

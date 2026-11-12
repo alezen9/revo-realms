@@ -3,11 +3,14 @@ import {
   float,
   hash,
   instanceIndex,
+  inverseSqrt,
   mix,
   mrt,
+  sin,
   smoothstep,
   uv,
   varying,
+  vec2,
   vec3,
   vec4,
 } from "three/tsl";
@@ -90,11 +93,9 @@ export class GrassMaterial extends SpriteNodeMaterial {
 
     const bladeWidth = uniforms.uBladeWidth.mul(distanceWidthGain);
 
-    const bladeWidthScale = positionNoise.add(0.5).mul(bladeWidth);
+    const bladeWidthScale = mix(0.6, 1.6, bladeHash).mul(bladeWidth);
 
     this.scaleNode = vec3(bladeWidthScale, scaleY, 1);
-
-    const randomBendOffset = bladeHash.mul(0.25).sub(0.125);
 
     const spriteRotationNoise = bladeHash.mul(31.7).fract().mul(2).sub(1);
 
@@ -102,21 +103,40 @@ export class GrassMaterial extends SpriteNodeMaterial {
       uniforms.uSpriteRotationRandomness,
     );
 
-    const bendProfile = bladeHeightSquared.mul(uniforms.uBaseBending);
-
-    const positionBendOffset = positionNoise.sub(0.5).mul(0.25);
-
-    const baseBending = positionBendOffset
-      .add(randomBendOffset)
-      .mul(bendProfile);
+    const bendVariation = positionNoise.add(bladeHash).sub(1).mul(0.25);
+    const baseBending = bendVariation
+      .mul(uniforms.uBaseBending)
+      .mul(bladeHeightSquared);
 
     this.rotationNode = spriteRotation.add(baseBending);
 
-    const bendLengthSquared = bendXZ.dot(bendXZ);
+    const clumpRadial = bladeLocalOffset.div(config.CLUMP_LOCAL_RADIUS);
+    const tuftSpread = clumpRadial.mul(uniforms.uTuftSpread).mul(scaleY);
 
-    const bladeLength = scaleY.mul(config.BLADE_HEIGHT * 2);
-    const bendDrop = bendLengthSquared
-      .div(bladeLength)
+    const bladeLength = scaleY.mul(config.BLADE_HEIGHT);
+    const maxLean = bladeLength.mul(config.MAX_LEAN_PER_BLADE_LENGTH);
+    const swirlPhase = worldPosition.xz.mul(config.SWIRLS_PER_METER);
+    const swirl = vec2(
+      sin(swirlPhase.x.add(sin(swirlPhase.y.mul(0.6)).mul(2))),
+      sin(swirlPhase.y.mul(0.9).add(sin(swirlPhase.x.mul(0.5)).mul(2))),
+    );
+    const patchLean = swirl.mul(uniforms.uPatchLean);
+    const droopDirection = vec2(
+      bladeHash.mul(73.1).fract(),
+      bladeHash.mul(19.7).fract(),
+    ).sub(0.5);
+    const bladeDroop = droopDirection
+      .mul(droopDirection.length())
+      .mul(uniforms.uBladeDroop);
+    const restLean = tuftSpread.add(patchLean.add(bladeDroop).mul(scaleY));
+    const pushXZ = bendXZ.add(restLean);
+    const pushPerMaxLeanSquared = pushXZ.dot(pushXZ).div(maxLean.mul(maxLean));
+    const leanLimit = inverseSqrt(pushPerMaxLeanSquared.add(1));
+    const leanXZ = pushXZ.mul(leanLimit);
+    const leanLengthSquared = leanXZ.dot(leanXZ);
+
+    const bendDrop = leanLengthSquared
+      .div(bladeLength.mul(2))
       .mul(uniforms.uBendDropStrength);
 
     const heightArc = bladeHeight.mul(float(1).sub(bladeHeight));
@@ -125,7 +145,7 @@ export class GrassMaterial extends SpriteNodeMaterial {
 
     const bendShape = bendControlShape.add(bladeHeightSquared);
 
-    const bendOffset = vec3(bendXZ.x, bendDrop.negate(), bendXZ.y).mul(
+    const bendOffset = vec3(leanXZ.x, bendDrop.negate(), leanXZ.y).mul(
       bendShape,
     );
 
@@ -147,9 +167,21 @@ export class GrassMaterial extends SpriteNodeMaterial {
     const viewDirection = viewOffset.normalize();
     const viewDirectionXZ = viewOffset.xz.normalize();
 
+    const bladeTone = bladeHash
+      .mul(57.3)
+      .fract()
+      .sub(0.5)
+      .mul(uniforms.uBladeToneVariation)
+      .add(1);
+
+    const windLean = bendXZ.mul(leanLimit).mul(bendShape);
+    const faceExposure = float(1)
+      .sub(windLean.dot(viewDirectionXZ).mul(uniforms.uWindExposure))
+      .clamp(0.5, 1.5);
+
     const light = getGrassLight({
       normal: getGrassNormal({
-        clumpRadial: bladeLocalOffset.div(config.CLUMP_LOCAL_RADIUS),
+        clumpRadial,
         height: bladeHeight,
         widthCoordinate: bladeUv.x.mul(2).sub(1),
         viewSide: getGrassViewSide(viewDirectionXZ),
@@ -159,7 +191,10 @@ export class GrassMaterial extends SpriteNodeMaterial {
     });
 
     const bladeSurface = varying(
-      vec4(variedColor, scaleY.div(uniforms.uBladeMaxScale).clamp()),
+      vec4(
+        variedColor.mul(faceExposure).mul(bladeTone),
+        scaleY.div(uniforms.uBladeMaxScale).clamp(),
+      ),
     );
     const bladeColor = bladeSurface.rgb;
 

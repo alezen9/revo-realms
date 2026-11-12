@@ -5,6 +5,7 @@ import { ColliderDesc } from "@dimforge/rapier3d";
 import { physicsWorld, stage } from "../../systems";
 import { RevoColliderType } from "../../systems/physics/colliderTypes";
 import { normalMap, texture, uniform, uv } from "three/tsl";
+import { placeAtAnchor } from "./placeAtAnchor";
 
 const uniforms = {
   uDiffuseScale: uniform(1.15),
@@ -30,13 +31,15 @@ export class GokuStatue {
   private shadowSettings = { depthBias: 0 };
 
   constructor() {
-    const gokuStatue = assets.getMesh("goku_statue");
+    const { gokuStatueModel } = assets.resources;
+    const gokuStatue = assets.getMesh("goku-statue", gokuStatueModel);
+    const collider = assets.getMesh("goku-statue-collider", gokuStatueModel);
+    placeAtAnchor("goku-statue", [gokuStatue, collider]);
     this.gokuStatue = gokuStatue;
     gokuStatue.material = new GokuStatueMaterial();
     stage.mainScene.add(gokuStatue);
     graphics.vsmPass.registerCaster(gokuStatue, this.shadowSettings);
 
-    const collider = assets.getMesh("goku_statue_collider");
     const hx = 0.5 * collider.scale.x;
     const hy = 0.5 * collider.scale.y;
     const hz = 0.5 * collider.scale.z;

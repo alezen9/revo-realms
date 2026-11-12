@@ -8,38 +8,63 @@ import {
   type MinificationTextureFilter,
 } from "three";
 import { type GLTF } from "three/addons/loaders/GLTFLoader.js";
-import worldModelUrl from "/models/sekai.glb?url";
+import terrainModelUrl from "/models/terrain.glb?url";
+import pineModelUrl from "/models/pine.glb?url";
+import pinesPlacementsUrl from "/models/pines-placements.bin?url";
+import leviathanAxeModelUrl from "/models/leviathan-axe.glb?url";
+import dragonSlayerModelUrl from "/models/dragon-slayer.glb?url";
+import gokuStatueModelUrl from "/models/goku-statue.glb?url";
+import campfireModelUrl from "/models/campfire.glb?url";
+import footballModelUrl from "/models/football.glb?url";
+import koiModelUrl from "/models/koi.glb?url";
+import pampasModelUrl from "/models/pampas.glb?url";
+import lakeRocksModelUrl from "/models/lake-rocks.glb?url";
+import lakeRocksPlacementsUrl from "/models/lake-rocks-placements.bin?url";
+import waterLilyModelUrl from "/models/water-lily.glb?url";
+import reedsModelUrl from "/models/reeds.glb?url";
+import reedsPlacementsUrl from "/models/reeds-placements.bin?url";
+import seaweedModelUrl from "/models/seaweed.glb?url";
+import seaweedPlacementsUrl from "/models/seaweed-placements.bin?url";
+import expedition33FlagModelUrl from "/models/expedition-33-flag.glb?url";
 import pxUrl from "/textures/environment/px.webp?url";
 import nxUrl from "/textures/environment/nx.webp?url";
 import pyUrl from "/textures/environment/py.webp?url";
 import nyUrl from "/textures/environment/ny.webp?url";
 import pzUrl from "/textures/environment/pz.webp?url";
 import nzUrl from "/textures/environment/nz.webp?url";
-import terrainMapsUrl from "/textures/new-world/terrain/terrain-maps.ktx2?url"; // R shadow, G grass, B water
+import terrainMasksUrl from "/textures/new-world/terrain/terrain-masks.ktx2?url"; // R flowers, G grass, B water, A trees
 import waterMaskUrl from "/textures/new-world/terrain/water-mask.bin?url"; // used CPU side
-import terrainNormAoUrl from "/textures/new-world/terrain/groundNormalAO_1k.ktx2?url";
-import normVeinWaterUrl from "/textures/new-world/water/water_normal_vein_uastc.ktx2?url";
-import leviathanDiffuseEmissiveUrl from "/textures/new-world/cool-stuff/leviathan/diffuse_emissive_1k.ktx2?url";
-import leviathanNormalUrl from "/textures/new-world/cool-stuff/leviathan/normal_512.ktx2?url";
-import leviathanORMUrl from "/textures/new-world/cool-stuff/leviathan/orm_512.ktx2?url";
-import berserkDiffuseUrl from "/textures/new-world/cool-stuff/berserk/diffuse_1k.ktx2?url";
-import berserkNormalUrl from "/textures/new-world/cool-stuff/berserk/normal_1k.ktx2?url";
-import berserkORMUrl from "/textures/new-world/cool-stuff/berserk/orm_512.ktx2?url";
-import gokuStatueDiffuseUrl from "/textures/new-world/cool-stuff/dragon-ball/diffuse_1k.ktx2?url";
-import gokuStatueNormalUrl from "/textures/new-world/cool-stuff/dragon-ball/normal_1k.ktx2?url";
-import expedition33DiffuseUrl from "/textures/new-world/cool-stuff/expedition-33/diffuse_1k.ktx2?url";
-import campfireDiffuseUrl from "/textures/new-world/campfire/diffuse_2k.ktx2?url";
-import campfireNormalRoughnessUrl from "/textures/new-world/campfire/normalRoughness_1k.ktx2?url";
-import fireSpritesUrl from "/textures/new-world/fire/fireSprites_128_etc1s.ktx2?url";
-import playerDiffuseUrl from "/textures/new-world/player/football/diffuse_512.ktx2?url";
-import playerNormalUrl from "/textures/new-world/player/football/normal_512.ktx2?url";
-import edelweissUrl from "/textures/new-world/flowers/edelweiss_128.ktx2?url";
-import pineTreeDiffuseUrl from "/textures/new-world/pine-tree/diffuse_2k.ktx2?url";
-
-import _treeBarkDiffuseUrl from "/textures/new-world/tree/bark_diffuse_512_uastc.ktx2?url";
-import _treeBarkNormalUrl from "/textures/new-world/tree/bark_normal_512_uastc.ktx2?url";
-
-import noiseAtlasUrl from "/textures/new-world/noise/noise_atlas.ktx2?url";
+import heightmapDataUrl from "/textures/new-world/terrain/heightmap.bin?url";
+import woodChipsNormalAoUrl from "/textures/new-world/terrain/wood-chips-normal-ao.ktx2?url";
+import waterNormalVeinUrl from "/textures/new-world/terrain/water-normal-vein.ktx2?url";
+import leviathanAxeDiffuseEmissionUrl from "/textures/new-world/leviathan-axe/leviathan-axe-diffuse-emission.ktx2?url";
+import leviathanAxeNormalUrl from "/textures/new-world/leviathan-axe/leviathan-axe-normal.ktx2?url";
+import leviathanAxeArmUrl from "/textures/new-world/leviathan-axe/leviathan-axe-arm.ktx2?url";
+import dragonSlayerDiffuseUrl from "/textures/new-world/dragon-slayer/dragon-slayer-diffuse.ktx2?url";
+import dragonSlayerNormalUrl from "/textures/new-world/dragon-slayer/dragon-slayer-normal.ktx2?url";
+import dragonSlayerArmUrl from "/textures/new-world/dragon-slayer/dragon-slayer-arm.ktx2?url";
+import gokuStatueConcreteDiffuseUrl from "/textures/new-world/goku-statue/goku-statue-concrete-diffuse.ktx2?url";
+import gokuStatueConcreteNormalUrl from "/textures/new-world/goku-statue/goku-statue-concrete-normal.ktx2?url";
+import expedition33FlagDiffuseUrl from "/textures/new-world/expedition-33-flag/expedition-33-flag-diffuse.ktx2?url";
+import campfireDiffuseUrl from "/textures/new-world/campfire/campfire-diffuse.ktx2?url";
+import campfireNormalRoughnessUrl from "/textures/new-world/campfire/campfire-normal-roughness.ktx2?url";
+import fireSpritesUrl from "/textures/new-world/campfire/fire-sprites.ktx2?url";
+import footballDiffuseUrl from "/textures/new-world/football/football-diffuse.ktx2?url";
+import footballNormalUrl from "/textures/new-world/football/football-normal.ktx2?url";
+import koiRedWhiteDiffuseUrl from "/textures/new-world/koi/koi-red-white-diffuse.ktx2?url";
+import koiRedBlackDiffuseUrl from "/textures/new-world/koi/koi-red-black-diffuse.ktx2?url";
+import koiGoldDiffuseUrl from "/textures/new-world/koi/koi-gold-diffuse.ktx2?url";
+import edelweissUrl from "/textures/new-world/edelweiss/edelweiss-diffuse.ktx2?url";
+import lakeRocksDiffuseUrl from "/textures/new-world/lake-rocks/lake-rocks-diffuse.ktx2?url";
+import reedsDiffuseUrl from "/textures/new-world/reeds/reeds-diffuse.ktx2?url";
+import seaweedDiffuseUrl from "/textures/new-world/seaweed/seaweed-diffuse.ktx2?url";
+import waterLilyNormalUrl from "/textures/new-world/water-lily/water-lily-normal.ktx2?url";
+import waterLilyDiffuseUrl from "/textures/new-world/water-lily/water-lily-diffuse.ktx2?url";
+import pampasDiffuseUrl from "/textures/new-world/pampas/pampas-diffuse.ktx2?url";
+import pineCanopyDiffuseUrl from "/textures/new-world/pine/pine-canopy-diffuse.ktx2?url";
+import pineBarkDiffuseUrl from "/textures/new-world/pine/pine-bark-diffuse.ktx2?url";
+import pineBarkNormalUrl from "/textures/new-world/pine/pine-bark-normal.ktx2?url";
+import noiseAtlasUrl from "/textures/new-world/noise/noise-atlas.ktx2?url";
 
 export type ResourceType = {
   texture: Texture;
@@ -93,7 +118,32 @@ export type ResourceRaw =
   | BinaryResourceRaw;
 
 export const manifest = [
-  { name: "worldModel", url: worldModelUrl, type: "gltf" },
+  { name: "terrainModel", url: terrainModelUrl, type: "gltf" },
+  { name: "pineModel", url: pineModelUrl, type: "gltf" },
+  { name: "leviathanAxeModel", url: leviathanAxeModelUrl, type: "gltf" },
+  { name: "dragonSlayerModel", url: dragonSlayerModelUrl, type: "gltf" },
+  { name: "gokuStatueModel", url: gokuStatueModelUrl, type: "gltf" },
+  { name: "campfireModel", url: campfireModelUrl, type: "gltf" },
+  { name: "footballModel", url: footballModelUrl, type: "gltf" },
+  { name: "koiModel", url: koiModelUrl, type: "gltf" },
+  { name: "pampasModel", url: pampasModelUrl, type: "gltf" },
+  { name: "lakeRocksModel", url: lakeRocksModelUrl, type: "gltf" },
+  {
+    name: "lakeRocksPlacements",
+    url: lakeRocksPlacementsUrl,
+    type: "binary",
+  },
+  { name: "waterLilyModel", url: waterLilyModelUrl, type: "gltf" },
+  { name: "reedsModel", url: reedsModelUrl, type: "gltf" },
+  { name: "reedsPlacements", url: reedsPlacementsUrl, type: "binary" },
+  { name: "seaweedModel", url: seaweedModelUrl, type: "gltf" },
+  { name: "seaweedPlacements", url: seaweedPlacementsUrl, type: "binary" },
+  {
+    name: "expedition33FlagModel",
+    url: expedition33FlagModelUrl,
+    type: "gltf",
+  },
+  { name: "pinesPlacements", url: pinesPlacementsUrl, type: "binary" },
   {
     name: "noiseAtlas", // super_noise_low / super_perlin / grainy / cracks
     url: noiseAtlasUrl,
@@ -108,8 +158,8 @@ export const manifest = [
   },
 
   {
-    name: "terrainMaps",
-    url: terrainMapsUrl,
+    name: "terrainMasks",
+    url: terrainMasksUrl,
     type: "ktx2",
     flipY: false,
     minFilter: LinearFilter,
@@ -122,15 +172,20 @@ export const manifest = [
     type: "binary",
   },
   {
-    name: "terrainNormAo",
-    url: terrainNormAoUrl,
+    name: "heightmapData",
+    url: heightmapDataUrl,
+    type: "binary",
+  },
+  {
+    name: "woodChipsNormalAo",
+    url: woodChipsNormalAoUrl,
     type: "ktx2",
     wrap: true,
     anisotropy: 4,
   },
   {
     name: "normVeinWater",
-    url: normVeinWaterUrl,
+    url: waterNormalVeinUrl,
     type: "ktx2",
     wrap: true,
   },
@@ -153,47 +208,47 @@ export const manifest = [
 
   {
     name: "leviathanAxeDiffuseEmissive",
-    url: leviathanDiffuseEmissiveUrl,
+    url: leviathanAxeDiffuseEmissionUrl,
     type: "ktx2",
     flipY: false,
     colorSpace: SRGBColorSpace,
   },
   {
     name: "leviathanAxeNormal",
-    url: leviathanNormalUrl,
+    url: leviathanAxeNormalUrl,
     type: "ktx2",
     flipY: false,
   },
   {
     name: "leviathanAxeORM",
-    url: leviathanORMUrl,
+    url: leviathanAxeArmUrl,
     type: "ktx2",
     flipY: false,
   },
 
   {
     name: "dragonSlayerSwordDiffuse",
-    url: berserkDiffuseUrl,
+    url: dragonSlayerDiffuseUrl,
     type: "ktx2",
     flipY: false,
     colorSpace: SRGBColorSpace,
   },
   {
     name: "dragonSlayerSwordNormal",
-    url: berserkNormalUrl,
+    url: dragonSlayerNormalUrl,
     type: "ktx2",
     flipY: false,
   },
   {
     name: "dragonSlayerSwordARM",
-    url: berserkORMUrl,
+    url: dragonSlayerArmUrl,
     type: "ktx2",
     flipY: false,
   },
 
   {
     name: "concreteDiffuse",
-    url: gokuStatueDiffuseUrl,
+    url: gokuStatueConcreteDiffuseUrl,
     type: "ktx2",
     flipY: false,
     wrap: true,
@@ -201,7 +256,7 @@ export const manifest = [
   },
   {
     name: "concreteNormal",
-    url: gokuStatueNormalUrl,
+    url: gokuStatueConcreteNormalUrl,
     type: "ktx2",
     flipY: false,
     wrap: true,
@@ -209,7 +264,7 @@ export const manifest = [
 
   {
     name: "expedition33FlagDiffuse",
-    url: expedition33DiffuseUrl,
+    url: expedition33FlagDiffuseUrl,
     type: "ktx2",
     flipY: false,
     colorSpace: SRGBColorSpace,
@@ -217,7 +272,7 @@ export const manifest = [
 
   {
     name: "playerDiffuse",
-    url: playerDiffuseUrl,
+    url: footballDiffuseUrl,
     type: "ktx2",
     flipY: false,
     colorSpace: SRGBColorSpace,
@@ -225,38 +280,101 @@ export const manifest = [
 
   {
     name: "playerNormal",
-    url: playerNormalUrl,
+    url: footballNormalUrl,
     type: "ktx2",
     flipY: false,
   },
 
   {
-    name: "treeBarkDiffuse",
-    url: _treeBarkDiffuseUrl,
+    name: "pineCanopyDiffuse",
+    url: pineCanopyDiffuseUrl,
+    type: "ktx2",
+    flipY: false,
+    // left linear on purpose, as srgb it reads too vibrant
+  },
+  {
+    name: "pineBarkDiffuse",
+    url: pineBarkDiffuseUrl,
     type: "ktx2",
     flipY: false,
     wrap: true,
     colorSpace: SRGBColorSpace,
   },
   {
-    name: "treeBarkNormal",
-    url: _treeBarkNormalUrl,
+    name: "pineBarkNormal",
+    url: pineBarkNormalUrl,
     type: "ktx2",
     flipY: false,
     wrap: true,
   },
 
   {
-    name: "pineTreeDiffuse",
-    url: pineTreeDiffuseUrl,
+    name: "lakeRocksDiffuse",
+    url: lakeRocksDiffuseUrl,
     type: "ktx2",
     flipY: false,
-    // left linear on purpose, as srgb it reads too vibrant
+    colorSpace: SRGBColorSpace,
+    wrap: true,
+  },
+  {
+    name: "reedsDiffuse",
+    url: reedsDiffuseUrl,
+    type: "ktx2",
+    flipY: false,
+    colorSpace: SRGBColorSpace,
+  },
+  {
+    name: "seaweedDiffuse",
+    url: seaweedDiffuseUrl,
+    type: "ktx2",
+    flipY: false,
+    colorSpace: SRGBColorSpace,
+  },
+  {
+    name: "waterLilyNormal",
+    url: waterLilyNormalUrl,
+    type: "ktx2",
+    flipY: false,
+  },
+  {
+    name: "waterLilyDiffuse",
+    url: waterLilyDiffuseUrl,
+    type: "ktx2",
+    flipY: false,
+    colorSpace: SRGBColorSpace,
+  },
+
+  {
+    name: "koiRedWhiteDiffuse",
+    url: koiRedWhiteDiffuseUrl,
+    type: "ktx2",
+    flipY: false,
+    colorSpace: SRGBColorSpace,
+  },
+  {
+    name: "koiRedBlackDiffuse",
+    url: koiRedBlackDiffuseUrl,
+    type: "ktx2",
+    flipY: false,
+    colorSpace: SRGBColorSpace,
+  },
+  {
+    name: "koiGoldDiffuse",
+    url: koiGoldDiffuseUrl,
+    type: "ktx2",
+    flipY: false,
+    colorSpace: SRGBColorSpace,
   },
 
   {
     name: "edelweiss",
     url: edelweissUrl,
+    type: "ktx2",
+    colorSpace: SRGBColorSpace,
+  },
+  {
+    name: "pampasDiffuse",
+    url: pampasDiffuseUrl,
     type: "ktx2",
     colorSpace: SRGBColorSpace,
   },

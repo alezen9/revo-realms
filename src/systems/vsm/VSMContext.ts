@@ -24,7 +24,7 @@ import {
 } from "./VSMMath";
 
 export const VSM_POOL_CAPACITY = 512;
-export const VSM_DYNAMIC_CAPACITY = 64;
+export const VSM_DYNAMIC_CAPACITY = 128;
 // 0 is a valid page key, so empty slots hold the largest uint instead
 export const VSM_INVALID_PAGE_KEY = 0xffffffff;
 export const VSM_JOBS_ALLOCATED = 0;
@@ -349,6 +349,12 @@ export class VSMContext {
 
     mesh.updateWorldMatrix(true, false);
     const worldBounds = new Box3().setFromObject(mesh);
+    const hasFiniteBounds = [
+      ...worldBounds.min.toArray(),
+      ...worldBounds.max.toArray(),
+    ].every(Number.isFinite);
+    if (!hasFiniteBounds)
+      throw new Error(`Shadow caster has non-finite bounds: ${mesh.name}`);
     this.casterEntries.set(mesh, {
       mesh,
       type,

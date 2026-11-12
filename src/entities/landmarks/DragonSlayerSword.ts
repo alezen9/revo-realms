@@ -11,6 +11,7 @@ import { Vector3 } from "three";
 import { VSMReceiverStandardMaterial } from "../../systems/vsm/VSMReceiverMaterials";
 import { normalMap, texture, uniform, uv } from "three/tsl";
 import { RevoColliderType } from "../../systems/physics/colliderTypes";
+import { placeAtAnchor } from "./placeAtAnchor";
 
 const uniforms = {
   uDiffuseScale: uniform(3.75),
@@ -36,7 +37,11 @@ class DragonSlayerMaterial extends VSMReceiverStandardMaterial {
 
 export class DragonSlayerSword {
   constructor() {
-    const sword = assets.getMesh("dragon_slayer");
+    const sword = assets.getMesh(
+      "dragon-slayer",
+      assets.resources.dragonSlayerModel,
+    );
+    placeAtAnchor("dragon-slayer", [sword]);
     sword.material = new DragonSlayerMaterial();
     stage.mainScene.add(sword);
     graphics.vsmPass.registerCaster(sword);

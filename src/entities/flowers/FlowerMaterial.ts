@@ -8,6 +8,7 @@ import {
   positionLocal,
   sin,
   smoothstep,
+  step,
   texture,
   uv,
   vec2,
@@ -22,6 +23,7 @@ import {
   type FlowersCompute,
   getGrassScale,
   getNoise,
+  getSpecies,
   getYOffset,
 } from "./FlowersCompute";
 
@@ -102,7 +104,17 @@ export class FlowerMaterial extends MeshBasicNodeMaterial {
     );
 
     const flower = texture(assets.resources.edelweiss, uv());
-    const tint = mix(uniforms.uColor1, uniforms.uColor2, rand2);
+    const species = getSpecies(flowersCompute.flowers.element(flowerIndex));
+    const speciesColor = mix(
+      mix(
+        mix(uniforms.uColor1, uniforms.uColor2, step(0.5, species)),
+        uniforms.uColor3,
+        step(1.5, species),
+      ),
+      uniforms.uColor4,
+      step(2.5, species),
+    );
+    const tint = speciesColor.mul(mix(0.85, 1.05, rand2));
     const flowerColor = tint.mul(flower.rgb).mul(uniforms.uBrightness);
     this.colorNode = flowerColor;
     const hemiRadiance = lighting.uHemiSkyColor.rgb.add(

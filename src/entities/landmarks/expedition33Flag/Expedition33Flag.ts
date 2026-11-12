@@ -1,16 +1,9 @@
-import {
-  Box3,
-  CylinderGeometry,
-  Mesh,
-  PlaneGeometry,
-  Quaternion,
-  Sphere,
-  Vector3,
-} from "three";
+import { Box3, Mesh, PlaneGeometry, Quaternion, Sphere, Vector3 } from "three";
 import { positionLocal } from "three/tsl";
 import { ColliderDesc } from "@dimforge/rapier3d";
 import { type State } from "../../../Game";
 import {
+  assets,
   eventBus,
   landmarks,
   physicsWorld,
@@ -21,34 +14,54 @@ import type { ComputeTask } from "../../../systems/rendering/ComputeTask";
 import { RevoColliderType } from "../../../systems/physics/colliderTypes";
 import { VSMReceiverStandardMaterial } from "../../../systems/vsm/VSMReceiverMaterials";
 import { UP } from "../../axes";
+import { placeAtAnchor } from "../placeAtAnchor";
 import { config, uniforms } from "./config";
 import { FlagCompute, getParticleAtPlanePosition } from "./FlagCompute";
 import { FlagMaterial } from "./FlagMaterial";
 import { debugExpedition33Flag } from "./debug";
 
-// top of the hill, sampled once from the terrain heightmap
-const HILLTOP = new Vector3(-115.74, 3.5, 215.79);
+// bounds in the model's own upright frame, before the anchor leans and places it
+const getModelBounds = (mesh: Mesh) => {
+  mesh.geometry.computeBoundingBox();
+  const { boundingBox } = mesh.geometry;
+  if (!boundingBox) throw new Error(`"${mesh.name}" has no bounds`);
+  return boundingBox.clone().applyMatrix4(mesh.matrix);
+};
 
 export class Expedition33Flag {
   private compute = new FlagCompute();
   private computeTask: ComputeTask;
-  private origin = HILLTOP.clone();
-  private staffAxis = new Vector3();
-  private staffQuaternion = new Quaternion();
+  private origin = new Vector3();
   private pendingSeconds = 0;
   private isPlayerNear = false;
 
   constructor() {
-    const leanDirection = new Vector3(-HILLTOP.x, 0, -HILLTOP.z).normalize();
-    this.staffAxis
-      .copy(UP)
-      .multiplyScalar(Math.cos(config.STAFF_LEAN_RADIANS))
-      .addScaledVector(leanDirection, Math.sin(config.STAFF_LEAN_RADIANS));
-    this.staffQuaternion.setFromUnitVectors(UP, this.staffAxis);
-    uniforms.uStaffAxis.value.copy(this.staffAxis);
+    const { expedition33FlagModel } = assets.resources;
+    const staff = assets.getMesh("expedition-33-staff", expedition33FlagModel);
+    const flag = assets.getMesh("expedition-33-flag", expedition33FlagModel);
+    const staffBounds = getModelBounds(staff);
+    const flagBounds = getModelBounds(flag);
+    placeAtAnchor("expedition-33-flag", [staff]);
+    const anchorScale = staff.scale.x;
+    const staffSize = staffBounds
+      .getSize(new Vector3())
+      .multiplyScalar(anchorScale);
+    const flagSize = flagBounds
+      .getSize(new Vector3())
+      .multiplyScalar(anchorScale);
+    uniforms.uFlagWidth.value = flagSize.x;
+    uniforms.uFlagHeight.value = flagSize.y;
+    uniforms.uAttachTop.value =
+      (flagBounds.max.y - staffBounds.min.y) * anchorScale;
 
-    stage.mainScene.add(this.createStaff(), this.createFlag());
-    this.createPhysics();
+    // the staff stands on its origin and leans with the anchor
+    this.origin.copy(staff.position);
+    const staffAxis = UP.clone().applyQuaternion(staff.quaternion);
+    uniforms.uStaffAxis.value.copy(staffAxis);
+
+    this.styleStaff(staff);
+    stage.mainScene.add(staff, this.createFlag());
+    this.createPhysics(staff.quaternion, staffAxis, staffSize);
 
     this.computeTask = graphics.createComputeTask({
       label: "Expedition33",
@@ -69,27 +82,17 @@ export class Expedition33Flag {
     debugExpedition33Flag();
   }
 
-  private createStaff() {
-    const geometry = new CylinderGeometry(
-      config.STAFF_RADIUS * 0.75,
-      config.STAFF_RADIUS,
-      config.STAFF_HEIGHT,
-      10,
-    );
-    const material = new VSMReceiverStandardMaterial({
+  private styleStaff(staff: Mesh) {
+    staff.material = new VSMReceiverStandardMaterial({
       color: 0x8a8f98,
       metalness: 0.9,
       roughness: 0.35,
     });
-    const staff = new Mesh(geometry, material);
-    staff.position
-      .copy(this.origin)
-      .addScaledVector(this.staffAxis, config.STAFF_HEIGHT / 2);
-    staff.quaternion.copy(this.staffQuaternion);
     graphics.vsmPass.registerCaster(staff);
-    return staff;
   }
 
+  // the cloth is rebuilt as a regular grid, the simulation pairs vertex and
+  // particle by index and an exported mesh does not keep its vertex order
   private createFlag() {
     const geometry = new PlaneGeometry(
       1,
@@ -98,14 +101,15 @@ export class Expedition33Flag {
       config.SEGMENTS_Y,
     );
     // the cloth only exists on the gpu, so its bounds cover everywhere it can reach
-    const reach = config.FLAG_WIDTH * config.TETHER_SLACK;
+    const attachTop = uniforms.uAttachTop.value;
+    const reach = uniforms.uFlagWidth.value * config.TETHER_SLACK;
     const bounds = new Box3(
       new Vector3(
         -reach,
-        config.ATTACH_TOP - config.FLAG_HEIGHT - reach,
+        attachTop - uniforms.uFlagHeight.value - reach,
         -reach,
       ),
-      new Vector3(reach, config.ATTACH_TOP, reach),
+      new Vector3(reach, attachTop, reach),
     );
     geometry.boundingBox = bounds;
     geometry.boundingSphere = bounds.getBoundingSphere(new Sphere());
@@ -123,16 +127,19 @@ export class Expedition33Flag {
     return flag;
   }
 
-  private createPhysics() {
+  private createPhysics(
+    staffQuaternion: Quaternion,
+    staffAxis: Vector3,
+    staffSize: Vector3,
+  ) {
+    const height = staffSize.y;
+    const radius = staffSize.x / 2;
     const translation = this.origin
       .clone()
-      .addScaledVector(this.staffAxis, config.STAFF_HEIGHT / 2);
-    const colliderDesc = ColliderDesc.cylinder(
-      config.STAFF_HEIGHT / 2,
-      config.STAFF_RADIUS,
-    )
+      .addScaledVector(staffAxis, height / 2);
+    const colliderDesc = ColliderDesc.cylinder(height / 2, radius)
       .setTranslation(translation.x, translation.y, translation.z)
-      .setRotation(this.staffQuaternion)
+      .setRotation(staffQuaternion)
       .setRestitution(0.4);
     physicsWorld.world.createCollider(colliderDesc).userData = {
       type: RevoColliderType.Stone,

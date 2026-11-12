@@ -46,6 +46,12 @@ export const debugGrass = (uniforms: GrassUniforms, config: GrassConfig) => {
     max: 1,
     step: 0.01,
   });
+  color.addBinding(uniforms.uBladeToneVariation, "value", {
+    label: "Blade tone variation",
+    min: 0,
+    max: 1,
+    step: 0.01,
+  });
   color.addBinding(uniforms.uWarmVariationStrength, "value", {
     label: "Warm variation",
     min: 0,
@@ -99,6 +105,12 @@ export const debugGrass = (uniforms: GrassUniforms, config: GrassConfig) => {
     max: 3,
     step: 0.01,
   });
+  lighting.addBinding(uniforms.uWindExposure, "value", {
+    label: "Wind exposure",
+    min: 0,
+    max: 1,
+    step: 0.01,
+  });
 
   const ao = folder.addFolder({ title: "AO" });
   ao.addBinding(uniforms.uAoScale, "value", {
@@ -144,7 +156,7 @@ export const debugGrass = (uniforms: GrassUniforms, config: GrassConfig) => {
   wind.addBinding(uniforms.uAmbientSwayStrength, "value", {
     label: "Ambient sway",
     min: 0,
-    max: 0.15,
+    max: 1,
     step: 0.001,
   });
   wind.addBinding(uniforms.uWindLull, "value", {
@@ -379,6 +391,24 @@ export const debugGrass = (uniforms: GrassUniforms, config: GrassConfig) => {
     label: "Base bend",
     min: -Math.PI * 2,
     max: Math.PI * 2,
+    step: 0.01,
+  });
+  general.addBinding(uniforms.uTuftSpread, "value", {
+    label: "Tuft spread",
+    min: 0,
+    max: 1,
+    step: 0.01,
+  });
+  general.addBinding(uniforms.uPatchLean, "value", {
+    label: "Patch lean",
+    min: 0,
+    max: 2,
+    step: 0.01,
+  });
+  general.addBinding(uniforms.uBladeDroop, "value", {
+    label: "Blade droop",
+    min: 0,
+    max: 4,
     step: 0.01,
   });
   general.addBinding(uniforms.uSpriteRotationRandomness, "value", {

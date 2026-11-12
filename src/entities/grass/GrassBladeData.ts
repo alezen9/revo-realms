@@ -11,18 +11,27 @@ import {
 } from "../../shaders/packing";
 import { config, uniforms } from "./config";
 
+const getHeightmapMin = () =>
+  Math.floor(assets.resources.heightmap.userData.min);
 const getHeightmapMax = () =>
   Math.ceil(assets.resources.heightmap.userData.max);
 
 export const getYOffset = Fn<[data: Node<"vec4">], Node<"float">>(([data]) => {
-  return unpackUnits(data.w, 0, 16, 0, getHeightmapMax());
+  return unpackUnits(data.w, 0, 16, getHeightmapMin(), getHeightmapMax());
 });
 
 export const setYOffset = Fn<
   [data: Node<"vec4">, value: Node<"float">],
   Node<"vec4">
 >(([data, value]) => {
-  data.w = packUnits(data.w, 0, 16, value, 0, getHeightmapMax());
+  data.w = packUnits(
+    data.w,
+    0,
+    16,
+    value,
+    getHeightmapMin(),
+    getHeightmapMax(),
+  );
   return data;
 });
 

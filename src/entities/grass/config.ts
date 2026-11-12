@@ -9,7 +9,7 @@ const getDrawProfile = (segments: number) => ({
   indexCount: getBladeIndexCount(segments),
 });
 
-const BLADE_WIDTH = 0.065;
+const BLADE_WIDTH = 0.075;
 const BLADE_HEIGHT = 1.75;
 const TILE_SIZE = 130;
 // near to far, one indirect draw per entry
@@ -22,6 +22,17 @@ const CLUMP_SPACING = TILE_SIZE / CLUMPS_PER_SIDE;
 const CLUMP_LOCAL_RADIUS = CLUMP_SPACING * 0.6;
 const MIN_VISIBLE_SCALE = 0.15;
 const DETAILED_WIND_TRANSITION_WIDTH = 5;
+const TUFT_CENTER_HEIGHT = 1.2;
+const TUFT_RIM_HEIGHT = 0.9;
+const CLUMP_MIN_HEIGHT = 0.85;
+const CLUMP_MAX_HEIGHT = 1.4;
+const STALK_CHANCE = 0.05;
+const STALK_HEIGHT = 1.6;
+const PATCH_MIN_HEIGHT = 0.55;
+const PATCH_MAX_HEIGHT = 1.3;
+const PATCH_DETAIL_REPEAT = 5;
+const MAX_LEAN_PER_BLADE_LENGTH = 0.85;
+const SWIRLS_PER_METER = 0.35;
 
 export const config = {
   LOD_DRAW_PROFILES,
@@ -45,6 +56,17 @@ export const config = {
   WORKGROUP_SIZE: 64,
   MIN_VISIBLE_SCALE,
   DETAILED_WIND_TRANSITION_WIDTH,
+  TUFT_CENTER_HEIGHT,
+  TUFT_RIM_HEIGHT,
+  CLUMP_MIN_HEIGHT,
+  CLUMP_MAX_HEIGHT,
+  STALK_CHANCE,
+  STALK_HEIGHT,
+  PATCH_MIN_HEIGHT,
+  PATCH_MAX_HEIGHT,
+  PATCH_DETAIL_REPEAT,
+  MAX_LEAN_PER_BLADE_LENGTH,
+  SWIRLS_PER_METER,
 };
 
 export type GrassConfig = typeof config;
@@ -88,7 +110,7 @@ export const uniforms = {
   uWindStrength: uniform(0.32),
   uWindSpeed: uniform(0.18),
   uWindUvScale: uniform(1.35),
-  uAmbientSwayStrength: uniform(0.055),
+  uAmbientSwayStrength: uniform(0.3),
   uWindLull: uniform(0.09),
   uWindEddyStrength: uniform(0.9),
   uWindGustCoverage: uniform(0.6),
@@ -106,10 +128,11 @@ export const uniforms = {
   uBaseColorDark: uniform(new Color(0.12, 0.15, 0.07).convertSRGBToLinear()),
   uBaseColor: uniform(new Color(0.2, 0.38, 0.19).convertSRGBToLinear()),
   uTipColor: uniform(new Color(0.46, 0.49, 0.37).convertSRGBToLinear()),
-  uWarmColor: uniform(new Color(0.66, 0.53, 0.41).convertSRGBToLinear()),
+  uWarmColor: uniform(new Color(0.46, 0.4, 0.21).convertSRGBToLinear()),
   uRustColor: uniform(new Color(0.38, 0.19, 0.11).convertSRGBToLinear()),
   uColorMixFactor: uniform(0.22),
   uColorVariationStrength: uniform(0.32),
+  uBladeToneVariation: uniform(0.18),
   uWarmVariationStrength: uniform(0.48),
   uRustVariationStrength: uniform(0.21),
 
@@ -123,6 +146,10 @@ export const uniforms = {
   uHighlightStrength: uniform(0.02),
   uBacklightStrength: uniform(0.13),
   uTuftRoundness: uniform(0.6),
+  uTuftSpread: uniform(0.3),
+  uPatchLean: uniform(0.45),
+  uBladeDroop: uniform(1.6),
+  uWindExposure: uniform(0.35),
   uWidthRoundness: uniform(0.8),
 
   uFullDensityRadius: uniform(18),

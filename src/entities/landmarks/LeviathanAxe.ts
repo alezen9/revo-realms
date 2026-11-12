@@ -11,6 +11,7 @@ import { Quaternion, Vector3 } from "three";
 import { VSMReceiverStandardMaterial } from "../../systems/vsm/VSMReceiverMaterials";
 import { color, normalMap, texture, uniform, uv } from "three/tsl";
 import { RevoColliderType } from "../../systems/physics/colliderTypes";
+import { placeAtAnchor } from "./placeAtAnchor";
 
 const uniforms = {
   uDiffuseScale: uniform(4),
@@ -48,7 +49,11 @@ class LeviathanAxeMaterial extends VSMReceiverStandardMaterial {
 
 export class LeviathanAxe {
   constructor() {
-    const axe = assets.getMesh("leviathan_axe");
+    const axe = assets.getMesh(
+      "leviathan-axe",
+      assets.resources.leviathanAxeModel,
+    );
+    placeAtAnchor("leviathan-axe", [axe]);
     axe.material = new LeviathanAxeMaterial();
 
     stage.mainScene.add(axe);

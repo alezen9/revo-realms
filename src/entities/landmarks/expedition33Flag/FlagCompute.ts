@@ -21,24 +21,26 @@ import { assets, wind } from "../../../systems";
 import { gameTime } from "../../../systems/time/gameTime";
 import { config, uniforms } from "./config";
 
-const { REST_X, REST_Y, BEND_WEIGHT, STEP_SECONDS } = config;
-const REST_DIAGONAL = Math.hypot(REST_X, REST_Y);
-// column offset, row offset, rest length, weight: the structural ring, the
-// shear ring, then a weak two ring bending that resists sharp creases
+const { BEND_WEIGHT, STEP_SECONDS } = config;
+// column offset, row offset, weight: the structural ring, the shear ring, then
+// a weak two ring bending that resists sharp creases. the rest length is the
+// offset measured in grid cells of the flag's size
 const NEIGHBORS = [
-  [1, 0, REST_X, 1],
-  [-1, 0, REST_X, 1],
-  [0, 1, REST_Y, 1],
-  [0, -1, REST_Y, 1],
-  [1, 1, REST_DIAGONAL, 1],
-  [-1, 1, REST_DIAGONAL, 1],
-  [1, -1, REST_DIAGONAL, 1],
-  [-1, -1, REST_DIAGONAL, 1],
-  [2, 0, REST_X * 2, BEND_WEIGHT],
-  [-2, 0, REST_X * 2, BEND_WEIGHT],
-  [0, 2, REST_Y * 2, BEND_WEIGHT],
-  [0, -2, REST_Y * 2, BEND_WEIGHT],
+  [1, 0, 1],
+  [-1, 0, 1],
+  [0, 1, 1],
+  [0, -1, 1],
+  [1, 1, 1],
+  [-1, 1, 1],
+  [1, -1, 1],
+  [-1, -1, 1],
+  [2, 0, BEND_WEIGHT],
+  [-2, 0, BEND_WEIGHT],
+  [0, 2, BEND_WEIGHT],
+  [0, -2, BEND_WEIGHT],
 ];
+const cellWidth = uniforms.uFlagWidth.div(config.SEGMENTS_X);
+const cellHeight = uniforms.uFlagHeight.div(config.SEGMENTS_Y);
 const EPSILON = 1e-5;
 // gusts travel across the flag and sample their own band of the noise atlas
 const GUST_TRAVEL_ACROSS_WIDTH = 0.3;
@@ -100,8 +102,8 @@ export const getParticleAtPlanePosition = Fn<
 
 const getStaffAnchor = Fn<[heightRatio: Node<"float">], Node<"vec3">>(
   ([heightRatio]) => {
-    const distanceAlongStaff = float(config.ATTACH_TOP).sub(
-      heightRatio.mul(config.FLAG_HEIGHT),
+    const distanceAlongStaff = uniforms.uAttachTop.sub(
+      heightRatio.mul(uniforms.uFlagHeight),
     );
     return uniforms.uStaffAxis.mul(distanceAlongStaff);
   },
@@ -113,7 +115,7 @@ const clampToTether = Fn<
 >(([position, anchor, widthRatio]) => {
   const fromAnchor = position.sub(anchor);
   const anchorDistance = fromAnchor.length().max(EPSILON);
-  const reach = widthRatio.mul(config.FLAG_WIDTH * config.TETHER_SLACK);
+  const reach = widthRatio.mul(uniforms.uFlagWidth.mul(config.TETHER_SLACK));
   const clampedDistance = anchorDistance.min(reach);
   const reachScale = clampedDistance.div(anchorDistance);
   return anchor.add(fromAnchor.mul(reachScale));
@@ -275,7 +277,11 @@ const solveParticle = Fn<
 
   // the table unrolls while the shader is built, the gpu sees 12 plain calls
   const total = vec4(0).toVar();
-  for (const [offsetX, offsetY, restLength, weight] of NEIGHBORS)
+  for (const [offsetX, offsetY, weight] of NEIGHBORS) {
+    const restLength = vec2(
+      cellWidth.mul(offsetX),
+      cellHeight.mul(offsetY),
+    ).length();
     total.addAssign(
       pullTowardRest(
         predictedPositions,
@@ -287,6 +293,7 @@ const solveParticle = Fn<
         weight,
       ),
     );
+  }
   const corrected = predicted.add(total.xyz.div(total.w.max(1)));
 
   const anchor = getStaffAnchor(coordinates.w);
@@ -313,7 +320,7 @@ const initParticles = Fn<
 >(([positions, previousPositions]) => {
   const coordinates = getGridCoordinates(instanceIndex);
   const windDirection = vec3(wind.uDirection.x, 0, wind.uDirection.y);
-  const distanceFromStaff = coordinates.z.mul(config.FLAG_WIDTH);
+  const distanceFromStaff = coordinates.z.mul(uniforms.uFlagWidth);
   const restPosition = getStaffAnchor(coordinates.w).add(
     windDirection.mul(distanceFromStaff),
   );

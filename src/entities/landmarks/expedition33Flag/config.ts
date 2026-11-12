@@ -6,9 +6,6 @@ const SEGMENTS_Y = 16;
 const POINTS_X = SEGMENTS_X + 1;
 const POINTS_Y = SEGMENTS_Y + 1;
 const COUNT = POINTS_X * POINTS_Y;
-const FLAG_WIDTH = 5.4;
-const FLAG_HEIGHT = 3.3;
-const STAFF_HEIGHT = 6.5;
 const SIM_DISTANCE = 80;
 // one constraint pass per step, small steps converge faster than more passes
 const STEPS_PER_SECOND = 960;
@@ -20,14 +17,6 @@ export const config = {
   POINTS_X,
   POINTS_Y,
   COUNT,
-  REST_X: FLAG_WIDTH / SEGMENTS_X,
-  REST_Y: FLAG_HEIGHT / SEGMENTS_Y,
-  FLAG_WIDTH,
-  FLAG_HEIGHT,
-  STAFF_HEIGHT,
-  STAFF_RADIUS: 0.07,
-  STAFF_LEAN_RADIANS: (8 * Math.PI) / 180,
-  ATTACH_TOP: STAFF_HEIGHT - 0.2,
   SIM_DISTANCE_SQUARED: SIM_DISTANCE * SIM_DISTANCE,
   STEP_SECONDS: 1 / STEPS_PER_SECOND,
   MAX_CATCH_UP_SECONDS: 1 / 30,
@@ -44,6 +33,10 @@ export const uniforms = {
   uDamping: uniform(2),
   uGravity: uniform(9.81),
   uStaffAxis: uniform(new Vector3(0, 1, 0)),
+  // the flag's size and where its top edge meets the staff come from the model
+  uFlagWidth: uniform(1),
+  uFlagHeight: uniform(1),
+  uAttachTop: uniform(1),
   uPlayerLocalPosition: uniform(new Vector3(0, -100, 0)),
   uPlayerRadius: uniform(0.5),
   uCollisionPadding: uniform(0.2),

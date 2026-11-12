@@ -1,6 +1,7 @@
 import {
   Box3,
   BufferAttribute,
+  InstancedMesh,
   MathUtils,
   Matrix4,
   Vector3,
@@ -23,6 +24,7 @@ import {
   positionLocal,
   storage,
   uint,
+  uniform,
   uvec2,
   uvec4,
   vec2,
@@ -61,7 +63,7 @@ const UV_LAST_STEP = UV_STEPS - 1;
 type ClusterInstance = {
   mesh: Mesh;
   caster: VSMCaster;
-  batchInstanceId?: number;
+  instanceId?: number;
   firstCluster: number;
   clusterCount: number;
   maskId: number;
@@ -180,19 +182,23 @@ const appendGeometryClusters = (
   return { firstCluster, clusterCount: meshlets.meshletCount };
 };
 
-const getInstanceBatchIds = (caster: VSMCaster) => {
+const getInstanceIds = (caster: VSMCaster) => {
   const { mesh, positionNode } = caster;
-  const batchIds: (number | undefined)[] = [];
+  const instanceIds: (number | undefined)[] = [];
   if (mesh instanceof BatchedMesh) {
     for (let id = 0; id < mesh.instanceCount; id++)
-      if (mesh.getVisibleAt(id)) batchIds.push(id);
-    return batchIds;
+      if (mesh.getVisibleAt(id)) instanceIds.push(id);
+    return instanceIds;
+  }
+  if (mesh instanceof InstancedMesh) {
+    for (let id = 0; id < mesh.count; id++) instanceIds.push(id);
+    return instanceIds;
   }
   let instanceCount = 1;
   if (positionNode) instanceCount = mesh.count;
   for (let instance = 0; instance < instanceCount; instance++)
-    batchIds.push(undefined);
-  return batchIds;
+    instanceIds.push(undefined);
+  return instanceIds;
 };
 
 const getCapacity = (length: number) =>
@@ -215,21 +221,11 @@ type WorkItemsNode = ReturnType<typeof createWorkItemsNode>;
 type WorkCounterNode = ReturnType<typeof createWorkCounterNode>;
 type MasksNode = ReturnType<typeof createMasksNode>;
 
-const getWorldPosition = (
+const transformPosition = (
   matrices: StorageBufferNode<"vec4">,
   instance: Node<"uint">,
-  local: Node<"vec3">,
-  positionNode: Node<"vec3"> | undefined,
+  position: Node<"vec3">,
 ) => {
-  let position = local;
-  if (positionNode)
-    position = positionNode.context({
-      overrideNodes: new Map<Node, () => Node>([
-        [instanceIndex, () => instance],
-        [positionLocal, () => local],
-        [positionGeometry, () => local],
-      ]),
-    });
   const matrixOffset = instance.mul(4);
   const columnX = matrices.element(matrixOffset);
   const columnY = matrices.element(matrixOffset.add(1));
@@ -243,6 +239,30 @@ const getWorldPosition = (
   return world.xyz;
 };
 
+const getWorldPosition = (
+  matrices: StorageBufferNode<"vec4">,
+  instance: Node<"uint">,
+  local: Node<"vec3">,
+  positionNode: Node<"vec3"> | undefined,
+  instanceWorldMatrix: Node<"mat4"> | undefined,
+) => {
+  const inputPosition = instanceWorldMatrix
+    ? transformPosition(matrices, instance, local)
+    : local;
+  let position = inputPosition;
+  if (positionNode)
+    position = positionNode.context({
+      overrideNodes: new Map<Node, () => Node>([
+        [instanceIndex, () => instance],
+        [positionLocal, () => inputPosition],
+        [positionGeometry, () => local],
+      ]),
+    });
+  if (instanceWorldMatrix)
+    return instanceWorldMatrix.mul(vec4(position, 1)).xyz;
+  return transformPosition(matrices, instance, position);
+};
+
 const computeClusterLightBounds = Fn<
   [
     instanceClusters: Uvec4Node,
@@ -252,6 +272,7 @@ const computeClusterLightBounds = Fn<
     lightBounds: Vec4Node,
     lightBasis: VSMContext["lightBasis"],
     positionNode: Node<"vec3"> | undefined,
+    instanceWorldMatrix: Node<"mat4"> | undefined,
   ],
   void
 >(
@@ -263,6 +284,7 @@ const computeClusterLightBounds = Fn<
     lightBounds,
     lightBasis,
     positionNode,
+    instanceWorldMatrix,
   ]) => {
     const instanceCluster = instanceClusters.element(instanceIndex).toVar();
     const bounds = vec4(1e8, 1e8, -1e8, -1e8).toVar();
@@ -277,6 +299,7 @@ const computeClusterLightBounds = Fn<
           instanceCluster.x,
           local,
           positionNode,
+          instanceWorldMatrix,
         );
         const light = getLightPosition(world, lightBasis);
         bounds.assign(vec4(bounds.xy.min(light), bounds.zw.max(light)));
@@ -300,6 +323,7 @@ const computeClusterLightBounds = Fn<
         instanceCluster.x,
         local,
         positionNode,
+        instanceWorldMatrix,
       );
       const light = getLightPosition(world, lightBasis);
       bounds.assign(vec4(bounds.xy.min(light), bounds.zw.max(light)));
@@ -476,10 +500,11 @@ export class VSMClusterBucket {
   private rasterMasks?: StorageBufferNode<"uint">;
   private bakeNodes: ComputeNode[] = [];
   private hasPendingBake = true;
-  private batchMatrix = new Matrix4();
+  private instanceMatrix = new Matrix4();
   private worldMatrix = new Matrix4();
   private instanceBounds = new Box3();
   private readonly positionNode?: Node<"vec3">;
+  private readonly instanceWorldMatrix?: Node<"mat4">;
 
   constructor(
     context: VSMContext,
@@ -488,7 +513,11 @@ export class VSMClusterBucket {
     kind: VSMLayerKind,
   ) {
     const { lightBasis } = context;
-    this.positionNode = casters[0].positionNode;
+    const { mesh, positionNode } = casters[0];
+    this.positionNode = positionNode;
+    const isDeformedInstancing = positionNode && mesh instanceof InstancedMesh;
+    if (isDeformedInstancing)
+      this.instanceWorldMatrix = uniform(mesh.matrixWorld);
     this.jobs = jobs;
     const content = this.collectContent(casters);
     this.maskSources = content.maskSources;
@@ -606,6 +635,7 @@ export class VSMClusterBucket {
       lightBounds,
       lightBasis,
       this.positionNode,
+      this.instanceWorldMatrix,
     ).compute(1, [64]);
     this.resetNode = resetWorkCount(workCounter).compute(1, [1]);
     this.buildNode = collectClusterWork(
@@ -671,6 +701,7 @@ export class VSMClusterBucket {
       entry.instance,
       local,
       this.positionNode,
+      this.instanceWorldMatrix,
     );
     return vec4(world, depthBias);
   }
@@ -721,12 +752,17 @@ export class VSMClusterBucket {
     this.bounds.makeEmpty();
     if (this.positionNode) this.bounds.setFromObject(this.instances[0].mesh);
     for (let index = 0; index < this.instances.length; index++) {
-      const { mesh, caster, batchInstanceId, maskId } = this.instances[index];
+      const { mesh, caster, instanceId, maskId } = this.instances[index];
       mesh.updateWorldMatrix(true, false);
       this.worldMatrix.copy(mesh.matrixWorld);
-      if (mesh instanceof BatchedMesh && batchInstanceId !== undefined) {
-        mesh.getMatrixAt(batchInstanceId, this.batchMatrix);
-        this.worldMatrix.multiply(this.batchMatrix);
+      const isInstanced =
+        mesh instanceof BatchedMesh || mesh instanceof InstancedMesh;
+      const hasInstanceMatrix = isInstanced && instanceId !== undefined;
+      if (hasInstanceMatrix) {
+        mesh.getMatrixAt(instanceId, this.instanceMatrix);
+        if (this.instanceWorldMatrix)
+          this.worldMatrix.copy(this.instanceMatrix);
+        else this.worldMatrix.multiply(this.instanceMatrix);
       }
       this.matrixValues.set(this.worldMatrix.elements, index * 16);
       // the w of the x column and of the translation are spare, only xyz is read back
@@ -745,6 +781,8 @@ export class VSMClusterBucket {
   }
 
   collectBoundsNodes(nodes: ComputeNode[]) {
+    // instanced deformation uses this buffer before the material, keeping raster bindings within the gpu limit
+    if (this.instanceWorldMatrix) this.updateMatrices();
     if (this.hasDirtyBounds || this.positionNode) nodes.push(this.boundsNode);
     this.hasDirtyBounds = false;
     if (this.markNode) nodes.push(this.markNode);
@@ -797,11 +835,11 @@ export class VSMClusterBucket {
         content.maskSources.push({ opacityNode, alphaTest });
         maskId = content.maskSources.length;
       }
-      for (const batchInstanceId of getInstanceBatchIds(caster)) {
+      for (const instanceId of getInstanceIds(caster)) {
         const isBatchInstance =
-          mesh instanceof BatchedMesh && batchInstanceId !== undefined;
+          mesh instanceof BatchedMesh && instanceId !== undefined;
         let geometryId = -1;
-        if (isBatchInstance) geometryId = mesh.getGeometryIdAt(batchInstanceId);
+        if (isBatchInstance) geometryId = mesh.getGeometryIdAt(instanceId);
         const key = `${mesh.geometry.uuid}:${geometryId}`;
         let clusters = geometries.get(key);
         if (!clusters) {
@@ -829,7 +867,7 @@ export class VSMClusterBucket {
         content.instances.push({
           mesh,
           caster,
-          batchInstanceId,
+          instanceId,
           firstCluster: clusters.firstCluster,
           clusterCount: clusters.clusterCount,
           maskId,

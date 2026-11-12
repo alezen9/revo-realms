@@ -31,7 +31,11 @@ import { IndirectStorageBufferAttribute, type Node } from "three/webgpu";
 import { assets, stage } from "../../systems";
 import { computeMapUvByPosition } from "../../shaders/mapping";
 import { computeFrustumVisibility } from "../../shaders/frustum";
-import { getGrassHeightFromMask, getGrassNoiseUv } from "./GrassShading";
+import {
+  getGrassHeightFromMask,
+  getGrassNoiseUv,
+  getLushness,
+} from "./GrassShading";
 import { gameDeltaTime } from "../../systems/time/gameTime";
 import { config, uniforms } from "./config";
 import {
@@ -158,8 +162,8 @@ const initClumps = Fn<
 
   const gridX = col.add(0.5).mul(config.CLUMP_SPACING);
   const gridZ = row.add(0.5).mul(config.CLUMP_SPACING);
-  const jitterX = randomX.sub(0.5).mul(config.CLUMP_SPACING * 0.5);
-  const jitterZ = randomZ.sub(0.5).mul(config.CLUMP_SPACING * 0.5);
+  const jitterX = randomX.sub(0.5).mul(config.CLUMP_SPACING);
+  const jitterZ = randomZ.sub(0.5).mul(config.CLUMP_SPACING);
 
   const offsetX = gridX.add(jitterX).sub(config.TILE_HALF_SIZE);
   const offsetZ = gridZ.add(jitterZ).sub(config.TILE_HALF_SIZE);
@@ -170,6 +174,12 @@ const initClumps = Fn<
   clumpState.assign(setClumpOrientation(clumpState, orientation));
 
   clumpWinds.element(instanceIndex).assign(vec2(0));
+
+  const clumpHeight = mix(
+    config.CLUMP_MIN_HEIGHT,
+    config.CLUMP_MAX_HEIGHT,
+    hash(instanceIndex.add(5179)),
+  );
 
   const clumpRotation = getClumpRotation(clumpState);
 
@@ -194,13 +204,30 @@ const initClumps = Fn<
       const scaleNoise = noiseSample.b;
       const shapedScaleNoise = scaleNoise.mul(scaleNoise);
 
-      const randomScale = remap(
+      const noiseScale = remap(
         shapedScaleNoise,
         0,
         1,
         uniforms.uBladeMinScale,
         uniforms.uBladeMaxScale,
       );
+      const rimProximity = float(bladeSlot)
+        .add(0.5)
+        .div(config.BLADES_PER_CLUMP);
+      const tuftHeight = mix(
+        config.TUFT_CENTER_HEIGHT,
+        config.TUFT_RIM_HEIGHT,
+        rimProximity,
+      );
+      const isStalk = step(
+        1 - config.STALK_CHANCE,
+        hash(getBladeIndex(bladeSlot).add(7919)),
+      );
+      const stalkHeight = mix(1, config.STALK_HEIGHT, isStalk);
+      const randomScale = noiseScale
+        .mul(tuftHeight)
+        .mul(clumpHeight)
+        .mul(stalkHeight);
 
       bladeState.assign(vec2(0));
       bladeState.assign(setScale(bladeState, randomScale));
@@ -264,25 +291,37 @@ const refreshTerrainCache = (
 
   If(needsTerrainRefresh, () => {
     const terrainMapUv = computeMapUvByPosition(clumpWorldPos.xz);
-    const terrainSample = texture(assets.resources.terrainMaps, terrainMapUv);
+    const terrainSample = texture(assets.resources.terrainMasks, terrainMapUv);
     const terrainGrassScale = getGrassHeightFromMask(terrainSample.g);
     const heightmapUv = vec2(terrainMapUv.x, float(1).sub(terrainMapUv.y));
     const terrainYOffset = texture(assets.resources.heightmap, heightmapUv).r;
 
-    clumpState.z = terrainGrassScale;
-    clumpState.assign(setYOffset(clumpState, terrainYOffset));
-    clumpState.assign(setTerrainCacheValidity(clumpState, 1));
-
-    const colorNoise = texture(
+    const patchBroadNoise = texture(
       assets.resources.noiseAtlas,
       getGrassNoiseUv(clumpWorldPos.xz),
-    ).g.toVar();
+    ).g;
+    const patchDetailNoise = texture(
+      assets.resources.noiseAtlas,
+      getGrassNoiseUv(clumpWorldPos.xz.mul(config.PATCH_DETAIL_REPEAT)),
+    ).g;
+    const lushness = getLushness(patchBroadNoise, patchDetailNoise).toVar();
+    const patchHeight = mix(
+      config.PATCH_MIN_HEIGHT,
+      config.PATCH_MAX_HEIGHT,
+      lushness,
+    );
+    const meadowHeight = mix(1, patchHeight, terrainGrassScale);
+    const dryness = float(1).sub(lushness).mul(terrainGrassScale).toVar();
+
+    clumpState.z = terrainGrassScale.mul(meadowHeight);
+    clumpState.assign(setYOffset(clumpState, terrainYOffset));
+    clumpState.assign(setTerrainCacheValidity(clumpState, 1));
 
     Loop(
       { start: 0, end: config.BLADES_PER_CLUMP, type: "uint" },
       ({ i: bladeSlot }) => {
         const bladeState = blades.element(getBladeIndex(bladeSlot));
-        bladeState.assign(setPositionNoise(bladeState, colorNoise));
+        bladeState.assign(setPositionNoise(bladeState, dryness));
       },
     );
   });

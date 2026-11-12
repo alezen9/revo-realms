@@ -1,5 +1,5 @@
 import { EPSILON, Fn, float, step } from "three/tsl";
-import type { Node } from "three/webgpu";
+import type { Node, UniformArrayNode } from "three/webgpu";
 
 type FloatNode = Node<"float">;
 
@@ -32,3 +32,23 @@ export const computeFrustumVisibility = Fn<FrustumVisibilityArgs, FloatNode>(
     return isVisibleX.mul(isVisibleY).mul(isVisibleZ);
   },
 );
+
+type SphereFrustumVisibilityArgs = [
+  center: Node<"vec3">,
+  radius: FloatNode,
+  planes: UniformArrayNode<"vec4">,
+];
+
+// a sphere is culled once it lies fully behind any of the six planes
+export const computeSphereFrustumVisibility = Fn<
+  SphereFrustumVisibilityArgs,
+  FloatNode
+>(([center, radius, planes]) => {
+  let isVisible: FloatNode = float(1);
+  for (let index = 0; index < 6; index++) {
+    const plane = planes.element(index);
+    const distance = plane.xyz.dot(center).add(plane.w);
+    isVisible = isVisible.mul(step(radius.negate(), distance));
+  }
+  return isVisible;
+});

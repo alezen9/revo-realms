@@ -86,7 +86,7 @@ export class Player {
   }
 
   private createCharacterMesh() {
-    const mesh = assets.getMesh("player");
+    const mesh = assets.getMesh("football", assets.resources.footballModel);
     mesh.material = new PlayerMaterial();
     mesh.position.set(0, 0, 0);
     return mesh;

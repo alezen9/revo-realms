@@ -5,12 +5,10 @@ type GrassBladeGeometryParams = {
   bladeHeight: number;
 };
 
-const getBladeHalfWidth = (t: number, halfWidthBase: number) => {
-  const baseGrow = Math.min(1, 0.28 + 0.72 * (t / 0.26));
-
-  const tipTaper = Math.pow(1 - t, 1.22);
-
-  return halfWidthBase * baseGrow * tipTaper;
+const getBladeHalfWidth = (t: number) => {
+  const baseGrow = Math.min(1, 0.4 + t * 3);
+  const tipTaper = (1 - t) * (1 - t * 0.35);
+  return 0.5 * baseGrow * tipTaper;
 };
 
 export class GrassBladeGeometry extends InstancedBufferGeometry {
@@ -19,7 +17,6 @@ export class GrassBladeGeometry extends InstancedBufferGeometry {
 
     const segments = Math.max(1, Math.floor(nSegments));
 
-    const halfWidthBase = 0.5;
     const rowCount = segments;
     const vertexCount = rowCount * 2 + 1;
     const quadCount = Math.max(0, rowCount - 1);
@@ -36,7 +33,7 @@ export class GrassBladeGeometry extends InstancedBufferGeometry {
     for (let row = 0; row < rowCount; row++) {
       const v = row / segments;
       const y = v * bladeHeight;
-      const halfWidth = getBladeHalfWidth(v, halfWidthBase);
+      const halfWidth = getBladeHalfWidth(v);
 
       const left = row * 2;
       const right = left + 1;

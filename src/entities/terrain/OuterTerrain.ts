@@ -25,7 +25,10 @@ export class OuterTerrain {
   }
 
   private createOuterTerrainMesh() {
-    const outerTerrain = assets.getMesh("terrain-outer");
+    const outerTerrain = assets.getMesh(
+      "terrain-outer",
+      assets.resources.terrainModel,
+    );
     outerTerrain.geometry.computeBoundingSphere();
     outerTerrain.geometry.computeBoundingBox();
     return outerTerrain;

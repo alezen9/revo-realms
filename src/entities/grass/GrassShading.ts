@@ -52,6 +52,11 @@ export const getGrassNoiseUv = (worldXZ: Node<"vec2">) =>
 export const getGrassHeightFromMask = (grassMask: Node<"float">) =>
   grassMask.sub(0.25).div(0.75).clamp();
 
+export const getLushness = (
+  patchBroadNoise: Node<"float">,
+  patchDetailNoise: Node<"float">,
+) => smoothstep(0.38, 0.62, mix(patchBroadNoise, patchDetailNoise, 0.5));
+
 export const getGrassViewSide = (viewDirectionXZ: Node<"vec2">) =>
   vec3(viewDirectionXZ.y, 0, viewDirectionXZ.x.negate());
 
