@@ -7,7 +7,7 @@ import { WindParticles } from "./wind/WindParticles";
 import { WindStreaks } from "./wind/WindStreaks";
 import { LeviathanAxe } from "./landmarks/LeviathanAxe";
 import { DragonSlayerSword } from "./landmarks/dragonSlayerSword/DragonSlayerSword";
-import { GokuStatue } from "./landmarks/GokuStatue";
+import { GokuStatue } from "./landmarks/gokuStatue/GokuStatue";
 import { Expedition33Flag } from "./landmarks/expedition33Flag/Expedition33Flag";
 import { Water } from "./water/Water";
 import { Koi } from "./koi/Koi";
