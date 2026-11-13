@@ -14,11 +14,11 @@ const {
   TURN_EASE_DISTANCE,
   WANDER_TURN,
   WANDER_RATE,
-  FLEE_WANDER,
-  THREAT_REACH,
+  FLEE_WANDER_WEIGHT,
+  FLEE_FADE_RADII,
   SEPARATION_RADIUS,
   SEPARATION_STRENGTH,
-  SEPARATION_HEIGHT,
+  SEPARATION_DEPTH_PUSH,
   AVOID_DISTANCE,
   AVOID_DISTANCE_PER_SPEED,
   AVOID_STRENGTH,
@@ -30,9 +30,10 @@ const DISTANCE_CHANNEL = 0;
 const FLOOR_CHANNEL = 1;
 
 const heading = new Vector3();
-const desired = new Vector3();
-const away = new Vector3();
-const probe = new Vector3();
+const steering = new Vector3();
+const awayFromPlayer = new Vector3();
+const awayFromFish = new Vector3();
+const ahead = new Vector3();
 const gradientSample = new Vector3();
 const fieldGradient = new Vector3();
 
@@ -57,7 +58,7 @@ export type Fish = {
   fleeTime: number;
   wanderTime: number;
   wanderPhase: number;
-  depthBias: number;
+  calmHeightRatio: number;
 };
 
 export type KoiLake = {
@@ -81,7 +82,6 @@ export const steerFish = (
     ? FLEE_DURATION
     : Math.max(0, fish.fleeTime - delta);
   const isFleeing = fish.fleeTime > 0;
-  // a startled koi bursts away and coasts back down to cruising over the cool down
   const fleeRemaining = fish.fleeTime / FLEE_DURATION;
   fish.speed = MathUtils.damp(
     fish.speed,
@@ -90,66 +90,69 @@ export const steerFish = (
     delta,
   );
 
-  // two waves at unrelated rates never repeat in step, so the bend drifts like a random wander
   fish.wanderTime += delta;
-  const wavePhase = fish.wanderTime * WANDER_RATE + fish.wanderPhase;
-  const wanderWave = Math.sin(wavePhase) + 0.6 * Math.sin(wavePhase * 0.37 + 2);
-  const wanderYaw = fish.yaw + WANDER_TURN * wanderWave;
-  desired.set(Math.sin(wanderYaw), 0, Math.cos(wanderYaw));
+  const wanderAngle = fish.wanderTime * WANDER_RATE + fish.wanderPhase;
+  const wanderBend =
+    Math.sin(wanderAngle) + 0.6 * Math.sin(wanderAngle * 0.37 + 2);
+  const wanderYaw = fish.yaw + WANDER_TURN * wanderBend;
+  steering.set(Math.sin(wanderYaw), 0, Math.cos(wanderYaw));
 
   if (isFleeing) {
-    away.subVectors(position, playerPosition).setY(0);
-    // the urge to flee fades with the player's distance, or a koi would keep ramming the shore after the threat left
+    awayFromPlayer.subVectors(position, playerPosition).setY(0);
     const threat = MathUtils.clamp(
-      1 - away.length() / (FLEE_RADIUS * THREAT_REACH),
+      1 - awayFromPlayer.length() / (FLEE_RADIUS * FLEE_FADE_RADII),
       0,
       1,
     );
-    desired
-      .multiplyScalar(FLEE_WANDER)
-      .addScaledVector(away.normalize(), threat);
+    steering
+      .multiplyScalar(FLEE_WANDER_WEIGHT)
+      .addScaledVector(awayFromPlayer.normalize(), threat);
   }
 
-  // fish pass over and under each other, so neighbours are kept apart in depth as well
-  let heightPush = 0;
+  let depthSeparation = 0;
   for (const other of fishes) {
     if (other === fish) continue;
-    away.subVectors(position, other.mesh.position);
-    const distance = away.length();
+    awayFromFish.subVectors(position, other.mesh.position);
+    const distance = awayFromFish.length();
     const isClose = distance < SEPARATION_RADIUS && distance > 0;
     if (!isClose) continue;
-    const push = (1 - distance / SEPARATION_RADIUS) / distance;
-    heightPush += away.y * push * SEPARATION_HEIGHT;
-    away.setY(0);
-    desired.addScaledVector(away, push * SEPARATION_STRENGTH);
+    const separationWeight = (1 - distance / SEPARATION_RADIUS) / distance;
+    depthSeparation +=
+      awayFromFish.y * separationWeight * SEPARATION_DEPTH_PUSH;
+    awayFromFish.setY(0);
+    steering.addScaledVector(
+      awayFromFish,
+      separationWeight * SEPARATION_STRENGTH,
+    );
   }
 
-  // sampled at the koi itself, so the push never jumps between sample points as it turns
   const avoidDistance = AVOID_DISTANCE + fish.speed * AVOID_DISTANCE_PER_SPEED;
   const obstacleDistance = sampleLakeField(field, position, DISTANCE_CHANNEL);
   const closeness = MathUtils.clamp(1 - obstacleDistance / avoidDistance, 0, 1);
   const isNearObstacle = closeness > 0;
   if (isNearObstacle) {
     const gradient = getFieldGradient(field, position);
-    // eased in, so the push starts gently instead of kicking in at full slope
     const avoidWeight = closeness * closeness;
-    desired.normalize();
-    // the part heading into the obstacle fades as it nears, so the koi slides along it
-    const into = Math.min(0, desired.dot(gradient));
-    desired.addScaledVector(gradient, -into * Math.min(1, avoidWeight * 2));
-    desired.addScaledVector(gradient, avoidWeight * AVOID_STRENGTH);
+    steering.normalize();
+    const intoObstacle = Math.min(0, steering.dot(gradient));
+    steering.addScaledVector(
+      gradient,
+      -intoObstacle * Math.min(1, avoidWeight * 2),
+    );
+    steering.addScaledVector(gradient, avoidWeight * AVOID_STRENGTH);
   }
-  desired.normalize();
+  steering.normalize();
 
-  // the turn rate eases in and out and is capped by speed, so every change of course is a smooth arc
-  const desiredYaw = Math.atan2(desired.x, desired.z);
-  const wrappedError =
-    MathUtils.euclideanModulo(desiredYaw - fish.yaw + Math.PI, Math.PI * 2) -
+  const steeringYaw = Math.atan2(steering.x, steering.z);
+  const yawToSteering =
+    MathUtils.euclideanModulo(steeringYaw - fish.yaw + Math.PI, Math.PI * 2) -
     Math.PI;
   // straight behind flips sign every frame and the turn would cancel out, so the koi keeps the side it turns to
-  const isBehind = Math.abs(wrappedError) > Math.PI * 0.85;
+  const isSteeringBehind = Math.abs(yawToSteering) > Math.PI * 0.85;
   const turnSide = Math.sign(fish.turnRate) || 1;
-  const yawError = isBehind ? turnSide * Math.abs(wrappedError) : wrappedError;
+  const yawError = isSteeringBehind
+    ? turnSide * Math.abs(yawToSteering)
+    : yawToSteering;
   const turnSpeed = Math.max(fish.speed, CRUISE_SPEED);
   const maxTurnRate = turnSpeed / TURN_RADIUS;
   const targetTurnRate = MathUtils.clamp(
@@ -170,19 +173,19 @@ export const steerFish = (
   position.addScaledVector(heading, fish.speed * delta);
 
   // depth eases in, so the floor is read ahead as well or a fast koi would scrape a rising bed
-  probe.copy(position).addScaledVector(heading, fish.speed * DEPTH_LOOK_AHEAD);
+  ahead.copy(position).addScaledVector(heading, fish.speed * DEPTH_LOOK_AHEAD);
   const swimFloor = Math.max(
     sampleLakeField(field, position, FLOOR_CHANNEL),
-    sampleLakeField(field, probe, FLOOR_CHANNEL),
+    sampleLakeField(field, ahead, FLOOR_CHANNEL),
   );
   const calmHeight = MathUtils.lerp(
     swimFloor,
     field.swimCeiling,
-    fish.depthBias,
+    fish.calmHeightRatio,
   );
   const preferredHeight = isFleeing ? swimFloor : calmHeight;
   const targetHeight = MathUtils.clamp(
-    preferredHeight + heightPush,
+    preferredHeight + depthSeparation,
     swimFloor,
     field.swimCeiling,
   );

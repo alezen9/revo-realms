@@ -12,26 +12,20 @@ export const config = {
   // turning is measured per meter swum, so a fleeing fish draws the same smooth curve as a cruising one
   TURN_CORRECTION_DISTANCE: 0.33,
   TURN_EASE_DISTANCE: 0.125,
-  // the wander bends the heading by two slow waves, a bend of 0.06 curves the
-  // path through about five meters of radius
   WANDER_TURN: 0.06,
   WANDER_RATE: 0.35,
-  // a fleeing koi keeps some of its wander, so a scattering group never runs in lockstep
-  FLEE_WANDER: 0.3,
-  // the flee urge reaches zero at this many flee radii from the player
-  THREAT_REACH: 2,
+  FLEE_WANDER_WEIGHT: 0.3,
+  FLEE_FADE_RADII: 2,
   SEPARATION_RADIUS: 3.5,
   SEPARATION_STRENGTH: 2,
-  SEPARATION_HEIGHT: 2,
-  // a fast koi needs more room to turn away, so it starts avoiding sooner
+  SEPARATION_DEPTH_PUSH: 2,
   AVOID_DISTANCE: 3,
   AVOID_DISTANCE_PER_SPEED: 0.5,
   AVOID_STRENGTH: 3,
   DEPTH_RESPONSE: 2,
   DEPTH_LOOK_AHEAD: 0.6,
-  // a calm koi keeps this share of the way from its floor up to the surface limit
-  MIN_DEPTH_BIAS: 0.3,
-  MAX_DEPTH_BIAS: 0.8,
+  MIN_CALM_HEIGHT_RATIO: 0.3,
+  MAX_CALM_HEIGHT_RATIO: 0.8,
   SPAWN_CLEARANCE: 3,
   SPAWN_SPACING: 8,
   SPAWN_SEED: 7,

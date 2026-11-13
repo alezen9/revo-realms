@@ -17,8 +17,8 @@ const {
   SIZES,
   CRUISE_SPEED,
   FLEE_SPEED,
-  MIN_DEPTH_BIAS,
-  MAX_DEPTH_BIAS,
+  MIN_CALM_HEIGHT_RATIO,
+  MAX_CALM_HEIGHT_RATIO,
   SPAWN_CLEARANCE,
   SPAWN_SPACING,
   SPAWN_SEED,
@@ -41,7 +41,6 @@ export class Koi {
     if (!bounds) throw new Error("Koi has no bounding box");
     const bodyLength = bounds.max.z - bounds.min.z;
 
-    // the header holds the grid origin, cell size, columns, rows and the swim ceiling
     const { buffer, byteOffset, byteLength } = koiLakeField;
     const fieldFloats = new Float32Array(buffer, byteOffset, byteLength / 4);
     const [originX, originZ, cellSize, columns, rows, swimCeiling] =
@@ -65,9 +64,9 @@ export class Koi {
       const mesh = new Mesh(geometry, material);
       mesh.scale.setScalar(SIZES[index % SIZES.length]);
 
-      const depthBias = MathUtils.lerp(
-        MIN_DEPTH_BIAS,
-        MAX_DEPTH_BIAS,
+      const calmHeightRatio = MathUtils.lerp(
+        MIN_CALM_HEIGHT_RATIO,
+        MAX_CALM_HEIGHT_RATIO,
         MathUtils.seededRandom(),
       );
       const column = cell % columns;
@@ -75,7 +74,7 @@ export class Koi {
       const swimFloor = field.values[cell * 2 + 1];
       mesh.position.set(
         originX + column * cellSize,
-        MathUtils.lerp(swimFloor, swimCeiling, depthBias),
+        MathUtils.lerp(swimFloor, swimCeiling, calmHeightRatio),
         originZ + row * cellSize,
       );
       const yaw = MathUtils.seededRandom() * Math.PI * 2;
@@ -92,7 +91,7 @@ export class Koi {
         fleeTime: 0,
         wanderTime: 0,
         wanderPhase: MathUtils.seededRandom() * Math.PI * 2,
-        depthBias,
+        calmHeightRatio,
       });
     }
     this.lake = { fishes, field };
@@ -121,7 +120,6 @@ export class Koi {
   };
 }
 
-// open water far from rocks and shore, and far enough apart that no two koi start as a pair
 const findSpawnCells = (field: KoiLakeField) => {
   const { columns, rows, values } = field;
   const cellCount = columns * rows;
