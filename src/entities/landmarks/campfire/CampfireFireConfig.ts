@@ -1,0 +1,12 @@
+export const config = {
+  COUNT: 2048,
+  WORKGROUP_SIZE: 256,
+  SPEED: 0.5,
+  RADIUS: 0.85,
+  HEIGHT: 1.85,
+  LIFETIME: 1,
+  CONE_FACTOR: 1.25,
+  SCALE: 0.65,
+  BLOOM: 1.5,
+  SPARK_SHARE: 0.1,
+};
