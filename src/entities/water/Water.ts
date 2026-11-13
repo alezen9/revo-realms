@@ -1,5 +1,6 @@
 import { Mesh } from "three";
 import { assets, sound, stage, eventBus, landmarks } from "../../systems";
+import { debugWater } from "./WaterDebug";
 import { WaterMaterial } from "./WaterMaterial";
 
 export class Water {
@@ -14,6 +15,7 @@ export class Water {
     this.lakeSurface = lakeSurface;
 
     lakeSurface.material = new WaterMaterial(lakeSurface.matrixWorld);
+    debugWater();
 
     const { boundingSphere } = lakeSurface.geometry;
     if (!boundingSphere) throw new Error("Lake surface has no bounding sphere");
