@@ -2,6 +2,7 @@ import { uniform } from "three/tsl";
 
 export const config = {
   CRUISE_SPEED: 0.5,
+  RETURN_SPEED: 1.5,
   GIVE_WAY_SPEED: 0.12,
   FLEE_SPEED: 6,
   CRUISE_RESPONSE: 0.8,
@@ -15,8 +16,18 @@ export const config = {
   MIN_LOOK_AHEAD: 2.5,
   GOAL_PACE: 2,
   DEPTH_RESPONSE: 2,
+  DEPTH_LOOK_AHEAD: 0.6,
   FLEE_RADIUS: 6,
   GIVE_WAY_RADIUS: 4,
+  SEPARATION_RADIUS: 2.5,
+  SEPARATION_STRENGTH: 2,
+  // a fast koi needs more room to turn away, so it starts avoiding sooner
+  AVOID_DISTANCE: 1,
+  AVOID_DISTANCE_PER_SPEED: 0.5,
+  AVOID_STRENGTH: 3,
+  LINE_MARGIN: 0.25,
+  MIN_AVOID_DISTANCE: 0.5,
+  RETURN_TIMEOUT: 15,
   CRUISE_BEAT_RATE: 2.5,
   BEAT_RATE_PER_SPEED: 2,
   BODY_WAVE: 3.5,

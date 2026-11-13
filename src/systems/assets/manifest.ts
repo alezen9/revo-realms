@@ -18,6 +18,7 @@ import campfireModelUrl from "/models/campfire.glb?url";
 import footballModelUrl from "/models/football.glb?url";
 import koiModelUrl from "/models/koi.glb?url";
 import koiRoutesUrl from "/models/koi-routes.bin?url";
+import koiLakeFieldUrl from "/models/koi-lake-field.bin?url";
 import pampasModelUrl from "/models/pampas.glb?url";
 import lakeRocksModelUrl from "/models/lake-rocks.glb?url";
 import lakeRocksPlacementsUrl from "/models/lake-rocks-placements.bin?url";
@@ -128,6 +129,7 @@ export const manifest = [
   { name: "footballModel", url: footballModelUrl, type: "gltf" },
   { name: "koiModel", url: koiModelUrl, type: "gltf" },
   { name: "koiRoutes", url: koiRoutesUrl, type: "binary" },
+  { name: "koiLakeField", url: koiLakeFieldUrl, type: "binary" },
   { name: "pampasModel", url: pampasModelUrl, type: "gltf" },
   { name: "lakeRocksModel", url: lakeRocksModelUrl, type: "gltf" },
   {

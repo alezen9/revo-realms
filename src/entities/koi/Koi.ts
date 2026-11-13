@@ -4,7 +4,13 @@ import { assets, eventBus, graphics, stage } from "../../systems";
 import { config } from "./KoiConfig";
 import { debugKoi } from "./KoiDebug";
 import { KoiMaterial } from "./KoiMaterial";
-import { steerFish, type Fish } from "./KoiSteering";
+import {
+  getRouteCells,
+  steerFish,
+  type Fish,
+  type KoiLake,
+  type KoiRoute,
+} from "./KoiSteering";
 
 const {
   COLORINGS,
@@ -19,16 +25,31 @@ const {
 } = config;
 
 export class Koi {
-  private fishes: Fish[] = [];
+  private lake: KoiLake;
 
-  // the lake scatter keeps rocks off the routes, so koi only ever follow them
   constructor() {
-    const { koiModel, koiRoutes } = assets.resources;
+    const { koiModel, koiRoutes, koiLakeField } = assets.resources;
     const { geometry } = assets.getMesh("koi", koiModel);
     geometry.computeBoundingBox();
     const bounds = geometry.boundingBox;
     if (!bounds) throw new Error("Koi has no bounding box");
     const bodyLength = bounds.max.z - bounds.min.z;
+
+    // the header holds the grid origin, cell size, columns and rows
+    const fieldFloats = new Float32Array(
+      koiLakeField.buffer,
+      koiLakeField.byteOffset,
+      koiLakeField.byteLength / 4,
+    );
+    const [originX, originZ, cellSize, columns, rows] = fieldFloats;
+    const field = {
+      originX,
+      originZ,
+      cellSize,
+      columns,
+      rows,
+      values: fieldFloats.subarray(5),
+    };
 
     // the first float is the sample count of every route, then x, y, z per sample
     const { buffer, byteOffset, byteLength } = koiRoutes;
@@ -37,6 +58,8 @@ export class Koi {
     const samples = routeFloats.subarray(1);
     const routeCount = samples.length / (samplesPerRoute * 3);
 
+    const routes: KoiRoute[] = [];
+    const fishes: Fish[] = [];
     for (let index = 0; index < routeCount; index++) {
       const points = Array.from({ length: samplesPerRoute }, (_, sample) =>
         new Vector3().fromArray(
@@ -45,13 +68,19 @@ export class Koi {
         ),
       );
       const route = new CatmullRomCurve3(points, true);
+      const routeLength = route.getLength();
+      routes.push({
+        curve: route,
+        length: routeLength,
+        samples: points,
+        cells: getRouteCells(points, field),
+      });
       const coloring = assets.resources[COLORINGS[index % COLORINGS.length]];
       const material = new KoiMaterial(coloring, bounds.max.z, bodyLength);
       const mesh = new Mesh(geometry, material);
       mesh.scale.setScalar(SIZES[index % SIZES.length]);
       const isEven = index % 2 === 0;
       const direction = isEven ? 1 : -1;
-      const routeLength = route.getLength();
       const progress = index / routeCount;
       const goalLead = (direction * MIN_LOOK_AHEAD) / routeLength;
       route.getPointAt(progress, mesh.position);
@@ -61,27 +90,34 @@ export class Koi {
       stage.mainScene.add(mesh);
       graphics.vsmPass.registerCaster(mesh, { type: "dynamic" });
 
-      this.fishes.push({
+      fishes.push({
         mesh,
         material,
-        route,
-        routeLength,
+        mode: "route",
+        routeIndex: index,
         direction,
         goalProgress: MathUtils.euclideanModulo(progress + goalLead, 1),
         speed: CRUISE_SPEED,
         fleeTime: 0,
+        returnTime: 0,
+        path: [],
+        pathIndex: 0,
         yaw,
         turnRate: 0,
       });
     }
+
+    const routeOwners = routes.map((_, index) => index);
+    this.lake = { fishes, routes, routeOwners, field };
 
     eventBus.on("engine-render-update", this.onEngineUpdate);
     debugKoi();
   }
 
   private onEngineUpdate = ({ player, delta }: State) => {
-    for (const [index, fish] of this.fishes.entries()) {
-      steerFish(fish, index, this.fishes, player.position, delta);
+    const { lake } = this;
+    for (const [index, fish] of lake.fishes.entries()) {
+      steerFish(fish, index, lake, player.position, delta);
 
       const { material, mesh, speed, turnRate } = fish;
       const turnSpeed = Math.max(speed, CRUISE_SPEED);
