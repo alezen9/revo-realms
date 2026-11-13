@@ -18,7 +18,7 @@ import {
 import { MeshBasicNodeMaterial, type Node } from "three/webgpu";
 import { assets, lighting, wind } from "../../systems";
 import { gameTime } from "../../systems/time/gameTime";
-import { uniforms } from "./config";
+import { uniforms } from "./FlowersConfig";
 import {
   type FlowersCompute,
   getGrassScale,
@@ -87,7 +87,7 @@ const getFlowerLocalPosition = (
   return sourcePosition.mul(scale).add(flowerBase).add(swayOffset);
 };
 
-export class FlowerMaterial extends MeshBasicNodeMaterial {
+export class FlowersMaterial extends MeshBasicNodeMaterial {
   constructor(flowersCompute: FlowersCompute) {
     super();
     this.stencilWrite = false;

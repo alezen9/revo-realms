@@ -26,7 +26,7 @@ import {
 } from "../../shaders/packing";
 import { computeMapUvByPosition } from "../../shaders/mapping";
 import { computeFrustumVisibility } from "../../shaders/frustum";
-import { config, uniforms } from "./config";
+import { config, uniforms } from "./FlowersConfig";
 
 type FlowerData = Node<"vec4">;
 type FlowerBuffer = ReturnType<typeof createFlowerBuffer>;

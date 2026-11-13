@@ -9,10 +9,10 @@ import {
 import { graphics, stage, eventBus } from "../../systems";
 import { type State } from "../../Game";
 import type { ComputeTask } from "../../systems/rendering/ComputeTask";
-import { config, uniforms } from "./config";
+import { config, uniforms } from "./FlowersConfig";
 import { FlowersCompute } from "./FlowersCompute";
-import { FlowerMaterial } from "./FlowerMaterial";
-import { debugFlowers } from "./debug";
+import { FlowersMaterial } from "./FlowersMaterial";
+import { debugFlowers } from "./FlowersDebug";
 
 const FLOWER_INDICES = new Uint8Array([0, 2, 1, 0, 3, 2, 0, 4, 3, 0, 1, 4]);
 
@@ -48,7 +48,7 @@ export class Flowers {
     geometry.setIndirect(indirectDrawAttribute);
 
     const flowersCompute = new FlowersCompute(atomicCounter);
-    const material = new FlowerMaterial(flowersCompute);
+    const material = new FlowersMaterial(flowersCompute);
     const mesh = new Mesh(geometry, material);
 
     this.mesh = mesh;

@@ -1,6 +1,6 @@
 import { debugPanel } from "../../systems";
 import { srgbColorTarget } from "../../systems/debug/tweakpaneColor";
-import { uniforms } from "./config";
+import { uniforms } from "./FlowersConfig";
 
 export const debugFlowers = () => {
   const folder = debugPanel.panel.addFolder({
