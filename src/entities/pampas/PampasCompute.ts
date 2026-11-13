@@ -32,7 +32,7 @@ import {
   getGrassNoiseUv,
   getLushness,
 } from "../grass/GrassShading";
-import { config, uniforms } from "./config";
+import { config, uniforms } from "./PampasConfig";
 
 type PlantBuffer = ReturnType<typeof createPlantBuffer>;
 type BendBuffer = ReturnType<typeof createBendBuffer>;

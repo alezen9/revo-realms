@@ -15,7 +15,7 @@ import {
 import { DoubleSide, MeshBasicNodeMaterial } from "three/webgpu";
 import { assets, lighting, wind } from "../../systems";
 import { gameTime } from "../../systems/time/gameTime";
-import { config, uniforms } from "./config";
+import { config, uniforms } from "./PampasConfig";
 import { type PampasCompute } from "./PampasCompute";
 
 export class PampasMaterial extends MeshBasicNodeMaterial {

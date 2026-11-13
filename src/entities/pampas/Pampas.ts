@@ -4,12 +4,12 @@ import {
   InstancedBufferGeometry,
   Mesh,
 } from "three/webgpu";
-import { assets, debugPanel, eventBus, graphics, stage } from "../../systems";
+import { assets, eventBus, graphics, stage } from "../../systems";
 import { type State } from "../../Game";
-import { srgbColorTarget } from "../../systems/debug/tweakpaneColor";
 import type { ComputeTask } from "../../systems/rendering/ComputeTask";
-import { config, uniforms } from "./config";
+import { config, uniforms } from "./PampasConfig";
 import { PampasCompute } from "./PampasCompute";
+import { debugPampas } from "./PampasDebug";
 import { PampasMaterial } from "./PampasMaterial";
 
 export class Pampas {
@@ -54,7 +54,7 @@ export class Pampas {
     this.computeTask.init();
 
     eventBus.on("engine-render-update", this.onEngineUpdate);
-    this.debug();
+    debugPampas();
   }
 
   private onEngineUpdate = ({ player }: State) => {
@@ -67,52 +67,4 @@ export class Pampas {
     uniforms.uPlayerPosition.value.copy(player.position);
     this.mesh.position.copy(player.position).setY(0);
   };
-
-  private debug() {
-    const folder = debugPanel.panel.addFolder({
-      title: "🌾 Pampas",
-      expanded: false,
-    });
-    folder.addBinding(uniforms.uDensity, "value", {
-      label: "Density",
-      min: 0,
-      max: 1,
-      step: 0.01,
-    });
-    folder.addBinding(srgbColorTarget(uniforms.uTint.value), "value", {
-      label: "Tint",
-      view: "color",
-      color: { type: "float" },
-    });
-    folder.addBinding(uniforms.uBrightness, "value", {
-      label: "Brightness",
-      min: 0,
-      max: 3,
-      step: 0.01,
-    });
-    folder.addBinding(uniforms.uAmbientSway, "value", {
-      label: "Ambient sway",
-      min: 0,
-      max: 0.5,
-      step: 0.01,
-    });
-    folder.addBinding(uniforms.uGustLean, "value", {
-      label: "Gust lean",
-      min: 0,
-      max: 1.5,
-      step: 0.01,
-    });
-    folder.addBinding(uniforms.uPlayerPush, "value", {
-      label: "Player push",
-      min: 0,
-      max: 2,
-      step: 0.01,
-    });
-    folder.addBinding(uniforms.uFlutter, "value", {
-      label: "Flutter",
-      min: 0,
-      max: 0.3,
-      step: 0.005,
-    });
-  }
 }
