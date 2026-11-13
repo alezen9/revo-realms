@@ -1,5 +1,4 @@
 import {
-  DoubleSide,
   InstancedMesh,
   MathUtils,
   Matrix4,
@@ -8,28 +7,14 @@ import {
   Vector2,
   Vector3,
 } from "three";
-import {
-  Fn,
-  hash,
-  instanceIndex,
-  normalMap,
-  PI2,
-  positionLocal,
-  sin,
-  smoothstep,
-  texture,
-  uv,
-  vec3,
-} from "three/tsl";
-import type { Node } from "three/webgpu";
+import { positionLocal, texture } from "three/tsl";
 import { type State } from "../../Game";
-import { assets, debugPanel, eventBus, graphics, stage } from "../../systems";
-import { gameTime } from "../../systems/time/gameTime";
-import { VSMReceiverStandardMaterial } from "../../systems/vsm/VSMReceiverMaterials";
+import { assets, eventBus, graphics, stage } from "../../systems";
+import { UP } from "../axes";
 import { realmConfig } from "../realmConfig";
-import { config, uniforms } from "./config";
-
-const UP = new Vector3(0, 1, 0);
+import { config, uniforms } from "./WaterLiliesConfig";
+import { debugWaterLilies } from "./WaterLiliesDebug";
+import { getLilyPosition, WaterLiliesMaterial } from "./WaterLiliesMaterial";
 
 type Lily = {
   mesh: InstancedMesh;
@@ -39,39 +24,6 @@ type Lily = {
   scale: Vector3;
   radius: number;
 };
-
-const getLilyPosition = Fn<[position: Node<"vec3">], Node<"vec3">>(
-  ([position]) => {
-    const bobPhase = hash(instanceIndex)
-      .mul(PI2)
-      .add(gameTime.mul(config.BOB_SPEED));
-    const bob = sin(bobPhase).mul(uniforms.uBob);
-    const playerDistance = position.xz.distance(uniforms.uPlayerPosition.xz);
-    const dip = smoothstep(config.DIP_RADIUS, 0, playerDistance)
-      .mul(uniforms.uPlayerPress)
-      .mul(uniforms.uDipDepth);
-    return position.add(vec3(0, bob.sub(dip), 0));
-  },
-);
-
-class WaterLilyMaterial extends VSMReceiverStandardMaterial {
-  constructor() {
-    super();
-    this.side = DoubleSide;
-    this.metalness = 0;
-    this.roughnessNode = uniforms.uRoughness;
-
-    const lily = texture(assets.resources.waterLilyDiffuse, uv());
-    this.colorNode = lily.rgb.mul(uniforms.uTint).mul(uniforms.uDiffuseScale);
-    this.opacityNode = lily.a;
-    this.alphaTest = 0.5;
-
-    const normal = texture(assets.resources.waterLilyNormal, uv());
-    this.normalNode = normalMap(normal, uniforms.uNormalScale);
-
-    this.positionNode = getLilyPosition(positionLocal);
-  }
-}
 
 export class WaterLilies {
   private lilies: Lily[] = [];
@@ -84,7 +36,7 @@ export class WaterLilies {
     const clusters = assets.getObject("water-lilies", terrainModel);
     clusters.updateWorldMatrix(true, true);
 
-    const material = new WaterLilyMaterial();
+    const material = new WaterLiliesMaterial();
     const capacity = clusters.children.length * config.MAX_LILIES_PER_CLUSTER;
     const meshes: InstancedMesh[] = [];
     for (const name of config.PADS) {
@@ -159,7 +111,7 @@ export class WaterLilies {
     this.activeArea.radius += config.ACTIVE_MARGIN;
 
     eventBus.on("engine-render-update", this.onEngineUpdate);
-    this.debug();
+    debugWaterLilies();
   }
 
   private onEngineUpdate = ({ player, delta }: State) => {
@@ -236,46 +188,5 @@ export class WaterLilies {
     const row = Math.floor(((z + HALF_MAP_SIZE) / MAP_SIZE) * resolution);
     const index = row * resolution + column;
     return (bits[index >> 3] & (1 << (index & 7))) !== 0;
-  }
-
-  private debug() {
-    const folder = debugPanel.panel.addFolder({
-      title: "🪷 Water lilies",
-      expanded: false,
-    });
-    folder.addBinding(uniforms.uTint, "value", {
-      label: "Tint",
-      view: "color",
-      color: { type: "float" },
-    });
-    folder.addBinding(uniforms.uRoughness, "value", {
-      label: "Roughness",
-      min: 0,
-      max: 1,
-      step: 0.01,
-    });
-    folder.addBinding(uniforms.uNormalScale, "value", {
-      label: "Normal scale",
-      min: 0,
-      max: 4,
-      step: 0.01,
-    });
-    folder.addBinding(uniforms.uDiffuseScale, "value", {
-      label: "Diffuse scale",
-      min: 0,
-      max: 5,
-    });
-    folder.addBinding(uniforms.uBob, "value", {
-      label: "Bob",
-      min: 0,
-      max: 0.1,
-      step: 0.001,
-    });
-    folder.addBinding(uniforms.uDipDepth, "value", {
-      label: "Dip depth",
-      min: 0,
-      max: 1,
-      step: 0.01,
-    });
   }
 }
