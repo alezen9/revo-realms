@@ -167,7 +167,6 @@ export class Player {
       blurStart,
       blurFull,
     );
-    playerUniforms.uPosition.value.copy(this.visualRoot.position);
   };
 
   private onFallCheck = () => {

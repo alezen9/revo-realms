@@ -150,14 +150,12 @@ export const debugPlayer = (collider: Collider) => {
     max: 0.4,
     step: 0.01,
   });
-  visuals
-    .addBinding(config, "SPIN_BLUR_MAX", {
-      label: "Spin blur",
-      min: 0,
-      max: 1,
-      step: 0.01,
-    })
-    .on("change", ({ value }) => (playerUniforms.uSpinBlurMax.value = value));
+  visuals.addBinding(playerUniforms.uSpinBlurMax, "value", {
+    label: "Spin blur",
+    min: 0,
+    max: 1,
+    step: 0.01,
+  });
   visuals.addBinding(playerUniforms.uDiffuseScale, "value", {
     label: "Diffuse scale",
     min: 0,

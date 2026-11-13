@@ -8,17 +8,14 @@ import {
   uv,
   vec3,
 } from "three/tsl";
-import { Vector3 } from "three/webgpu";
 import { assets, lighting } from "../../systems";
 import { VSMReceiverLambertMaterial } from "../../systems/vsm/VSMReceiverMaterials";
 import { playerConfig as config } from "./config";
 
 export const playerUniforms = {
-  uDiffuseScale: uniform(config.DIFFUSE_BOOST),
+  uDiffuseScale: uniform(2.45),
   uSpinFactor: uniform(0),
-  uSpinBlurMax: uniform(config.SPIN_BLUR_MAX),
-  uPosition: uniform(new Vector3()),
-  uRadius: uniform(config.RADIUS_IN_METERS),
+  uSpinBlurMax: uniform(0.33),
   uSunTintStrength: uniform(0.22),
 };
 
