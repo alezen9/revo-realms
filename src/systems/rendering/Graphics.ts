@@ -26,6 +26,7 @@ export class Graphics {
   private eventBus: EventBus;
   private framePipeline!: FramePipeline;
   private sizes?: Sizes;
+  private onRendererDeviceLost: WebGPURenderer["onDeviceLost"];
 
   constructor(stage: Stage, debugPanel: DebugPanel, eventBus: EventBus) {
     this.stage = stage;
@@ -48,6 +49,8 @@ export class Graphics {
     renderer.setClearColor(0x000000, 0);
 
     this.renderer = renderer;
+    this.onRendererDeviceLost = renderer.onDeviceLost.bind(renderer);
+    renderer.onDeviceLost = this.onDeviceLost;
 
     this.eventBus.on("engine-render-target-resize", (sizes) => {
       this.sizes = sizes;
@@ -102,4 +105,9 @@ export class Graphics {
   render() {
     this.framePipeline.render();
   }
+
+  private onDeviceLost: WebGPURenderer["onDeviceLost"] = (info) => {
+    this.onRendererDeviceLost(info);
+    this.eventBus.emit("engine-device-lost");
+  };
 }

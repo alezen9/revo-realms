@@ -105,6 +105,7 @@ export class PerformanceMonitor {
     this.frameScheduler = frameScheduler;
     this.physicsScheduler = physicsScheduler;
     this.gameClock = gameClock;
+    this.eventBus.on("engine-device-lost", this.dispose);
     import.meta.hot?.dispose(this.dispose);
   }
 

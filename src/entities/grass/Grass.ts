@@ -130,12 +130,11 @@ export class Grass {
       throw new Error("[Grass] monitoring readback is not initialized");
     }
 
-    const readback = await graphics.renderer.getArrayBufferAsync(
-      this.compute.indirectDrawAttribute,
-      monitoringReadback,
-    );
-
     try {
+      const readback = await graphics.renderer.getArrayBufferAsync(
+        this.compute.indirectDrawAttribute,
+        monitoringReadback,
+      );
       const buffer = readback.buffer;
 
       if (!buffer) {
@@ -176,7 +175,7 @@ export class Grass {
         allocatedTriangles,
       };
     } finally {
-      readback.release();
+      monitoringReadback.release();
     }
   };
 }

@@ -138,6 +138,7 @@ export class Game {
     this.resizeObserver.observe(document.body);
 
     import.meta.hot?.dispose(this.dispose);
+    eventBus.on("engine-device-lost", this.dispose);
 
     graphics.renderer.setAnimationLoop(this.onAnimationFrame);
   }

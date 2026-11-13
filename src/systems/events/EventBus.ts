@@ -28,6 +28,7 @@ type EngineEvents = {
   "engine-render-update": UpdateEvent;
   "engine-camera-change": VoidFunction;
   "engine-render-target-resize": ResizeEvent;
+  "engine-device-lost": VoidFunction;
   "engine-loading-resources-progress": (percentage: number) => void;
   "engine-loading-audio-progress": (percentage: number) => void;
   "engine-loading-core-progress": (percentage: number) => void;
