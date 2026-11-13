@@ -70,6 +70,6 @@ export const playerConfig = {
   SPIN_NORMAL_SCALE_MIN: 1.2,
   DIFFUSE_BOOST: 2.45,
 
-  PLAYER_INITIAL_POSITION: new Vector3(...POSITIONS.lake),
+  PLAYER_INITIAL_POSITION: new Vector3(...POSITIONS.hill),
   RESET_Y_IN_METERS: -15,
 };
