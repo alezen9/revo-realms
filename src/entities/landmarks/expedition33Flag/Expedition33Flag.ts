@@ -18,6 +18,7 @@ import { placeAtAnchor } from "../placeAtAnchor";
 import { config, uniforms } from "./config";
 import { FlagCompute, getParticleAtPlanePosition } from "./FlagCompute";
 import { FlagMaterial } from "./FlagMaterial";
+import { FlagPetals } from "./FlagPetals";
 import { debugExpedition33Flag } from "./debug";
 
 // bounds in the model's own upright frame, before the anchor leans and places it
@@ -31,6 +32,7 @@ const getModelBounds = (mesh: Mesh) => {
 export class Expedition33Flag {
   private compute = new FlagCompute();
   private computeTask: ComputeTask;
+  private petals: FlagPetals;
   private origin = new Vector3();
   private pendingSeconds = 0;
   private isPlayerNear = false;
@@ -69,6 +71,7 @@ export class Expedition33Flag {
       update: this.compute.computeUpdate,
     });
     this.computeTask.init();
+    this.petals = new FlagPetals(this.compute, this.origin);
 
     landmarks.register({
       name: "Expedition 33",
@@ -154,6 +157,7 @@ export class Expedition33Flag {
 
   private onEngineUpdate = ({ delta, player }: State) => {
     if (!this.isPlayerNear) return;
+    this.petals.update(delta);
     if (!this.computeTask.canUpdate) return;
 
     this.pendingSeconds = Math.min(

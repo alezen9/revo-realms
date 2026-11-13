@@ -62,7 +62,7 @@ const getGridCoordinates = Fn<[index: Node<"uint">], Node<"vec4">>(
   },
 );
 
-const getParticleIndex = Fn<
+export const getParticleIndex = Fn<
   [column: Node<"float">, row: Node<"float">],
   Node<"uint">
 >(([column, row]) =>
@@ -363,7 +363,7 @@ const simulateSteps = Fn<
 
 export class FlagCompute {
   readonly positions = createParticleBuffer();
-  private previousPositions = createParticleBuffer();
+  readonly previousPositions = createParticleBuffer();
   private predictedPositions = createParticleBuffer();
   readonly computeInit = initParticles(
     this.positions,
