@@ -11,11 +11,14 @@ import {
 } from "three/tsl";
 import { VSMReceiverLambertMaterial } from "../../../systems/vsm/VSMReceiverMaterials";
 import { assets } from "../../../systems";
-import { uniforms } from "./config";
-import { getParticleNormal, type FlagCompute } from "./FlagCompute";
+import { uniforms } from "./Expedition33FlagConfig";
+import {
+  getParticleNormal,
+  type Expedition33FlagCompute,
+} from "./Expedition33FlagCompute";
 
-export class FlagMaterial extends VSMReceiverLambertMaterial {
-  constructor(compute: FlagCompute) {
+export class Expedition33FlagMaterial extends VSMReceiverLambertMaterial {
+  constructor(compute: Expedition33FlagCompute) {
     super();
     this.side = DoubleSide;
 

@@ -19,7 +19,7 @@ import {
 import type { Node } from "three/webgpu";
 import { assets, wind } from "../../../systems";
 import { gameTime } from "../../../systems/time/gameTime";
-import { config, uniforms } from "./config";
+import { config, uniforms } from "./Expedition33FlagConfig";
 
 const { BEND_WEIGHT, STEP_SECONDS } = config;
 // column offset, row offset, weight: the structural ring, the shear ring, then
@@ -361,7 +361,7 @@ const simulateSteps = Fn<
   });
 });
 
-export class FlagCompute {
+export class Expedition33FlagCompute {
   readonly positions = createParticleBuffer();
   readonly previousPositions = createParticleBuffer();
   private predictedPositions = createParticleBuffer();

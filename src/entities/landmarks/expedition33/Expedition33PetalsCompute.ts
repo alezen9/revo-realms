@@ -13,12 +13,13 @@ import {
 } from "three/tsl";
 import type { Node } from "three/webgpu";
 import { wind } from "../../../systems";
-import { config, petalConfig, petalUniforms, uniforms } from "./config";
+import { config, uniforms } from "./Expedition33FlagConfig";
+import { petalConfig, petalUniforms } from "./Expedition33PetalsConfig";
 import {
   getParticleIndex,
-  type FlagCompute,
+  type Expedition33FlagCompute,
   type ParticleBuffer,
-} from "./FlagCompute";
+} from "./Expedition33FlagCompute";
 
 const createPetalBuffer = () => instancedArray(petalConfig.COUNT, "vec4");
 export type PetalBuffer = ReturnType<typeof createPetalBuffer>;
@@ -162,7 +163,7 @@ const updatePetals = Fn<
   });
 });
 
-export class PetalCompute {
+export class Expedition33PetalsCompute {
   // xyz -> world position, w -> seconds alive, negative while waiting on the flag
   readonly petals = createPetalBuffer();
   // xyz -> velocity, w -> shift of the shed spot, changes every life
@@ -170,7 +171,7 @@ export class PetalCompute {
   readonly computeInit;
   readonly computeUpdate;
 
-  constructor(flagCompute: FlagCompute) {
+  constructor(flagCompute: Expedition33FlagCompute) {
     this.petals.value.name = "flagPetals.petals";
     this.motions.value.name = "flagPetals.motions";
     const workgroup = [petalConfig.WORKGROUP_SIZE];

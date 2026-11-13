@@ -1,25 +1,20 @@
-import { Box3, Mesh, PlaneGeometry, Quaternion, Sphere, Vector3 } from "three";
+import { Box3, Mesh, PlaneGeometry, Sphere, Vector3 } from "three";
 import { positionLocal } from "three/tsl";
-import { ColliderDesc } from "@dimforge/rapier3d";
 import { type State } from "../../../Game";
-import {
-  assets,
-  eventBus,
-  landmarks,
-  physicsWorld,
-  graphics,
-  stage,
-} from "../../../systems";
+import { assets, eventBus, landmarks, graphics, stage } from "../../../systems";
 import type { ComputeTask } from "../../../systems/rendering/ComputeTask";
-import { RevoColliderType } from "../../../systems/physics/colliderTypes";
 import { VSMReceiverStandardMaterial } from "../../../systems/vsm/VSMReceiverMaterials";
 import { UP } from "../../axes";
 import { placeAtAnchor } from "../placeAtAnchor";
-import { config, uniforms } from "./config";
-import { FlagCompute, getParticleAtPlanePosition } from "./FlagCompute";
-import { FlagMaterial } from "./FlagMaterial";
-import { FlagPetals } from "./FlagPetals";
-import { debugExpedition33Flag } from "./debug";
+import { config, uniforms } from "./Expedition33FlagConfig";
+import {
+  Expedition33FlagCompute,
+  getParticleAtPlanePosition,
+} from "./Expedition33FlagCompute";
+import { createExpedition33FlagCollider } from "./Expedition33FlagCollider";
+import { Expedition33FlagMaterial } from "./Expedition33FlagMaterial";
+import { Expedition33Petals } from "./Expedition33Petals";
+import { debugExpedition33Flag } from "./Expedition33FlagDebug";
 
 // bounds in the model's own upright frame, before the anchor leans and places it
 const getModelBounds = (mesh: Mesh) => {
@@ -30,9 +25,9 @@ const getModelBounds = (mesh: Mesh) => {
 };
 
 export class Expedition33Flag {
-  private compute = new FlagCompute();
+  private compute = new Expedition33FlagCompute();
   private computeTask: ComputeTask;
-  private petals: FlagPetals;
+  private petals: Expedition33Petals;
   private origin = new Vector3();
   private pendingSeconds = 0;
   private isPlayerNear = false;
@@ -63,7 +58,12 @@ export class Expedition33Flag {
 
     this.styleStaff(staff);
     stage.mainScene.add(staff, this.createFlag());
-    this.createPhysics(staff.quaternion, staffAxis, staffSize);
+    createExpedition33FlagCollider(
+      this.origin,
+      staff.quaternion,
+      staffAxis,
+      staffSize,
+    );
 
     this.computeTask = graphics.createComputeTask({
       label: "Expedition33",
@@ -71,7 +71,8 @@ export class Expedition33Flag {
       update: this.compute.computeUpdate,
     });
     this.computeTask.init();
-    this.petals = new FlagPetals(this.compute, this.origin);
+    debugExpedition33Flag();
+    this.petals = new Expedition33Petals(this.compute, this.origin);
 
     landmarks.register({
       name: "Expedition 33",
@@ -82,7 +83,6 @@ export class Expedition33Flag {
 
     eventBus.on("engine-render-update", this.onEngineUpdate);
     eventBus.on("engine-render-update-throttle-64x", this.onGateUpdate);
-    debugExpedition33Flag();
   }
 
   private styleStaff(staff: Mesh) {
@@ -116,7 +116,7 @@ export class Expedition33Flag {
     );
     geometry.boundingBox = bounds;
     geometry.boundingSphere = bounds.getBoundingSphere(new Sphere());
-    const flag = new Mesh(geometry, new FlagMaterial(this.compute));
+    const flag = new Mesh(geometry, new Expedition33FlagMaterial(this.compute));
     flag.position.copy(this.origin);
 
     const particlePosition = getParticleAtPlanePosition(
@@ -128,25 +128,6 @@ export class Expedition33Flag {
       positionNode: particlePosition,
     });
     return flag;
-  }
-
-  private createPhysics(
-    staffQuaternion: Quaternion,
-    staffAxis: Vector3,
-    staffSize: Vector3,
-  ) {
-    const height = staffSize.y;
-    const radius = staffSize.x / 2;
-    const translation = this.origin
-      .clone()
-      .addScaledVector(staffAxis, height / 2);
-    const colliderDesc = ColliderDesc.cylinder(height / 2, radius)
-      .setTranslation(translation.x, translation.y, translation.z)
-      .setRotation(staffQuaternion)
-      .setRestitution(0.4);
-    physicsWorld.world.createCollider(colliderDesc).userData = {
-      type: RevoColliderType.Stone,
-    };
   }
 
   private onGateUpdate = ({ player }: State) => {

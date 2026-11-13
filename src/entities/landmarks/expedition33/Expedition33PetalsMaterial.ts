@@ -11,16 +11,16 @@ import {
   uv,
   vec3,
 } from "three/tsl";
-import { petalConfig, petalUniforms } from "./config";
+import { petalConfig, petalUniforms } from "./Expedition33PetalsConfig";
 import {
   SEED_STREAMS,
   getLifetime,
   getPetalSeed,
-  type PetalCompute,
-} from "./PetalCompute";
+  type Expedition33PetalsCompute,
+} from "./Expedition33PetalsCompute";
 
-export class PetalMaterial extends MeshBasicNodeMaterial {
-  constructor(compute: PetalCompute) {
+export class Expedition33PetalsMaterial extends MeshBasicNodeMaterial {
+  constructor(compute: Expedition33PetalsCompute) {
     super();
     this.side = DoubleSide;
 
