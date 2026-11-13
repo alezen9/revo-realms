@@ -1,91 +1,84 @@
-import { CatmullRomCurve3, MathUtils, Mesh, Vector3 } from "three";
+import { MathUtils, Mesh } from "three";
 import { type State } from "../../Game";
 import { assets, eventBus, graphics, stage } from "../../systems";
 import { config } from "./KoiConfig";
 import { debugKoi } from "./KoiDebug";
 import { KoiMaterial } from "./KoiMaterial";
 import {
-  getRouteCells,
   steerFish,
   type Fish,
   type KoiLake,
-  type KoiRoute,
+  type KoiLakeField,
 } from "./KoiSteering";
 
 const {
+  FISH_COUNT,
   COLORINGS,
   SIZES,
-  MIN_LOOK_AHEAD,
   CRUISE_SPEED,
   FLEE_SPEED,
+  MIN_DEPTH_BIAS,
+  MAX_DEPTH_BIAS,
+  SPAWN_CLEARANCE,
+  SPAWN_SPACING,
+  SPAWN_SEED,
   CRUISE_BEAT_RATE,
   BEAT_RATE_PER_SPEED,
   CRUISE_SWING,
   FLEE_SWING,
 } = config;
 
+const HEADER_LENGTH = 6;
+
 export class Koi {
   private lake: KoiLake;
 
   constructor() {
-    const { koiModel, koiRoutes, koiLakeField } = assets.resources;
+    const { koiModel, koiLakeField } = assets.resources;
     const { geometry } = assets.getMesh("koi", koiModel);
     geometry.computeBoundingBox();
     const bounds = geometry.boundingBox;
     if (!bounds) throw new Error("Koi has no bounding box");
     const bodyLength = bounds.max.z - bounds.min.z;
 
-    // the header holds the grid origin, cell size, columns and rows
-    const fieldFloats = new Float32Array(
-      koiLakeField.buffer,
-      koiLakeField.byteOffset,
-      koiLakeField.byteLength / 4,
-    );
-    const [originX, originZ, cellSize, columns, rows] = fieldFloats;
+    // the header holds the grid origin, cell size, columns, rows and the swim ceiling
+    const { buffer, byteOffset, byteLength } = koiLakeField;
+    const fieldFloats = new Float32Array(buffer, byteOffset, byteLength / 4);
+    const [originX, originZ, cellSize, columns, rows, swimCeiling] =
+      fieldFloats;
     const field = {
       originX,
       originZ,
       cellSize,
       columns,
       rows,
-      values: fieldFloats.subarray(5),
+      swimCeiling,
+      values: fieldFloats.subarray(HEADER_LENGTH),
     };
 
-    // the first float is the sample count of every route, then x, y, z per sample
-    const { buffer, byteOffset, byteLength } = koiRoutes;
-    const routeFloats = new Float32Array(buffer, byteOffset, byteLength / 4);
-    const [samplesPerRoute] = routeFloats;
-    const samples = routeFloats.subarray(1);
-    const routeCount = samples.length / (samplesPerRoute * 3);
-
-    const routes: KoiRoute[] = [];
+    MathUtils.seededRandom(SPAWN_SEED);
+    const spawnCells = findSpawnCells(field);
     const fishes: Fish[] = [];
-    for (let index = 0; index < routeCount; index++) {
-      const points = Array.from({ length: samplesPerRoute }, (_, sample) =>
-        new Vector3().fromArray(
-          samples,
-          (index * samplesPerRoute + sample) * 3,
-        ),
-      );
-      const route = new CatmullRomCurve3(points, true);
-      const routeLength = route.getLength();
-      routes.push({
-        curve: route,
-        length: routeLength,
-        samples: points,
-        cells: getRouteCells(points, field),
-      });
+    for (const [index, cell] of spawnCells.entries()) {
       const coloring = assets.resources[COLORINGS[index % COLORINGS.length]];
       const material = new KoiMaterial(coloring, bounds.max.z, bodyLength);
       const mesh = new Mesh(geometry, material);
       mesh.scale.setScalar(SIZES[index % SIZES.length]);
-      const isEven = index % 2 === 0;
-      const direction = isEven ? 1 : -1;
-      const progress = index / routeCount;
-      const goalLead = (direction * MIN_LOOK_AHEAD) / routeLength;
-      route.getPointAt(progress, mesh.position);
-      const heading = route.getTangentAt(progress).multiplyScalar(direction);
-      const yaw = Math.atan2(heading.x, heading.z);
+
+      const depthBias = MathUtils.lerp(
+        MIN_DEPTH_BIAS,
+        MAX_DEPTH_BIAS,
+        MathUtils.seededRandom(),
+      );
+      const column = cell % columns;
+      const row = Math.floor(cell / columns);
+      const swimFloor = field.values[cell * 2 + 1];
+      mesh.position.set(
+        originX + column * cellSize,
+        MathUtils.lerp(swimFloor, swimCeiling, depthBias),
+        originZ + row * cellSize,
+      );
+      const yaw = MathUtils.seededRandom() * Math.PI * 2;
       mesh.rotation.y = yaw;
       stage.mainScene.add(mesh);
       graphics.vsmPass.registerCaster(mesh, { type: "dynamic" });
@@ -93,22 +86,16 @@ export class Koi {
       fishes.push({
         mesh,
         material,
-        mode: "route",
-        routeIndex: index,
-        direction,
-        goalProgress: MathUtils.euclideanModulo(progress + goalLead, 1),
         speed: CRUISE_SPEED,
-        fleeTime: 0,
-        returnTime: 0,
-        path: [],
-        pathIndex: 0,
         yaw,
         turnRate: 0,
+        fleeTime: 0,
+        wanderTime: 0,
+        wanderPhase: MathUtils.seededRandom() * Math.PI * 2,
+        depthBias,
       });
     }
-
-    const routeOwners = routes.map((_, index) => index);
-    this.lake = { fishes, routes, routeOwners, field };
+    this.lake = { fishes, field };
 
     eventBus.on("engine-render-update", this.onEngineUpdate);
     debugKoi();
@@ -116,8 +103,8 @@ export class Koi {
 
   private onEngineUpdate = ({ player, delta }: State) => {
     const { lake } = this;
-    for (const [index, fish] of lake.fishes.entries()) {
-      steerFish(fish, index, lake, player.position, delta);
+    for (const fish of lake.fishes) {
+      steerFish(fish, lake, player.position, delta);
 
       const { material, mesh, speed, turnRate } = fish;
       const turnSpeed = Math.max(speed, CRUISE_SPEED);
@@ -133,3 +120,31 @@ export class Koi {
     }
   };
 }
+
+// open water far from rocks and shore, and far enough apart that no two koi start as a pair
+const findSpawnCells = (field: KoiLakeField) => {
+  const { columns, rows, values } = field;
+  const cellCount = columns * rows;
+  const spawnCells: number[] = [];
+  for (let attempt = 0; attempt < cellCount; attempt++) {
+    const cell = Math.floor(MathUtils.seededRandom() * cellCount);
+    const isOpenWater = values[cell * 2] >= SPAWN_CLEARANCE;
+    if (!isOpenWater) continue;
+    const column = cell % columns;
+    const row = Math.floor(cell / columns);
+    let isCrowded = false;
+    for (const other of spawnCells) {
+      const otherColumn = other % columns;
+      const otherRow = Math.floor(other / columns);
+      const distance =
+        Math.hypot(column - otherColumn, row - otherRow) * field.cellSize;
+      if (distance >= SPAWN_SPACING) continue;
+      isCrowded = true;
+      break;
+    }
+    if (isCrowded) continue;
+    spawnCells.push(cell);
+    if (spawnCells.length === FISH_COUNT) return spawnCells;
+  }
+  throw new Error("Not enough open water to spawn every koi");
+};
