@@ -18,14 +18,14 @@ import { gameTime } from "../../systems/time/gameTime";
 import { VSMReceiverStandardMaterial } from "../../systems/vsm/VSMReceiverMaterials";
 import { config, uniforms } from "./WaterLiliesConfig";
 
+const { BOB_SPEED, DIP_RADIUS } = config;
+
 export const getLilyPosition = Fn<[position: Node<"vec3">], Node<"vec3">>(
   ([position]) => {
-    const bobPhase = hash(instanceIndex)
-      .mul(PI2)
-      .add(gameTime.mul(config.BOB_SPEED));
+    const bobPhase = hash(instanceIndex).mul(PI2).add(gameTime.mul(BOB_SPEED));
     const bob = sin(bobPhase).mul(uniforms.uBob);
     const playerDistance = position.xz.distance(uniforms.uPlayerPosition.xz);
-    const dip = smoothstep(config.DIP_RADIUS, 0, playerDistance)
+    const dip = smoothstep(DIP_RADIUS, 0, playerDistance)
       .mul(uniforms.uPlayerPress)
       .mul(uniforms.uDipDepth);
     return position.add(vec3(0, bob.sub(dip), 0));

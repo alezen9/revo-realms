@@ -17,6 +17,8 @@ import { gameTime } from "../../systems/time/gameTime";
 import { VSMReceiverLambertMaterial } from "../../systems/vsm/VSMReceiverMaterials";
 import { config, uniforms } from "./PineTreesConfig";
 
+const { SWAY_PHASE_PER_METER } = config;
+
 // the whole pine bends from its roots, so bark and canopy move together and
 // the crown travels the most
 const computeTrunkBend = Fn<[crownHeight: Node<"float">], Node<"vec3">>(
@@ -29,7 +31,7 @@ const computeTrunkBend = Fn<[crownHeight: Node<"float">], Node<"vec3">>(
     );
     const windTravel = positionLocal.xz
       .dot(wind.uDirection)
-      .mul(config.SWAY_PHASE_PER_METER);
+      .mul(SWAY_PHASE_PER_METER);
     const phase = gameTime.mul(uniforms.uTrunkSwaySpeed).sub(windTravel);
 
     const alongWindSway = windDirection.mul(sin(phase));

@@ -11,6 +11,13 @@ import { RevoColliderType } from "../../systems/physics/colliderTypes";
 import { assets, eventBus, physicsWorld, stage } from "../../systems";
 import type { TerrainMaterial } from "./TerrainMaterial";
 
+const {
+  HALF_FLOOR_THICKNESS,
+  HALF_MAP_SIZE,
+  KINTOUN_ACTIVATION_THRESHOLD,
+  MAP_SIZE,
+} = realmConfig;
+
 export class OuterTerrain {
   private outerTerrain: Mesh;
   // kintoun is the flying nimbus cloud from dragon ball, a floor that follows the player past the map edge
@@ -44,7 +51,7 @@ export class OuterTerrain {
     const halfSize = 2;
     const colliderDesc = ColliderDesc.cuboid(
       halfSize,
-      realmConfig.HALF_FLOOR_THICKNESS,
+      HALF_FLOOR_THICKNESS,
       halfSize,
     )
       .setFriction(1)
@@ -57,25 +64,23 @@ export class OuterTerrain {
   }
 
   private positionKintounUnderPlayer(playerPosition: Vector3) {
-    this.kintounPosition
-      .copy(playerPosition)
-      .setY(-realmConfig.HALF_FLOOR_THICKNESS);
+    this.kintounPosition.copy(playerPosition).setY(-HALF_FLOOR_THICKNESS);
     this.kintoun.setTranslation(this.kintounPosition, true);
   }
 
   private onEngineUpdate = (state: State) => {
     const { player } = state;
     const isPlayerNearEdgeX =
-      realmConfig.HALF_MAP_SIZE - Math.abs(player.position.x) <
-      realmConfig.KINTOUN_ACTIVATION_THRESHOLD;
+      HALF_MAP_SIZE - Math.abs(player.position.x) <
+      KINTOUN_ACTIVATION_THRESHOLD;
     const isPlayerNearEdgeZ =
-      realmConfig.HALF_MAP_SIZE - Math.abs(player.position.z) <
-      realmConfig.KINTOUN_ACTIVATION_THRESHOLD;
+      HALF_MAP_SIZE - Math.abs(player.position.z) <
+      KINTOUN_ACTIVATION_THRESHOLD;
     if (isPlayerNearEdgeX || isPlayerNearEdgeZ) {
       this.positionKintounUnderPlayer(player.position);
     }
 
-    const outerTerrainThreshold = realmConfig.MAP_SIZE;
+    const outerTerrainThreshold = MAP_SIZE;
     const absPlayerX = Math.abs(player.position.x);
     const directionX = Math.sign(player.position.x);
     const absPlayerZ = Math.abs(player.position.z);

@@ -7,6 +7,8 @@ import { WindStreaksCompute } from "./WindStreaksCompute";
 import { debugWindStreaks } from "./WindStreaksDebug";
 import { WindStreaksMaterial } from "./WindStreaksMaterial";
 
+const { SEGMENT_COUNT, STREAK_COUNT, MAX_UPDATE_DELTA } = config;
+
 export class WindStreaks {
   private streaksCompute = new WindStreaksCompute();
   private computeTask: ComputeTask;
@@ -30,9 +32,9 @@ export class WindStreaks {
 
   private createMesh() {
     const mesh = new InstancedMesh(
-      new PlaneGeometry(1, 1, 1, config.SEGMENT_COUNT),
+      new PlaneGeometry(1, 1, 1, SEGMENT_COUNT),
       new WindStreaksMaterial(this.streaksCompute),
-      config.STREAK_COUNT,
+      STREAK_COUNT,
     );
     mesh.visible = false;
     mesh.frustumCulled = false;
@@ -68,7 +70,7 @@ export class WindStreaks {
 
     this.elapsedSinceUpdate = Math.min(
       this.elapsedSinceUpdate + delta,
-      config.MAX_UPDATE_DELTA,
+      MAX_UPDATE_DELTA,
     );
     this.updateStreaks();
   };

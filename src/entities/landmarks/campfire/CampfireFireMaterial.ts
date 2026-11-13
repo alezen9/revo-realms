@@ -22,6 +22,8 @@ import { assets } from "../../../systems";
 import { config } from "./CampfireFireConfig";
 import type { CampfireFireCompute } from "./CampfireFireCompute";
 
+const { SCALE, HEIGHT, BLOOM } = config;
+
 export class CampfireFireMaterial extends SpriteNodeMaterial {
   constructor(compute: CampfireFireCompute) {
     super();
@@ -41,10 +43,7 @@ export class CampfireFireMaterial extends SpriteNodeMaterial {
 
     const sparkScale = float(1).sub(isSpark.mul(0.85));
     const baseScale = secondRandom.clamp(0.25, 1);
-    this.scaleNode = baseScale
-      .mul(particle.w)
-      .mul(sparkScale)
-      .mul(config.SCALE);
+    this.scaleNode = baseScale.mul(particle.w).mul(sparkScale).mul(SCALE);
 
     const spriteCorner = vec2(
       step(0.5, firstRandom).mul(0.5),
@@ -57,7 +56,7 @@ export class CampfireFireMaterial extends SpriteNodeMaterial {
     const deepRed = vec3(1, 0.1, 0).mul(4).toConst();
     const black = vec3(0).toConst();
 
-    const effectiveHeight = mix(config.HEIGHT, config.HEIGHT * 2, isSpark);
+    const effectiveHeight = mix(HEIGHT, HEIGHT * 2, isSpark);
     const heightRatio = positionLocal.y.div(effectiveHeight);
     const heightFactor = smoothstep(0, 1, heightRatio).pow(2);
     const lowerColor = mix(gold, deepRed, smoothstep(0, 0.25, heightFactor));
@@ -69,7 +68,7 @@ export class CampfireFireMaterial extends SpriteNodeMaterial {
     const alphaScale = float(0.5).toConst();
     const alphaBlend = sprite.r.mul(blendFactor).mul(alphaScale);
     const particleColor = mix(fireColor, deepRed, isSpark);
-    this.colorNode = particleColor.mul(alphaBlend).mul(config.BLOOM);
+    this.colorNode = particleColor.mul(alphaBlend).mul(BLOOM);
     this.alphaTest = 0.1;
     this.opacityNode = particle.w.mul(sprite.r).mul(alphaScale);
   }

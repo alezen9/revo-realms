@@ -7,6 +7,8 @@ import { WindParticlesCompute } from "./WindParticlesCompute";
 import { debugWindParticles } from "./WindParticlesDebug";
 import { WindParticlesMaterial } from "./WindParticlesMaterial";
 
+const { PARTICLE_COUNT } = config;
+
 export class WindParticles {
   private particlesCompute = new WindParticlesCompute();
   private computeTask: ComputeTask;
@@ -30,7 +32,7 @@ export class WindParticles {
     const mesh = new InstancedMesh(
       new CircleGeometry(0.5, 8),
       new WindParticlesMaterial(this.particlesCompute),
-      config.PARTICLE_COUNT,
+      PARTICLE_COUNT,
     );
     mesh.visible = false;
     mesh.frustumCulled = false;

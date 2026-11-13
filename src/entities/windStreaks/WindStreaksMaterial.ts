@@ -14,6 +14,8 @@ import { wind } from "../../systems";
 import { config, uniforms } from "./WindStreaksConfig";
 import type { WindStreaksCompute } from "./WindStreaksCompute";
 
+const { SPINE_POINT_COUNT, SEGMENT_COUNT } = config;
+
 export class WindStreaksMaterial extends MeshBasicNodeMaterial {
   constructor(streaksCompute: WindStreaksCompute) {
     super();
@@ -25,11 +27,11 @@ export class WindStreaksMaterial extends MeshBasicNodeMaterial {
     this.side = DoubleSide;
 
     const streakIndex = float(instanceIndex);
-    const baseIndex = streakIndex.mul(config.SPINE_POINT_COUNT);
+    const baseIndex = streakIndex.mul(SPINE_POINT_COUNT);
     const trailProgress = uv().y;
-    const row = trailProgress.mul(config.SEGMENT_COUNT).round();
+    const row = trailProgress.mul(SEGMENT_COUNT).round();
     const headRow = row.sub(1).max(0);
-    const tailRow = row.add(1).min(config.SEGMENT_COUNT);
+    const tailRow = row.add(1).min(SEGMENT_COUNT);
     const { spinePoints } = streaksCompute;
     const point = spinePoints.element(baseIndex.add(row));
     const towardHead = spinePoints.element(baseIndex.add(headRow)).xyz;

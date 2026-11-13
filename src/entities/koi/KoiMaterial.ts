@@ -11,9 +11,11 @@ import {
 import { VSMReceiverLambertMaterial } from "../../systems/vsm/VSMReceiverMaterials";
 import { config, uniforms } from "./KoiConfig";
 
+const { CRUISE_SWING, BODY_WAVE } = config;
+
 export class KoiMaterial extends VSMReceiverLambertMaterial {
   readonly uSwimPhase = uniform(0);
-  readonly uSwing = uniform(config.CRUISE_SWING);
+  readonly uSwing = uniform(CRUISE_SWING);
   readonly uCurvature = uniform(0);
 
   constructor(coloring: Texture, headZ: number, bodyLength: number) {
@@ -22,7 +24,7 @@ export class KoiMaterial extends VSMReceiverLambertMaterial {
     this.colorNode = diffuse.rgb.mul(uniforms.uDiffuseScale);
 
     const tailward = float(headZ).sub(positionLocal.z).div(bodyLength);
-    const swing = sin(this.uSwimPhase.sub(tailward.mul(config.BODY_WAVE)))
+    const swing = sin(this.uSwimPhase.sub(tailward.mul(BODY_WAVE)))
       .mul(tailward.mul(tailward))
       .mul(this.uSwing);
     // the body lies on the arc through its origin, so it sags toward the turn by distance squared over twice the radius

@@ -12,6 +12,8 @@ import { PampasCompute } from "./PampasCompute";
 import { debugPampas } from "./PampasDebug";
 import { PampasMaterial } from "./PampasMaterial";
 
+const { COUNT } = config;
+
 export class Pampas {
   private mesh: Mesh;
   private computeTask: ComputeTask;
@@ -23,7 +25,7 @@ export class Pampas {
     geometry.setAttribute("position", model.geometry.getAttribute("position"));
     geometry.setAttribute("uv", model.geometry.getAttribute("uv"));
     geometry.setIndex(model.geometry.getIndex());
-    geometry.instanceCount = config.COUNT;
+    geometry.instanceCount = COUNT;
 
     const indexCount = geometry.index?.count ?? 0;
     const indirectDrawAttribute = new IndirectStorageBufferAttribute(

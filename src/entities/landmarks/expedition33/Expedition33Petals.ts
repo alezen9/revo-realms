@@ -8,6 +8,8 @@ import { debugExpedition33Petals } from "./Expedition33PetalsDebug";
 import { createExpedition33PetalsGeometry } from "./Expedition33PetalsGeometry";
 import { Expedition33PetalsMaterial } from "./Expedition33PetalsMaterial";
 
+const { REACH, COUNT, MAX_STEP_SECONDS } = petalConfig;
+
 export class Expedition33Petals {
   private compute: Expedition33PetalsCompute;
   private computeTask: ComputeTask;
@@ -25,18 +27,18 @@ export class Expedition33Petals {
 
     const geometry = createExpedition33PetalsGeometry();
     // petals only exist on the gpu, so the bounds cover everywhere they can fly
-    geometry.boundingSphere = new Sphere(origin.clone(), petalConfig.REACH);
+    geometry.boundingSphere = new Sphere(origin.clone(), REACH);
     const mesh = new InstancedMesh(
       geometry,
       new Expedition33PetalsMaterial(this.compute),
-      petalConfig.COUNT,
+      COUNT,
     );
     mesh.name = "expedition-33-petals";
     stage.mainScene.add(mesh);
   }
 
   update(delta: number) {
-    petalUniforms.uDelta.value = Math.min(delta, petalConfig.MAX_STEP_SECONDS);
+    petalUniforms.uDelta.value = Math.min(delta, MAX_STEP_SECONDS);
     this.computeTask.update();
   }
 }

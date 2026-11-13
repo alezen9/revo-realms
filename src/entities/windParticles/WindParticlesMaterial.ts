@@ -4,6 +4,8 @@ import { wind } from "../../systems";
 import { config, uniforms } from "./WindParticlesConfig";
 import type { WindParticlesCompute } from "./WindParticlesCompute";
 
+const { VARIATION_SEED_OFFSET, PARTICLE_LIFETIME } = config;
+
 export class WindParticlesMaterial extends SpriteNodeMaterial {
   constructor(particlesCompute: WindParticlesCompute) {
     super();
@@ -15,10 +17,10 @@ export class WindParticlesMaterial extends SpriteNodeMaterial {
     const data = particlesCompute.particles.element(instanceIndex);
     const particleIndex = float(instanceIndex);
     const seed = hash(particleIndex);
-    const variation = hash(particleIndex.add(config.VARIATION_SEED_OFFSET));
+    const variation = hash(particleIndex.add(VARIATION_SEED_OFFSET));
     const lifetime = mix(
-      config.PARTICLE_LIFETIME * 0.82,
-      config.PARTICLE_LIFETIME * 1.18,
+      PARTICLE_LIFETIME * 0.82,
+      PARTICLE_LIFETIME * 1.18,
       variation,
     );
     const lifeProgress = data.w.div(lifetime).clamp();

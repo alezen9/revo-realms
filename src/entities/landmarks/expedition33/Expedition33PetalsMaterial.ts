@@ -19,6 +19,8 @@ import {
   type Expedition33PetalsCompute,
 } from "./Expedition33PetalsCompute";
 
+const { GROW_END, SHRINK_START } = petalConfig;
+
 export class Expedition33PetalsMaterial extends MeshBasicNodeMaterial {
   constructor(compute: Expedition33PetalsCompute) {
     super();
@@ -27,12 +29,8 @@ export class Expedition33PetalsMaterial extends MeshBasicNodeMaterial {
     const petal = compute.petals.element(instanceIndex);
     const age = petal.w;
     const lifeRatio = age.div(getLifetime(instanceIndex));
-    const grow = smoothstep(0, petalConfig.GROW_END, lifeRatio);
-    const shrink = smoothstep(
-      petalConfig.SHRINK_START,
-      1,
-      lifeRatio,
-    ).oneMinus();
+    const grow = smoothstep(0, GROW_END, lifeRatio);
+    const shrink = smoothstep(SHRINK_START, 1, lifeRatio).oneMinus();
 
     // squared so small petals are common and big ones rare
     const sizeSeed = getPetalSeed(instanceIndex, SEED_STREAMS.size);

@@ -12,6 +12,8 @@ import { assets, stage } from "../../systems";
 import { createInnerTerrainCollider } from "./InnerTerrainCollider";
 import type { TerrainMaterial } from "./TerrainMaterial";
 
+const { HEIGHTMAP_GRID_SIZE } = realmConfig;
+
 export class InnerTerrain {
   constructor(terrainMaterial: TerrainMaterial) {
     const innerTerrain = this.createInnerTerrainMesh();
@@ -59,7 +61,7 @@ export class InnerTerrain {
       byteOffset,
       byteLength / Float32Array.BYTES_PER_ELEMENT,
     );
-    const gridSize = realmConfig.HEIGHTMAP_GRID_SIZE;
+    const gridSize = HEIGHTMAP_GRID_SIZE;
     const hasFullGrid = heights.length === gridSize * gridSize;
     if (!hasFullGrid)
       throw new Error(
@@ -69,7 +71,7 @@ export class InnerTerrain {
   }
 
   private createHeightmapTexture(heights: Float32Array) {
-    const gridSize = realmConfig.HEIGHTMAP_GRID_SIZE;
+    const gridSize = HEIGHTMAP_GRID_SIZE;
     const heightmapData = new Float32Array(heights.length);
     let minHeight = Infinity;
     let maxHeight = -Infinity;

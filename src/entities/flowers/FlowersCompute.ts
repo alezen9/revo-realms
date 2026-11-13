@@ -28,13 +28,26 @@ import { computeMapUvByPosition } from "../../shaders/mapping";
 import { computeFrustumVisibility } from "../../shaders/frustum";
 import { config, uniforms } from "./FlowersConfig";
 
+const {
+  COUNT,
+  SPECIES_COUNT,
+  FLOWERS_PER_SIDE,
+  SPACING,
+  TILE_HALF_SIZE,
+  TILE_SIZE,
+  FLOWER_BOUNDING_SPHERE_RADIUS,
+  SPECIES_WAVELENGTH,
+  SPECIES_THRESHOLDS,
+  WORKGROUP_SIZE,
+} = config;
+
 type FlowerData = Node<"vec4">;
 type FlowerBuffer = ReturnType<typeof createFlowerBuffer>;
 type IndexBuffer = ReturnType<typeof createIndexBuffer>;
 type Counter = StorageArrayElementNode<"uint">;
 
-const createFlowerBuffer = () => instancedArray(config.COUNT, "vec4");
-const createIndexBuffer = () => instancedArray(config.COUNT, "uint");
+const createFlowerBuffer = () => instancedArray(COUNT, "vec4");
+const createIndexBuffer = () => instancedArray(COUNT, "uint");
 
 export const getYOffset = Fn<[data: FlowerData], Node<"float">>(([data]) =>
   unpackUnits(
@@ -51,7 +64,7 @@ export const getGrassScale = Fn<[data: FlowerData], Node<"float">>(([data]) =>
 );
 
 export const getSpecies = Fn<[data: FlowerData], Node<"float">>(([data]) =>
-  unpackUnits(data.z, 19, 2, 0, config.SPECIES_COUNT - 1),
+  unpackUnits(data.z, 19, 2, 0, SPECIES_COUNT - 1),
 );
 
 export const getNoise = Fn<[data: FlowerData], Node<"vec4">>(([data]) =>
@@ -93,7 +106,7 @@ const setGrassScale = Fn<[data: FlowerData, value: Node<"float">], FlowerData>(
 
 const setSpecies = Fn<[data: FlowerData, value: Node<"float">], FlowerData>(
   ([data, value]) => {
-    data.z = packUnits(data.z, 19, 2, value, 0, config.SPECIES_COUNT - 1);
+    data.z = packUnits(data.z, 19, 2, value, 0, SPECIES_COUNT - 1);
     return data;
   },
 );
@@ -111,23 +124,23 @@ const setNoise = Fn<[data: FlowerData, value: Node<"vec4">], FlowerData>(
 const initFlowers = Fn<[flowers: FlowerBuffer], void>(([flowers]) => {
   const data = flowers.element(instanceIndex);
 
-  const row = floor(float(instanceIndex).div(config.FLOWERS_PER_SIDE));
-  const col = float(instanceIndex).mod(config.FLOWERS_PER_SIDE);
+  const row = floor(float(instanceIndex).div(FLOWERS_PER_SIDE));
+  const col = float(instanceIndex).mod(FLOWERS_PER_SIDE);
 
   const randX = hash(instanceIndex.add(4321));
   const randZ = hash(instanceIndex.add(1234));
   const offsetX = col
-    .mul(config.SPACING)
-    .sub(config.TILE_HALF_SIZE)
-    .add(randX.mul(config.SPACING * 0.5));
+    .mul(SPACING)
+    .sub(TILE_HALF_SIZE)
+    .add(randX.mul(SPACING * 0.5));
   const offsetZ = row
-    .mul(config.SPACING)
-    .sub(config.TILE_HALF_SIZE)
-    .add(randZ.mul(config.SPACING * 0.5));
+    .mul(SPACING)
+    .sub(TILE_HALF_SIZE)
+    .add(randZ.mul(SPACING * 0.5));
 
   const tileUv = vec3(offsetX, 0, offsetZ)
-    .xz.add(config.TILE_HALF_SIZE)
-    .div(config.TILE_SIZE)
+    .xz.add(TILE_HALF_SIZE)
+    .div(TILE_SIZE)
     .abs();
 
   const noise = texture(assets.resources.noiseAtlas, tileUv);
@@ -146,13 +159,13 @@ const updateFlowers = Fn<
   const data = flowers.element(instanceIndex);
   const unwrappedOffset = vec2(data.x, data.y).sub(uniforms.uPlayerDeltaXZ);
   const wrappedOffsetX = mod(
-    unwrappedOffset.x.add(config.TILE_HALF_SIZE),
-    config.TILE_SIZE,
-  ).sub(config.TILE_HALF_SIZE);
+    unwrappedOffset.x.add(TILE_HALF_SIZE),
+    TILE_SIZE,
+  ).sub(TILE_HALF_SIZE);
   const wrappedOffsetZ = mod(
-    unwrappedOffset.y.add(config.TILE_HALF_SIZE),
-    config.TILE_SIZE,
-  ).sub(config.TILE_HALF_SIZE);
+    unwrappedOffset.y.add(TILE_HALF_SIZE),
+    TILE_SIZE,
+  ).sub(TILE_HALF_SIZE);
   const wrappedOffset = vec3(wrappedOffsetX, 0, wrappedOffsetZ);
 
   data.x = wrappedOffset.x;
@@ -165,7 +178,7 @@ const updateFlowers = Fn<
     clipPosition,
     stage.uFx,
     stage.uFy,
-    config.FLOWER_BOUNDING_SPHERE_RADIUS,
+    FLOWER_BOUNDING_SPHERE_RADIUS,
     uniforms.uCullPadNDCX,
     uniforms.uCullPadNDCYNear,
     uniforms.uCullPadNDCYFar,
@@ -194,12 +207,12 @@ const updateFlowers = Fn<
     // neighbours share a species with a little mixing where two drifts meet
     const speciesNoise = texture(
       assets.resources.noiseAtlas,
-      worldPos.xz.div(config.SPECIES_WAVELENGTH),
+      worldPos.xz.div(SPECIES_WAVELENGTH),
     ).g;
     const species = speciesNoise
       .add(hash(instanceIndex.add(271)).sub(0.5).mul(0.03))
       .toVar();
-    const [first, second, third] = config.SPECIES_THRESHOLDS;
+    const [first, second, third] = SPECIES_THRESHOLDS;
     const speciesIndex = step(first, species)
       .add(step(second, species))
       .add(step(third, species));
@@ -230,16 +243,13 @@ export class FlowersCompute {
   readonly computeResetInstanceCount;
 
   constructor(visibleCount: Counter) {
-    const workgroup = [config.WORKGROUP_SIZE];
-    this.computeInit = initFlowers(this.flowers).compute(
-      config.COUNT,
-      workgroup,
-    );
+    const workgroup = [WORKGROUP_SIZE];
+    this.computeInit = initFlowers(this.flowers).compute(COUNT, workgroup);
     this.computeUpdate = updateFlowers(
       this.flowers,
       this.visibleFlowerIndices,
       visibleCount,
-    ).compute(config.COUNT, workgroup);
+    ).compute(COUNT, workgroup);
     this.computeUpdate.name = "Flowers";
     this.computeResetInstanceCount = resetVisibleCount(visibleCount).compute(
       1,

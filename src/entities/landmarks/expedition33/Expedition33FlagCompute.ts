@@ -21,7 +21,18 @@ import { assets, wind } from "../../../systems";
 import { gameTime } from "../../../systems/time/gameTime";
 import { config, uniforms } from "./Expedition33FlagConfig";
 
-const { BEND_WEIGHT, STEP_SECONDS } = config;
+const {
+  BEND_WEIGHT,
+  STEP_SECONDS,
+  SEGMENTS_X,
+  SEGMENTS_Y,
+  COUNT,
+  POINTS_X,
+  TETHER_SLACK,
+  MAX_SPEED,
+  PARTICLES_PER_INVOCATION,
+  WORKGROUP_SIZE,
+} = config;
 // column offset, row offset, weight: the structural ring, the shear ring, then
 // a weak two ring bending that resists sharp creases. the rest length is the
 // offset measured in grid cells of the flag's size
@@ -39,25 +50,25 @@ const NEIGHBORS = [
   [0, 2, BEND_WEIGHT],
   [0, -2, BEND_WEIGHT],
 ];
-const cellWidth = uniforms.uFlagWidth.div(config.SEGMENTS_X);
-const cellHeight = uniforms.uFlagHeight.div(config.SEGMENTS_Y);
+const cellWidth = uniforms.uFlagWidth.div(SEGMENTS_X);
+const cellHeight = uniforms.uFlagHeight.div(SEGMENTS_Y);
 const EPSILON = 1e-5;
 // gusts travel across the flag and sample their own band of the noise atlas
 const GUST_TRAVEL_ACROSS_WIDTH = 0.3;
 const GUST_BAND_HEIGHT = 0.21;
 const GUST_BAND_OFFSET = 0.37;
 
-const createParticleBuffer = () => instancedArray(config.COUNT, "vec4");
+const createParticleBuffer = () => instancedArray(COUNT, "vec4");
 export type ParticleBuffer = ReturnType<typeof createParticleBuffer>;
 
 // x -> column, y -> row, z -> widthRatio (0 staff, 1 free edge),
 // w -> heightRatio (0 top, 1 bottom)
 const getGridCoordinates = Fn<[index: Node<"uint">], Node<"vec4">>(
   ([index]) => {
-    const row = floor(float(index).div(config.POINTS_X));
-    const column = float(index).mod(config.POINTS_X);
-    const widthRatio = column.div(config.SEGMENTS_X);
-    const heightRatio = row.div(config.SEGMENTS_Y);
+    const row = floor(float(index).div(POINTS_X));
+    const column = float(index).mod(POINTS_X);
+    const widthRatio = column.div(SEGMENTS_X);
+    const heightRatio = row.div(SEGMENTS_Y);
     return vec4(column, row, widthRatio, heightRatio);
   },
 );
@@ -67,9 +78,9 @@ export const getParticleIndex = Fn<
   Node<"uint">
 >(([column, row]) =>
   row
-    .clamp(0, config.SEGMENTS_Y)
-    .mul(config.POINTS_X)
-    .add(column.clamp(0, config.SEGMENTS_X))
+    .clamp(0, SEGMENTS_Y)
+    .mul(POINTS_X)
+    .add(column.clamp(0, SEGMENTS_X))
     .toUint(),
 );
 
@@ -95,8 +106,8 @@ export const getParticleAtPlanePosition = Fn<
   [positions: ParticleBuffer, planePosition: Node<"vec3">],
   Node<"vec3">
 >(([positions, planePosition]) => {
-  const column = planePosition.x.add(0.5).mul(config.SEGMENTS_X).round();
-  const row = float(0.5).sub(planePosition.y).mul(config.SEGMENTS_Y).round();
+  const column = planePosition.x.add(0.5).mul(SEGMENTS_X).round();
+  const row = float(0.5).sub(planePosition.y).mul(SEGMENTS_Y).round();
   return positions.element(getParticleIndex(column, row)).xyz;
 });
 
@@ -115,7 +126,7 @@ const clampToTether = Fn<
 >(([position, anchor, widthRatio]) => {
   const fromAnchor = position.sub(anchor);
   const anchorDistance = fromAnchor.length().max(EPSILON);
-  const reach = widthRatio.mul(uniforms.uFlagWidth.mul(config.TETHER_SLACK));
+  const reach = widthRatio.mul(uniforms.uFlagWidth.mul(TETHER_SLACK));
   const clampedDistance = anchorDistance.min(reach);
   const reachScale = clampedDistance.div(anchorDistance);
   return anchor.add(fromAnchor.mul(reachScale));
@@ -198,9 +209,9 @@ const pullTowardRest = Fn<
     const neighborColumn = coordinates.x.add(offsetX);
     const neighborRow = coordinates.y.add(offsetY);
     const isInsideLeftEdge = step(-0.5, neighborColumn);
-    const isInsideRightEdge = step(neighborColumn, config.SEGMENTS_X + 0.5);
+    const isInsideRightEdge = step(neighborColumn, SEGMENTS_X + 0.5);
     const isInsideTopEdge = step(-0.5, neighborRow);
-    const isInsideBottomEdge = step(neighborRow, config.SEGMENTS_Y + 0.5);
+    const isInsideBottomEdge = step(neighborRow, SEGMENTS_Y + 0.5);
     const isInsideGrid = isInsideLeftEdge
       .mul(isInsideRightEdge)
       .mul(isInsideTopEdge)
@@ -237,9 +248,7 @@ const integrateParticle = Fn<
   const damping = exp(uniforms.uDamping.mul(-STEP_SECONDS));
   const displacement = position.sub(previous).mul(damping).toVar();
   const displacementLength = displacement.length().max(EPSILON);
-  const maxDisplacement = displacementLength.min(
-    config.MAX_SPEED * STEP_SECONDS,
-  );
+  const maxDisplacement = displacementLength.min(MAX_SPEED * STEP_SECONDS);
   displacement.mulAssign(maxDisplacement.div(displacementLength));
 
   const gravity = vec3(0, uniforms.uGravity.negate(), 0);
@@ -306,12 +315,12 @@ const solveParticle = Fn<
 
 const OWNED_SLOTS = {
   start: 0,
-  end: config.PARTICLES_PER_INVOCATION,
+  end: PARTICLES_PER_INVOCATION,
   type: "uint",
 } as const;
 
 const getOwnedParticle = Fn<[slot: Node<"uint">], Node<"uint">>(([slot]) =>
-  invocationLocalIndex.add(slot.mul(config.WORKGROUP_SIZE)),
+  invocationLocalIndex.add(slot.mul(WORKGROUP_SIZE)),
 );
 
 const initParticles = Fn<
@@ -340,7 +349,7 @@ const simulateSteps = Fn<
     // the ownership guards stay branches, two invocations on one particle would race
     Loop(OWNED_SLOTS, ({ i: slot }) => {
       const index = getOwnedParticle(slot);
-      If(index.lessThan(config.COUNT), () => {
+      If(index.lessThan(COUNT), () => {
         integrateParticle(
           positions,
           previousPositions,
@@ -353,7 +362,7 @@ const simulateSteps = Fn<
 
     Loop(OWNED_SLOTS, ({ i: slot }) => {
       const index = getOwnedParticle(slot);
-      If(index.lessThan(config.COUNT), () => {
+      If(index.lessThan(COUNT), () => {
         solveParticle(predictedPositions, positions, index);
       });
     });
@@ -368,10 +377,10 @@ export class Expedition33FlagCompute {
   readonly computeInit = initParticles(
     this.positions,
     this.previousPositions,
-  ).compute(config.COUNT, [config.WORKGROUP_SIZE]);
+  ).compute(COUNT, [WORKGROUP_SIZE]);
   readonly computeUpdate = simulateSteps(
     this.positions,
     this.previousPositions,
     this.predictedPositions,
-  ).compute(config.WORKGROUP_SIZE, [config.WORKGROUP_SIZE]);
+  ).compute(WORKGROUP_SIZE, [WORKGROUP_SIZE]);
 }

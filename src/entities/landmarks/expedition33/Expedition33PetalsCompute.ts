@@ -21,7 +21,18 @@ import {
   type ParticleBuffer,
 } from "./Expedition33FlagCompute";
 
-const createPetalBuffer = () => instancedArray(petalConfig.COUNT, "vec4");
+const {
+  COUNT,
+  MIN_LIFE_SECONDS,
+  MAX_LIFE_SECONDS,
+  MIN_SWAY_FREQUENCY,
+  MAX_SWAY_FREQUENCY,
+  MIN_SHED_WIDTH_RATIO,
+  WORKGROUP_SIZE,
+} = petalConfig;
+const { SEGMENTS_X, SEGMENTS_Y, STEP_SECONDS } = config;
+
+const createPetalBuffer = () => instancedArray(COUNT, "vec4");
 export type PetalBuffer = ReturnType<typeof createPetalBuffer>;
 
 // every petal reads its own streams of the hash, so its look stays put across lives
@@ -52,12 +63,12 @@ const GOLDEN_RATIO_FRACTION = 0.618034;
 type SeedStream = (typeof SEED_STREAMS)[keyof typeof SEED_STREAMS];
 
 export const getPetalSeed = (index: Node<"uint">, stream: SeedStream) =>
-  hash(index.add(stream * petalConfig.COUNT));
+  hash(index.add(stream * COUNT));
 
 export const getLifetime = Fn<[index: Node<"uint">], Node<"float">>(([index]) =>
   mix(
-    petalConfig.MIN_LIFE_SECONDS,
-    petalConfig.MAX_LIFE_SECONDS,
+    MIN_LIFE_SECONDS,
+    MAX_LIFE_SECONDS,
     getPetalSeed(index, SEED_STREAMS.lifetime),
   ),
 );
@@ -67,8 +78,8 @@ const getSwayPhase = Fn<
   Node<"float">
 >(([index, age]) => {
   const frequency = mix(
-    petalConfig.MIN_SWAY_FREQUENCY,
-    petalConfig.MAX_SWAY_FREQUENCY,
+    MIN_SWAY_FREQUENCY,
+    MAX_SWAY_FREQUENCY,
     getPetalSeed(index, SEED_STREAMS.swayFrequency),
   );
   const offset = getPetalSeed(index, SEED_STREAMS.swayPhase).mul(TWO_PI);
@@ -82,19 +93,19 @@ const getShedParticle = Fn<
   const columnSeed = getPetalSeed(index, SEED_STREAMS.shedColumn)
     .add(lifeShift)
     .fract();
-  const widthRatio = mix(petalConfig.MIN_SHED_WIDTH_RATIO, 1, columnSeed);
-  const column = widthRatio.mul(config.SEGMENTS_X).round();
+  const widthRatio = mix(MIN_SHED_WIDTH_RATIO, 1, columnSeed);
+  const column = widthRatio.mul(SEGMENTS_X).round();
   const rowSeed = getPetalSeed(index, SEED_STREAMS.shedRow)
     .add(lifeShift.mul(GOLDEN_RATIO_FRACTION))
     .fract();
-  const row = rowSeed.mul(config.SEGMENTS_Y).round();
+  const row = rowSeed.mul(SEGMENTS_Y).round();
   return getParticleIndex(column, row);
 });
 
 const initPetals = Fn<[petals: PetalBuffer, motions: PetalBuffer], void>(
   ([petals, motions]) => {
     const waitSeed = getPetalSeed(instanceIndex, SEED_STREAMS.wait);
-    const wait = waitSeed.mul(petalConfig.MAX_LIFE_SECONDS);
+    const wait = waitSeed.mul(MAX_LIFE_SECONDS);
     petals.element(instanceIndex).assign(vec4(0, -100, 0, wait.negate()));
     motions.element(instanceIndex).assign(vec4(0));
   },
@@ -123,9 +134,7 @@ const updatePetals = Fn<
     const clothIndex = getShedParticle(instanceIndex, lifeShift);
     const clothPosition = clothPositions.element(clothIndex).xyz;
     const clothPrevious = clothPreviousPositions.element(clothIndex).xyz;
-    const clothVelocity = clothPosition
-      .sub(clothPrevious)
-      .div(config.STEP_SECONDS);
+    const clothVelocity = clothPosition.sub(clothPrevious).div(STEP_SECONDS);
     const spawnPosition = petalUniforms.uFlagOrigin.add(clothPosition);
     const inheritedVelocity = clothVelocity.mul(petalUniforms.uInheritedSpeed);
     const countdown = isExpired.select(0, age.add(delta)).min(0);
@@ -174,9 +183,9 @@ export class Expedition33PetalsCompute {
   constructor(flagCompute: Expedition33FlagCompute) {
     this.petals.value.name = "flagPetals.petals";
     this.motions.value.name = "flagPetals.motions";
-    const workgroup = [petalConfig.WORKGROUP_SIZE];
+    const workgroup = [WORKGROUP_SIZE];
     this.computeInit = initPetals(this.petals, this.motions).compute(
-      petalConfig.COUNT,
+      COUNT,
       workgroup,
     );
     this.computeUpdate = updatePetals(
@@ -184,6 +193,6 @@ export class Expedition33PetalsCompute {
       this.motions,
       flagCompute.positions,
       flagCompute.previousPositions,
-    ).compute(petalConfig.COUNT, workgroup);
+    ).compute(COUNT, workgroup);
   }
 }

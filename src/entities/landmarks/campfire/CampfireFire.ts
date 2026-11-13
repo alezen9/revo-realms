@@ -4,12 +4,14 @@ import { config } from "./CampfireFireConfig";
 import { CampfireFireCompute } from "./CampfireFireCompute";
 import { CampfireFireMaterial } from "./CampfireFireMaterial";
 
+const { COUNT } = config;
+
 export class CampfireFire extends InstancedMesh {
   private compute = new CampfireFireCompute();
   private isOnScreen = false;
 
   constructor() {
-    super(new PlaneGeometry(), undefined, config.COUNT);
+    super(new PlaneGeometry(), undefined, COUNT);
     this.material = new CampfireFireMaterial(this.compute);
 
     eventBus.on("engine-render-update-throttle-64x", this.onVisibilityCheck);

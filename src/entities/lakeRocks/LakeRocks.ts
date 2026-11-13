@@ -5,6 +5,8 @@ import { config } from "./LakeRocksConfig";
 import { debugLakeRocks } from "./LakeRocksDebug";
 import { LakeRocksMaterial } from "./LakeRocksMaterial";
 
+const { ROCKS } = config;
+
 export class LakeRocks {
   private meshes: Mesh[] = [];
   private shadowSettings = { depthBias: 0 };
@@ -35,9 +37,9 @@ export class LakeRocks {
     surfacingRock.updateMatrixWorld();
     this.meshes.push(surfacingRock);
 
-    const capacity = Math.ceil(rockCount / config.ROCKS.length);
+    const capacity = Math.ceil(rockCount / ROCKS.length);
     const sunkRocks: InstancedMesh[] = [];
-    for (const name of config.ROCKS) {
+    for (const name of ROCKS) {
       const { geometry } = assets.getMesh(name, lakeRocksModel);
       const mesh = new InstancedMesh(geometry, material, capacity);
       mesh.name = name;
@@ -47,7 +49,7 @@ export class LakeRocks {
 
     // the lake scatter sized each rock for the model at its place in the file
     for (let placementIndex = 1; placementIndex < rockCount; placementIndex++) {
-      const mesh = sunkRocks[placementIndex % config.ROCKS.length];
+      const mesh = sunkRocks[placementIndex % ROCKS.length];
       matrix.fromArray(matrices, placementIndex * 16);
       mesh.setMatrixAt(mesh.count, matrix);
       mesh.count++;

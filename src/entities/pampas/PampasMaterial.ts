@@ -18,6 +18,9 @@ import { gameTime } from "../../systems/time/gameTime";
 import { config, uniforms } from "./PampasConfig";
 import { type PampasCompute } from "./PampasCompute";
 
+const { MIN_HEIGHT, MAX_HEIGHT, MIN_THICKNESS, MAX_THICKNESS, PLANT_HEIGHT } =
+  config;
+
 export class PampasMaterial extends MeshBasicNodeMaterial {
   constructor(pampasCompute: PampasCompute) {
     super();
@@ -31,16 +34,8 @@ export class PampasMaterial extends MeshBasicNodeMaterial {
     const facingHash = hash(plantIndex.add(577));
     const growth = plant.w;
 
-    const height = mix(
-      config.MIN_HEIGHT,
-      config.MAX_HEIGHT,
-      heightHash.mul(growth),
-    );
-    const thickness = mix(
-      config.MIN_THICKNESS,
-      config.MAX_THICKNESS,
-      thicknessHash,
-    );
+    const height = mix(MIN_HEIGHT, MAX_HEIGHT, heightHash.mul(growth));
+    const thickness = mix(MIN_THICKNESS, MAX_THICKNESS, thicknessHash);
     const facing = facingHash.mul(PI2);
     const turned = vec3(
       positionLocal.x.mul(cos(facing)).add(positionLocal.z.mul(sin(facing))),
@@ -66,7 +61,7 @@ export class PampasMaterial extends MeshBasicNodeMaterial {
       .mul(uniforms.uPlayerPush);
     const flattening = playerPush.length().mul(-0.5);
 
-    const heightRatio = positionLocal.y.div(config.PLANT_HEIGHT);
+    const heightRatio = positionLocal.y.div(PLANT_HEIGHT);
     const bend = heightRatio.mul(heightRatio);
     const lean = wind.uDirection.mul(ambientSway.add(gustLean)).add(playerPush);
 

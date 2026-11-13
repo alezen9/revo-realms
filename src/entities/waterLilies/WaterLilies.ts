@@ -16,6 +16,21 @@ import { config, uniforms } from "./WaterLiliesConfig";
 import { debugWaterLilies } from "./WaterLiliesDebug";
 import { getLilyPosition, WaterLiliesMaterial } from "./WaterLiliesMaterial";
 
+const {
+  MAX_LILIES_PER_CLUSTER,
+  PADS,
+  SEED,
+  FIRST_SIZE,
+  COMPANION_SIZE,
+  COMPANION_GAP,
+  FLOAT_HEIGHT,
+  ACTIVE_MARGIN,
+  MAX_PRESS_HEIGHT,
+  PRESS_RATE,
+  PUSH_RADIUS,
+  PUSH_SPEED,
+} = config;
+
 type Lily = {
   mesh: InstancedMesh;
   instanceId: number;
@@ -37,9 +52,9 @@ export class WaterLilies {
     clusters.updateWorldMatrix(true, true);
 
     const material = new WaterLiliesMaterial();
-    const capacity = clusters.children.length * config.MAX_LILIES_PER_CLUSTER;
+    const capacity = clusters.children.length * MAX_LILIES_PER_CLUSTER;
     const meshes: InstancedMesh[] = [];
-    for (const name of config.PADS) {
+    for (const name of PADS) {
       const { geometry } = assets.getMesh(name, waterLilyModel);
       const mesh = new InstancedMesh(geometry, material, capacity);
       mesh.name = name;
@@ -49,17 +64,16 @@ export class WaterLilies {
       meshes.push(mesh);
     }
 
-    MathUtils.seededRandom(config.SEED);
+    MathUtils.seededRandom(SEED);
     const center = new Vector3();
 
     for (const cluster of clusters.children) {
       cluster.getWorldPosition(center);
       const count =
-        1 +
-        Math.floor(MathUtils.seededRandom() * config.MAX_LILIES_PER_CLUSTER);
+        1 + Math.floor(MathUtils.seededRandom() * MAX_LILIES_PER_CLUSTER);
       const firstSize = MathUtils.lerp(
-        config.FIRST_SIZE.min,
-        config.FIRST_SIZE.max,
+        FIRST_SIZE.min,
+        FIRST_SIZE.max,
         MathUtils.seededRandom(),
       );
       const firstDirection = MathUtils.seededRandom() * Math.PI * 2;
@@ -67,13 +81,13 @@ export class WaterLilies {
       for (let index = 0; index < count; index++) {
         const isFirst = index === 0;
         const companionSize = MathUtils.lerp(
-          config.COMPANION_SIZE.min,
-          config.COMPANION_SIZE.max,
+          COMPANION_SIZE.min,
+          COMPANION_SIZE.max,
           MathUtils.seededRandom(),
         );
         const size = isFirst ? firstSize : companionSize;
         const direction = firstDirection + (index * Math.PI * 2) / count;
-        const companionDistance = (firstSize + size) / 2 + config.COMPANION_GAP;
+        const companionDistance = (firstSize + size) / 2 + COMPANION_GAP;
         const distance = isFirst ? 0 : companionDistance;
 
         const meshIndex = Math.floor(MathUtils.seededRandom() * meshes.length);
@@ -84,7 +98,7 @@ export class WaterLilies {
           instanceId: mesh.count,
           position: new Vector3(
             center.x + Math.cos(direction) * distance,
-            center.y + config.FLOAT_HEIGHT,
+            center.y + FLOAT_HEIGHT,
             center.z + Math.sin(direction) * distance,
           ),
           rotation: new Quaternion().setFromAxisAngle(UP, facing),
@@ -108,7 +122,7 @@ export class WaterLilies {
     }
 
     this.activeArea.setFromPoints(this.lilies.map((lily) => lily.position));
-    this.activeArea.radius += config.ACTIVE_MARGIN;
+    this.activeArea.radius += ACTIVE_MARGIN;
 
     eventBus.on("engine-render-update", this.onEngineUpdate);
     debugWaterLilies();
@@ -120,12 +134,12 @@ export class WaterLilies {
 
     // every lily floats at the same height, so the middle of them is the surface
     const heightAboveWater = player.position.y - this.activeArea.center.y;
-    const isPlayerAtSurface = heightAboveWater < config.MAX_PRESS_HEIGHT;
+    const isPlayerAtSurface = heightAboveWater < MAX_PRESS_HEIGHT;
     uniforms.uPlayerPosition.value.copy(player.position);
     uniforms.uPlayerPress.value = MathUtils.damp(
       uniforms.uPlayerPress.value,
       isPlayerAtSurface ? 1 : 0,
-      config.PRESS_RATE,
+      PRESS_RATE,
       delta,
     );
 
@@ -136,13 +150,13 @@ export class WaterLilies {
         position.z - player.position.z,
       );
       const distance = this.awayFromPlayer.length();
-      const nearness = Math.max(0, 1 - distance / config.PUSH_RADIUS);
+      const nearness = Math.max(0, 1 - distance / PUSH_RADIUS);
       const press = uniforms.uPlayerPress.value * nearness;
       const isPressed = press > 0;
       if (!isPressed) continue;
 
       this.awayFromPlayer.normalize();
-      const step = press * config.PUSH_SPEED * delta;
+      const step = press * PUSH_SPEED * delta;
       const nextX = position.x + this.awayFromPlayer.x * step;
       const nextZ = position.z + this.awayFromPlayer.y * step;
 

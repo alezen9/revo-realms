@@ -23,12 +23,31 @@ import { gameTime } from "../../systems/time/gameTime";
 import { computeMapUvByPosition } from "../../shaders/mapping";
 import { config, uniforms } from "./WindStreaksConfig";
 
+const {
+  FORWARD_BIAS,
+  GOLDEN_RATIO_CONJUGATE,
+  STREAK_COUNT,
+  RECYCLE_DISTANCE,
+  FIELD_HALF_SIZE,
+  EDGE_FADE_SIZE,
+  SPAWN_FADE_DISTANCE,
+  TOTAL_SPINE_POINT_COUNT,
+  HEIGHT_SEQUENCE_STEP,
+  STREAK_SPEED,
+  GROUND_CLEARANCE,
+  HEIGHT_FOLLOW_RATE,
+  SPINE_POINT_COUNT,
+  SEGMENT_COUNT,
+  TRAIL_LENGTH,
+  STREAK_WORKGROUP_SIZE,
+} = config;
+
 const getWindSide = Fn(() =>
   vec3(wind.uDirection.y.negate(), 0, wind.uDirection.x),
 );
 
 const getFieldCenter = Fn(() =>
-  uniforms.uPlayerPosition.xz.add(wind.uDirection.mul(config.FORWARD_BIAS)),
+  uniforms.uPlayerPosition.xz.add(wind.uDirection.mul(FORWARD_BIAS)),
 );
 
 // the curve is a pure function of arc length, so evaluating it further back
@@ -49,27 +68,13 @@ const getSpawnOrigin = Fn<[streakIndex: Node<"float">], Node<"vec2">>(
   ([streakIndex]) => {
     const gustOffset = hash(floor(gameTime));
     const lane = gustOffset
-      .add(streakIndex.mul(config.GOLDEN_RATIO_CONJUGATE))
+      .add(streakIndex.mul(GOLDEN_RATIO_CONJUGATE))
       .fract();
-    const alongSequence = gustOffset
-      .add(streakIndex.div(config.STREAK_COUNT))
-      .fract();
+    const alongSequence = gustOffset.add(streakIndex.div(STREAK_COUNT)).fract();
     // a full reset spreads the flight evenly, a recycle re-enters at the back
-    const spreadAlong = mix(
-      -config.RECYCLE_DISTANCE,
-      config.FIELD_HALF_SIZE,
-      alongSequence,
-    );
-    const along = mix(
-      float(-config.RECYCLE_DISTANCE),
-      spreadAlong,
-      uniforms.uReset,
-    );
-    const lateral = mix(
-      config.FIELD_HALF_SIZE * -0.85,
-      config.FIELD_HALF_SIZE * 0.85,
-      lane,
-    );
+    const spreadAlong = mix(-RECYCLE_DISTANCE, FIELD_HALF_SIZE, alongSequence);
+    const along = mix(float(-RECYCLE_DISTANCE), spreadAlong, uniforms.uReset);
+    const lateral = mix(FIELD_HALF_SIZE * -0.85, FIELD_HALF_SIZE * 0.85, lane);
     return getFieldCenter()
       .add(wind.uDirection.mul(along))
       .add(getWindSide().xz.mul(lateral));
@@ -84,22 +89,18 @@ const getVisibility = Fn<
   const fieldDistance = relativePosition.x.max(relativePosition.y);
   const fieldFade = float(1).sub(
     smoothstep(
-      config.FIELD_HALF_SIZE - config.EDGE_FADE_SIZE,
-      config.FIELD_HALF_SIZE,
+      FIELD_HALF_SIZE - EDGE_FADE_SIZE,
+      FIELD_HALF_SIZE,
       fieldDistance,
     ),
   );
-  const spawnFade = smoothstep(
-    0,
-    config.SPAWN_FADE_DISTANCE,
-    lifecycleDistance,
-  );
+  const spawnFade = smoothstep(0, SPAWN_FADE_DISTANCE, lifecycleDistance);
   return wind.uIntensityDirectional.mul(fieldFade).mul(spawnFade);
 });
 
-const createStreakBuffer = () => instancedArray(config.STREAK_COUNT, "vec4");
+const createStreakBuffer = () => instancedArray(STREAK_COUNT, "vec4");
 const createSpinePointBuffer = () =>
-  instancedArray(config.TOTAL_SPINE_POINT_COUNT, "vec4");
+  instancedArray(TOTAL_SPINE_POINT_COUNT, "vec4");
 type StreakBuffer = ReturnType<typeof createStreakBuffer>;
 type SpinePointBuffer = ReturnType<typeof createSpinePointBuffer>;
 
@@ -109,21 +110,19 @@ const updateStreaks = Fn<
 >(([streaks, spinePoints]) => {
   const streakIndex = float(instanceIndex);
   const seed = hash(streakIndex);
-  const variation = streakIndex.mul(config.HEIGHT_SEQUENCE_STEP).fract();
+  const variation = streakIndex.mul(HEIGHT_SEQUENCE_STEP).fract();
   const streak = streaks.element(instanceIndex);
   const origin = streak.xy.toVar();
 
   const speedVariation = mix(0.88, 1.12, seed);
-  const speed = float(config.STREAK_SPEED)
-    .mul(uniforms.uSpeed)
-    .mul(speedVariation);
+  const speed = float(STREAK_SPEED).mul(uniforms.uSpeed).mul(speedVariation);
   const arcStep = speed.mul(wind.uIntensityDirectional).mul(uniforms.uDelta);
   const arc = streak.z.add(arcStep);
 
   const headXZ = getCurveXZ(origin, arc, seed);
   const headOffset = headXZ.sub(getFieldCenter());
   const alongDistance = headOffset.dot(wind.uDirection);
-  const isRecycling = step(config.RECYCLE_DISTANCE, alongDistance);
+  const isRecycling = step(RECYCLE_DISTANCE, alongDistance);
   const shouldReset = uniforms.uReset.max(isRecycling).toVar();
   const nextOrigin = mix(origin, getSpawnOrigin(streakIndex), shouldReset);
   const nextArc = mix(arc, float(0), shouldReset);
@@ -133,27 +132,23 @@ const updateStreaks = Fn<
   const headTerrainHeight = texture(assets.resources.heightmap, headHeightUv).r;
   const heightVariation = mix(0.05, 0.9, variation.mul(variation));
   const hoverHeight = uniforms.uHeight.mul(heightVariation);
-  const targetHeight = headTerrainHeight
-    .add(hoverHeight)
-    .add(config.GROUND_CLEARANCE);
-  const followDecay = exp(
-    uniforms.uDelta.mul(config.HEIGHT_FOLLOW_RATE).negate(),
-  );
+  const targetHeight = headTerrainHeight.add(hoverHeight).add(GROUND_CLEARANCE);
+  const followDecay = exp(uniforms.uDelta.mul(HEIGHT_FOLLOW_RATE).negate());
   const heightFollow = float(1).sub(followDecay);
   const movedHeight = mix(streak.w, targetHeight, heightFollow);
   const nextHeight = mix(movedHeight, targetHeight, shouldReset);
 
   streak.assign(vec4(nextOrigin.x, nextOrigin.y, nextArc, nextHeight));
 
-  const baseIndex = streakIndex.mul(config.SPINE_POINT_COUNT);
-  Loop(config.SPINE_POINT_COUNT, ({ i }) => {
-    const trailProgress = float(i).div(config.SEGMENT_COUNT);
-    const pointArc = nextArc.sub(trailProgress.mul(config.TRAIL_LENGTH));
+  const baseIndex = streakIndex.mul(SPINE_POINT_COUNT);
+  Loop(SPINE_POINT_COUNT, ({ i }) => {
+    const trailProgress = float(i).div(SEGMENT_COUNT);
+    const pointArc = nextArc.sub(trailProgress.mul(TRAIL_LENGTH));
     const positionXZ = getCurveXZ(nextOrigin, pointArc, seed);
     const pointMapUv = computeMapUvByPosition(positionXZ);
     const pointHeightUv = vec2(pointMapUv.x, float(1).sub(pointMapUv.y));
     const terrainHeight = texture(assets.resources.heightmap, pointHeightUv).r;
-    const clearedTerrainHeight = terrainHeight.add(config.GROUND_CLEARANCE);
+    const clearedTerrainHeight = terrainHeight.add(GROUND_CLEARANCE);
     const height = nextHeight.max(clearedTerrainHeight);
     const position = vec3(positionXZ.x, height, positionXZ.y);
     const visibility = getVisibility(position, nextArc);
@@ -174,8 +169,8 @@ export class WindStreaksCompute {
     this.streaks.value.name = "windStreaks.streaks";
     this.spinePoints.value.name = "windStreaks.spinePoints";
     this.computeStreaks = updateStreaks(this.streaks, this.spinePoints).compute(
-      config.STREAK_COUNT,
-      [config.STREAK_WORKGROUP_SIZE],
+      STREAK_COUNT,
+      [STREAK_WORKGROUP_SIZE],
     );
   }
 }

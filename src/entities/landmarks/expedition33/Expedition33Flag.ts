@@ -16,6 +16,15 @@ import { Expedition33FlagMaterial } from "./Expedition33FlagMaterial";
 import { Expedition33Petals } from "./Expedition33Petals";
 import { debugExpedition33Flag } from "./Expedition33FlagDebug";
 
+const {
+  SEGMENTS_X,
+  SEGMENTS_Y,
+  TETHER_SLACK,
+  SIM_DISTANCE_SQUARED,
+  MAX_CATCH_UP_SECONDS,
+  STEP_SECONDS,
+} = config;
+
 // bounds in the model's own upright frame, before the anchor leans and places it
 const getModelBounds = (mesh: Mesh) => {
   mesh.geometry.computeBoundingBox();
@@ -97,15 +106,10 @@ export class Expedition33Flag {
   // the cloth is rebuilt as a regular grid, the simulation pairs vertex and
   // particle by index and an exported mesh does not keep its vertex order
   private createFlag() {
-    const geometry = new PlaneGeometry(
-      1,
-      1,
-      config.SEGMENTS_X,
-      config.SEGMENTS_Y,
-    );
+    const geometry = new PlaneGeometry(1, 1, SEGMENTS_X, SEGMENTS_Y);
     // the cloth only exists on the gpu, so its bounds cover everywhere it can reach
     const attachTop = uniforms.uAttachTop.value;
-    const reach = uniforms.uFlagWidth.value * config.TETHER_SLACK;
+    const reach = uniforms.uFlagWidth.value * TETHER_SLACK;
     const bounds = new Box3(
       new Vector3(
         -reach,
@@ -132,8 +136,7 @@ export class Expedition33Flag {
 
   private onGateUpdate = ({ player }: State) => {
     this.isPlayerNear =
-      player.position.distanceToSquared(this.origin) <
-      config.SIM_DISTANCE_SQUARED;
+      player.position.distanceToSquared(this.origin) < SIM_DISTANCE_SQUARED;
   };
 
   private onEngineUpdate = ({ delta, player }: State) => {
@@ -143,11 +146,11 @@ export class Expedition33Flag {
 
     this.pendingSeconds = Math.min(
       this.pendingSeconds + delta,
-      config.MAX_CATCH_UP_SECONDS,
+      MAX_CATCH_UP_SECONDS,
     );
-    const stepCount = Math.floor(this.pendingSeconds / config.STEP_SECONDS);
+    const stepCount = Math.floor(this.pendingSeconds / STEP_SECONDS);
     if (stepCount === 0) return;
-    this.pendingSeconds -= stepCount * config.STEP_SECONDS;
+    this.pendingSeconds -= stepCount * STEP_SECONDS;
 
     uniforms.uStepCount.value = stepCount;
     uniforms.uPlayerLocalPosition.value.copy(player.position).sub(this.origin);

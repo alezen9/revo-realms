@@ -21,6 +21,8 @@ import { gameTime } from "../../systems/time/gameTime";
 import { computeMapUvByPosition } from "../../shaders/mapping";
 import { config, uniforms } from "./TerrainConfig";
 
+const { GRASS_GROUND_SOFTNESS } = config;
+
 type CausticsArgs = [
   mapUv: Node<"vec2">,
   waterDepth: Node<"float">,
@@ -68,7 +70,7 @@ export class TerrainMaterial extends VSMReceiverLambertMaterial {
     const terrainMapSample = texture(assets.resources.terrainMasks, mapUv);
     const grassMask = terrainMapSample.g;
     const grassBlend = smoothstep(0.05, 0.35, grassMask);
-    this.softShadowNode = grassBlend.mul(config.GRASS_GROUND_SOFTNESS);
+    this.softShadowNode = grassBlend.mul(GRASS_GROUND_SOFTNESS);
     const waterMask = terrainMapSample.b;
     const waterDepth = positionWorld.y.negate();
     const waterDepthBlend = smoothstep(0, 8, waterDepth);

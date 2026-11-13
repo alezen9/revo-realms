@@ -14,6 +14,8 @@ import { FlowersCompute } from "./FlowersCompute";
 import { FlowersMaterial } from "./FlowersMaterial";
 import { debugFlowers } from "./FlowersDebug";
 
+const { COUNT } = config;
+
 const FLOWER_INDICES = new Uint8Array([0, 2, 1, 0, 3, 2, 0, 4, 3, 0, 1, 4]);
 
 export class Flowers {
@@ -23,7 +25,7 @@ export class Flowers {
   constructor() {
     const geometry = this.createGeometry();
     geometry.rotateX(-Math.PI / 2);
-    geometry.instanceCount = config.COUNT;
+    geometry.instanceCount = COUNT;
 
     const indexCount = FLOWER_INDICES.length;
     const indirectDrawAttribute = new IndirectStorageBufferAttribute(

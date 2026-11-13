@@ -7,16 +7,18 @@ import { physicsWorld } from "../../systems";
 import { RevoColliderType } from "../../systems/physics/colliderTypes";
 import { realmConfig } from "../realmConfig";
 
+const { HEIGHTMAP_GRID_SIZE, MAP_SIZE } = realmConfig;
+
 export const createInnerTerrainCollider = (heights: Float32Array) => {
-  const cellCount = realmConfig.HEIGHTMAP_GRID_SIZE - 1;
+  const cellCount = HEIGHTMAP_GRID_SIZE - 1;
   const colliderDesc = ColliderDesc.heightfield(
     cellCount,
     cellCount,
     heights,
     {
-      x: realmConfig.MAP_SIZE,
+      x: MAP_SIZE,
       y: 1,
-      z: realmConfig.MAP_SIZE,
+      z: MAP_SIZE,
     },
     HeightFieldFlags.FIX_INTERNAL_EDGES,
   )
