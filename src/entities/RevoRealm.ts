@@ -6,7 +6,7 @@ import { PineTrees } from "./pineTrees/PineTrees";
 import { WindParticles } from "./wind/WindParticles";
 import { WindStreaks } from "./wind/WindStreaks";
 import { LeviathanAxe } from "./landmarks/LeviathanAxe";
-import { DragonSlayerSword } from "./landmarks/DragonSlayerSword";
+import { DragonSlayerSword } from "./landmarks/dragonSlayerSword/DragonSlayerSword";
 import { GokuStatue } from "./landmarks/GokuStatue";
 import { Expedition33Flag } from "./landmarks/expedition33Flag/Expedition33Flag";
 import { Water } from "./water/Water";
