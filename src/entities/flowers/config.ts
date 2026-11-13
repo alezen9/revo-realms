@@ -4,8 +4,6 @@ import { Color, Vector2, Vector3 } from "three/webgpu";
 const FLOWER_HEIGHT = 1;
 const TILE_SIZE = 150;
 const FLOWERS_PER_SIDE = 128;
-const MIN_SCALE = 0.2;
-const MAX_SCALE = 0.325;
 
 export const config = {
   FLOWER_BOUNDING_SPHERE_RADIUS: FLOWER_HEIGHT,
@@ -38,6 +36,6 @@ export const uniforms = {
   uWindDirectionalStrength: uniform(0.45),
   uWindSwaySpeed: uniform(0.9),
   uWindVerticalBobStrength: uniform(0.02),
-  uMinScale: uniform(MIN_SCALE),
-  uMaxScale: uniform(MAX_SCALE),
+  uMinScale: uniform(0.2),
+  uMaxScale: uniform(0.325),
 };
