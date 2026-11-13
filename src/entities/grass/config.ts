@@ -9,7 +9,6 @@ const getDrawProfile = (segments: number) => ({
   indexCount: getBladeIndexCount(segments),
 });
 
-const BLADE_WIDTH = 0.075;
 const BLADE_HEIGHT = 1.75;
 const TILE_SIZE = 130;
 // near to far, one indirect draw per entry
@@ -42,7 +41,6 @@ export const config = {
   INDEX_COUNT_INDEX: 0,
   INSTANCE_COUNT_INDEX: 1,
   FIRST_INSTANCE_INDEX: 4,
-  BLADE_WIDTH,
   BLADE_HEIGHT,
   BLADE_BOUNDING_SPHERE_RADIUS: BLADE_HEIGHT,
   TILE_SIZE,
@@ -90,7 +88,7 @@ export const uniforms = {
   uPlayerPosition: uniform(new Vector3(0, 0, 0)),
   uPlayerDeltaXZ: uniform(new Vector2(0, 0)),
 
-  uBladeWidth: uniform(config.BLADE_WIDTH),
+  uBladeWidth: uniform(0.075),
   uWidthFarGain: uniform(4),
   uWidthNearRadius: uniform(15),
   uWidthNearRadiusSquared: uniform(15 * 15),
