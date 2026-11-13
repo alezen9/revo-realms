@@ -1,54 +1,9 @@
-import {
-  CatmullRomCurve3,
-  MathUtils,
-  Mesh,
-  Vector3,
-  type Texture,
-} from "three";
-import {
-  float,
-  positionLocal,
-  sin,
-  texture,
-  uniform,
-  uv,
-  vec3,
-} from "three/tsl";
+import { CatmullRomCurve3, MathUtils, Mesh, Vector3 } from "three";
 import { type State } from "../../Game";
-import { assets, debugPanel, eventBus, graphics, stage } from "../../systems";
-import { VSMReceiverLambertMaterial } from "../../systems/vsm/VSMReceiverMaterials";
-
-const CRUISE_SPEED = 0.5;
-const GIVE_WAY_SPEED = 0.12;
-const FLEE_SPEED = 6;
-const CRUISE_RESPONSE = 0.8;
-const FLEE_RESPONSE = 2.5;
-const FLEE_DURATION = 3;
-const TURN_RADIUS = 1.2;
-// turning is measured per meter swum, so a fleeing fish draws the same smooth curve as a cruising one
-const TURN_CORRECTION_DISTANCE = 0.33;
-const TURN_EASE_DISTANCE = 0.125;
-// twice the turn radius, or a fish could circle a goal that sits inside its turn
-const MIN_LOOK_AHEAD = 2.5;
-const GOAL_PACE = 2;
-const DEPTH_RESPONSE = 2;
-const FLEE_RADIUS = 6;
-const GIVE_WAY_RADIUS = 4;
-const CRUISE_BEAT_RATE = 2.5;
-const BEAT_RATE_PER_SPEED = 2;
-const BODY_WAVE = 3.5;
-const CRUISE_SWING = 0.07;
-const FLEE_SWING = 0.12;
-const SIZES = [2.3, 2.65, 3, 1.6, 1.95];
-const COLORINGS = [
-  "koiRedWhiteDiffuse",
-  "koiRedBlackDiffuse",
-  "koiGoldDiffuse",
-] as const;
-
-const uniforms = {
-  uDiffuseScale: uniform(2.5),
-};
+import { assets, eventBus, graphics, stage } from "../../systems";
+import { config } from "./KoiConfig";
+import { debugKoi } from "./KoiDebug";
+import { KoiMaterial } from "./KoiMaterial";
 
 type Fish = {
   mesh: Mesh;
@@ -62,29 +17,6 @@ type Fish = {
   yaw: number;
   turnRate: number;
 };
-
-class KoiMaterial extends VSMReceiverLambertMaterial {
-  readonly uSwimPhase = uniform(0);
-  readonly uSwing = uniform(CRUISE_SWING);
-  readonly uCurvature = uniform(0);
-
-  constructor(coloring: Texture, headZ: number, bodyLength: number) {
-    super();
-    const diffuse = texture(coloring, uv());
-    this.colorNode = diffuse.rgb.mul(uniforms.uDiffuseScale);
-
-    const tailward = float(headZ).sub(positionLocal.z).div(bodyLength);
-    const swing = sin(this.uSwimPhase.sub(tailward.mul(BODY_WAVE)))
-      .mul(tailward.mul(tailward))
-      .mul(this.uSwing);
-    // the body lies on the arc through its origin, so it sags toward the turn by distance squared over twice the radius
-    const bend = positionLocal.z
-      .mul(positionLocal.z)
-      .mul(this.uCurvature)
-      .mul(0.5);
-    this.positionNode = positionLocal.add(vec3(swing.add(bend), 0, 0));
-  }
-}
 
 export class Koi {
   private fishes: Fish[] = [];
@@ -110,15 +42,16 @@ export class Koi {
         point.getWorldPosition(new Vector3()),
       );
       const route = new CatmullRomCurve3(points, true);
-      const coloring = assets.resources[COLORINGS[index % COLORINGS.length]];
+      const coloring =
+        assets.resources[config.COLORINGS[index % config.COLORINGS.length]];
       const material = new KoiMaterial(coloring, bounds.max.z, bodyLength);
       const mesh = new Mesh(geometry, material);
-      mesh.scale.setScalar(SIZES[index % SIZES.length]);
+      mesh.scale.setScalar(config.SIZES[index % config.SIZES.length]);
       const isEven = index % 2 === 0;
       const direction = isEven ? 1 : -1;
       const routeLength = route.getLength();
       const progress = index / paths.children.length;
-      const goalLead = (direction * MIN_LOOK_AHEAD) / routeLength;
+      const goalLead = (direction * config.MIN_LOOK_AHEAD) / routeLength;
       route.getPointAt(progress, mesh.position);
       route.getTangentAt(progress, this.heading).multiplyScalar(direction);
       const yaw = Math.atan2(this.heading.x, this.heading.z);
@@ -133,7 +66,7 @@ export class Koi {
         routeLength,
         direction,
         goalProgress: MathUtils.euclideanModulo(progress + goalLead, 1),
-        speed: CRUISE_SPEED,
+        speed: config.CRUISE_SPEED,
         fleeTime: 0,
         yaw,
         turnRate: 0,
@@ -141,7 +74,7 @@ export class Koi {
     }
 
     eventBus.on("engine-render-update", this.onEngineUpdate);
-    this.debug();
+    debugKoi();
   }
 
   private onEngineUpdate = ({ player, delta }: State) => {
@@ -149,10 +82,11 @@ export class Koi {
       const { mesh, material, route, routeLength } = fish;
 
       const isPlayerNear =
-        mesh.position.distanceToSquared(player.position) < FLEE_RADIUS ** 2;
+        mesh.position.distanceToSquared(player.position) <
+        config.FLEE_RADIUS ** 2;
       const isStartled = isPlayerNear && fish.fleeTime === 0;
       fish.fleeTime = isPlayerNear
-        ? FLEE_DURATION
+        ? config.FLEE_DURATION
         : Math.max(0, fish.fleeTime - delta);
       const isFleeing = fish.fleeTime > 0;
 
@@ -163,23 +97,23 @@ export class Koi {
         const otherDistanceSquared = other.mesh.position.distanceToSquared(
           mesh.position,
         );
-        const isOtherClose = otherDistanceSquared < GIVE_WAY_RADIUS ** 2;
+        const isOtherClose = otherDistanceSquared < config.GIVE_WAY_RADIUS ** 2;
         if (!isOtherClose) continue;
         isGivingWay = true;
         break;
       }
 
-      let targetSpeed = CRUISE_SPEED;
-      if (isGivingWay) targetSpeed = GIVE_WAY_SPEED;
-      if (isFleeing) targetSpeed = FLEE_SPEED;
+      let targetSpeed = config.CRUISE_SPEED;
+      if (isGivingWay) targetSpeed = config.GIVE_WAY_SPEED;
+      if (isFleeing) targetSpeed = config.FLEE_SPEED;
       fish.speed = MathUtils.damp(
         fish.speed,
         targetSpeed,
-        isFleeing ? FLEE_RESPONSE : CRUISE_RESPONSE,
+        isFleeing ? config.FLEE_RESPONSE : config.CRUISE_RESPONSE,
         delta,
       );
       const travel = fish.speed * delta;
-      const lookAhead = Math.max(MIN_LOOK_AHEAD, fish.speed);
+      const lookAhead = Math.max(config.MIN_LOOK_AHEAD, fish.speed);
 
       this.heading.set(Math.sin(fish.yaw), 0, Math.cos(fish.yaw));
       this.awayFromPlayer.subVectors(mesh.position, player.position);
@@ -189,7 +123,7 @@ export class Koi {
       // the goal outpaces the fish only while close, so it never runs off without the fish
       const isGoalNear = this.goal.distanceTo(mesh.position) < lookAhead;
       let goalAdvance = 0;
-      if (isGoalNear) goalAdvance = GOAL_PACE * travel;
+      if (isGoalNear) goalAdvance = config.GOAL_PACE * travel;
       if (isStartled && isFacingPlayer) {
         fish.direction *= -1;
         // the goal was a look ahead in front, this drops it as far behind
@@ -210,17 +144,17 @@ export class Koi {
       const yawError =
         MathUtils.euclideanModulo(goalYaw - fish.yaw + Math.PI, Math.PI * 2) -
         Math.PI;
-      const turnSpeed = Math.max(fish.speed, CRUISE_SPEED);
-      const maxTurnRate = turnSpeed / TURN_RADIUS;
+      const turnSpeed = Math.max(fish.speed, config.CRUISE_SPEED);
+      const maxTurnRate = turnSpeed / config.TURN_RADIUS;
       const targetTurnRate = MathUtils.clamp(
-        (yawError * turnSpeed) / TURN_CORRECTION_DISTANCE,
+        (yawError * turnSpeed) / config.TURN_CORRECTION_DISTANCE,
         -maxTurnRate,
         maxTurnRate,
       );
       fish.turnRate = MathUtils.damp(
         fish.turnRate,
         targetTurnRate,
-        turnSpeed / TURN_EASE_DISTANCE,
+        turnSpeed / config.TURN_EASE_DISTANCE,
         delta,
       );
       fish.yaw += fish.turnRate * delta;
@@ -231,29 +165,24 @@ export class Koi {
       mesh.position.y = MathUtils.damp(
         mesh.position.y,
         this.goal.y,
-        DEPTH_RESPONSE,
+        config.DEPTH_RESPONSE,
         delta,
       );
-      const beatRate = CRUISE_BEAT_RATE + fish.speed * BEAT_RATE_PER_SPEED;
+      const beatRate =
+        config.CRUISE_BEAT_RATE + fish.speed * config.BEAT_RATE_PER_SPEED;
       material.uSwimPhase.value += beatRate * delta;
       const effort = MathUtils.clamp(
-        (fish.speed - CRUISE_SPEED) / (FLEE_SPEED - CRUISE_SPEED),
+        (fish.speed - config.CRUISE_SPEED) /
+          (config.FLEE_SPEED - config.CRUISE_SPEED),
         0,
         1,
       );
-      material.uSwing.value = MathUtils.lerp(CRUISE_SWING, FLEE_SWING, effort);
+      material.uSwing.value = MathUtils.lerp(
+        config.CRUISE_SWING,
+        config.FLEE_SWING,
+        effort,
+      );
       material.uCurvature.value = (fish.turnRate / turnSpeed) * mesh.scale.x;
     }
   };
-
-  private debug() {
-    const folder = debugPanel.panel.addFolder({
-      title: "🐟 Koi",
-      expanded: false,
-    });
-    folder.addBinding(uniforms.uDiffuseScale, "value", {
-      label: "Diffuse scale",
-      min: 0,
-    });
-  }
 }
