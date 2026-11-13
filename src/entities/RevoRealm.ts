@@ -15,7 +15,7 @@ import { LakeRocks } from "./lakeRocks/LakeRocks";
 import { WaterLilies } from "./waterLilies/WaterLilies";
 import { LakePlants } from "./lakePlants/LakePlants";
 import { Campfire } from "./landmarks/campfire/Campfire";
-import { FootballPitch } from "./landmarks/FootballPitch";
+import { FootballPitch } from "./landmarks/footballPitch/FootballPitch";
 
 export class RevoRealm {
   constructor() {

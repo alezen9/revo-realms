@@ -1,5 +1,5 @@
 import { Vector3 } from "three";
-import { landmarks } from "../../systems";
+import { landmarks } from "../../../systems";
 
 const POSITION = new Vector3(-15, 0.5, -165);
 const ARRIVAL_RADIUS = 35;
