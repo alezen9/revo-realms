@@ -1,4 +1,3 @@
-import { Color } from "three";
 import {
   float,
   floor,
@@ -9,62 +8,17 @@ import {
   instanceIndex,
   mix,
   mod,
-  smoothstep,
   step,
   texture,
-  uniform,
   vec2,
   vec3,
   vec4,
 } from "three/tsl";
-import {
-  CircleGeometry,
-  InstancedMesh,
-  SpriteNodeMaterial,
-  type Node,
-  Vector2,
-  Vector3,
-} from "three/webgpu";
-import { type State } from "../../Game";
-import type { ComputeTask } from "../../systems/rendering/ComputeTask";
-import {
-  assets,
-  debugPanel,
-  eventBus,
-  pipelineWarmup,
-  graphics,
-  stage,
-  wind,
-} from "../../systems";
+import { type Node } from "three/webgpu";
+import { assets, wind } from "../../systems";
 import { gameTime } from "../../systems/time/gameTime";
 import { computeMapUvByPosition } from "../../shaders/mapping";
-
-const uniforms = {
-  uPlayerDeltaXZ: uniform(new Vector2(0, 0)),
-  uPlayerPosition: uniform(new Vector3()),
-  uDelta: uniform(0),
-  uColor: uniform(new Color().setRGB(0.27, 0.31, 0.28)),
-  uSpeed: uniform(0.5),
-  uTurbulence: uniform(1.75),
-  uHeight: uniform(3.3),
-  uSize: uniform(0.6),
-};
-
-const PARTICLES_PER_SIDE = 64;
-const FIELD_SIZE = 170;
-
-const config = {
-  PARTICLES_PER_SIDE,
-  PARTICLE_COUNT: PARTICLES_PER_SIDE * PARTICLES_PER_SIDE,
-  FIELD_SIZE,
-  FIELD_HALF_SIZE: FIELD_SIZE / 2,
-  PARTICLE_SPACING: FIELD_SIZE / PARTICLES_PER_SIDE,
-  PARTICLE_LIFETIME: 6.4,
-  PARTICLE_SPEED: 30,
-  RESPAWN_DELAY: 2.4,
-  VARIATION_SEED_OFFSET: 2048,
-  WORKGROUP_SIZE: 64,
-};
+import { config, uniforms } from "./WindParticlesConfig";
 
 const createParticleBuffer = () =>
   instancedArray(config.PARTICLE_COUNT, "vec4");
@@ -216,7 +170,7 @@ const updateParticles = Fn<
   });
 });
 
-class WindParticlesCompute {
+export class WindParticlesCompute {
   // x -> local offsetX
   // y -> world height (0 when the spawn is outside grass)
   // z -> local offsetZ
@@ -237,138 +191,5 @@ class WindParticlesCompute {
       this.particles,
       float(maxTerrainHeight),
     ).compute(config.PARTICLE_COUNT, workgroup);
-  }
-}
-
-export class WindParticles {
-  private particlesCompute = new WindParticlesCompute();
-  private computeTask: ComputeTask;
-  private mesh: InstancedMesh;
-
-  constructor() {
-    this.computeTask = graphics.createComputeTask({
-      label: "WindParticles",
-      init: this.particlesCompute.computeInit,
-      update: this.particlesCompute.computeUpdate,
-    });
-    this.mesh = this.createMesh();
-    stage.mainScene.add(this.mesh);
-    this.computeTask.init();
-    this.registerPrewarmTask();
-    eventBus.on("engine-render-update", this.onEngineUpdate);
-    this.debug();
-  }
-
-  private createMesh() {
-    const mesh = new InstancedMesh(
-      new CircleGeometry(0.5, 8),
-      new WindParticleMaterial(this.particlesCompute),
-      config.PARTICLE_COUNT,
-    );
-    mesh.visible = false;
-    mesh.frustumCulled = false;
-    return mesh;
-  }
-
-  private registerPrewarmTask() {
-    pipelineWarmup.registerTask({
-      prepare: async () => {
-        this.mesh.visible = true;
-        await this.computeTask.init();
-        await this.computeTask.update();
-      },
-      restore: () => {},
-    });
-  }
-
-  private onEngineUpdate = ({ player, delta }: State) => {
-    const deltaX = player.position.x - this.mesh.position.x;
-    const deltaZ = player.position.z - this.mesh.position.z;
-    uniforms.uPlayerDeltaXZ.value.set(deltaX, deltaZ);
-    uniforms.uPlayerPosition.value.copy(player.position);
-    uniforms.uDelta.value = delta;
-    this.mesh.position.copy(player.position).setY(0);
-    this.mesh.visible = true;
-    this.computeTask.update();
-  };
-
-  private debug() {
-    const folder = debugPanel.panel.addFolder({
-      title: "🌬️ Wind particles",
-      expanded: false,
-    });
-
-    folder.addBinding(uniforms.uColor, "value", {
-      label: "Color",
-      view: "color",
-      color: { type: "float" },
-    });
-    folder.addBinding(uniforms.uSpeed, "value", {
-      label: "Speed",
-      min: 0,
-      max: 3,
-      step: 0.01,
-    });
-    folder.addBinding(uniforms.uTurbulence, "value", {
-      label: "Turbulence",
-      min: 0,
-      max: 3,
-      step: 0.01,
-    });
-    folder.addBinding(uniforms.uHeight, "value", {
-      label: "Height",
-      min: 0.5,
-      max: 12,
-      step: 0.1,
-    });
-    folder.addBinding(uniforms.uSize, "value", {
-      label: "Size",
-      min: 0.25,
-      max: 4,
-      step: 0.01,
-    });
-  }
-}
-
-class WindParticleMaterial extends SpriteNodeMaterial {
-  constructor(particlesCompute: WindParticlesCompute) {
-    super();
-
-    this.transparent = false;
-    this.depthWrite = true;
-    this.forceSinglePass = true;
-
-    const data = particlesCompute.particles.element(instanceIndex);
-    const particleIndex = float(instanceIndex);
-    const seed = hash(particleIndex);
-    const variation = hash(particleIndex.add(config.VARIATION_SEED_OFFSET));
-    const lifetime = mix(
-      config.PARTICLE_LIFETIME * 0.82,
-      config.PARTICLE_LIFETIME * 1.18,
-      variation,
-    );
-    const lifeProgress = data.w.div(lifetime).clamp();
-    const lifeFadeIn = smoothstep(0, 0.14, lifeProgress);
-    const lifeFadeOut = float(1).sub(smoothstep(0.78, 1, lifeProgress));
-    const lifeFade = lifeFadeIn.mul(lifeFadeOut);
-    const smallSize = mix(0.03, 0.076, seed);
-    const largeSize = mix(0.09, 0.18, variation);
-    const isLargeParticle = step(0.66, seed);
-    const particleSize = mix(smallSize, largeSize, isLargeParticle);
-    const gustVisibility = smoothstep(
-      seed.mul(0.55),
-      1,
-      wind.uIntensityDirectional,
-    );
-    const isAlive = step(0, data.w);
-    const isSpawnValid = step(0.001, data.y);
-    const visibility = isAlive
-      .mul(isSpawnValid)
-      .mul(lifeFade)
-      .mul(gustVisibility);
-
-    this.positionNode = data.xyz;
-    this.scaleNode = particleSize.mul(uniforms.uSize).mul(visibility);
-    this.colorNode = uniforms.uColor.mul(mix(0.48, 0.72, variation));
   }
 }
