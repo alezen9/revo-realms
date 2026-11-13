@@ -18,6 +18,8 @@ export const config = {
   WANDER_RATE: 0.35,
   // a fleeing koi keeps some of its wander, so a scattering group never runs in lockstep
   FLEE_WANDER: 0.3,
+  // the flee urge reaches zero at this many flee radii from the player
+  THREAT_REACH: 2,
   SEPARATION_RADIUS: 3.5,
   SEPARATION_STRENGTH: 2,
   SEPARATION_HEIGHT: 2,

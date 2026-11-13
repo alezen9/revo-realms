@@ -15,6 +15,7 @@ const {
   WANDER_TURN,
   WANDER_RATE,
   FLEE_WANDER,
+  THREAT_REACH,
   SEPARATION_RADIUS,
   SEPARATION_STRENGTH,
   SEPARATION_HEIGHT,
@@ -80,9 +81,11 @@ export const steerFish = (
     ? FLEE_DURATION
     : Math.max(0, fish.fleeTime - delta);
   const isFleeing = fish.fleeTime > 0;
+  // a startled koi bursts away and coasts back down to cruising over the cool down
+  const fleeRemaining = fish.fleeTime / FLEE_DURATION;
   fish.speed = MathUtils.damp(
     fish.speed,
-    isFleeing ? FLEE_SPEED : CRUISE_SPEED,
+    MathUtils.lerp(CRUISE_SPEED, FLEE_SPEED, fleeRemaining),
     isFleeing ? FLEE_RESPONSE : CRUISE_RESPONSE,
     delta,
   );
@@ -95,8 +98,16 @@ export const steerFish = (
   desired.set(Math.sin(wanderYaw), 0, Math.cos(wanderYaw));
 
   if (isFleeing) {
-    away.subVectors(position, playerPosition).setY(0).normalize();
-    desired.multiplyScalar(FLEE_WANDER).add(away);
+    away.subVectors(position, playerPosition).setY(0);
+    // the urge to flee fades with the player's distance, or a koi would keep ramming the shore after the threat left
+    const threat = MathUtils.clamp(
+      1 - away.length() / (FLEE_RADIUS * THREAT_REACH),
+      0,
+      1,
+    );
+    desired
+      .multiplyScalar(FLEE_WANDER)
+      .addScaledVector(away.normalize(), threat);
   }
 
   // fish pass over and under each other, so neighbours are kept apart in depth as well
@@ -113,22 +124,20 @@ export const steerFish = (
     desired.addScaledVector(away, push * SEPARATION_STRENGTH);
   }
 
-  heading.set(Math.sin(fish.yaw), 0, Math.cos(fish.yaw));
+  // sampled at the koi itself, so the push never jumps between sample points as it turns
   const avoidDistance = AVOID_DISTANCE + fish.speed * AVOID_DISTANCE_PER_SPEED;
-  probe.copy(position).addScaledVector(heading, avoidDistance / 2);
-  const hereDistance = sampleLakeField(field, position, DISTANCE_CHANNEL);
-  const probeDistance = sampleLakeField(field, probe, DISTANCE_CHANNEL);
-  const isProbeCloser = probeDistance < hereDistance;
-  const obstacleDistance = Math.min(hereDistance, probeDistance);
+  const obstacleDistance = sampleLakeField(field, position, DISTANCE_CHANNEL);
   const closeness = MathUtils.clamp(1 - obstacleDistance / avoidDistance, 0, 1);
   const isNearObstacle = closeness > 0;
   if (isNearObstacle) {
-    const gradient = getFieldGradient(field, isProbeCloser ? probe : position);
+    const gradient = getFieldGradient(field, position);
+    // eased in, so the push starts gently instead of kicking in at full slope
+    const avoidWeight = closeness * closeness;
     desired.normalize();
     // the part heading into the obstacle fades as it nears, so the koi slides along it
     const into = Math.min(0, desired.dot(gradient));
-    desired.addScaledVector(gradient, -into * Math.min(1, closeness * 2));
-    desired.addScaledVector(gradient, closeness * AVOID_STRENGTH);
+    desired.addScaledVector(gradient, -into * Math.min(1, avoidWeight * 2));
+    desired.addScaledVector(gradient, avoidWeight * AVOID_STRENGTH);
   }
   desired.normalize();
 
