@@ -50,19 +50,26 @@ export class Koi {
 
   // the lake scatter keeps rocks off the routes, so koi only ever follow them
   constructor() {
-    const { koiModel, terrainModel } = assets.resources;
+    const { koiModel, koiRoutes } = assets.resources;
     const { geometry } = assets.getMesh("koi", koiModel);
     geometry.computeBoundingBox();
     const bounds = geometry.boundingBox;
     if (!bounds) throw new Error("Koi has no bounding box");
     const bodyLength = bounds.max.z - bounds.min.z;
 
-    const paths = assets.getObject("koi-paths", terrainModel);
-    paths.updateWorldMatrix(true, true);
+    // the first float is the sample count of every route, then x, y, z per sample
+    const { buffer, byteOffset, byteLength } = koiRoutes;
+    const routeFloats = new Float32Array(buffer, byteOffset, byteLength / 4);
+    const [samplesPerRoute] = routeFloats;
+    const samples = routeFloats.subarray(1);
+    const routeCount = samples.length / (samplesPerRoute * 3);
 
-    for (const [index, path] of paths.children.entries()) {
-      const points = path.children.map((point) =>
-        point.getWorldPosition(new Vector3()),
+    for (let index = 0; index < routeCount; index++) {
+      const points = Array.from({ length: samplesPerRoute }, (_, sample) =>
+        new Vector3().fromArray(
+          samples,
+          (index * samplesPerRoute + sample) * 3,
+        ),
       );
       const route = new CatmullRomCurve3(points, true);
       const coloring = assets.resources[COLORINGS[index % COLORINGS.length]];
@@ -72,7 +79,7 @@ export class Koi {
       const isEven = index % 2 === 0;
       const direction = isEven ? 1 : -1;
       const routeLength = route.getLength();
-      const progress = index / paths.children.length;
+      const progress = index / routeCount;
       const goalLead = (direction * MIN_LOOK_AHEAD) / routeLength;
       route.getPointAt(progress, mesh.position);
       route.getTangentAt(progress, this.heading).multiplyScalar(direction);
