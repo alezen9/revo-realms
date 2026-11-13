@@ -7,14 +7,9 @@ import {
   NoColorSpace,
   RedFormat,
 } from "three/webgpu";
-import {
-  CoefficientCombineRule,
-  ColliderDesc,
-  HeightFieldFlags,
-} from "@dimforge/rapier3d";
 import { realmConfig } from "../realmConfig";
-import { RevoColliderType } from "../../systems/physics/colliderTypes";
-import { assets, physicsWorld, stage } from "../../systems";
+import { assets, stage } from "../../systems";
+import { createInnerTerrainCollider } from "./InnerTerrainCollider";
 import type { TerrainMaterial } from "./TerrainMaterial";
 
 export class InnerTerrain {
@@ -22,7 +17,9 @@ export class InnerTerrain {
     const innerTerrain = this.createInnerTerrainMesh();
     innerTerrain.material = terrainMaterial;
     stage.mainScene.add(innerTerrain);
-    this.createHeightfieldPhysics();
+    const heights = this.getHeights();
+    assets.resources.heightmap.copy(this.createHeightmapTexture(heights));
+    createInnerTerrainCollider(heights);
   }
 
   private createInnerTerrainMesh() {
@@ -102,28 +99,5 @@ export class InnerTerrain {
     heightmap.userData = { min: minHeight, max: maxHeight };
     heightmap.needsUpdate = true;
     return heightmap;
-  }
-
-  private createHeightfieldPhysics() {
-    const heights = this.getHeights();
-    assets.resources.heightmap.copy(this.createHeightmapTexture(heights));
-    const cellCount = realmConfig.HEIGHTMAP_GRID_SIZE - 1;
-    const colliderDesc = ColliderDesc.heightfield(
-      cellCount,
-      cellCount,
-      heights,
-      {
-        x: realmConfig.MAP_SIZE,
-        y: 1,
-        z: realmConfig.MAP_SIZE,
-      },
-      HeightFieldFlags.FIX_INTERNAL_EDGES,
-    )
-      .setFriction(1)
-      .setFrictionCombineRule(CoefficientCombineRule.Max)
-      .setRestitution(0.2);
-    physicsWorld.world.createCollider(colliderDesc).userData = {
-      type: RevoColliderType.Terrain,
-    };
   }
 }

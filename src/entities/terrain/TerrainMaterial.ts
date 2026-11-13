@@ -9,34 +9,17 @@ import {
   positionWorld,
   smoothstep,
   texture,
-  uniform,
   varying,
   vec2,
   vec3,
 } from "three/tsl";
-import { Color, type Node } from "three/webgpu";
+import { type Node } from "three/webgpu";
 import { VSMReceiverLambertMaterial } from "../../systems/vsm/VSMReceiverMaterials";
 import { shadeGrassGround } from "../grass/GrassShading";
-import { assets, debugPanel } from "../../systems";
+import { assets } from "../../systems";
 import { gameTime } from "../../systems/time/gameTime";
-import { srgbColorTarget } from "../../systems/debug/tweakpaneColor";
 import { computeMapUvByPosition } from "../../shaders/mapping";
-
-const GRASS_GROUND_SOFTNESS = 0.25;
-
-const uniforms = {
-  uGrassGroundColor: uniform(new Color(0.25, 0.27, 0.18).convertSRGBToLinear()),
-  uUnderwaterSandColor: uniform(
-    new Color(0.95, 0.87, 0.68).convertSRGBToLinear(),
-  ),
-  uSandColor: uniform(new Color(0.89, 0.85, 0.75).convertSRGBToLinear()),
-  uGrassNormalScale: uniform(1),
-  uSandNormalScale: uniform(1),
-  uWaterNormalScale: uniform(0.35),
-  uCausticsHighlightScale: uniform(0.4),
-  uCausticsUv1Scale: uniform(31.53),
-  uCausticsUv2Scale: uniform(58.71),
-};
+import { config, uniforms } from "./TerrainConfig";
 
 type CausticsArgs = [
   mapUv: Node<"vec2">,
@@ -77,7 +60,6 @@ export class TerrainMaterial extends VSMReceiverLambertMaterial {
   constructor() {
     super();
     this.createMaterial();
-    this.debugTerrain();
   }
 
   private createMaterial() {
@@ -86,7 +68,7 @@ export class TerrainMaterial extends VSMReceiverLambertMaterial {
     const terrainMapSample = texture(assets.resources.terrainMasks, mapUv);
     const grassMask = terrainMapSample.g;
     const grassBlend = smoothstep(0.05, 0.35, grassMask);
-    this.softShadowNode = grassBlend.mul(GRASS_GROUND_SOFTNESS);
+    this.softShadowNode = grassBlend.mul(config.GRASS_GROUND_SOFTNESS);
     const waterMask = terrainMapSample.b;
     const waterDepth = positionWorld.y.negate();
     const waterDepthBlend = smoothstep(0, 8, waterDepth);
@@ -129,71 +111,5 @@ export class TerrainMaterial extends VSMReceiverLambertMaterial {
     this.colorNode = surfaceColor.mul(surfaceWeight);
     this.emissiveNode = ground.color.mul(groundWeight);
     this.extraDirectSun = ground.directSun.mul(groundWeight);
-  }
-
-  private debugTerrain() {
-    const folder = debugPanel.panel.addFolder({
-      title: "⛰️ Terrain",
-      expanded: false,
-    });
-    const color = folder.addFolder({
-      title: "Color",
-    });
-    color.addBinding(
-      srgbColorTarget(uniforms.uGrassGroundColor.value),
-      "value",
-      {
-        label: "Grass ground",
-        view: "color",
-        color: { type: "float" },
-      },
-    );
-    color.addBinding(srgbColorTarget(uniforms.uSandColor.value), "value", {
-      label: "Sand",
-      view: "color",
-      color: { type: "float" },
-    });
-    color.addBinding(
-      srgbColorTarget(uniforms.uUnderwaterSandColor.value),
-      "value",
-      {
-        label: "Underwater sand",
-        view: "color",
-        color: { type: "float" },
-      },
-    );
-    const normal = folder.addFolder({
-      title: "Normal scale",
-    });
-    normal.addBinding(uniforms.uSandNormalScale, "value", {
-      label: "Sand",
-    });
-    normal.addBinding(uniforms.uGrassNormalScale, "value", {
-      label: "Grass",
-    });
-    normal.addBinding(uniforms.uWaterNormalScale, "value", {
-      label: "Water",
-    });
-    const caustics = folder.addFolder({
-      title: "Caustics",
-    });
-    caustics.addBinding(uniforms.uCausticsUv1Scale, "value", {
-      label: "UV 1 scale",
-      min: 0,
-      max: 100,
-      step: 0.001,
-    });
-    caustics.addBinding(uniforms.uCausticsUv2Scale, "value", {
-      label: "UV 2 scale",
-      min: 0,
-      max: 100,
-      step: 0.001,
-    });
-    caustics.addBinding(uniforms.uCausticsHighlightScale, "value", {
-      label: "Highlight scale",
-      min: 0,
-      max: 1,
-      step: 0.001,
-    });
   }
 }
