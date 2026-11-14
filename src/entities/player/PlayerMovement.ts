@@ -1,7 +1,7 @@
-import { Quaternion, Vector3 } from "three";
+import { Vector3 } from "three";
 import { Ray, RigidBody, type Vector } from "@dimforge/rapier3d";
 import { input, physicsWorld } from "../../systems";
-import { DOWN, FORWARD, UP } from "../axes";
+import { DOWN, UP } from "../axes";
 import type { PlayerBuoyancy } from "./PlayerBuoyancy";
 import { playerConfig as config } from "./playerConfig";
 
@@ -11,7 +11,6 @@ export class PlayerMovement {
 
   private yawInRadians = 0;
   private previousYawInRadians = 0;
-  private yawQuaternion = new Quaternion();
   private linearVelocity = new Vector3();
   private angularVelocity = new Vector3();
   private forwardDirection = new Vector3();
@@ -20,6 +19,7 @@ export class PlayerMovement {
   private ray = new Ray(this.rayOrigin, DOWN);
 
   private isOnGround = false;
+  private hasGroundContact = false;
   private jumpsRemaining = 0;
   private wasJumpHeld = false;
   private jumpBufferTimer = 0;
@@ -41,7 +41,8 @@ export class PlayerMovement {
   }
 
   updateGrounding() {
-    this.isOnGround = this.groundingLockTimer === 0 && this.checkIfGrounded();
+    this.hasGroundContact = this.checkIfGrounded();
+    this.isOnGround = this.groundingLockTimer === 0 && this.hasGroundContact;
   }
 
   resetJumps() {
@@ -52,7 +53,7 @@ export class PlayerMovement {
     const isJumpKeyPressed = input.isJumpPressed();
 
     this.groundingLockTimer = Math.max(0, this.groundingLockTimer - delta);
-    this.isOnGround = this.groundingLockTimer === 0 && this.checkIfGrounded();
+    this.isOnGround = this.groundingLockTimer === 0 && this.hasGroundContact;
 
     if (this.isOnGround) this.jumpsRemaining = config.MAX_JUMPS;
 
@@ -164,8 +165,11 @@ export class PlayerMovement {
     if (input.isLeftward()) this.yawInRadians += turnSpeed * delta;
     if (input.isRightward()) this.yawInRadians -= turnSpeed * delta;
 
-    this.yawQuaternion.setFromAxisAngle(UP, this.yawInRadians);
-    this.forwardDirection.copy(FORWARD).applyQuaternion(this.yawQuaternion);
+    this.forwardDirection.set(
+      -Math.sin(this.yawInRadians),
+      0,
+      -Math.cos(this.yawInRadians),
+    );
   }
 
   private getMovementMultiplier() {
