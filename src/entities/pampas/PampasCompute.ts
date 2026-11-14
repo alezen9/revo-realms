@@ -26,12 +26,6 @@ import { assets, stage } from "../../systems";
 import { computeMapUvByPosition } from "../../shaders/mapping";
 import { computeFrustumVisibility } from "../../shaders/frustum";
 import { gameDeltaTime } from "../../systems/time/gameTime";
-import { config as grassConfig } from "../grass/config";
-import {
-  getGrassHeightFromMask,
-  getGrassNoiseUv,
-  getLushness,
-} from "../grass/GrassShading";
 import { config, uniforms } from "./pampasConfig";
 
 const {
@@ -46,8 +40,6 @@ const {
   PLANT_HEIGHT,
   RECOVERY_RATE,
   PRESS_RATE,
-  DRYNESS_START,
-  DRYNESS_FULL,
   MIN_CLUMP_FULLNESS,
   WORKGROUP_SIZE,
 } = config;
@@ -131,20 +123,7 @@ const updatePlants = Fn<
     const heightUv = vec2(mapUv.x, float(1).sub(mapUv.y));
     plant.z = texture(assets.resources.heightmap, heightUv).r;
 
-    const grassMask = texture(assets.resources.terrainMasks, mapUv).g;
-    const patchBroadNoise = texture(
-      assets.resources.noiseAtlas,
-      getGrassNoiseUv(worldPos.xz),
-    ).g;
-    const patchDetailNoise = texture(
-      assets.resources.noiseAtlas,
-      getGrassNoiseUv(worldPos.xz.mul(grassConfig.PATCH_DETAIL_REPEAT)),
-    ).g;
-    const dryness = float(1)
-      .sub(getLushness(patchBroadNoise, patchDetailNoise))
-      .mul(getGrassHeightFromMask(grassMask));
-
-    const growth = smoothstep(DRYNESS_START, DRYNESS_FULL, dryness);
+    const growth = texture(assets.resources.terrainMasks, mapUv).r;
     plant.w = growth;
 
     const clumpIndex = getClumpIndex();

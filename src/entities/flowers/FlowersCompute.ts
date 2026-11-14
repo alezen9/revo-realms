@@ -36,8 +36,6 @@ const {
   TILE_HALF_SIZE,
   TILE_SIZE,
   FLOWER_BOUNDING_SPHERE_RADIUS,
-  SPECIES_WAVELENGTH,
-  SPECIES_THRESHOLDS,
   WORKGROUP_SIZE,
 } = config;
 
@@ -198,22 +196,20 @@ const updateFlowers = Fn<
       .div(1 - 0.5)
       .clamp();
     const grassVisibility = step(0.05, grassScale);
-    const isBlooming = step(hash(instanceIndex.add(7919)), masks.r);
+    const fields = texture(assets.resources.terrainFields, mapUv);
+    const whiteShare = fields.r;
+    const yellowShare = whiteShare.add(fields.g);
+    const lilacShare = yellowShare.add(fields.b);
+    const bloomShare = lilacShare.add(fields.a);
+    const bloomRoll = hash(instanceIndex.add(7919));
+    const isBlooming = step(bloomRoll, bloomShare);
     const isDrawn = grassVisibility.mul(isBlooming).mul(isVisible);
     data.assign(setGrassScale(data, grassScale));
     data.assign(setVisibility(data, isDrawn));
 
-    const speciesNoise = texture(
-      assets.resources.noiseAtlas,
-      worldPos.xz.div(SPECIES_WAVELENGTH),
-    ).g;
-    const species = speciesNoise
-      .add(hash(instanceIndex.add(271)).sub(0.5).mul(0.03))
-      .toVar();
-    const [first, second, third] = SPECIES_THRESHOLDS;
-    const speciesIndex = step(first, species)
-      .add(step(second, species))
-      .add(step(third, species));
+    const speciesIndex = step(whiteShare, bloomRoll)
+      .add(step(yellowShare, bloomRoll))
+      .add(step(lilacShare, bloomRoll));
     data.assign(setSpecies(data, speciesIndex));
 
     If(isDrawn, () => {

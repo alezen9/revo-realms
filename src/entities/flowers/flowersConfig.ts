@@ -3,7 +3,7 @@ import { Color, Vector2, Vector3 } from "three/webgpu";
 
 const FLOWER_HEIGHT = 1;
 const TILE_SIZE = 150;
-const FLOWERS_PER_SIDE = 128;
+const FLOWERS_PER_SIDE = 256;
 
 export const config = {
   FLOWER_BOUNDING_SPHERE_RADIUS: FLOWER_HEIGHT,
@@ -13,9 +13,7 @@ export const config = {
   COUNT: FLOWERS_PER_SIDE * FLOWERS_PER_SIDE,
   SPACING: TILE_SIZE / FLOWERS_PER_SIDE,
   WORKGROUP_SIZE: 64,
-  SPECIES_WAVELENGTH: 240,
   SPECIES_COUNT: 4,
-  SPECIES_THRESHOLDS: [0.427, 0.486, 0.553],
 };
 
 export const uniforms = {
@@ -24,10 +22,10 @@ export const uniforms = {
   uCullPadNDCX: uniform(0.075), // small padding to hide rotation lag
   uCullPadNDCYNear: uniform(0.75), // small padding to avoid near clipping
   uCullPadNDCYFar: uniform(0.2), // small padding to avoid far clipping
-  uColor1: uniform(new Color(0.75, 0.75, 0.75).convertSRGBToLinear()),
-  uColor2: uniform(new Color(0.7, 0.58, 0.12).convertSRGBToLinear()),
-  uColor3: uniform(new Color(0.48, 0.41, 0.6).convertSRGBToLinear()),
-  uColor4: uniform(new Color(0.69, 0.25, 0.09).convertSRGBToLinear()),
+  uColor1: uniform(new Color(0.92, 0.9, 0.84).convertSRGBToLinear()),
+  uColor2: uniform(new Color(0.96, 0.7, 0.06).convertSRGBToLinear()),
+  uColor3: uniform(new Color(0.58, 0.36, 0.86).convertSRGBToLinear()),
+  uColor4: uniform(new Color(0.86, 0.1, 0.07).convertSRGBToLinear()),
   uBrightness: uniform(1),
   uWindAmbientStrength: uniform(0.2),
   uWindDirectionalStrength: uniform(0.45),

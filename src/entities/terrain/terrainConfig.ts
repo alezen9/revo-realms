@@ -6,7 +6,7 @@ export const config = {
 };
 
 export const uniforms = {
-  uGrassGroundColor: uniform(new Color(0.25, 0.27, 0.18).convertSRGBToLinear()),
+  uGrassGroundColor: uniform(new Color(0.25, 0.28, 0.12).convertSRGBToLinear()),
   uUnderwaterSandColor: uniform(
     new Color(0.95, 0.87, 0.68).convertSRGBToLinear(),
   ),

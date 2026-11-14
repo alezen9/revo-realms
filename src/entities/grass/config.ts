@@ -133,7 +133,7 @@ export const uniforms = {
   uWarmVariationStrength: uniform(0.48),
   uRustVariationStrength: uniform(0.21),
 
-  uAoScale: uniform(3),
+  uAoScale: uniform(1.75),
   uAoRimSmoothness: uniform(5),
   uAoRadius: uniform(65),
   uAoRadiusSquared: uniform(65 * 65),
@@ -143,9 +143,9 @@ export const uniforms = {
   uHighlightStrength: uniform(0.02),
   uBacklightStrength: uniform(0.13),
   uTuftRoundness: uniform(0.6),
-  uTuftSpread: uniform(0.3),
-  uPatchLean: uniform(0.45),
-  uBladeDroop: uniform(1.6),
+  uTuftSpread: uniform(0.25),
+  uPatchLean: uniform(0.35),
+  uBladeDroop: uniform(0.5),
   uWindExposure: uniform(0.35),
   uWidthRoundness: uniform(0.8),
 

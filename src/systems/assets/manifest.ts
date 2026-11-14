@@ -33,7 +33,8 @@ import pyUrl from "/textures/environment/py.webp?url";
 import nyUrl from "/textures/environment/ny.webp?url";
 import pzUrl from "/textures/environment/pz.webp?url";
 import nzUrl from "/textures/environment/nz.webp?url";
-import terrainMasksUrl from "/textures/new-world/terrain/terrain-masks.ktx2?url"; // R flowers, G grass, B water, A trees
+import terrainMasksUrl from "/textures/new-world/terrain/terrain-masks.ktx2?url"; // R pampas, G grass, B water, A trees
+import terrainFieldsUrl from "/textures/new-world/terrain/terrain-fields.ktx2?url"; // flower species: R white, G yellow, B lilac, A red
 import waterMaskUrl from "/textures/new-world/terrain/water-mask.bin?url";
 import heightmapDataUrl from "/textures/new-world/terrain/heightmap.bin?url";
 import woodChipsNormalAoUrl from "/textures/new-world/terrain/wood-chips-normal-ao.ktx2?url";
@@ -162,6 +163,15 @@ export const manifest = [
   {
     name: "terrainMasks",
     url: terrainMasksUrl,
+    type: "ktx2",
+    flipY: false,
+    minFilter: LinearFilter,
+    magFilter: LinearFilter,
+    generateMipmaps: false,
+  },
+  {
+    name: "terrainFields",
+    url: terrainFieldsUrl,
     type: "ktx2",
     flipY: false,
     minFilter: LinearFilter,
