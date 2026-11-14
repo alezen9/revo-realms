@@ -13,11 +13,8 @@ export const config = {
   COUNT: FLOWERS_PER_SIDE * FLOWERS_PER_SIDE,
   SPACING: TILE_SIZE / FLOWERS_PER_SIDE,
   WORKGROUP_SIZE: 64,
-  // each species covers a stretch of meadow this wide, so a drift is mostly one color
   SPECIES_WAVELENGTH: 240,
   SPECIES_COUNT: 4,
-  // quartiles of the noise atlas green channel, so each species covers about a
-  // quarter of the meadow instead of the two middle ones taking it all
   SPECIES_THRESHOLDS: [0.427, 0.486, 0.553],
 };
 

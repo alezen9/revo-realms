@@ -25,7 +25,6 @@ import {
 
 export const VSM_POOL_CAPACITY = 512;
 export const VSM_DYNAMIC_CAPACITY = 128;
-// 0 is a valid page key, so empty slots hold the largest uint instead
 export const VSM_INVALID_PAGE_KEY = 0xffffffff;
 export const VSM_JOBS_ALLOCATED = 0;
 export const VSM_JOBS_ACTIVE = VSM_POOL_CAPACITY;

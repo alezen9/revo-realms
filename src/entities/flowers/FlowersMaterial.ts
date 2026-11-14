@@ -18,7 +18,7 @@ import {
 import { MeshBasicNodeMaterial, type Node } from "three/webgpu";
 import { assets, lighting, wind } from "../../systems";
 import { gameTime } from "../../systems/time/gameTime";
-import { uniforms } from "./FlowersConfig";
+import { uniforms } from "./flowersConfig";
 import {
   type FlowersCompute,
   getGrassScale,

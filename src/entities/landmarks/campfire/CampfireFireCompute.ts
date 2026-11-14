@@ -13,7 +13,7 @@ import {
   vec4,
 } from "three/tsl";
 import { gameTime } from "../../../systems/time/gameTime";
-import { config } from "./CampfireFireConfig";
+import { config } from "./campfireFireConfig";
 
 const {
   COUNT,

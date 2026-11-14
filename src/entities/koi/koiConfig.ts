@@ -9,7 +9,6 @@ export const config = {
   FLEE_RADIUS: 6,
   FLEE_DURATION: 3,
   TURN_RADIUS: 1.2,
-  // turning is measured per meter swum, so a fleeing fish draws the same smooth curve as a cruising one
   TURN_CORRECTION_DISTANCE: 0.33,
   TURN_EASE_DISTANCE: 0.125,
   WANDER_TURN: 0.06,

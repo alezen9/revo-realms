@@ -1,15 +1,15 @@
 import { MathUtils, Mesh } from "three";
 import { type State } from "../../Game";
 import { assets, eventBus, graphics, stage } from "../../systems";
-import { config } from "./KoiConfig";
-import { debugKoi } from "./KoiDebug";
+import { config } from "./koiConfig";
+import { debugKoi } from "./koiDebug";
 import { KoiMaterial } from "./KoiMaterial";
 import {
   steerFish,
   type Fish,
   type KoiLake,
   type KoiLakeField,
-} from "./KoiSteering";
+} from "./koiSteering";
 
 const {
   FISH_COUNT,

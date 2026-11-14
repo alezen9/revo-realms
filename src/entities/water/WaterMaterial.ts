@@ -26,7 +26,7 @@ import {
 import { gameTime } from "../../systems/time/gameTime";
 import { blendRNM } from "../../shaders/normals";
 import { assets, graphics } from "../../systems";
-import { uniforms } from "./WaterConfig";
+import { uniforms } from "./waterConfig";
 
 export class WaterMaterial extends MeshBasicNodeMaterial {
   constructor(surfaceMatrixWorld: Matrix4) {
@@ -78,7 +78,6 @@ export class WaterMaterial extends MeshBasicNodeMaterial {
       uniforms.uRefractionStrength.mul(1.5),
       waterDepth,
     );
-    // tangent tilt, not the outward normal, drives the wobble
     const distortion = tsn.xy.mul(distortionStrength);
     const refractedScreenUv = screenUV.add(distortion.mul(isUnderWater));
     const zNdcRefr = mainSceneDepth.sample(refractedScreenUv).r;
@@ -102,11 +101,9 @@ export class WaterMaterial extends MeshBasicNodeMaterial {
       reflectVector,
     );
 
-    // schlick fresnel: F0 + (1 - F0) * (1 - cos theta)^5, water reflects 2% head on
     const cosTheta = dot(normal, viewDir).clamp();
     const F0 = float(0.02);
     const grazingAngle = float(1.0).sub(cosTheta);
-    // multiplying is much cheaper than pow
     const grazingAnglePow5 = grazingAngle
       .mul(grazingAngle)
       .mul(grazingAngle)

@@ -20,7 +20,6 @@ const {
 
 export class OuterTerrain {
   private outerTerrain: Mesh;
-  // kintoun is the flying nimbus cloud from dragon ball, a floor that follows the player past the map edge
   private kintoun: RigidBody;
   private kintounPosition = new Vector3();
   constructor(terrainMaterial: TerrainMaterial) {

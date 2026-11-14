@@ -98,10 +98,6 @@ type ClumpWind = {
   usesWindTransition: Node<"float">;
 };
 
-// draw arguments for every LOD live back to back in one buffer, so the compute
-// pass binds a single storage buffer instead of one per LOD. firstInstance points
-// each draw at its own region of the visible index list, which is how the material
-// resolves its LOD without being told: instance_index starts at firstInstance.
 const createIndirectDrawArguments = () => {
   const { LOD_DRAW_PROFILES, LOD_COUNT, INDIRECT_ARGS_STRIDE, BLADE_COUNT } =
     config;
@@ -688,8 +684,6 @@ const updateClumps = Fn<
   );
 });
 
-// only the instance counts are cleared; indexCount and firstInstance are set
-// once at construction and must survive every frame
 const resetInstanceCounts = Fn<[drawArguments: DrawArguments], void>(
   ([drawArguments]) => {
     Loop(
@@ -711,8 +705,6 @@ export class GrassCompute {
   );
   readonly clumpState = createClumpBuffer();
   readonly bladeState = createBladeBuffer();
-  // one draw list per LOD, packed as regions of a single buffer; a blade appends
-  // to exactly one region, so no region can exceed BLADE_COUNT
   readonly visibleIndices = createVisibleIndexBuffer();
   readonly computeInit;
   readonly computeUpdate;

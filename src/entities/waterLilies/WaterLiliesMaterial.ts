@@ -16,7 +16,7 @@ import type { Node } from "three/webgpu";
 import { assets } from "../../systems";
 import { gameTime } from "../../systems/time/gameTime";
 import { VSMReceiverStandardMaterial } from "../../systems/vsm/VSMReceiverMaterials";
-import { config, uniforms } from "./WaterLiliesConfig";
+import { config, uniforms } from "./waterLiliesConfig";
 
 const { BOB_SPEED, DIP_RADIUS } = config;
 

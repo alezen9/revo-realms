@@ -15,12 +15,10 @@ import type { Node } from "three/webgpu";
 import { assets, wind } from "../../systems";
 import { gameTime } from "../../systems/time/gameTime";
 import { VSMReceiverLambertMaterial } from "../../systems/vsm/VSMReceiverMaterials";
-import { config, uniforms } from "./PineTreesConfig";
+import { config, uniforms } from "./pineTreesConfig";
 
 const { SWAY_PHASE_PER_METER } = config;
 
-// the whole pine bends from its roots, so bark and canopy move together and
-// the crown travels the most
 const computeTrunkBend = Fn<[crownHeight: Node<"float">], Node<"vec3">>(
   ([crownHeight]) => {
     const windDirection = vec3(wind.uDirection.x, 0, wind.uDirection.y);
@@ -64,8 +62,6 @@ export class PineTreesCanopyMaterial extends VSMReceiverLambertMaterial {
     this.opacityNode = diffuse.a;
     this.alphaTest = 0.35;
     this.alphaToCoverage = true;
-    // needles are too thin and noisy for the finest shadow pages, and close up
-    // they scatter page requests across the whole pool
     this.softShadowNode = float(0.5);
 
     const random = uv().x.mul(uv().y).mul(4);

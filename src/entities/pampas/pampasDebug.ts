@@ -1,6 +1,6 @@
 import { debugPanel } from "../../systems";
 import { srgbColorTarget } from "../../systems/debug/tweakpaneColor";
-import { uniforms } from "./PampasConfig";
+import { uniforms } from "./pampasConfig";
 
 export const debugPampas = () => {
   const folder = debugPanel.panel.addFolder({

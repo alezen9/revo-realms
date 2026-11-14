@@ -1,5 +1,5 @@
 import { debugPanel } from "../../systems";
-import { uniforms } from "./KoiConfig";
+import { uniforms } from "./koiConfig";
 
 export const debugKoi = () => {
   const folder = debugPanel.panel.addFolder({

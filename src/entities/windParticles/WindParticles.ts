@@ -2,9 +2,9 @@ import { CircleGeometry, InstancedMesh } from "three/webgpu";
 import { type State } from "../../Game";
 import type { ComputeTask } from "../../systems/rendering/ComputeTask";
 import { eventBus, pipelineWarmup, graphics, stage } from "../../systems";
-import { config, uniforms } from "./WindParticlesConfig";
+import { config, uniforms } from "./windParticlesConfig";
 import { WindParticlesCompute } from "./WindParticlesCompute";
-import { debugWindParticles } from "./WindParticlesDebug";
+import { debugWindParticles } from "./windParticlesDebug";
 import { WindParticlesMaterial } from "./WindParticlesMaterial";
 
 const { PARTICLE_COUNT } = config;

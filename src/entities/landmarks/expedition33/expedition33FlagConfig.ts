@@ -7,7 +7,6 @@ const POINTS_X = SEGMENTS_X + 1;
 const POINTS_Y = SEGMENTS_Y + 1;
 const COUNT = POINTS_X * POINTS_Y;
 const SIM_DISTANCE = 80;
-// one constraint pass per step, small steps converge faster than more passes
 const STEPS_PER_SECOND = 960;
 const WORKGROUP_SIZE = 256;
 
@@ -23,7 +22,6 @@ export const config = {
   MAX_SPEED: 18,
   TETHER_SLACK: 1.02,
   BEND_WEIGHT: 0.35,
-  // the whole flag runs in one workgroup so every step stays in one dispatch
   WORKGROUP_SIZE,
   PARTICLES_PER_INVOCATION: Math.ceil(COUNT / WORKGROUP_SIZE),
 };
@@ -33,7 +31,6 @@ export const uniforms = {
   uDamping: uniform(2),
   uGravity: uniform(9.81),
   uStaffAxis: uniform(new Vector3(0, 1, 0)),
-  // the flag's size and where its top edge meets the staff come from the model
   uFlagWidth: uniform(1),
   uFlagHeight: uniform(1),
   uAttachTop: uniform(1),

@@ -1,6 +1,6 @@
 import { InstancedMesh, PlaneGeometry } from "three/webgpu";
 import { eventBus, frustumCulling, graphics } from "../../../systems";
-import { config } from "./CampfireFireConfig";
+import { config } from "./campfireFireConfig";
 import { CampfireFireCompute } from "./CampfireFireCompute";
 import { CampfireFireMaterial } from "./CampfireFireMaterial";
 

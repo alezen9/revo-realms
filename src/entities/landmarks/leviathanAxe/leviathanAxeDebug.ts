@@ -1,5 +1,5 @@
 import { debugPanel } from "../../../systems";
-import { uniforms } from "./LeviathanAxeConfig";
+import { uniforms } from "./leviathanAxeConfig";
 
 export const debugLeviathanAxe = () => {
   const folder = debugPanel.panel.addFolder({

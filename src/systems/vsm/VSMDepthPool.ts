@@ -254,7 +254,6 @@ const rasterizeClusters = Fn<RasterArgs, void>(
                 let isCovered = isInside;
                 if (source.hasMasks) {
                   const isTexelCovered = isInside.toVar();
-                  // a workgroup is one cluster, so this branch never splits it
                   If(entry.maskId.notEqual(0), () => {
                     const firstUv = triangleUvs.element<"vec2">(vertexBase);
                     const secondUv = triangleUvs.element<"vec2">(
@@ -314,7 +313,6 @@ export class VSMDepthPool {
     this.kind = kind;
     this.jobs = jobs;
     this.depthBiasTexels = depthBiasTexels;
-    // one word per slot after the pages remembers if anything was drawn into it
     this.casterFlagBase = capacity * PAGE_TEXEL_COUNT;
     const texelCount = this.casterFlagBase + capacity;
     const depthAttribute = new StorageBufferAttribute(

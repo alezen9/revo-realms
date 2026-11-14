@@ -1,7 +1,7 @@
 import { normalMap, texture, uv } from "three/tsl";
 import { assets } from "../../../systems";
 import { VSMReceiverStandardMaterial } from "../../../systems/vsm/VSMReceiverMaterials";
-import { uniforms } from "./GokuStatueConfig";
+import { uniforms } from "./gokuStatueConfig";
 
 export class GokuStatueMaterial extends VSMReceiverStandardMaterial {
   constructor() {

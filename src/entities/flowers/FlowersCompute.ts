@@ -26,7 +26,7 @@ import {
 } from "../../shaders/packing";
 import { computeMapUvByPosition } from "../../shaders/mapping";
 import { computeFrustumVisibility } from "../../shaders/frustum";
-import { config, uniforms } from "./FlowersConfig";
+import { config, uniforms } from "./flowersConfig";
 
 const {
   COUNT,
@@ -198,13 +198,11 @@ const updateFlowers = Fn<
       .div(1 - 0.5)
       .clamp();
     const grassVisibility = step(0.05, grassScale);
-    // the flowers mask is the chance to bloom, so drifts fill in and the rest stays sparse
     const isBlooming = step(hash(instanceIndex.add(7919)), masks.r);
     const isDrawn = grassVisibility.mul(isBlooming).mul(isVisible);
     data.assign(setGrassScale(data, grassScale));
     data.assign(setVisibility(data, isDrawn));
 
-    // neighbours share a species with a little mixing where two drifts meet
     const speciesNoise = texture(
       assets.resources.noiseAtlas,
       worldPos.xz.div(SPECIES_WAVELENGTH),

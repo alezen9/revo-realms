@@ -54,7 +54,6 @@ type UnpackUnitsArgs = [
   maxV: FloatNode,
 ];
 
-// fields are fixed point integers stacked in one float, so all fields of a value must fit in 24 bits to stay exact
 const pack = Fn<PackArgs, FloatNode>(
   ([dest, offset, bits, value, lsb, bias]) => {
     const levels = sub(pow(2, bits), 1);

@@ -131,8 +131,6 @@ export class PerformanceMonitor {
     this.physicsRemainderMs = remainderDelta * 1_000;
   }
 
-  // must run before assets and entities allocate, since agrimensor only tracks
-  // resources created after it attaches
   async initAsync() {
     if (!this.isEnabled) return;
 
@@ -225,7 +223,6 @@ export class PerformanceMonitor {
 
     if (!gpu) return;
 
-    // derive the measured frame identity so delayed timestamp results are counted once
     const gpuFrameNumber =
       frame.renderedFrameCount + 1 - gpu.resultLagFrameCount;
     if (gpuFrameNumber <= this.lastGpuFrameNumber) return;
@@ -394,7 +391,6 @@ export class PerformanceMonitor {
     window.clearInterval(this.snapshotInterval);
     const { threeAdapter, agrimensor } = this;
     if (threeAdapter) threeAdapter.dispose();
-    // dropped first: beginRenderFrame throws on a destroyed instance
     this.agrimensor = undefined;
     if (agrimensor) agrimensor.destroy();
   };

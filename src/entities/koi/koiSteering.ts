@@ -1,5 +1,5 @@
 import { MathUtils, type Mesh, Vector3 } from "three";
-import { config } from "./KoiConfig";
+import { config } from "./koiConfig";
 import type { KoiMaterial } from "./KoiMaterial";
 
 const {
@@ -147,7 +147,6 @@ export const steerFish = (
   const yawToSteering =
     MathUtils.euclideanModulo(steeringYaw - fish.yaw + Math.PI, Math.PI * 2) -
     Math.PI;
-  // straight behind flips sign every frame and the turn would cancel out, so the koi keeps the side it turns to
   const isSteeringBehind = Math.abs(yawToSteering) > Math.PI * 0.85;
   const turnSide = Math.sign(fish.turnRate) || 1;
   const yawError = isSteeringBehind
@@ -172,7 +171,6 @@ export const steerFish = (
   heading.set(Math.sin(fish.yaw), 0, Math.cos(fish.yaw));
   position.addScaledVector(heading, fish.speed * delta);
 
-  // depth eases in, so the floor is read ahead as well or a fast koi would scrape a rising bed
   ahead.copy(position).addScaledVector(heading, fish.speed * DEPTH_LOOK_AHEAD);
   const swimFloor = Math.max(
     sampleLakeField(field, position, FLOOR_CHANNEL),

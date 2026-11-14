@@ -21,7 +21,7 @@ import type { Node } from "three/webgpu";
 import { assets, wind } from "../../systems";
 import { gameTime } from "../../systems/time/gameTime";
 import { computeMapUvByPosition } from "../../shaders/mapping";
-import { config, uniforms } from "./WindStreaksConfig";
+import { config, uniforms } from "./windStreaksConfig";
 
 const {
   FORWARD_BIAS,
@@ -50,8 +50,6 @@ const getFieldCenter = Fn(() =>
   uniforms.uPlayerPosition.xz.add(wind.uDirection.mul(FORWARD_BIAS)),
 );
 
-// the curve is a pure function of arc length, so evaluating it further back
-// gives exactly where the head was, which is what makes the body follow it
 const getCurveXZ = Fn<
   [origin: Node<"vec2">, arc: Node<"float">, seed: Node<"float">],
   Node<"vec2">
@@ -71,7 +69,6 @@ const getSpawnOrigin = Fn<[streakIndex: Node<"float">], Node<"vec2">>(
       .add(streakIndex.mul(GOLDEN_RATIO_CONJUGATE))
       .fract();
     const alongSequence = gustOffset.add(streakIndex.div(STREAK_COUNT)).fract();
-    // a full reset spreads the flight evenly, a recycle re-enters at the back
     const spreadAlong = mix(-RECYCLE_DISTANCE, FIELD_HALF_SIZE, alongSequence);
     const along = mix(float(-RECYCLE_DISTANCE), spreadAlong, uniforms.uReset);
     const lateral = mix(FIELD_HALF_SIZE * -0.85, FIELD_HALF_SIZE * 0.85, lane);

@@ -1,8 +1,6 @@
 import { uniform } from "three/tsl";
 
 export const config = {
-  // neighbouring pines sway slightly out of step, so the motion rolls through
-  // the forest along the wind instead of every tree rocking in unison
   SWAY_PHASE_PER_METER: 0.02,
 };
 

@@ -14,7 +14,6 @@ export const config = {
   FIELD_HALF_SIZE,
   TRAIL_LENGTH,
   TOTAL_SPINE_POINT_COUNT: STREAK_COUNT * SPINE_POINT_COUNT,
-  // a streak is retired once its whole ribbon has cleared the far edge
   RECYCLE_DISTANCE: FIELD_HALF_SIZE + TRAIL_LENGTH,
   EDGE_FADE_SIZE: 18,
   FORWARD_BIAS: 25,

@@ -34,7 +34,7 @@ import nyUrl from "/textures/environment/ny.webp?url";
 import pzUrl from "/textures/environment/pz.webp?url";
 import nzUrl from "/textures/environment/nz.webp?url";
 import terrainMasksUrl from "/textures/new-world/terrain/terrain-masks.ktx2?url"; // R flowers, G grass, B water, A trees
-import waterMaskUrl from "/textures/new-world/terrain/water-mask.bin?url"; // used CPU side
+import waterMaskUrl from "/textures/new-world/terrain/water-mask.bin?url";
 import heightmapDataUrl from "/textures/new-world/terrain/heightmap.bin?url";
 import woodChipsNormalAoUrl from "/textures/new-world/terrain/wood-chips-normal-ao.ktx2?url";
 import waterNormalVeinUrl from "/textures/new-world/terrain/water-normal-vein.ktx2?url";
@@ -254,7 +254,6 @@ export const manifest = [
     type: "ktx2",
     flipY: false,
     wrap: true,
-    // left linear on purpose, as srgb it reads too vibrant
   },
   {
     name: "concreteNormal",
@@ -292,7 +291,6 @@ export const manifest = [
     url: pineCanopyDiffuseUrl,
     type: "ktx2",
     flipY: false,
-    // left linear on purpose, as srgb it reads too vibrant
   },
   {
     name: "pineBarkDiffuse",

@@ -11,7 +11,7 @@ import {
   vec3,
 } from "three/tsl";
 import { VSMReceiverLambertMaterial } from "../../systems/vsm/VSMReceiverMaterials";
-import { uniforms } from "./LakePlantsConfig";
+import { uniforms } from "./lakePlantsConfig";
 
 export class LakePlantsMaterial extends VSMReceiverLambertMaterial {
   constructor(diffuse: Texture, tintVariety: number) {

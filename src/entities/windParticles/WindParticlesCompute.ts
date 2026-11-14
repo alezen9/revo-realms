@@ -18,7 +18,7 @@ import { type Node } from "three/webgpu";
 import { assets, wind } from "../../systems";
 import { gameTime } from "../../systems/time/gameTime";
 import { computeMapUvByPosition } from "../../shaders/mapping";
-import { config, uniforms } from "./WindParticlesConfig";
+import { config, uniforms } from "./windParticlesConfig";
 
 const {
   PARTICLE_COUNT,

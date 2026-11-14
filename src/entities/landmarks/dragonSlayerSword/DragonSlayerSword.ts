@@ -1,7 +1,7 @@
 import { assets, landmarks, stage, graphics } from "../../../systems";
 import { placeAtAnchor } from "../placeAtAnchor";
-import { createDragonSlayerSwordCollider } from "./DragonSlayerSwordCollider";
-import { debugDragonSlayerSword } from "./DragonSlayerSwordDebug";
+import { createDragonSlayerSwordCollider } from "./dragonSlayerSwordCollider";
+import { debugDragonSlayerSword } from "./dragonSlayerSwordDebug";
 import { DragonSlayerSwordMaterial } from "./DragonSlayerSwordMaterial";
 
 export class DragonSlayerSword {

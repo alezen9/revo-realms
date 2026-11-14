@@ -1,5 +1,5 @@
 import { debugPanel } from "../../systems";
-import { uniforms } from "./PineTreesConfig";
+import { uniforms } from "./pineTreesConfig";
 
 export const debugPineTrees = () => {
   const folder = debugPanel.panel.addFolder({

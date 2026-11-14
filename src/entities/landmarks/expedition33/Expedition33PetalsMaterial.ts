@@ -11,7 +11,7 @@ import {
   uv,
   vec3,
 } from "three/tsl";
-import { petalConfig, petalUniforms } from "./Expedition33PetalsConfig";
+import { petalConfig, petalUniforms } from "./expedition33PetalsConfig";
 import {
   SEED_STREAMS,
   getLifetime,
@@ -32,7 +32,6 @@ export class Expedition33PetalsMaterial extends MeshBasicNodeMaterial {
     const grow = smoothstep(0, GROW_END, lifeRatio);
     const shrink = smoothstep(SHRINK_START, 1, lifeRatio).oneMinus();
 
-    // squared so small petals are common and big ones rare
     const sizeSeed = getPetalSeed(instanceIndex, SEED_STREAMS.size);
     const sizeVariation = mix(0.6, 1.4, sizeSeed.mul(sizeSeed));
     const size = petalUniforms.uSize.mul(sizeVariation).mul(grow).mul(shrink);

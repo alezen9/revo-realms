@@ -1,7 +1,7 @@
 import { assets, graphics, landmarks, stage } from "../../../systems";
 import { placeAtAnchor } from "../placeAtAnchor";
 import { CampfireFire } from "./CampfireFire";
-import { createCampfireColliders } from "./CampfireCollider";
+import { createCampfireColliders } from "./campfireCollider";
 import { CampfireMaterial } from "./CampfireMaterial";
 
 export class Campfire {

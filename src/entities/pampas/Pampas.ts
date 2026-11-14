@@ -7,9 +7,9 @@ import {
 import { assets, eventBus, graphics, stage } from "../../systems";
 import { type State } from "../../Game";
 import type { ComputeTask } from "../../systems/rendering/ComputeTask";
-import { config, uniforms } from "./PampasConfig";
+import { config, uniforms } from "./pampasConfig";
 import { PampasCompute } from "./PampasCompute";
-import { debugPampas } from "./PampasDebug";
+import { debugPampas } from "./pampasDebug";
 import { PampasMaterial } from "./PampasMaterial";
 
 const { COUNT } = config;

@@ -20,7 +20,6 @@ export const uniforms = {
   uHighlightsGlow: uniform(4),
   uHighlightFresnelInfluence: uniform(0.35),
   uDepthDistance: uniform(20),
-  // red absorbs fastest, which pushes the water toward blue and green with depth
   uAbsorptionRGB: uniform(new Vector3(0.35, 0.1, 0.08)),
   uInscatterTint: uniform(new Color(0.0, 0.09, 0.09)),
   uInscatterStrength: uniform(0.85),

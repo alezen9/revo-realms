@@ -1,13 +1,6 @@
 import { PerspectiveCamera, Quaternion, Vector3 } from "three";
 import { UP } from "../axes";
-
-export const playerCameraConfig = {
-  OFFSET: new Vector3(0, 16, 20),
-  TARGET_HEIGHT_IN_METERS: 1,
-  POSITION_FOLLOW_SPEED_IN_INVERSE_SECONDS: 12,
-  TARGET_FOLLOW_SPEED_IN_INVERSE_SECONDS: 18,
-  ROTATION_FOLLOW_SPEED_IN_INVERSE_SECONDS: 10,
-};
+import { playerCameraConfig } from "./playerConfig";
 
 export class PlayerCamera {
   private camera: PerspectiveCamera;

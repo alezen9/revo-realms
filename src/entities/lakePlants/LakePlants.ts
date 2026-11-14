@@ -1,7 +1,7 @@
 import { InstancedMesh, Matrix4 } from "three";
 import { texture } from "three/tsl";
 import { assets, graphics, stage } from "../../systems";
-import { debugLakePlants } from "./LakePlantsDebug";
+import { debugLakePlants } from "./lakePlantsDebug";
 import { LakePlantsMaterial } from "./LakePlantsMaterial";
 
 export class LakePlants {

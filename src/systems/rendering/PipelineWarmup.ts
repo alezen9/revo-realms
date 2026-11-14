@@ -32,8 +32,6 @@ export class PipelineWarmup {
     this.tasks.push(task);
   }
 
-  // three builds materials against the renderer's current render target and mrt
-  // between its awaits, so nothing may render until the compile has finished
   async runStartupPrewarmAsync(): Promise<StartupPrewarmResult> {
     this.disableFrustumCulling();
     try {

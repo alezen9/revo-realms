@@ -19,7 +19,7 @@ import { shadeGrassGround } from "../grass/GrassShading";
 import { assets } from "../../systems";
 import { gameTime } from "../../systems/time/gameTime";
 import { computeMapUvByPosition } from "../../shaders/mapping";
-import { config, uniforms } from "./TerrainConfig";
+import { config, uniforms } from "./terrainConfig";
 
 const { GRASS_GROUND_SOFTNESS } = config;
 

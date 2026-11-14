@@ -19,7 +19,6 @@ import { computeSphereFrustumVisibility } from "../../shaders/frustum";
 // indexCount, instanceCount, firstIndex, baseVertex, firstInstance
 const DRAW_ARGUMENTS_STRIDE = 5;
 const INSTANCE_COUNT_INDEX = 1;
-// bark and canopy
 const PART_COUNT = 2;
 const WORKGROUP_SIZE = 64;
 
@@ -88,7 +87,6 @@ const cullPines = Fn<
     Return();
   });
 
-  // every part of a pine draws the same visible list, so only the first count hands out slots
   const slot = atomicAdd(drawArguments.element(INSTANCE_COUNT_INDEX), 1);
   for (let draw = 1; draw < PART_COUNT; draw++) {
     const instanceCountIndex = draw * DRAW_ARGUMENTS_STRIDE;
@@ -104,8 +102,6 @@ const cullPines = Fn<
 
 export class PineTreesCompute {
   readonly drawArgumentsAttribute: IndirectStorageBufferAttribute;
-  // three's instancing reads this as instanceMatrix, so on the gpu instance i is
-  // the i-th visible pine, while the cpu copy keeps every pine for vsm to read
   readonly visibleMatrices: StorageInstancedBufferAttribute;
   readonly computeResetInstanceCounts;
   readonly computeCull;

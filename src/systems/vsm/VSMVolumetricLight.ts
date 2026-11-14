@@ -34,7 +34,6 @@ const RESOLUTION_SCALE = 0.125;
 const HISTORY_WEIGHT = 0.9;
 const JITTER_FRAMES = 64;
 const JITTER_STEP = 5.588238;
-// 4x the distance is 2 levels coarser, fine pages are rarely resident in the air
 const SEARCH_DISTANCE_SCALE = 4;
 
 const getHenyeyGreenstein = (cosTheta: FloatNode, anisotropy: FloatNode) => {

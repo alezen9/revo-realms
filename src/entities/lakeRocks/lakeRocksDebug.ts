@@ -1,6 +1,6 @@
 import type { Mesh } from "three";
 import { debugPanel, graphics } from "../../systems";
-import { uniforms } from "./LakeRocksConfig";
+import { uniforms } from "./lakeRocksConfig";
 
 type ShadowSettings = { depthBias: number };
 

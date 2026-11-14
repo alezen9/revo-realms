@@ -1,8 +1,10 @@
 import type { Collider } from "@dimforge/rapier3d";
 import { debugPanel } from "../../systems";
-import { playerConfig as config } from "./config";
-import { playerUniforms } from "./PlayerMaterial";
-import { playerCameraConfig } from "./PlayerCamera";
+import {
+  playerCameraConfig,
+  playerConfig as config,
+  playerUniforms,
+} from "./playerConfig";
 
 export const debugPlayer = (collider: Collider) => {
   const folder = debugPanel.panel.addFolder({

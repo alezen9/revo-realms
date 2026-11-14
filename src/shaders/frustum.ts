@@ -39,7 +39,6 @@ type SphereFrustumVisibilityArgs = [
   planes: UniformArrayNode<"vec4">,
 ];
 
-// a sphere is culled once it lies fully behind any of the six planes
 export const computeSphereFrustumVisibility = Fn<
   SphereFrustumVisibilityArgs,
   FloatNode

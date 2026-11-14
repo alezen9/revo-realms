@@ -1,6 +1,6 @@
 import { InnerTerrain } from "./InnerTerrain";
 import { OuterTerrain } from "./OuterTerrain";
-import { debugTerrain } from "./TerrainDebug";
+import { debugTerrain } from "./terrainDebug";
 import { TerrainMaterial } from "./TerrainMaterial";
 
 export class Terrain {

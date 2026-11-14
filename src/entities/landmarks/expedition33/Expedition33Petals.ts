@@ -2,10 +2,10 @@ import { InstancedMesh, Sphere, type Vector3 } from "three";
 import { graphics, stage } from "../../../systems";
 import type { ComputeTask } from "../../../systems/rendering/ComputeTask";
 import type { Expedition33FlagCompute } from "./Expedition33FlagCompute";
-import { petalConfig, petalUniforms } from "./Expedition33PetalsConfig";
+import { petalConfig, petalUniforms } from "./expedition33PetalsConfig";
 import { Expedition33PetalsCompute } from "./Expedition33PetalsCompute";
-import { debugExpedition33Petals } from "./Expedition33PetalsDebug";
-import { createExpedition33PetalsGeometry } from "./Expedition33PetalsGeometry";
+import { debugExpedition33Petals } from "./expedition33PetalsDebug";
+import { createExpedition33PetalsGeometry } from "./expedition33PetalsGeometry";
 import { Expedition33PetalsMaterial } from "./Expedition33PetalsMaterial";
 
 const { REACH, COUNT, MAX_STEP_SECONDS } = petalConfig;
@@ -26,7 +26,6 @@ export class Expedition33Petals {
     debugExpedition33Petals();
 
     const geometry = createExpedition33PetalsGeometry();
-    // petals only exist on the gpu, so the bounds cover everywhere they can fly
     geometry.boundingSphere = new Sphere(origin.clone(), REACH);
     const mesh = new InstancedMesh(
       geometry,

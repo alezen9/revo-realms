@@ -17,7 +17,6 @@ import { assets, wind } from "../../systems";
 import { gameDeltaTime, gameTime } from "../../systems/time/gameTime";
 import { uniforms } from "./config";
 
-// cubic bezier with P0 = 0 and P3 = 1 over normalized blade height
 const computeWindResponse = Fn<[bladeScale: Node<"float">], Node<"float">>(
   ([bladeScale]) => {
     const t = bladeScale.div(uniforms.uBladeMaxScale).clamp();

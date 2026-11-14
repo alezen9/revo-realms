@@ -1,4 +1,5 @@
 import { Vector3 } from "three";
+import { uniform } from "three/tsl";
 
 const POSITIONS = {
   center: [0, 0.5, 10],
@@ -68,6 +69,21 @@ export const playerConfig = {
   SPIN_NORMAL_SCALE: 3.5,
   SPIN_NORMAL_SCALE_MIN: 1.2,
 
-  PLAYER_INITIAL_POSITION: new Vector3(...POSITIONS.hill),
+  PLAYER_INITIAL_POSITION: new Vector3(...POSITIONS.dragonball),
   RESET_Y_IN_METERS: -15,
+};
+
+export const playerCameraConfig = {
+  OFFSET: new Vector3(0, 16, 20),
+  TARGET_HEIGHT_IN_METERS: 1,
+  POSITION_FOLLOW_SPEED_IN_INVERSE_SECONDS: 12,
+  TARGET_FOLLOW_SPEED_IN_INVERSE_SECONDS: 18,
+  ROTATION_FOLLOW_SPEED_IN_INVERSE_SECONDS: 10,
+};
+
+export const playerUniforms = {
+  uDiffuseScale: uniform(2.45),
+  uSpinFactor: uniform(0),
+  uSpinBlurMax: uniform(0.33),
+  uSunTintStrength: uniform(0.22),
 };

@@ -1,19 +1,12 @@
 import { MathUtils, Mesh, Object3D, Quaternion, Vector3 } from "three";
 import type { RigidBody } from "@dimforge/rapier3d";
-import { physicsScheduler } from "../../systems";
-import { playerConfig as config } from "./config";
+import { playerConfig as config } from "./playerConfig";
 import { FORWARD } from "../axes";
 
-export class PlayerVisual {
+export class PlayerDeformation {
   private visualRoot: Object3D;
   private mesh: Mesh;
   private rigidBody: RigidBody;
-
-  private prevPosition = new Vector3();
-  private targetPosition = new Vector3();
-  private prevQuaternion = new Quaternion();
-  private targetQuaternion = new Quaternion();
-  private bodyQuaternion = new Quaternion();
 
   private previousVelocity = new Vector3();
   private velocity = new Vector3();
@@ -34,18 +27,13 @@ export class PlayerVisual {
     this.visualRoot = visualRoot;
     this.mesh = mesh;
     this.rigidBody = rigidBody;
-
-    rigidBody.translation(this.prevPosition);
-    rigidBody.rotation(this.prevQuaternion);
-    this.targetPosition.copy(this.prevPosition);
-    this.targetQuaternion.copy(this.prevQuaternion);
   }
 
   noteJump() {
     this.jumpStretchImpulse = 1;
   }
 
-  capture(
+  update(
     delta: number,
     isOnGround: boolean,
     isInWater: boolean,
@@ -68,28 +56,11 @@ export class PlayerVisual {
     );
     this.previousVelocity.copy(velocity);
     this.wasOnGround = isOnGround;
-
-    this.prevPosition.copy(this.targetPosition);
-    this.prevQuaternion.copy(this.targetQuaternion);
-    this.rigidBody.translation(this.targetPosition);
-    this.rigidBody.rotation(this.targetQuaternion);
   }
 
-  interpolate(delta: number) {
+  apply(delta: number, bodyQuaternion: Quaternion) {
     const { SQUASH_RECOVERY_SPEED_IN_INVERSE_SECONDS: recoverySpeed } = config;
-    const { alpha } = physicsScheduler;
     const recoveryFactor = 1 - Math.exp(-recoverySpeed * delta);
-
-    this.visualRoot.position.lerpVectors(
-      this.prevPosition,
-      this.targetPosition,
-      alpha,
-    );
-    this.bodyQuaternion.slerpQuaternions(
-      this.prevQuaternion,
-      this.targetQuaternion,
-      alpha,
-    );
 
     this.squashScale.lerp(this.targetSquashScale, recoveryFactor);
     this.squashQuaternion.slerp(this.targetSquashQuaternion, recoveryFactor);
@@ -99,19 +70,10 @@ export class PlayerVisual {
     this.inverseSquashQuaternion.copy(this.squashQuaternion).invert();
     this.mesh.quaternion
       .copy(this.inverseSquashQuaternion)
-      .multiply(this.bodyQuaternion);
+      .multiply(bodyQuaternion);
   }
 
   reset() {
-    const { PLAYER_INITIAL_POSITION } = config;
-
-    this.prevPosition.copy(PLAYER_INITIAL_POSITION);
-    this.targetPosition.copy(PLAYER_INITIAL_POSITION);
-    this.prevQuaternion.identity();
-    this.targetQuaternion.identity();
-    this.bodyQuaternion.identity();
-
-    this.visualRoot.position.copy(PLAYER_INITIAL_POSITION);
     this.visualRoot.scale.set(1, 1, 1);
     this.visualRoot.quaternion.identity();
     this.mesh.quaternion.identity();

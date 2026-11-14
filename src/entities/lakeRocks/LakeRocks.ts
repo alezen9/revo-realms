@@ -1,8 +1,8 @@
 import { InstancedMesh, Matrix4, Mesh } from "three";
 import { assets, graphics, stage } from "../../systems";
-import { createLakeRocksCollider } from "./LakeRocksCollider";
-import { config } from "./LakeRocksConfig";
-import { debugLakeRocks } from "./LakeRocksDebug";
+import { createLakeRocksCollider } from "./lakeRocksCollider";
+import { config } from "./lakeRocksConfig";
+import { debugLakeRocks } from "./lakeRocksDebug";
 import { LakeRocksMaterial } from "./LakeRocksMaterial";
 
 const { ROCKS } = config;
@@ -20,7 +20,6 @@ export class LakeRocks {
     const material = new LakeRocksMaterial();
     const matrix = new Matrix4();
 
-    // the scatter writes the one rock that breaks the surface first
     const { geometry: surfacingGeometry } = assets.getMesh(
       "lake-rock-surfacing",
       lakeRocksModel,
@@ -47,7 +46,6 @@ export class LakeRocks {
       sunkRocks.push(mesh);
     }
 
-    // the lake scatter sized each rock for the model at its place in the file
     for (let placementIndex = 1; placementIndex < rockCount; placementIndex++) {
       const mesh = sunkRocks[placementIndex % ROCKS.length];
       matrix.fromArray(matrices, placementIndex * 16);

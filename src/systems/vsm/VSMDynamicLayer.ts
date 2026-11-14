@@ -71,7 +71,6 @@ const prepareDynamicPages = Fn<
   });
 });
 
-// dynamic clusters stamp the active pages they cover with this frame
 const countTouchedPages = Fn<DynamicJobArgs, void>(
   ([counters, dynamicCounters, pageJobs, pageTable, frame]) => {
     const activeCount = atomicLoad(counters.element(VSM_COUNTER_ACTIVE));
@@ -100,7 +99,6 @@ const assignDynamicSlots = Fn<DynamicJobArgs, void>(
       const touchedFrame = pageTable.element(job.x).y;
       const isTouched = touchedFrame.equal(frame);
       If(isTouched, () => {
-        // finer levels take the first slots so a full pool drops the coarse ones
         const firstSlot = uint(0).toVar();
         Loop(
           { start: uint(0), end: level, type: "uint" },
@@ -199,7 +197,6 @@ export class VSMDynamicLayer {
     this.pool.sync(terrainBounds);
   }
 
-  // clusters mark their pages before the touch pass, their shape can come from the gpu
   collectComputeNodes(nodes: ComputeNode[]) {
     nodes.push(this.prepareNode);
     this.pool.collectBoundsNodes(nodes);

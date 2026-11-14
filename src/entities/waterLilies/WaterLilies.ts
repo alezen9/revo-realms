@@ -12,8 +12,8 @@ import { type State } from "../../Game";
 import { assets, eventBus, graphics, stage } from "../../systems";
 import { UP } from "../axes";
 import { realmConfig } from "../realmConfig";
-import { config, uniforms } from "./WaterLiliesConfig";
-import { debugWaterLilies } from "./WaterLiliesDebug";
+import { config, uniforms } from "./waterLiliesConfig";
+import { debugWaterLilies } from "./waterLiliesDebug";
 import { getLilyPosition, WaterLiliesMaterial } from "./WaterLiliesMaterial";
 
 const {
@@ -132,7 +132,6 @@ export class WaterLilies {
     const isPlayerNearLilies = this.activeArea.containsPoint(player.position);
     if (!isPlayerNearLilies) return;
 
-    // every lily floats at the same height, so the middle of them is the surface
     const heightAboveWater = player.position.y - this.activeArea.center.y;
     const isPlayerAtSurface = heightAboveWater < MAX_PRESS_HEIGHT;
     uniforms.uPlayerPosition.value.copy(player.position);

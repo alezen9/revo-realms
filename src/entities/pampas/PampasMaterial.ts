@@ -15,7 +15,7 @@ import {
 import { DoubleSide, MeshBasicNodeMaterial } from "three/webgpu";
 import { assets, lighting, wind } from "../../systems";
 import { gameTime } from "../../systems/time/gameTime";
-import { config, uniforms } from "./PampasConfig";
+import { config, uniforms } from "./pampasConfig";
 import { type PampasCompute } from "./PampasCompute";
 
 const { MIN_HEIGHT, MAX_HEIGHT, MIN_THICKNESS, MAX_THICKNESS, PLANT_HEIGHT } =

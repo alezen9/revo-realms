@@ -1,5 +1,5 @@
 import { debugPanel } from "../../../systems";
-import { petalUniforms } from "./Expedition33PetalsConfig";
+import { petalUniforms } from "./expedition33PetalsConfig";
 
 export const debugExpedition33Petals = () => {
   const petals = debugPanel.panel.addFolder({

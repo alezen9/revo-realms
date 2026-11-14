@@ -1,6 +1,6 @@
 import { debugPanel } from "../../systems";
 import { srgbColorTarget } from "../../systems/debug/tweakpaneColor";
-import { uniforms } from "./TerrainConfig";
+import { uniforms } from "./terrainConfig";
 
 export const debugTerrain = () => {
   const folder = debugPanel.panel.addFolder({

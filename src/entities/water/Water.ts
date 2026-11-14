@@ -1,6 +1,6 @@
 import { Mesh } from "three";
 import { assets, sound, stage, eventBus, landmarks } from "../../systems";
-import { debugWater } from "./WaterDebug";
+import { debugWater } from "./waterDebug";
 import { WaterMaterial } from "./WaterMaterial";
 
 export class Water {

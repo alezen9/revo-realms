@@ -9,7 +9,7 @@ import {
 } from "three/webgpu";
 import { realmConfig } from "../realmConfig";
 import { assets, stage } from "../../systems";
-import { createInnerTerrainCollider } from "./InnerTerrainCollider";
+import { createInnerTerrainCollider } from "./innerTerrainCollider";
 import type { TerrainMaterial } from "./TerrainMaterial";
 
 const { HEIGHTMAP_GRID_SIZE } = realmConfig;

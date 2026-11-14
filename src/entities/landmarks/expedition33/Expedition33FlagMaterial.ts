@@ -11,7 +11,7 @@ import {
 } from "three/tsl";
 import { VSMReceiverLambertMaterial } from "../../../systems/vsm/VSMReceiverMaterials";
 import { assets } from "../../../systems";
-import { uniforms } from "./Expedition33FlagConfig";
+import { uniforms } from "./expedition33FlagConfig";
 import {
   getParticleNormal,
   type Expedition33FlagCompute,
@@ -24,7 +24,6 @@ export class Expedition33FlagMaterial extends VSMReceiverLambertMaterial {
 
     this.positionNode = compute.positions.element(vertexIndex).xyz;
 
-    // the geometry's own normal is the flat placeholder plane
     const normal = getParticleNormal(compute.positions, vertexIndex);
     const normalView = varying(transformNormalToView(normal));
     this.normalNode = normalView.normalize().mul(faceDirection);
@@ -34,7 +33,6 @@ export class Expedition33FlagMaterial extends VSMReceiverLambertMaterial {
       assets.resources.expedition33FlagDiffuse,
       designUv,
     ).rgb;
-    // anything clearly brighter than the black cloth is the gold design
     const isGold = step(0.25, design.r.max(design.g).max(design.b));
     this.colorNode = design.mul(uniforms.uDiffuseScale);
     this.emissiveNode = design.mul(isGold.mul(uniforms.uEmissive));

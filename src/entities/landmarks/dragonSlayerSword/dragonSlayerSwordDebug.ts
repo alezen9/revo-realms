@@ -1,5 +1,5 @@
 import { debugPanel } from "../../../systems";
-import { uniforms } from "./DragonSlayerSwordConfig";
+import { uniforms } from "./dragonSlayerSwordConfig";
 
 export const debugDragonSlayerSword = () => {
   const folder = debugPanel.panel.addFolder({

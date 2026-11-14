@@ -18,7 +18,6 @@ const INDIRECT_DRAW_BYTE_LENGTH =
 export class Grass {
   private compute = new GrassCompute();
   private material = new GrassMaterial(this.compute);
-  // every LOD mesh rides the same wrapping tile, so only the group moves
   private tile = new Group();
   private playerDeltaXZ = new Vector2();
   private computeTask: ComputeTask;

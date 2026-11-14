@@ -1,7 +1,7 @@
 import { color, normalMap, texture, uv } from "three/tsl";
 import { assets } from "../../../systems";
 import { VSMReceiverStandardMaterial } from "../../../systems/vsm/VSMReceiverMaterials";
-import { uniforms } from "./LeviathanAxeConfig";
+import { uniforms } from "./leviathanAxeConfig";
 
 export class LeviathanAxeMaterial extends VSMReceiverStandardMaterial {
   constructor() {

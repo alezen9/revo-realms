@@ -19,7 +19,7 @@ import {
 import type { Node } from "three/webgpu";
 import { assets, wind } from "../../../systems";
 import { gameTime } from "../../../systems/time/gameTime";
-import { config, uniforms } from "./Expedition33FlagConfig";
+import { config, uniforms } from "./expedition33FlagConfig";
 
 const {
   BEND_WEIGHT,
@@ -33,9 +33,6 @@ const {
   PARTICLES_PER_INVOCATION,
   WORKGROUP_SIZE,
 } = config;
-// column offset, row offset, weight: the structural ring, the shear ring, then
-// a weak two ring bending that resists sharp creases. the rest length is the
-// offset measured in grid cells of the flag's size
 const NEIGHBORS = [
   [1, 0, 1],
   [-1, 0, 1],
@@ -53,7 +50,6 @@ const NEIGHBORS = [
 const cellWidth = uniforms.uFlagWidth.div(SEGMENTS_X);
 const cellHeight = uniforms.uFlagHeight.div(SEGMENTS_Y);
 const EPSILON = 1e-5;
-// gusts travel across the flag and sample their own band of the noise atlas
 const GUST_TRAVEL_ACROSS_WIDTH = 0.3;
 const GUST_BAND_HEIGHT = 0.21;
 const GUST_BAND_OFFSET = 0.37;
@@ -84,7 +80,6 @@ export const getParticleIndex = Fn<
     .toUint(),
 );
 
-// points out of the plane geometry's front face, so faceDirection can flip it for the back
 export const getParticleNormal = Fn<
   [positions: ParticleBuffer, index: Node<"uint">],
   Node<"vec3">
@@ -97,11 +92,9 @@ export const getParticleNormal = Fn<
   const up = positions.element(getParticleIndex(column, row.sub(1))).xyz;
   const down = positions.element(getParticleIndex(column, row.add(1))).xyz;
   const cross = down.sub(up).cross(right.sub(left));
-  // folds give a zero cross, normalize -> nan
   return cross.div(cross.length().max(EPSILON));
 });
 
-// shadow rasterization reads the rest plane, so each plane vertex maps back to its particle
 export const getParticleAtPlanePosition = Fn<
   [positions: ParticleBuffer, planePosition: Node<"vec3">],
   Node<"vec3">
@@ -143,8 +136,6 @@ const pushOutOfPlayer = Fn<[position: Node<"vec3">], Node<"vec3">>(
   },
 );
 
-// air on a small plate: drag along the relative wind, lift across it, both
-// scaled by how much the cloth faces the wind (NvCloth's applyWind model)
 const getWindAcceleration = Fn<
   [
     positions: ParticleBuffer,
@@ -218,7 +209,6 @@ const pullTowardRest = Fn<
       .mul(isInsideBottomEdge);
     const appliedWeight = isInsideGrid.mul(weight);
 
-    // a pinned neighbor cannot move, so this particle takes the whole correction
     const isNeighborPinned = step(neighborColumn, 0.5);
     const correctionShare = isNeighborPinned.mul(0.5).add(0.5);
 
@@ -284,7 +274,6 @@ const solveParticle = Fn<
   const coordinates = getGridCoordinates(index);
   const predicted = predictedPositions.element(index).xyz;
 
-  // the table unrolls while the shader is built, the gpu sees 12 plain calls
   const total = vec4(0).toVar();
   for (const [offsetX, offsetY, weight] of NEIGHBORS) {
     const restLength = vec2(
@@ -346,7 +335,6 @@ const simulateSteps = Fn<
   void
 >(([positions, previousPositions, predictedPositions]) => {
   Loop({ start: 0, end: uniforms.uStepCount, type: "uint" }, () => {
-    // the ownership guards stay branches, two invocations on one particle would race
     Loop(OWNED_SLOTS, ({ i: slot }) => {
       const index = getOwnedParticle(slot);
       If(index.lessThan(COUNT), () => {

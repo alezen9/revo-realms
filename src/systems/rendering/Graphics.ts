@@ -39,7 +39,6 @@ export class Graphics {
 
     const renderer = new WebGPURenderer({
       canvas,
-      // the scene pass carries the MSAA
       antialias: false,
       trackTimestamp: false,
       powerPreference: "high-performance",

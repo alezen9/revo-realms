@@ -32,7 +32,7 @@ import {
   getGrassNoiseUv,
   getLushness,
 } from "../grass/GrassShading";
-import { config, uniforms } from "./PampasConfig";
+import { config, uniforms } from "./pampasConfig";
 
 const {
   COUNT,

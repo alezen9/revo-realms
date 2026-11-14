@@ -13,8 +13,8 @@ import {
 } from "three/tsl";
 import type { Node } from "three/webgpu";
 import { wind } from "../../../systems";
-import { config, uniforms } from "./Expedition33FlagConfig";
-import { petalConfig, petalUniforms } from "./Expedition33PetalsConfig";
+import { config, uniforms } from "./expedition33FlagConfig";
+import { petalConfig, petalUniforms } from "./expedition33PetalsConfig";
 import {
   getParticleIndex,
   type Expedition33FlagCompute,
@@ -35,7 +35,6 @@ const { SEGMENTS_X, SEGMENTS_Y, STEP_SECONDS } = config;
 const createPetalBuffer = () => instancedArray(COUNT, "vec4");
 export type PetalBuffer = ReturnType<typeof createPetalBuffer>;
 
-// every petal reads its own streams of the hash, so its look stays put across lives
 export const SEED_STREAMS = {
   shedColumn: 0,
   shedRow: 1,
@@ -57,7 +56,6 @@ export const SEED_STREAMS = {
   spinY: 17,
   spinZ: 18,
 } as const;
-// keeps a petal's next spot on the cloth unrelated to its last
 const GOLDEN_RATIO_FRACTION = 0.618034;
 
 type SeedStream = (typeof SEED_STREAMS)[keyof typeof SEED_STREAMS];
@@ -163,7 +161,6 @@ const updatePetals = Fn<
       .mul(windSpeed)
       .add(sway)
       .add(vec3(0, fallSpeed.negate(), 0));
-    // easing toward the target keeps every change of wind a smooth turn
     const airBlend = exp(petalUniforms.uAirDrag.mul(delta).negate()).oneMinus();
     const velocity = mix(motion.xyz, targetVelocity, airBlend);
     const position = petal.xyz.add(velocity.mul(delta));

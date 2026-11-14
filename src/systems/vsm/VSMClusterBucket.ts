@@ -56,7 +56,6 @@ const VSM_CLUSTER_VERTICES = VSM_CLUSTER_TRIANGLES * 3;
 const VSM_CLUSTER_MAX_WORK_ITEMS = 262144;
 const VSM_MASK_SIZE = 256;
 const VSM_MASK_WORDS = (VSM_MASK_SIZE * VSM_MASK_SIZE) / 32;
-// 12 bits per uv axis keep the packed uv an exact integer in a float
 const UV_STEPS = 4096;
 const UV_LAST_STEP = UV_STEPS - 1;
 
@@ -150,7 +149,6 @@ const appendGeometryClusters = (
     maximum.setScalar(-Infinity);
     for (let corner = 0; corner < VSM_CLUSTER_VERTICES; corner++) {
       const isPadding = corner >= triangles.length;
-      // padding repeats the last triangle's first corner, a zero area triangle
       let meshletCorner = corner;
       if (isPadding) meshletCorner = lastTriangleCorner;
       const vertexIndex = vertices[triangles[meshletCorner]];
@@ -288,7 +286,6 @@ const computeClusterLightBounds = Fn<
   ]) => {
     const instanceCluster = instanceClusters.element(instanceIndex).toVar();
     const bounds = vec4(1e8, 1e8, -1e8, -1e8).toVar();
-    // a position node can deform the cluster, so its rest box corners don't bound it
     if (positionNode) {
       const vertexCount = instanceCluster.w.mul(3);
       Loop({ start: 0, end: vertexCount, type: "uint" }, ({ i: vertex }) => {
@@ -332,7 +329,6 @@ const computeClusterLightBounds = Fn<
   },
 );
 
-// opacity is baked once, so it may only depend on uv
 const bakeOpacityMask = Fn<
   [
     masks: MasksNode,
@@ -403,7 +399,6 @@ const collectClusterWork = Fn<
   });
 });
 
-// stamps the active pages this cluster covers, read by the dynamic touch pass
 const markClusterPages = Fn<
   [
     lightBounds: Vec4Node,
@@ -429,7 +424,6 @@ const markClusterPages = Fn<
       ).toVar();
       const pageWidth = lastPage.x.sub(firstPage.x).add(1).toVar();
       const pageHeight = lastPage.y.sub(firstPage.y).add(1).toVar();
-      // inverted/nan box wraps to billions of pages -> gpu hang
       const isWindowSized = pageWidth
         .lessThanEqual(VSM_PAGE_GRID_SIZE)
         .and(pageHeight.lessThanEqual(VSM_PAGE_GRID_SIZE));
@@ -729,7 +723,6 @@ export class VSMClusterBucket {
 
   setCasters(casters: VSMCaster[]) {
     const content = this.collectContent(casters);
-    // the bake kernels are built per mask, so a different set needs a new bucket
     const hasSameMasks = hasSameMaskSources(
       this.maskSources,
       content.maskSources,
@@ -781,7 +774,6 @@ export class VSMClusterBucket {
   }
 
   collectBoundsNodes(nodes: ComputeNode[]) {
-    // instanced deformation uses this buffer before the material, keeping raster bindings within the gpu limit
     if (this.instanceWorldMatrix) this.updateMatrices();
     if (this.hasDirtyBounds || this.positionNode) nodes.push(this.boundsNode);
     this.hasDirtyBounds = false;

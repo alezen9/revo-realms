@@ -1,5 +1,5 @@
 import { debugPanel } from "../../systems";
-import { uniforms } from "./WaterLiliesConfig";
+import { uniforms } from "./waterLiliesConfig";
 
 export const debugWaterLilies = () => {
   const folder = debugPanel.panel.addFolder({

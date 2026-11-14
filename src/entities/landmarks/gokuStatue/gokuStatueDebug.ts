@@ -1,6 +1,6 @@
 import type { Mesh } from "three";
 import { debugPanel, graphics } from "../../../systems";
-import { uniforms } from "./GokuStatueConfig";
+import { uniforms } from "./gokuStatueConfig";
 
 type ShadowSettings = { depthBias: number };
 

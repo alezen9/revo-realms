@@ -6,15 +6,15 @@ import type { ComputeTask } from "../../../systems/rendering/ComputeTask";
 import { VSMReceiverStandardMaterial } from "../../../systems/vsm/VSMReceiverMaterials";
 import { UP } from "../../axes";
 import { placeAtAnchor } from "../placeAtAnchor";
-import { config, uniforms } from "./Expedition33FlagConfig";
+import { config, uniforms } from "./expedition33FlagConfig";
 import {
   Expedition33FlagCompute,
   getParticleAtPlanePosition,
 } from "./Expedition33FlagCompute";
-import { createExpedition33FlagCollider } from "./Expedition33FlagCollider";
+import { createExpedition33FlagCollider } from "./expedition33FlagCollider";
 import { Expedition33FlagMaterial } from "./Expedition33FlagMaterial";
 import { Expedition33Petals } from "./Expedition33Petals";
-import { debugExpedition33Flag } from "./Expedition33FlagDebug";
+import { debugExpedition33Flag } from "./expedition33FlagDebug";
 
 const {
   SEGMENTS_X,
@@ -25,7 +25,6 @@ const {
   STEP_SECONDS,
 } = config;
 
-// bounds in the model's own upright frame, before the anchor leans and places it
 const getModelBounds = (mesh: Mesh) => {
   mesh.geometry.computeBoundingBox();
   const { boundingBox } = mesh.geometry;
@@ -60,7 +59,6 @@ export class Expedition33Flag {
     uniforms.uAttachTop.value =
       (flagBounds.max.y - staffBounds.min.y) * anchorScale;
 
-    // the staff stands on its origin and leans with the anchor
     this.origin.copy(staff.position);
     const staffAxis = UP.clone().applyQuaternion(staff.quaternion);
     uniforms.uStaffAxis.value.copy(staffAxis);
@@ -103,11 +101,8 @@ export class Expedition33Flag {
     graphics.vsmPass.registerCaster(staff);
   }
 
-  // the cloth is rebuilt as a regular grid, the simulation pairs vertex and
-  // particle by index and an exported mesh does not keep its vertex order
   private createFlag() {
     const geometry = new PlaneGeometry(1, 1, SEGMENTS_X, SEGMENTS_Y);
-    // the cloth only exists on the gpu, so its bounds cover everywhere it can reach
     const attachTop = uniforms.uAttachTop.value;
     const reach = uniforms.uFlagWidth.value * TETHER_SLACK;
     const bounds = new Box3(

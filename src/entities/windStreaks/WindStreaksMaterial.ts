@@ -11,7 +11,7 @@ import {
 } from "three/tsl";
 import { MeshBasicNodeMaterial } from "three/webgpu";
 import { wind } from "../../systems";
-import { config, uniforms } from "./WindStreaksConfig";
+import { config, uniforms } from "./windStreaksConfig";
 import type { WindStreaksCompute } from "./WindStreaksCompute";
 
 const { SPINE_POINT_COUNT, SEGMENT_COUNT } = config;

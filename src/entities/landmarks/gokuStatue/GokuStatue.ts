@@ -1,7 +1,7 @@
 import { assets, graphics, landmarks, stage } from "../../../systems";
 import { placeAtAnchor } from "../placeAtAnchor";
-import { createGokuStatueCollider } from "./GokuStatueCollider";
-import { debugGokuStatue } from "./GokuStatueDebug";
+import { createGokuStatueCollider } from "./gokuStatueCollider";
+import { debugGokuStatue } from "./gokuStatueDebug";
 import { GokuStatueMaterial } from "./GokuStatueMaterial";
 
 export class GokuStatue {

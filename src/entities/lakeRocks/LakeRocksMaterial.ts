@@ -1,7 +1,7 @@
 import { float, mix, mrt, normalWorld, texture, uv, vec4 } from "three/tsl";
 import { MeshBasicNodeMaterial } from "three/webgpu";
 import { assets, lighting } from "../../systems";
-import { uniforms } from "./LakeRocksConfig";
+import { uniforms } from "./lakeRocksConfig";
 
 export class LakeRocksMaterial extends MeshBasicNodeMaterial {
   constructor() {

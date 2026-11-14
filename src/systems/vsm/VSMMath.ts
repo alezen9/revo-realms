@@ -130,11 +130,9 @@ export const isPageInWindow = (
   return isPastWindowStart.and(isBeforeWindowEnd);
 };
 
-// min x, min y, max x, max y, reset to this before growing
 export const EMPTY_PAGE_RANGE = [0xffffffff, 0xffffffff, 0, 0];
 const boxCorner = new Vector3();
 
-// grows one page range per level, starting at offset, to cover the box
 export const growPageRanges = (
   ranges: Uint32Array,
   offset: number,

@@ -1,5 +1,5 @@
 import { debugPanel } from "../../systems";
-import { uniforms } from "./WindParticlesConfig";
+import { uniforms } from "./windParticlesConfig";
 
 export const debugWindParticles = () => {
   const folder = debugPanel.panel.addFolder({

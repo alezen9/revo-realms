@@ -19,7 +19,7 @@ import {
   SpriteNodeMaterial,
 } from "three/webgpu";
 import { assets } from "../../../systems";
-import { config } from "./CampfireFireConfig";
+import { config } from "./campfireFireConfig";
 import type { CampfireFireCompute } from "./CampfireFireCompute";
 
 const { SCALE, HEIGHT, BLOOM } = config;

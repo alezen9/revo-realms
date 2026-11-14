@@ -9,7 +9,7 @@ import {
   vec3,
 } from "three/tsl";
 import { VSMReceiverLambertMaterial } from "../../systems/vsm/VSMReceiverMaterials";
-import { config, uniforms } from "./KoiConfig";
+import { config, uniforms } from "./koiConfig";
 
 const { CRUISE_SWING, BODY_WAVE } = config;
 
@@ -27,7 +27,6 @@ export class KoiMaterial extends VSMReceiverLambertMaterial {
     const swing = sin(this.uSwimPhase.sub(tailward.mul(BODY_WAVE)))
       .mul(tailward.mul(tailward))
       .mul(this.uSwing);
-    // the body lies on the arc through its origin, so it sags toward the turn by distance squared over twice the radius
     const bend = positionLocal.z
       .mul(positionLocal.z)
       .mul(this.uCurvature)

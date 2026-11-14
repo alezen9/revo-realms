@@ -337,7 +337,6 @@ const allocateMissingPages = Fn<
     counters.element(level.add(VSM_COUNTER_LEVEL_MISSES)),
   );
   If(missIndex.lessThan(levelMisses), () => {
-    // finer levels rank first so they win the free slots
     const rank = missIndex.toVar();
     Loop({ start: uint(0), end: level, type: "uint" }, ({ i: finer }) => {
       const finerMisses = atomicLoad(
@@ -533,7 +532,6 @@ export class VSMPages {
     const boxCount = Math.min(boxes.length, MAX_INVALIDATION_BOXES);
     for (let rect = 0; rect < boxCount * VSM_LEVEL_COUNT; rect++)
       this.invalidationValues.set(EMPTY_PAGE_RANGE, rect * 4);
-    // boxes past the limit merge into the last one
     for (let index = 0; index < boxes.length; index++) {
       const box = Math.min(index, MAX_INVALIDATION_BOXES - 1);
       const offset = box * VSM_LEVEL_COUNT * 4;

@@ -1,5 +1,5 @@
 import { debugPanel } from "../../../systems";
-import { uniforms } from "./Expedition33FlagConfig";
+import { uniforms } from "./expedition33FlagConfig";
 
 export const debugExpedition33Flag = () => {
   const folder = debugPanel.panel.addFolder({

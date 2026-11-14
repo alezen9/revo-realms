@@ -4,20 +4,12 @@ import {
   normalMap,
   normalWorld,
   texture,
-  uniform,
   uv,
   vec3,
 } from "three/tsl";
 import { assets, lighting } from "../../systems";
 import { VSMReceiverLambertMaterial } from "../../systems/vsm/VSMReceiverMaterials";
-import { playerConfig as config } from "./config";
-
-export const playerUniforms = {
-  uDiffuseScale: uniform(2.45),
-  uSpinFactor: uniform(0),
-  uSpinBlurMax: uniform(0.33),
-  uSunTintStrength: uniform(0.22),
-};
+import { playerConfig as config, playerUniforms } from "./playerConfig";
 
 export class PlayerMaterial extends VSMReceiverLambertMaterial {
   constructor() {

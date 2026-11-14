@@ -1,7 +1,7 @@
 import { float, hash, instanceIndex, mix, smoothstep, step } from "three/tsl";
 import { SpriteNodeMaterial } from "three/webgpu";
 import { wind } from "../../systems";
-import { config, uniforms } from "./WindParticlesConfig";
+import { config, uniforms } from "./windParticlesConfig";
 import type { WindParticlesCompute } from "./WindParticlesCompute";
 
 const { VARIATION_SEED_OFFSET, PARTICLE_LIFETIME } = config;

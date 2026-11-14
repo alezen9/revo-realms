@@ -1,7 +1,7 @@
 import { assets, graphics, landmarks, stage } from "../../../systems";
 import { placeAtAnchor } from "../placeAtAnchor";
-import { createLeviathanAxeColliders } from "./LeviathanAxeCollider";
-import { debugLeviathanAxe } from "./LeviathanAxeDebug";
+import { createLeviathanAxeColliders } from "./leviathanAxeCollider";
+import { debugLeviathanAxe } from "./leviathanAxeDebug";
 import { LeviathanAxeMaterial } from "./LeviathanAxeMaterial";
 
 export class LeviathanAxe {

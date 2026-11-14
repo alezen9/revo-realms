@@ -9,10 +9,10 @@ import {
 import { graphics, stage, eventBus } from "../../systems";
 import { type State } from "../../Game";
 import type { ComputeTask } from "../../systems/rendering/ComputeTask";
-import { config, uniforms } from "./FlowersConfig";
+import { config, uniforms } from "./flowersConfig";
 import { FlowersCompute } from "./FlowersCompute";
 import { FlowersMaterial } from "./FlowersMaterial";
-import { debugFlowers } from "./FlowersDebug";
+import { debugFlowers } from "./flowersDebug";
 
 const { COUNT } = config;
 
@@ -31,12 +31,12 @@ export class Flowers {
     const indirectDrawAttribute = new IndirectStorageBufferAttribute(
       new Uint32Array([
         indexCount, // indexCount
-        0, // instance count, updated every frame by the atomic counter
-        0, // firstIndex
-        0, // baseVertex
-        0, // firstInstance
+        0,
+        0,
+        0,
+        0,
       ]),
-      1, // size of each argument, all of them are uint so 1
+      1,
     );
 
     const atomicIndirectDrawArguments = storage(
@@ -45,7 +45,6 @@ export class Flowers {
       indirectDrawAttribute.count,
     ).toAtomic();
 
-    // instance count is the second indirect draw argument
     const atomicCounter = atomicIndirectDrawArguments.element(1);
     geometry.setIndirect(indirectDrawAttribute);
 
@@ -59,8 +58,8 @@ export class Flowers {
       label: "Flowers",
       init: flowersCompute.computeInit,
       update: [
-        flowersCompute.computeResetInstanceCount, // always reset first
-        flowersCompute.computeUpdate, // then rebuild the visible list
+        flowersCompute.computeResetInstanceCount,
+        flowersCompute.computeUpdate,
       ],
     });
 
@@ -71,13 +70,6 @@ export class Flowers {
   }
 
   private createGeometry() {
-    // 1 ------- 2
-    // | \     / |
-    // |   \ /   |
-    // |    0    |
-    // |   / \   |
-    // | /     \ |
-    // 4 ------- 3
     const geometry = new InstancedBufferGeometry();
 
     const halfWidth = 0.5;

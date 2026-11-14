@@ -2,9 +2,9 @@ import { InstancedMesh, type Mesh } from "three";
 import { texture } from "three/tsl";
 import { assets, eventBus, graphics, stage } from "../../systems";
 import type { ComputeTask } from "../../systems/rendering/ComputeTask";
-import { createPineTreesColliders } from "./PineTreesCollider";
+import { createPineTreesColliders } from "./pineTreesCollider";
 import { PineTreesCompute } from "./PineTreesCompute";
-import { debugPineTrees } from "./PineTreesDebug";
+import { debugPineTrees } from "./pineTreesDebug";
 import {
   PineTreesBarkMaterial,
   PineTreesCanopyMaterial,
@@ -19,7 +19,6 @@ export class PineTrees {
     const canopy = assets.getMesh("pine-canopy", pineModel);
     const bark = assets.getMesh("pine-bark", pineModel);
     const collider = assets.getObject("pine-capsule-collider", pineModel);
-    // the terrain scatter writes one 4x4 matrix per pine
     const { buffer, byteOffset, byteLength } = pinesPlacements;
     const matrices = new Float32Array(buffer, byteOffset, byteLength / 4);
 

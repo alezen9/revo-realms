@@ -2,14 +2,14 @@ import { Vector3 } from "three";
 import type { RigidBody } from "@dimforge/rapier3d";
 import { assets } from "../../systems";
 import { realmConfig } from "../realmConfig";
-import { playerConfig as config } from "./config";
+import { playerConfig as config } from "./playerConfig";
 
 type WaterMask = {
   bits: Uint8Array;
   resolution: number;
 };
 
-export class PlayerWater {
+export class PlayerBuoyancy {
   isInWater = false;
 
   private rigidBody: RigidBody;
@@ -61,7 +61,6 @@ export class PlayerWater {
       return;
     }
 
-    // land drag is horizontal only and applied by the player
     this.rigidBody.setLinearDamping(0);
     this.rigidBody.setAngularDamping(landAngular);
   }

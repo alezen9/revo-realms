@@ -3,7 +3,6 @@ import { Matrix4, Quaternion, Vector3 } from "three";
 import { physicsWorld } from "../../systems";
 import { RevoColliderType } from "../../systems/physics/colliderTypes";
 
-// the collider is a unit capsule sized by its scale, diameter in x and height in y
 export const createPineTreesColliders = (
   colliderMatrix: Matrix4,
   matrices: Float32Array,

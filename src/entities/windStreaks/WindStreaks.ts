@@ -2,9 +2,9 @@ import { InstancedMesh, PlaneGeometry } from "three/webgpu";
 import { type State } from "../../Game";
 import type { ComputeTask } from "../../systems/rendering/ComputeTask";
 import { eventBus, pipelineWarmup, graphics, stage, wind } from "../../systems";
-import { config, uniforms } from "./WindStreaksConfig";
+import { config, uniforms } from "./windStreaksConfig";
 import { WindStreaksCompute } from "./WindStreaksCompute";
-import { debugWindStreaks } from "./WindStreaksDebug";
+import { debugWindStreaks } from "./windStreaksDebug";
 import { WindStreaksMaterial } from "./WindStreaksMaterial";
 
 const { SEGMENT_COUNT, STREAK_COUNT, MAX_UPDATE_DELTA } = config;

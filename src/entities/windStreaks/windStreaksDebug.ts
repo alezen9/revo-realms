@@ -1,5 +1,5 @@
 import { debugPanel } from "../../systems";
-import { uniforms } from "./WindStreaksConfig";
+import { uniforms } from "./windStreaksConfig";
 
 export const debugWindStreaks = () => {
   const folder = debugPanel.panel.addFolder({
