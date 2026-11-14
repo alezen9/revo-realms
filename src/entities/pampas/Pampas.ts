@@ -8,6 +8,7 @@ import { assets, eventBus, graphics, stage } from "../../systems";
 import { type State } from "../../Game";
 import type { ComputeTask } from "../../systems/rendering/ComputeTask";
 import { config, uniforms } from "./pampasConfig";
+import { PampasBirds } from "./PampasBirds";
 import { PampasCompute } from "./PampasCompute";
 import { debugPampas } from "./pampasDebug";
 import { PampasMaterial } from "./PampasMaterial";
@@ -17,6 +18,7 @@ const { COUNT } = config;
 export class Pampas {
   private mesh: Mesh;
   private computeTask: ComputeTask;
+  private birds = new PampasBirds();
 
   constructor() {
     const { pampasModel } = assets.resources;
@@ -41,7 +43,10 @@ export class Pampas {
     const atomicInstanceCount = atomicIndirectDrawArguments.element(1);
     geometry.setIndirect(indirectDrawAttribute);
 
-    const pampasCompute = new PampasCompute(atomicInstanceCount);
+    const pampasCompute = new PampasCompute(
+      atomicInstanceCount,
+      this.birds.compute,
+    );
     this.mesh = new Mesh(geometry, new PampasMaterial(pampasCompute));
     stage.mainScene.add(this.mesh);
 
@@ -59,7 +64,8 @@ export class Pampas {
     debugPampas();
   }
 
-  private onEngineUpdate = ({ player }: State) => {
+  private onEngineUpdate = ({ delta, player }: State) => {
+    this.birds.update(delta, player.position);
     if (!this.computeTask.canUpdate) return;
     this.computeTask.update();
 

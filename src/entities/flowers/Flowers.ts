@@ -13,6 +13,7 @@ import { config, uniforms } from "./flowersConfig";
 import { FlowersCompute } from "./FlowersCompute";
 import { FlowersMaterial } from "./FlowersMaterial";
 import { debugFlowers } from "./flowersDebug";
+import { FlowersPetals } from "./FlowersPetals";
 
 const { COUNT } = config;
 
@@ -21,6 +22,7 @@ const FLOWER_INDICES = new Uint8Array([0, 2, 1, 0, 3, 2, 0, 4, 3, 0, 1, 4]);
 export class Flowers {
   private mesh: Mesh;
   private computeTask: ComputeTask;
+  private petals = new FlowersPetals();
 
   constructor() {
     const geometry = this.createGeometry();
@@ -48,7 +50,10 @@ export class Flowers {
     const atomicCounter = atomicIndirectDrawArguments.element(1);
     geometry.setIndirect(indirectDrawAttribute);
 
-    const flowersCompute = new FlowersCompute(atomicCounter);
+    const flowersCompute = new FlowersCompute(
+      atomicCounter,
+      this.petals.compute,
+    );
     const material = new FlowersMaterial(flowersCompute);
     const mesh = new Mesh(geometry, material);
 
@@ -120,7 +125,8 @@ export class Flowers {
     return geometry;
   }
 
-  private onEngineUpdate = ({ player }: State) => {
+  private onEngineUpdate = ({ delta, player }: State) => {
+    this.petals.update(delta, player.position);
     if (!this.computeTask.canUpdate) return;
     this.computeTask.update();
     this.syncFrameUniforms(player.position);

@@ -4,7 +4,6 @@ import type { ComputeTask } from "../../../systems/rendering/ComputeTask";
 import type { Expedition33FlagCompute } from "./Expedition33FlagCompute";
 import { petalConfig, petalUniforms } from "./expedition33PetalsConfig";
 import { Expedition33PetalsCompute } from "./Expedition33PetalsCompute";
-import { debugExpedition33Petals } from "./expedition33PetalsDebug";
 import { createExpedition33PetalsGeometry } from "./expedition33PetalsGeometry";
 import { Expedition33PetalsMaterial } from "./Expedition33PetalsMaterial";
 
@@ -23,7 +22,6 @@ export class Expedition33Petals {
       update: this.compute.computeUpdate,
     });
     this.computeTask.init();
-    debugExpedition33Petals();
 
     const geometry = createExpedition33PetalsGeometry();
     geometry.boundingSphere = new Sphere(origin.clone(), REACH);

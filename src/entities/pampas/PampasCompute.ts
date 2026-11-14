@@ -27,6 +27,12 @@ import { computeMapUvByPosition } from "../../shaders/mapping";
 import { computeFrustumVisibility } from "../../shaders/frustum";
 import { gameDeltaTime } from "../../systems/time/gameTime";
 import { config, uniforms } from "./pampasConfig";
+import {
+  flushBirdsFromClump,
+  type BirdBuffer,
+  type NestBuffer,
+  type PampasBirdsCompute,
+} from "./PampasBirdsCompute";
 
 const {
   COUNT,
@@ -83,9 +89,15 @@ const updatePlants = Fn<
     bends: BendBuffer,
     visibleIndices: IndexBuffer,
     visibleCount: Counter,
+    birds: BirdBuffer,
+    birdHeadings: BirdBuffer,
+    birdNests: NestBuffer,
+    flushCount: Counter,
   ],
   void
->(([plants, bends, visibleIndices, visibleCount]) => {
+>((nodes) => {
+  const [plants, bends, visibleIndices, visibleCount, ...birdNodes] = nodes;
+  const [birds, birdHeadings, birdNests, flushCount] = birdNodes;
   const plant = plants.element(instanceIndex);
 
   const unwrappedOffset = vec2(plant.x, plant.y).sub(uniforms.uPlayerDeltaXZ);
@@ -132,6 +144,16 @@ const updatePlants = Fn<
     const clumpFullness = mix(MIN_CLUMP_FULLNESS, 1, hash(clumpIndex.add(331)));
     const isInClump = step(hash(instanceIndex.add(613)), clumpFullness);
     const isGrowing = isClumpGrowing.mul(isInClump);
+    const isFirstPlantInClump = instanceIndex.mod(PLANTS_PER_CLUMP).equal(0);
+
+    flushBirdsFromClump(birds, birdHeadings, birdNests, flushCount, {
+      clumpIndex,
+      isClumpKeeper: isFirstPlantInClump.and(isClumpGrowing.greaterThan(0)),
+      playerOffset: offset,
+      playerPosition: uniforms.uPlayerPosition,
+      terrainHeight: plant.z,
+      plantHeight: PLANT_HEIGHT,
+    });
 
     If(isGrowing.greaterThan(0), () => {
       const drawIndex = atomicAdd(visibleCount, 1);
@@ -155,7 +177,7 @@ export class PampasCompute {
   readonly computeUpdate;
   readonly computeResetInstanceCount;
 
-  constructor(visibleCount: Counter) {
+  constructor(visibleCount: Counter, birdsCompute: PampasBirdsCompute) {
     const workgroup = [WORKGROUP_SIZE];
     this.computeInit = initPlants(this.plants).compute(COUNT, workgroup);
     this.computeUpdate = updatePlants(
@@ -163,6 +185,10 @@ export class PampasCompute {
       this.bends,
       this.visiblePlantIndices,
       visibleCount,
+      birdsCompute.birds,
+      birdsCompute.headings,
+      birdsCompute.nests,
+      birdsCompute.flushCounter.element(0),
     ).compute(COUNT, workgroup);
     this.computeUpdate.name = "Pampas";
     this.computeResetInstanceCount = resetVisibleCount(visibleCount).compute(

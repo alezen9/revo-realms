@@ -1,0 +1,45 @@
+import { Vector3 } from "three";
+import { uniform } from "three/tsl";
+
+export const petalConfig = {
+  COUNT: 4096,
+  WORKGROUP_SIZE: 64,
+  MIN_LIFE_SECONDS: 4,
+  MAX_LIFE_SECONDS: 7,
+  GROW_END: 0.08,
+  SHRINK_START: 0.6,
+  MIN_SWAY_FREQUENCY: 1.2,
+  MAX_SWAY_FREQUENCY: 2.2,
+  SHED_HEIGHT: 0.6,
+  SHED_RADIUS: 1.2,
+  KICK_SPEED_LIMIT: 12,
+  CARRIED_PER_KICK_SPEED: 0.35,
+  PUSH_ASIDE_PER_KICK_SPEED: 0.15,
+  LIFT_PER_KICK_SPEED: 0.2,
+  GUST_LIFT: 1.5,
+  GUST_SCATTER: 0.5,
+  CALM_SHED_RATE: 0.002,
+  CALM_WIND: 0.3,
+  WIND_SPEED: 2.5,
+  FALL_SPEED: 0.3,
+  SWAY: 0.5,
+  SPIN: 1.6,
+  AIR_DRAG: 1.5,
+  GLINT_SHARPNESS: 6,
+  MAX_PLAYER_HEIGHT: 0.9,
+  MAX_STEP_SECONDS: 1 / 20,
+  MAX_STEP_DISTANCE: 5,
+  GUST_WAVES_PER_METER: 0.16,
+  GUST_WAVE_SPEED: 2,
+};
+
+export const petalUniforms = {
+  uDelta: uniform(0),
+  uPlayerVelocity: uniform(new Vector3()),
+  uPlayerStepDistance: uniform(0),
+  uShedSeed: uniform(0, "uint"),
+  uPetalsPerFlower: uniform(1.5),
+  uGustShedRate: uniform(0.04),
+  uSize: uniform(0.16),
+  uGlint: uniform(1.5),
+};

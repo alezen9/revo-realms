@@ -27,6 +27,11 @@ import {
 import { computeMapUvByPosition } from "../../shaders/mapping";
 import { computeFrustumVisibility } from "../../shaders/frustum";
 import { config, uniforms } from "./flowersConfig";
+import {
+  shedPetalFromFlower,
+  type FlowersPetalsCompute,
+  type PetalBuffer,
+} from "./FlowersPetalsCompute";
 
 const {
   COUNT,
@@ -151,73 +156,97 @@ const initFlowers = Fn<[flowers: FlowerBuffer], void>(([flowers]) => {
 });
 
 const updateFlowers = Fn<
-  [flowers: FlowerBuffer, visibleIndices: IndexBuffer, visibleCount: Counter],
+  [
+    flowers: FlowerBuffer,
+    visibleIndices: IndexBuffer,
+    visibleCount: Counter,
+    petals: PetalBuffer,
+    petalMotions: PetalBuffer,
+    shedCount: Counter,
+  ],
   void
->(([flowers, visibleIndices, visibleCount]) => {
-  const data = flowers.element(instanceIndex);
-  const unwrappedOffset = vec2(data.x, data.y).sub(uniforms.uPlayerDeltaXZ);
-  const wrappedOffsetX = mod(
-    unwrappedOffset.x.add(TILE_HALF_SIZE),
-    TILE_SIZE,
-  ).sub(TILE_HALF_SIZE);
-  const wrappedOffsetZ = mod(
-    unwrappedOffset.y.add(TILE_HALF_SIZE),
-    TILE_SIZE,
-  ).sub(TILE_HALF_SIZE);
-  const wrappedOffset = vec3(wrappedOffsetX, 0, wrappedOffsetZ);
+>(
+  ([
+    flowers,
+    visibleIndices,
+    visibleCount,
+    petals,
+    petalMotions,
+    shedCount,
+  ]) => {
+    const data = flowers.element(instanceIndex);
+    const unwrappedOffset = vec2(data.x, data.y).sub(uniforms.uPlayerDeltaXZ);
+    const wrappedOffsetX = mod(
+      unwrappedOffset.x.add(TILE_HALF_SIZE),
+      TILE_SIZE,
+    ).sub(TILE_HALF_SIZE);
+    const wrappedOffsetZ = mod(
+      unwrappedOffset.y.add(TILE_HALF_SIZE),
+      TILE_SIZE,
+    ).sub(TILE_HALF_SIZE);
+    const wrappedOffset = vec3(wrappedOffsetX, 0, wrappedOffsetZ);
 
-  data.x = wrappedOffset.x;
-  data.y = wrappedOffset.z;
+    data.x = wrappedOffset.x;
+    data.y = wrappedOffset.z;
 
-  const worldPos = wrappedOffset.add(uniforms.uPlayerPosition);
-  const clipPosition = stage.uCameraMatrix.mul(vec4(worldPos, 1));
+    const worldPos = wrappedOffset.add(uniforms.uPlayerPosition);
+    const clipPosition = stage.uCameraMatrix.mul(vec4(worldPos, 1));
 
-  const isVisible = computeFrustumVisibility(
-    clipPosition,
-    stage.uFx,
-    stage.uFy,
-    FLOWER_BOUNDING_SPHERE_RADIUS,
-    uniforms.uCullPadNDCX,
-    uniforms.uCullPadNDCYNear,
-    uniforms.uCullPadNDCYFar,
-  );
+    const isVisible = computeFrustumVisibility(
+      clipPosition,
+      stage.uFx,
+      stage.uFy,
+      FLOWER_BOUNDING_SPHERE_RADIUS,
+      uniforms.uCullPadNDCX,
+      uniforms.uCullPadNDCYNear,
+      uniforms.uCullPadNDCYFar,
+    );
 
-  data.assign(setVisibility(data, isVisible));
+    data.assign(setVisibility(data, isVisible));
 
-  If(isVisible.greaterThan(0), () => {
-    const mapUv = computeMapUvByPosition(worldPos.xz);
-    const heightUv = vec2(mapUv.x, float(1).sub(mapUv.y));
-    const yOffset = texture(assets.resources.heightmap, heightUv).r;
-    data.assign(setYOffset(data, yOffset));
+    If(isVisible.greaterThan(0), () => {
+      const mapUv = computeMapUvByPosition(worldPos.xz);
+      const heightUv = vec2(mapUv.x, float(1).sub(mapUv.y));
+      const yOffset = texture(assets.resources.heightmap, heightUv).r;
+      data.assign(setYOffset(data, yOffset));
 
-    const masks = texture(assets.resources.terrainMasks, mapUv);
-    const grassScale = masks.g
-      .sub(0.5)
-      .div(1 - 0.5)
-      .clamp();
-    const grassVisibility = step(0.05, grassScale);
-    const fields = texture(assets.resources.terrainFields, mapUv);
-    const whiteShare = fields.r;
-    const yellowShare = whiteShare.add(fields.g);
-    const lilacShare = yellowShare.add(fields.b);
-    const bloomShare = lilacShare.add(fields.a);
-    const bloomRoll = hash(instanceIndex.add(7919));
-    const isBlooming = step(bloomRoll, bloomShare);
-    const isDrawn = grassVisibility.mul(isBlooming).mul(isVisible);
-    data.assign(setGrassScale(data, grassScale));
-    data.assign(setVisibility(data, isDrawn));
+      const masks = texture(assets.resources.terrainMasks, mapUv);
+      const grassScale = masks.g
+        .sub(0.5)
+        .div(1 - 0.5)
+        .clamp();
+      const grassVisibility = step(0.05, grassScale);
+      const fields = texture(assets.resources.terrainFields, mapUv);
+      const whiteShare = fields.r;
+      const yellowShare = whiteShare.add(fields.g);
+      const lilacShare = yellowShare.add(fields.b);
+      const bloomShare = lilacShare.add(fields.a);
+      const bloomRoll = hash(instanceIndex.add(7919));
+      const isBlooming = step(bloomRoll, bloomShare);
+      const isDrawn = grassVisibility.mul(isBlooming).mul(isVisible);
+      data.assign(setGrassScale(data, grassScale));
+      data.assign(setVisibility(data, isDrawn));
 
-    const speciesIndex = step(whiteShare, bloomRoll)
-      .add(step(yellowShare, bloomRoll))
-      .add(step(lilacShare, bloomRoll));
-    data.assign(setSpecies(data, speciesIndex));
+      const speciesIndex = step(whiteShare, bloomRoll)
+        .add(step(yellowShare, bloomRoll))
+        .add(step(lilacShare, bloomRoll));
+      data.assign(setSpecies(data, speciesIndex));
 
-    If(isDrawn, () => {
-      const drawIndex = atomicAdd(visibleCount, 1);
-      visibleIndices.element(drawIndex).assign(instanceIndex);
+      If(isDrawn, () => {
+        const drawIndex = atomicAdd(visibleCount, 1);
+        visibleIndices.element(drawIndex).assign(instanceIndex);
+        shedPetalFromFlower(petals, petalMotions, shedCount, {
+          flowerIndex: instanceIndex,
+          playerOffset: wrappedOffset,
+          playerPosition: uniforms.uPlayerPosition,
+          terrainHeight: yOffset,
+          grassScale,
+          species: speciesIndex,
+        });
+      });
     });
-  });
-});
+  },
+);
 
 const resetVisibleCount = Fn<[visibleCount: Counter], void>(
   ([visibleCount]) => {
@@ -236,13 +265,16 @@ export class FlowersCompute {
   readonly computeUpdate;
   readonly computeResetInstanceCount;
 
-  constructor(visibleCount: Counter) {
+  constructor(visibleCount: Counter, petalsCompute: FlowersPetalsCompute) {
     const workgroup = [WORKGROUP_SIZE];
     this.computeInit = initFlowers(this.flowers).compute(COUNT, workgroup);
     this.computeUpdate = updateFlowers(
       this.flowers,
       this.visibleFlowerIndices,
       visibleCount,
+      petalsCompute.petals,
+      petalsCompute.motions,
+      petalsCompute.shedCounter.element(0),
     ).compute(COUNT, workgroup);
     this.computeUpdate.name = "Flowers";
     this.computeResetInstanceCount = resetVisibleCount(visibleCount).compute(
